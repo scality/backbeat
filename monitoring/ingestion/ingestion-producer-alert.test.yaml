@@ -1,0 +1,53 @@
+evaluation_interval: 1m
+rule_files:
+  - ingestion-producer-alert.rendered.yaml
+
+tests:
+
+  # A source whose setup keeps failing is retried on every cron tick, so it
+  # fails at a steady rate while every other source keeps reading normally.
+  - name: Ingestion Producer Source Setup Failing
+    interval: 1m
+    input_series:
+      - series: s3_ingestion_source_operations_total{namespace="zenko",job="artesca-data-backbeat-ingestion-producer-headless",origin="ingestion",op="getRaftId",status="error"}
+        values: 0+12x20
+      - series: s3_ingestion_source_operations_total{namespace="zenko",job="artesca-data-backbeat-ingestion-producer-headless",origin="ingestion",op="getRaftLog",status="success"}
+        values: 0+12000x20
+    alert_rule_test:
+      - alertname: IngestionProducerSourceSetupFailing
+        eval_time: 5m
+        exp_alerts: []
+      - alertname: IngestionProducerSourceSetupFailing
+        eval_time: 12m
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              zenko_service: backbeat-ingestion-producer
+              description: "Ingestion producer has been unable to start reading from a source for the last 10 minutes, so the objects of that location are not ingested. Check the producer logs for the bucket it fails to resolve."
+              summary: "Ingestion producer cannot start reading from a source"
+      # The same failures are 0.1% of all the source operations, which is why the
+      # error ratio alerts cannot report a single source that stopped ingesting.
+      - alertname: IngestionProducerSourceErrorRate3Percent
+        eval_time: 12m
+        exp_alerts: []
+      - alertname: IngestionProducerSourceErrorRate5Percent
+        eval_time: 12m
+        exp_alerts: []
+
+  # A source that fails to set up while its location restarts, then recovers,
+  # must not alert.
+  - name: Ingestion Producer Source Setup Recovering
+    interval: 1m
+    input_series:
+      - series: s3_ingestion_source_operations_total{namespace="zenko",job="artesca-data-backbeat-ingestion-producer-headless",origin="ingestion",op="getRaftId",status="error"}
+        values: 0 12 24 24x17
+      - series: s3_ingestion_source_operations_total{namespace="zenko",job="artesca-data-backbeat-ingestion-producer-headless",origin="ingestion",op="getRaftId",status="success"}
+        values: 0 0 0 1+1x17
+    alert_rule_test:
+      - alertname: IngestionProducerSourceSetupFailing
+        eval_time: 8m
+        exp_alerts: []
+      - alertname: IngestionProducerSourceSetupFailing
+        eval_time: 15m
+        exp_alerts: []
