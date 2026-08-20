@@ -274,7 +274,8 @@ class QueueProcessor extends EventEmitter {
             (ctx, done) => ctx.task.processQueueEntry(
                 ctx.entry, ctx.kafkaEntry, done),
             ctx => getTaskSchedulerQueueKey(ctx.entry),
-            ctx => getTaskSchedulerDedupeKey(ctx.entry));
+            ctx => getTaskSchedulerDedupeKey(ctx.entry),
+            this.logger);
     }
 
     _setupVaultclientCache() {
