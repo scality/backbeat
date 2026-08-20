@@ -572,7 +572,10 @@ describe('BackbeatConsumer rebalance during batch processing', () => {
     }).timeout(60000);
 });
 
-describe('BackbeatConsumer ledger drain on rebalance', () => {
+// Skipped on 9.5: these tests were written against librdkafka 2.12 and fail
+// 40-80% of the time on the 2.3.0 pinned by BB-806, which 9.5 keeps. Unskip on
+// 9.6, which carries the librdkafka upgrade (BB-849).
+describe.skip('BackbeatConsumer ledger drain on rebalance', () => {
     const topic = 'backbeat-consumer-spec-ledger-drain';
     const groupId = `replication-group-ledger-drain-${Math.random()}`;
     let producer;
@@ -1275,7 +1278,8 @@ describe('BackbeatConsumer shutdown tests', () => {
     }).timeout(60000);
 });
 
-describe('BackbeatConsumer fromOffset tests', () => {
+// Skipped on 9.5 for the same reason as the ledger drain tests above (BB-849).
+describe.skip('BackbeatConsumer fromOffset tests', () => {
     const topic = 'backbeat-consumer-spec-from-offset';
     let producer;
     let consumer;
