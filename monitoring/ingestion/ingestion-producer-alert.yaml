@@ -84,7 +84,7 @@ groups:
       description: "Ingestion producer source error rate has increased to 3% in the last 5 minutes"
       summary: "Ingestion producer source error rate has increased"
 
-  - alert: IngestionProducerSourceErrorRate3Percent
+  - alert: IngestionProducerSourceErrorRate5Percent
     Expr: |
       sum(rate(s3_ingestion_source_operations_total{status="error", namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
         /
