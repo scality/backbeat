@@ -142,8 +142,12 @@ class S3Mock {
             const expectedUrls = ['putobject', 'putpart'].map(
                 op => `/_/backbeat/multiplebackenddata/${constants.bucket}` +
                     `/${constants.objectKey}?operation=${op}`)
-                  .concat([`/_/backbeat/data/${constants.bucket}/${constants.objectKey}?v2=`]);
-            assert(expectedUrls.includes(req.url));
+                  .concat([
+                      `/_/backbeat/data/${constants.bucket}/${constants.objectKey}` +
+                      `?v2=&versionId=${constants.versionId}`,
+                  ]);
+            assert(expectedUrls.includes(req.url),
+                `Unexpected PUT URL: ${req.url}, expected one of: ${JSON.stringify(expectedUrls)}`);
             const chunks = [];
             req.on('data', chunk => {
                 if (this.testScenario === 'abortPut') {
