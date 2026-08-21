@@ -378,3 +378,51 @@ describe('ReplicationConfigValidator maxPollIntervalMs', () => {
             /less than or equal to 1800000/);
     });
 });
+
+describe('ReplicationConfigValidator bootstrapList from the environment', () => {
+    const bootstrapList = env => {
+        Object.assign(process.env, env);
+        try {
+            // the overrides are applied in place, make sure each case has its own copy
+            const config = JSON.parse(JSON.stringify(baseConfig));
+            return configValidator({}, config).destination.bootstrapList;
+        } finally {
+            Object.keys(env).forEach(name => delete process.env[name]);
+        }
+    };
+
+    it('should hold the servers of the zenko site, comma separated', () => {
+        assert.deepStrictEqual(
+            bootstrapList({ EXTENSIONS_REPLICATION_DEST_BOOTSTRAPLIST: 'zenko-1:8000, zenko-2:8000' }),
+            [{ site: 'zenko', servers: ['zenko-1:8000', 'zenko-2:8000'], echo: false }]);
+    });
+
+    it('should append the additional sites', () => {
+        assert.deepStrictEqual(
+            bootstrapList({
+                EXTENSIONS_REPLICATION_DEST_BOOTSTRAPLIST: 'zenko-1:8000',
+                EXTENSIONS_REPLICATION_DEST_BOOTSTRAPLIST_MORE: '{ "site": "aws", "type": "aws_s3" }',
+            }),
+            [{ site: 'zenko', servers: ['zenko-1:8000'], echo: false },
+                { site: 'aws', type: 'aws_s3' }]);
+    });
+
+    it('should report an invalid additional site', () => {
+        assert.throws(
+            () => bootstrapList({
+                EXTENSIONS_REPLICATION_DEST_BOOTSTRAPLIST: 'zenko-1:8000',
+                EXTENSIONS_REPLICATION_DEST_BOOTSTRAPLIST_MORE: '{ site: aws }',
+            }),
+            /invalid JSON value for EXTENSIONS_REPLICATION_DEST_BOOTSTRAPLIST_MORE/);
+    });
+
+    it('should take the whole list as JSON', () => {
+        assert.deepStrictEqual(
+            bootstrapList({
+                EXTENSIONS_REPLICATION_DEST_BOOTSTRAPLIST:
+                    '[{ "site": "zenko", "servers": ["zenko-1:8000"] }, { "site": "aws", "type": "aws_s3" }]',
+            }),
+            [{ site: 'zenko', servers: ['zenko-1:8000'], echo: false },
+                { site: 'aws', type: 'aws_s3' }]);
+    });
+});

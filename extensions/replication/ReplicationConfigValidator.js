@@ -5,6 +5,7 @@ const { hostPortJoi, transportJoi, bootstrapListJoi, adminCredsJoi,
         stsConfigJoi } =
     require('../../lib/config/configItems.joi');
 const { extensionConfigValidator } = require('../../lib/config/extensionConfigValidator');
+const { parseJSON } = require('../../lib/config/envOverrides');
 const {
     authTypeAccount,
     authTypeAssumeRole,
@@ -13,6 +14,26 @@ const {
 } = require('../../lib/constants');
 
 const { MAX_QUEUED_DEFAULT }  = require('../../lib/constants').backbeatConsumer;
+
+const BOOTSTRAPLIST_MORE = 'EXTENSIONS_REPLICATION_DEST_BOOTSTRAPLIST_MORE';
+
+/**
+ * Decodes the legacy comma separated server list, naming the single `zenko`
+ * site, with the cloud backends of BOOTSTRAPLIST_MORE as raw JSON objects.
+ * The JSON form is left to the usual coercion.
+ *
+ * @param {string} value - raw env var value
+ * @param {Object} env - environment the override comes from
+ * @returns {Array|undefined} bootstrap list, undefined to coerce the value
+ */
+function decodeBootstrapList(value, env) {
+    if (value.trimStart().startsWith('[')) {
+        return undefined;
+    }
+    const zenko = { site: 'zenko', servers: value.split(',').map(server => server.trim()) };
+    const more = env[BOOTSTRAPLIST_MORE];
+    return more ? [zenko, ...parseJSON(`[${more}]`, BOOTSTRAPLIST_MORE)] : [zenko];
+}
 
 // the historic env var names put the backend before `RETRY`, e.g.
 // EXTENSIONS_REPLICATION_QUEUE_PROCESSOR_AWS_S3_RETRY_BACKOFF_MIN
@@ -100,7 +121,10 @@ const joiSchema = joi.object({
             then: joi.optional(),
             otherwise: joi.required(),
         }),
-        bootstrapList: bootstrapListJoi,
+        bootstrapList: bootstrapListJoi.meta({
+            env: 'BOOTSTRAPLIST',
+            envDecodeHook: decodeBootstrapList,
+        }),
     }).required().custom(_validatePerSiteDestinationConfig).meta({ env: 'DEST' }),
     topic: joi.string().required(),
     dataMoverTopic: joi.string().optional(),

@@ -1,10 +1,13 @@
 'use strict';
 
 const assert = require('assert');
+const fs = require('fs');
 const joi = require('joi');
+const sinon = require('sinon');
+
+const fileConfig = require('./config.json');
 
 const {
-    applyCompositeEnvOverrides,
     applyEnvOverrides,
     envVarMappings,
 } = require('../../../../lib/config/envOverrides');
@@ -136,6 +139,12 @@ describe('config env var mapping', () => {
                 const config = applyEnvOverrides({}, backbeatConfigJoi, [], { [name]: '::1' });
                 assert.deepStrictEqual(config.server.healthChecks.allowFrom, ['::1'], name);
             });
+
+            // renamed segment, under the alias of the section holding it
+            assert.strictEqual(
+                applyEnvOverrides({}, backbeatConfigJoi, [], { MONGODB_HOSTS: 'mongo1:27017' })
+                    .queuePopulator.mongo.replicaSetHosts,
+                'mongo1:27017');
         });
     });
 
@@ -228,6 +237,30 @@ describe('config env var mapping', () => {
         });
     });
 
+    describe('field decoder', () => {
+        // a field with a syntax of its own, spanning a second variable
+        const schema = joi.object({
+            servers: joi.array().items(joi.string()).meta({
+                envDecodeHook: (value, env) => (value.startsWith('[') ? undefined
+                    : [value, env.SERVERS_MORE].filter(more => more)),
+            }),
+        });
+        const apply = env => applyEnvOverrides({}, schema, [], env);
+
+        it('should build the value of the field', () => {
+            assert.deepStrictEqual(apply({ SERVERS: 'a:8000' }).servers, ['a:8000']);
+        });
+
+        it('should read the companion variable from the environment', () => {
+            assert.deepStrictEqual(apply({ SERVERS: 'a:8000', SERVERS_MORE: 'b:8000' }).servers,
+                                   ['a:8000', 'b:8000']);
+        });
+
+        it('should coerce the value the decoder defers on', () => {
+            assert.deepStrictEqual(apply({ SERVERS: '["a:8000"]' }).servers, ['a:8000']);
+        });
+    });
+
     describe('liveness probe port', () => {
         const schema = joi.object({
             queuePopulator: joi.object({ probeServer: probeServerJoi }),
@@ -265,71 +298,6 @@ describe('config env var mapping', () => {
             assert.deepStrictEqual(config.processor.probeServer,
                                    { bindAddress: '0.0.0.0', port: '8200' });
         });
-    });
-});
-
-describe('composite config env vars', () => {
-    const apply = env => applyCompositeEnvOverrides({ redis: { host: 'localhost', port: 6379 } }, env);
-
-    it('should set the sentinels group name, and drop the standalone host', () => {
-        assert.deepStrictEqual(apply({ REDIS_SENTINELS: 'host1:26379' }).redis,
-                               { sentinels: 'host1:26379', name: 'mymaster' });
-        assert.deepStrictEqual(apply({ REDIS_SENTINELS: 'host1:26379', REDIS_HA_NAME: 'group' }).redis,
-                               { sentinels: 'host1:26379', name: 'group' });
-    });
-
-    it('should default the standalone redis port', () => {
-        assert.deepStrictEqual(apply({ REDIS_HOST: 'redis' }).redis, { host: 'redis', port: '6379' });
-        assert.deepStrictEqual(apply({ REDIS_HOST: 'redis', REDIS_PORT: '6380' }).redis,
-                               { host: 'redis', port: '6380' });
-        assert.deepStrictEqual(apply({ REDIS_PORT: '6380' }).redis,
-                               { host: 'localhost', port: '6380' });
-    });
-
-    it('should ignore the standalone redis host and port when sentinels are set', () => {
-        assert.deepStrictEqual(
-            apply({ REDIS_SENTINELS: 'host1:26379', REDIS_HOST: 'redis', REDIS_PORT: '6380' }).redis,
-            { sentinels: 'host1:26379', name: 'mymaster' });
-    });
-
-    it('should set the replica set hosts, and leave the log source alone', () => {
-        const config = applyCompositeEnvOverrides({}, { MONGODB_HOSTS: 'mongo1:27017,mongo2:27017' });
-        assert.deepStrictEqual(config.queuePopulator, {
-            mongo: { replicaSetHosts: 'mongo1:27017,mongo2:27017' },
-        });
-    });
-
-    it('should build the replication bootstrap list of a single site', () => {
-        const config = applyCompositeEnvOverrides({ extensions: { replication: {} } }, {
-            EXTENSIONS_REPLICATION_DEST_BOOTSTRAPLIST: 'zenko-1:8000',
-        });
-        assert.deepStrictEqual(config.extensions.replication.destination.bootstrapList,
-                               [{ site: 'zenko', servers: ['zenko-1:8000'] }]);
-    });
-
-    it('should split the servers of the replication bootstrap site', () => {
-        const config = applyCompositeEnvOverrides({ extensions: { replication: {} } }, {
-            EXTENSIONS_REPLICATION_DEST_BOOTSTRAPLIST: 'zenko-1:8000, zenko-2:8000',
-        });
-        assert.deepStrictEqual(config.extensions.replication.destination.bootstrapList,
-                               [{ site: 'zenko', servers: ['zenko-1:8000', 'zenko-2:8000'] }]);
-    });
-
-    it('should append the additional replication bootstrap sites', () => {
-        const config = applyCompositeEnvOverrides({ extensions: { replication: {} } }, {
-            EXTENSIONS_REPLICATION_DEST_BOOTSTRAPLIST: 'zenko-1:8000',
-            EXTENSIONS_REPLICATION_DEST_BOOTSTRAPLIST_MORE: '{ "site": "aws", "type": "aws_s3" }',
-        });
-        assert.deepStrictEqual(config.extensions.replication.destination.bootstrapList, [
-            { site: 'zenko', servers: ['zenko-1:8000'] },
-            { site: 'aws', type: 'aws_s3' },
-        ]);
-    });
-
-    it('should leave the bootstrap list alone when replication is not configured', () => {
-        assert.deepStrictEqual(
-            applyCompositeEnvOverrides({}, { EXTENSIONS_REPLICATION_DEST_BOOTSTRAPLIST: 'zenko-1:8000' }),
-            {});
     });
 });
 
@@ -468,7 +436,7 @@ describe('historic config env vars', () => {
                 name: 'group',
                 sentinels: [{ host: 'sentinel1', port: 26379 }, { host: 'sentinel2', port: 26379 }],
             },
-        }],
+        }, { redis: {} }],
         [{ REDIS_HOST: 'redis' }, { 'redis.host': 'redis', 'redis.port': 6379 }],
         [{ REDIS_HOST: 'redis', REDIS_PORT: '6380' }, { 'redis.host': 'redis', 'redis.port': 6380 }],
         [{ QUEUE_POPULATOR_BATCH_MAX_READ: '42' }, { 'queuePopulator.batchMaxRead': 42 }],
@@ -575,12 +543,25 @@ describe('historic config env vars', () => {
         }
     });
 
-    function configWith(env) {
+    /**
+     * @param {Object} env - env vars of the case
+     * @param {Object} [sections] - config sections replacing those of the file,
+     *   for a case the fixture cannot host as it stands
+     * @returns {Config} configuration built from the file and the environment
+     */
+    function configWith(env, sections) {
         const og = Object.fromEntries(Object.keys(env).map(name => [name, process.env[name]]));
         Object.assign(process.env, env);
+        if (sections) {
+            sinon.stub(fs, 'readFileSync')
+                .callThrough()
+                .withArgs(process.env.BACKBEAT_CONFIG_FILE, sinon.match.any)
+                .returns(JSON.stringify({ ...fileConfig, ...sections }));
+        }
         try {
             return new Config();
         } finally {
+            sinon.restore();
             Object.entries(og).forEach(([name, value]) => {
                 if (value === undefined) {
                     delete process.env[name];
@@ -591,12 +572,17 @@ describe('historic config env vars', () => {
         }
     }
 
-    contract.forEach(([env, expected]) => {
+    contract.forEach(([env, expected, sections]) => {
         it(`should apply ${Object.keys(env).join(', ')}`, () => {
-            const config = configWith(env);
+            const config = configWith(env, sections);
             Object.entries(expected).forEach(([path, value]) =>
                 assert.deepStrictEqual(getField(config, path.split('.')), value, path));
         });
+    });
+
+    it('should reject the sentinels over a standalone configuration', () => {
+        assert.throws(() => configWith({ REDIS_SENTINELS: 'sentinel1:26379' }),
+                      /"redis.host" is not allowed/);
     });
 
     it('should account for every historic env var', () => {

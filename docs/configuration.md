@@ -69,7 +69,6 @@ silently ignored.
 
 - `LIVENESS_PROBE_PORT`: the port of every probe server configured, bound to
   `0.0.0.0`. Per site probe servers are left alone.
-- `MONGODB_HOSTS`: `queuePopulator.mongo.replicaSetHosts`.
 - `REDIS_SENTINELS`, `REDIS_HA_NAME`: `redis.sentinels` and `redis.name`
   (`mymaster` by default). They replace the standalone host and port. The
   sentinels are a comma separated list of `host:port`, e.g.
@@ -77,9 +76,10 @@ silently ignored.
 - `REDIS_HOST`, `REDIS_PORT`: standalone `redis.host` and `redis.port` (6379 by
   default). Both are ignored when sentinels are configured.
 - `EXTENSIONS_REPLICATION_DEST_BOOTSTRAPLIST`: the servers of the `zenko` site
-  of the replication bootstrap list, comma separated.
+  of the replication bootstrap list, comma separated, for backwards compatibility.
   `EXTENSIONS_REPLICATION_DEST_BOOTSTRAPLIST_MORE` holds the additional sites,
-  as raw JSON objects, e.g. `{ "site": "aws", "type": "aws_s3" }`.
+  as raw JSON objects, e.g. `{ "site": "aws", "type": "aws_s3" }`. It can also
+  take the full list of sites as a JSON array.
 
 ## Other variables
 
