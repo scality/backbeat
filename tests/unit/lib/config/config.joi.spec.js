@@ -10,10 +10,17 @@ describe('backbeat config schema', () => {
         const redisJoi = backbeatConfigJoi.extract('redis');
         const validate = redis => joi.attempt(redis, redisJoi);
 
+        // a configuration that does not mention redis reaches it locally, as
+        // the standalone section of the shipped configuration file does
+        it('should default to a local standalone server', () => {
+            assert.deepStrictEqual(joi.attempt({}, joi.object({ redis: redisJoi })),
+                                   { redis: { host: '127.0.0.1', port: 6379 } });
+        });
+
         describe('sentinels', () => {
             it('should default the group name of the master they watch', () => {
                 assert.deepStrictEqual(validate({ sentinels: 'host1:26379' }), {
-                    sentinels: 'host1:26379',
+                    sentinels: [{ host: 'host1', port: 26379 }],
                     name: 'mymaster',
                     password: '',
                     sentinelPassword: '',
@@ -22,6 +29,24 @@ describe('backbeat config schema', () => {
 
             it('should keep the configured group name', () => {
                 assert.strictEqual(validate({ sentinels: 'host1:26379', name: 'group' }).name, 'group');
+            });
+
+            // the redis client expects a list: a comma separated one is parsed
+            it('should parse the comma separated form', () => {
+                assert.deepStrictEqual(
+                    validate({ sentinels: 'host1:26379,host2:26380' }).sentinels,
+                    [{ host: 'host1', port: 26379 }, { host: 'host2', port: 26380 }]);
+            });
+
+            it('should keep the passwords of a comma separated form', () => {
+                const redis = { sentinels: 'host1:26379', password: 'p', sentinelPassword: 's' };
+
+                assert.deepStrictEqual(validate(redis), {
+                    sentinels: [{ host: 'host1', port: 26379 }],
+                    name: 'mymaster',
+                    password: 'p',
+                    sentinelPassword: 's',
+                });
             });
 
             it('should accept a list of host and port', () => {

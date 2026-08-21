@@ -435,6 +435,9 @@ describe('historic config env vars', () => {
             redis: {
                 name: 'group',
                 sentinels: [{ host: 'sentinel1', port: 26379 }, { host: 'sentinel2', port: 26379 }],
+                // the passwords of the section survive the parsing of the list
+                password: '',
+                sentinelPassword: '',
             },
         }, { redis: {} }],
         [{ REDIS_HOST: 'redis' }, { 'redis.host': 'redis', 'redis.port': 6379 }],
