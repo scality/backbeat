@@ -4,8 +4,54 @@ const assert = require('assert');
 const joi = require('joi');
 
 const { backbeatConfigJoi } = require('../../../../lib/config.joi');
+const { envVarMappings } = require('../../../../lib/config/envOverrides');
 
 describe('backbeat config schema', () => {
+    it('should derive no name for the params BackbeatProducer sets itself', () => {
+        const names = [...envVarMappings(backbeatConfigJoi).keys()];
+
+        assert.ok(!names.some(name => name.startsWith('KAFKA_PRODUCER_PARAMS')), names.join(', '));
+    });
+
+    describe('queuePopulator', () => {
+        // the probe server of the populator is conditioned by `...extensions`:
+        // the section is validated under a parent holding one
+        const schema = joi.object({
+            queuePopulator: backbeatConfigJoi.extract('queuePopulator'),
+            extensions: joi.object(),
+        });
+        const base = {
+            auth: { type: 'none', vault: { host: 'vault', port: 8500 } },
+            cronRule: '* * * * *',
+            zookeeperPath: '/backbeat',
+            probeServer: { port: 8550 },
+        };
+        const validate = queuePopulator =>
+            schema.validate({ queuePopulator: { ...base, ...queuePopulator }, extensions: { gc: {} } });
+
+        // the log source names the section the populator reads the oplog from
+        it('should require the section of its log source', () => {
+            assert.match(validate({ logSource: 'bucketd' }).error.message, /"queuePopulator.bucketd" is required/);
+            assert.match(validate({ logSource: 'dmd' }).error.message, /"queuePopulator.dmd" is required/);
+            assert.match(validate({ logSource: 'kafka' }).error.message, /"queuePopulator.kafka" is required/);
+        });
+
+        it('should accept the log source its section configures', () => {
+            assert.strictEqual(validate({ logSource: 'dmd', dmd: { host: 'dmd', port: 9990 } }).error,
+                               undefined);
+        });
+
+        // the ingestion reader is configured by the extension
+        it('should need no section for the ingestion log source', () => {
+            assert.strictEqual(validate({ logSource: 'ingestion' }).error, undefined);
+        });
+
+        it('should reject a log source it cannot read', () => {
+            assert.match(validate({ logSource: 'mongo' }).error.message,
+                         /"queuePopulator.logSource" must be one of \[bucketd, ingestion, dmd, kafka\]/);
+        });
+    });
+
     describe('redis', () => {
         const redisJoi = backbeatConfigJoi.extract('redis');
         const validate = redis => joi.attempt(redis, redisJoi);
