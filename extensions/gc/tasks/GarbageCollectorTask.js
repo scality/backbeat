@@ -264,10 +264,15 @@ class GarbageCollectorTask extends BackbeatTask {
                     version,
                 });
 
+                // A direct transition (requested in the PUT request itself, rather than by a
+                // lifecycle rule) already declares the cold storage class in the metadata: use
+                // a dedicated originOp so that consumers can tell both apart.
+                const isDirect = objMD.getAmzStorageClass() === newLocation;
+
                 objMD.setLocation()
                     .setDataStoreName(newLocation)
                     .setAmzStorageClass(newLocation)
-                    .setOriginOp('s3:LifecycleTransition')
+                    .setOriginOp(isDirect ? 's3:LifecycleTransition:Direct' : 's3:LifecycleTransition')
                     .setTransitionInProgress(false)
                     .setUserMetadata({
                         'x-amz-meta-scal-s3-transition-attempt': undefined,

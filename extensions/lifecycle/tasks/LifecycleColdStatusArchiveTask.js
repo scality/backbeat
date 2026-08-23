@@ -112,10 +112,15 @@ class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
                 objectMD.setOriginOp('s3:LifecycleTransition:SetArchive');
 
                 if (skipLocationDeletion) {
+                    // A direct transition (requested in the PUT request itself, rather than by a
+                    // lifecycle rule) already declares the cold storage class in the metadata:
+                    // use a dedicated originOp so that consumers can tell both apart.
+                    const isDirect = objectMD.getAmzStorageClass() === coldLocation;
+
                     objectMD.setDataStoreName(coldLocation)
                         .setAmzStorageClass(coldLocation)
                         .setTransitionInProgress(false)
-                        .setOriginOp('s3:LifecycleTransition')
+                        .setOriginOp(isDirect ? 's3:LifecycleTransition:Direct' : 's3:LifecycleTransition')
                         .setUserMetadata({
                             'x-amz-meta-scal-s3-transition-attempt': undefined,
                         });

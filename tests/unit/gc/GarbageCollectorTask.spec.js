@@ -97,10 +97,47 @@ describe('GarbageCollectorTask', () => {
             assert.strictEqual(updatedMD.getDataStoreName(), 'new-location');
             assert.strictEqual(updatedMD.getAmzStorageClass(), 'new-location');
             assert.strictEqual(updatedMD.getTransitionInProgress(), false);
+            assert.strictEqual(updatedMD.getOriginOp(), 's3:LifecycleTransition');
             done();
         });
     });
 
+    it('should set the direct transition origin op if the new location was requested', done => {
+        backbeatClient.batchDeleteResponse = { error: null, res: null };
+
+        const entry = ActionQueueEntry.create('deleteArchivedSourceData')
+              .addContext({
+                  origin: 'lifecycle',
+                  ruleType: 'archive',
+                  bucketName: bucket,
+                  objectKey: key,
+                  versionId: version,
+              })
+              .setAttribute('serviceName', 'lifecycle-transition')
+              .setAttribute('target.oldLocation', 'old-location')
+              .setAttribute('target.newLocation', 'new-location')
+              .setAttribute('target.bucket', bucket)
+              .setAttribute('target.key', version)
+              .setAttribute('target.version', key)
+              .setAttribute('target.accountId', accountId)
+              .setAttribute('target.owner', owner);
+
+        mdObj.setLocation(loc)
+            .setDataStoreName('old-location')
+            .setAmzStorageClass('new-location')
+            .setTransitionInProgress(true);
+        backbeatMetadataProxyClient.setMdObj(mdObj);
+
+        gcTask.processActionEntry(entry, err => {
+            assert.ifError(err);
+
+            const updatedMD = backbeatMetadataProxyClient.mdObj;
+            assert.strictEqual(updatedMD.getDataStoreName(), 'new-location');
+            assert.strictEqual(updatedMD.getTransitionInProgress(), false);
+            assert.strictEqual(updatedMD.getOriginOp(), 's3:LifecycleTransition:Direct');
+            done();
+        });
+    });
 
     it('should delete archived location info if gc failed with 404', done => {
         backbeatClient.batchDeleteResponse = { error: { statusCode: 404 }, res: null };

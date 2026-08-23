@@ -20,6 +20,7 @@ const {
     coldStorageRestoreAdjustTopicPrefix,
     coldStorageRestoreTopicPrefix,
     coldStorageGCTopicPrefix,
+    coldStorageArchiveTopicPrefix,
 } = config.extensions.lifecycle;
 const BackbeatProducer = require('../../lib/BackbeatProducer');
 const locations = require('../../conf/locationConfig.json') || {};
@@ -99,6 +100,7 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
                     next => this._setupProducer(`${coldStorageRestoreAdjustTopicPrefix}${location}`, next),
                     next => this._setupProducer(`${coldStorageRestoreTopicPrefix}${location}`, next),
                     next => this._setupProducer(`${coldStorageGCTopicPrefix}${location}`, next),
+                    next => this._setupProducer(`${coldStorageArchiveTopicPrefix}${location}`, next),
                 ], done);
             }, cb);
         } else {
@@ -238,6 +240,143 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
         return new Date(date.$date || date);
     }
 
+    _isColdLocation(locationName) {
+        return !!(locationName && this.locationConfigs[locationName]
+            && this.locationConfigs[locationName].isCold);
+    }
+
+    /**
+     * Handle a "direct-to-cold" transition: cloudserver has written the object data to a hot
+     * location, but the user requested a cold storage class in the PUT request. Cloudserver
+     * flags the object as "transition in progress", and it is up to the queue populator to
+     * trigger the archival, as there is no lifecycle rule (nor lifecycle scan) involved.
+     *
+     * The message published here is strictly the same as the one the lifecycle bucket processor
+     * publishes (c.f. ReplicationAPI.sendDataMoverAction), so that the whole downstream pipeline
+     * (Sorbet, cold status processor, garbage collector) is reused unchanged.
+     *
+     * @param {Object} entry - The record log entry from metadata.
+     * @return {undefined}
+     */
+    _handleTransitionOp(entry) {
+        // accountId is mandatory in the message, for Sorbet to assume the bucket owner's role
+        if (!this.vaultClientWrapper) {
+            return;
+        }
+
+        if (entry.type !== 'put' ||
+            entry.key.startsWith(mpuBucketPrefix)) {
+            return;
+        }
+
+        const value = JSON.parse(entry.value);
+
+        // Only object creation may declare a cold storage class, and the requeue of a failed
+        // transition asks for a new attempt. Any other originOp is written by backbeat itself:
+        // excluding them ensures we never re-trigger on our own metadata updates.
+        if (!['s3:ObjectCreated:Put',
+            's3:ObjectCreated:CompleteMultipartUpload',
+            's3:ObjectCreated:Copy',
+            's3:LifecycleTransition:Retry'].includes(value.originOp)) {
+            return;
+        }
+
+        // Set by cloudserver on a direct-to-cold PUT, and kept set until the transition
+        // completes: this is the marker distinguishing a pending transition from a plain PUT.
+        if (!value['x-amz-scal-transition-in-progress']) {
+            return;
+        }
+
+        const coldLocation = value['x-amz-storage-class'];
+        if (!this._isColdLocation(coldLocation)) {
+            return;
+        }
+
+        // The data is already in the cold location: the transition has completed.
+        if (this._isColdLocation(value.dataStoreName)) {
+            return;
+        }
+
+        // Note: the check is on archiveInfo rather than on archive, so that a pending
+        // deferred restore does not prevent the transition from being triggered.
+        if (value.archive && value.archive.archiveInfo) {
+            return;
+        }
+
+        // if entry is a versioned object and is the master entry, skip task as
+        // the non-master entry will be processed
+        if (this._isVersionedObject(value) && isMasterKey(entry.key)) {
+            this.log.trace('skip processing of object master entry');
+            return;
+        }
+
+        let attempt;
+        const rawAttempt = value['x-amz-meta-scal-s3-transition-attempt'];
+        if (rawAttempt) {
+            attempt = Number.parseInt(rawAttempt, 10);
+        }
+
+        const ownerId = value['owner-id'];
+        this.vaultClientWrapper.getAccountId(ownerId, (err, accountId) => {
+            if (err) {
+                this.log.error('unable to get account', {
+                    method: 'LifecycleQueuePopulator._handleTransitionOp',
+                    ownerId,
+                    err,
+                });
+                return;
+            }
+
+            this.log.trace(
+                'publishing object transition entry',
+                { bucket: entry.bucket, key: entry.key, version: value.versionId, coldLocation },
+            );
+
+            const topic = `${coldStorageArchiveTopicPrefix}${coldLocation}`;
+            const key = `${entry.bucket}/${entry.key}`;
+
+            let version;
+            if (value.versionId) {
+                version = encode(value.versionId);
+            }
+
+            const transitionTime = this._parseDate(
+                value['x-amz-scal-transition-time'] || value['last-modified']);
+            const message = JSON.stringify({
+                accountId,
+                bucketName: entry.bucket,
+                objectKey: value.key,
+                objectVersion: version,
+                requestId: uuid(),
+                size: value['content-length'],
+                eTag: value['content-md5'],
+                try: attempt,
+                transitionTime: transitionTime.toISOString(),
+            });
+
+            const producer = this._producers[topic];
+            if (producer) {
+                LifecycleMetrics.onLifecycleTriggered(this.log, 'queuePopulator', 'archive',
+                    coldLocation, Date.now() - transitionTime.getTime());
+
+                const kafkaEntry = { key: encodeURIComponent(key), message };
+                producer.send([kafkaEntry], err => {
+                    LifecycleMetrics.onKafkaPublish(this.log, 'ColdStorageArchiveTopic', 'queuePopulator', err, 1);
+                    if (err) {
+                        this.log.error('error publishing object transition request entry', {
+                            error: err,
+                            method: 'LifecycleQueuePopulator._handleTransitionOp',
+                        });
+                    }
+                });
+            } else {
+                this.log.error(`producer not available for location ${coldLocation}`, {
+                    method: 'LifecycleQueuePopulator._handleTransitionOp',
+                });
+            }
+        });
+    }
+
     _handleRestoreOp(entry) {
         if (!this.vaultClientWrapper) {
             return;
@@ -279,6 +418,18 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
 
         if (!value.archive || !value.archive.restoreRequestedAt ||
             !value.archive.restoreRequestedDays) {
+            return;
+        }
+
+        // The object is not archived yet: there is nothing to restore. This may happen when a
+        // restore is requested on an object whose transition is still in progress, in which
+        // case the restore is deferred until the transition completes.
+        if (!value.archive.archiveInfo) {
+            this.log.debug('object not archived yet, skipping restore request', {
+                method: 'LifecycleQueuePopulator._handleRestoreOp',
+                bucket: entry.bucket,
+                key: entry.key,
+            });
             return;
         }
 
@@ -504,6 +655,7 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
         }
 
         this._handleRestoreOp(entry);
+        this._handleTransitionOp(entry);
 
         if (this.extConfig.conductor.bucketSource !== 'zookeeper') {
             this.log.debug('bucket source is not zookeeper, skipping entry', {
