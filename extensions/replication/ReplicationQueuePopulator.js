@@ -84,11 +84,17 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
         const locationConfig = (dataStoreName && locationsConfig[dataStoreName])
             || {};
         // Clean room: the object data still lives on the source (isCRR)
-        // location and first needs to be localized. This is unrelated to
-        // replicationInfo, which tracks replication of a *local* object to
-        // remote sites, hence the check before any replication condition.
-        if (locationConfig.isCRR && this.localizationConfig) {
-            this._publishLocalizationAction(entry, queueEntry, value);
+        // location, there is nothing local to replicate yet, so localize it
+        // first (when configured) and skip it. Nothing is lost: the
+        // localization merge rewrites the metadata, which comes back through
+        // the oplog with the real location and is replicated then.
+        // This is unrelated to replicationInfo, which tracks replication of a
+        // *local* object to remote sites, hence the check before any
+        // replication condition.
+        if (locationConfig.isCRR) {
+            if (this.localizationConfig) {
+                this._publishLocalizationAction(entry, queueEntry, value);
+            }
             return;
         }
         // Allow a non-versioned object if being replicated from an NFS bucket.

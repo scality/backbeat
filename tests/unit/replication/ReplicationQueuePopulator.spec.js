@@ -597,12 +597,33 @@ describe('replication queue populator: clean room localization', () => {
         sinon.assert.notCalled(params.metricsHandler.localizationObjects);
     });
 
-    it('should fall back to replication when localization is disabled', () => {
+    it('should not replicate a non-localized object when localization is ' +
+       'disabled', () => {
         delete params.config.localization;
         rqp = new RecordingQueuePopulatorMock(params);
         rqp._filterKeyOp(makeEntry(makeValue()));
 
-        assert.strictEqual(rqp.published.length, 1);
-        assert.strictEqual(rqp.published[0].topic, TOPIC);
+        assert.strictEqual(rqp.published.length, 0);
+    });
+
+    // the data still lives on the source location: there is nothing local to
+    // replicate, whatever replicationInfo says.
+    [true, false].forEach(localizationEnabled => {
+        it('should never replicate a pending non-localized object ' +
+           `(localization ${localizationEnabled ? 'enabled' : 'disabled'})`,
+        () => {
+            if (!localizationEnabled) {
+                delete params.config.localization;
+            }
+            rqp = new RecordingQueuePopulatorMock(params);
+            const value = makeValue({
+                replicationInfo: { ...repInfo, status: 'PENDING' },
+            });
+            rqp._filterKeyOp(makeEntry(value));
+
+            assert.strictEqual(
+                rqp.published.filter(p => p.topic === TOPIC).length, 0);
+            sinon.assert.notCalled(params.metricsHandler.objects);
+        });
     });
 });

@@ -31,6 +31,8 @@ const errorTransitionInProgress = errors.InternalError.
     customizeDescription('transition is currently in progress');
 const errorTransitionColdObject = errors.InternalError.
     customizeDescription('transitioning a cold object is forbidden');
+const errorTransitionNonLocalizedObject = errors.InternalError.
+    customizeDescription('transitioning a non-localized object is forbidden');
 const errorObjectTemporarilyRestored = errors.InternalError.
     customizeDescription('object temporarily restored');
 const errorReplicationInProgress = errors.InternalError.
@@ -1270,11 +1272,20 @@ class LifecycleTask extends BackbeatTask {
                     return next(errorReplicationInProgress);
                 }
                 const dataStoreName = objectMD.getDataStoreName();
-                const isObjectCold = dataStoreName && locationsConfig[dataStoreName]
-                    && locationsConfig[dataStoreName].isCold;
+                const locationConfig = (dataStoreName
+                    && locationsConfig[dataStoreName]) || {};
                 // We do not transition cold objects
-                if (isObjectCold) {
+                if (locationConfig.isCold) {
                     return next(errorTransitionColdObject);
+                }
+                // Clean room: the object data still lives on the source
+                // (isCRR) location. Localization is the only valid transition
+                // out of such a location, and it is triggered by its own path
+                // (the queue populator), not by lifecycle rules. The version
+                // is simply re-evaluated on a later scan, once localization
+                // has completed.
+                if (locationConfig.isCRR) {
+                    return next(errorTransitionNonLocalizedObject);
                 }
                 // If transition is in progress, do not re-publish entry
                 // to data-mover or cold-archive topic.
