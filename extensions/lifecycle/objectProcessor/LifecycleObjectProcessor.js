@@ -7,6 +7,9 @@ const BackbeatConsumerManager = require('../../../lib/BackbeatConsumerManager');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const ClientManager = require('../../../lib/clients/ClientManager');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
+const VaultClientWrapper = require('../../utils/VaultClientWrapper');
+const { AccountIdCache } = require('../../utils/AccountIdCache');
+const { authTypeAssumeRole } = require('../../../lib/constants');
 
 const logIdFromType = {
     'object-processor': 'Backbeat:Lifecycle:ObjectProcessor',
@@ -61,7 +64,53 @@ class LifecycleObjectProcessor extends EventEmitter {
             transport,
         }, this._log);
 
+        this.vaultClientWrapper = new VaultClientWrapper(
+            `lifecycle:${this.getProcessorType()}`,
+            this._processConfig.vaultAdmin,
+            this.getAuthConfig(this._lcConfig),
+            this._log,
+        );
+        this._accountIdCache = new AccountIdCache(
+            this._processConfig.concurrency);
+
         this.retryWrapper = new BackbeatTask(this._processConfig.retry);
+    }
+
+    /**
+     * Resolve the account id of a canonical id. Actions published by the
+     * lifecycle conductor already carry the account id; those published by the
+     * queue populator (clean room localization) only know the canonical id.
+     * @param {String} ownerId - canonical id of the object owner
+     * @param {Logger} log - logger instance
+     * @param {Function} cb - callback: cb(err, accountId)
+     * @return {undefined}
+     */
+    getAccountId(ownerId, log, cb) {
+        if (this.getAuthConfig(this._lcConfig).type !== authTypeAssumeRole) {
+            log.debug('skipping: not assume role auth type');
+            return process.nextTick(cb);
+        }
+
+        if (this._accountIdCache.isKnown(ownerId)) {
+            return process.nextTick(cb, null, this._accountIdCache.get(ownerId));
+        }
+
+        return this.vaultClientWrapper.getAccountId(ownerId, (err, accountId) => {
+            if (err) {
+                if (err.NoSuchEntity) {
+                    log.error('canonical id does not exist', { error: err, ownerId });
+                    this._accountIdCache.miss(ownerId);
+                } else {
+                    log.error('could not get account id', { error: err, ownerId });
+                }
+                return cb(err);
+            }
+
+            this._accountIdCache.set(ownerId, accountId);
+            this._accountIdCache.expireOldest();
+
+            return cb(null, accountId);
+        });
     }
 
     getProcessorType() {
@@ -130,6 +179,9 @@ class LifecycleObjectProcessor extends EventEmitter {
     start(done) {
         this.clientManager.initSTSConfig();
         this.clientManager.initCredentialsManager();
+        if (this.getAuthConfig(this._lcConfig).type === authTypeAssumeRole) {
+            this.vaultClientWrapper.init();
+        }
         this._setupConsumers(done);
     }
 
@@ -225,12 +277,14 @@ class LifecycleObjectProcessor extends EventEmitter {
                 this.clientManager.getBackbeatClient.bind(this.clientManager),
             getBackbeatMetadataProxy:
                 this.clientManager.getBackbeatMetadataProxy.bind(this.clientManager),
+            getAccountId: this.getAccountId.bind(this),
             logger: this._log,
         };
     }
 
     isReady() {
-        return this._consumers && this._consumers.isReady();
+        return this._consumers && this._consumers.isReady() &&
+            this.vaultClientWrapper.tempCredentialsReady();
     }
 }
 

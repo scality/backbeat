@@ -1,4 +1,5 @@
 const assert = require('assert');
+const { errors } = require('arsenal');
 const { ObjectMD } = require('arsenal').models;
 
 class GarbageCollectorProducerMock {
@@ -157,6 +158,21 @@ class ProcessorMock {
         this.coldProducer = coldProducer;
         this._gcConfig = gcConfig;
         this.logger = logger;
+        this.accountIds = {};
+        this.accountIdLookups = 0;
+    }
+
+    setAccountId(ownerId, accountId) {
+        this.accountIds[ownerId] = accountId;
+    }
+
+    getAccountId(ownerId, log, cb) {
+        this.accountIdLookups += 1;
+        const accountId = this.accountIds[ownerId];
+        if (!accountId) {
+            return process.nextTick(cb, errors.NoSuchEntity);
+        }
+        return process.nextTick(cb, null, accountId);
     }
 
     getStateVars() {
@@ -170,6 +186,7 @@ class ProcessorMock {
             getBackbeatClient: () => this.backbeatClient,
             getBackbeatMetadataProxy: () => this.backbeatMetadataProxy,
             getS3Client: () => this.s3Client,
+            getAccountId: this.getAccountId.bind(this),
         };
     }
 }

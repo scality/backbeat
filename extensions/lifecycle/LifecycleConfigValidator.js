@@ -71,6 +71,7 @@ const joiSchema = joi.object({
         concurrency: joi.number().greater(0).default(10),
         maxQueued: joi.number().greater(0).default(MAX_QUEUED_DEFAULT),
         probeServer: probeServerJoi.default(),
+        vaultAdmin: hostPortJoi,
         circuitBreaker: joi.object().optional(),
     },
     coldStorageArchiveTopicPrefix: joi.string().default('cold-archive-req-'),

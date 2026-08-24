@@ -139,6 +139,13 @@ const joiSchema = joi.object({
         probeServer: probeServerPerSite,
     }).optional(),
     objectSizeMetrics: joi.array().items(joi.number()).default(OBJECT_SIZE_METRICS),
+    // Clean room: localization of objects whose data still lives on the source
+    // (isCRR) location. Enabled by setting `toLocation`.
+    localization: joi.object({
+        toLocation: joi.string().required(),
+        resultsTopic: joi.string()
+            .default('backbeat-lifecycle-transition-tasks'),
+    }).optional(),
 });
 
 /**

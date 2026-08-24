@@ -1,8 +1,11 @@
 const assert = require('assert');
 const sinon = require('sinon');
 
+const { encode } = require('arsenal').versioning.VersionID;
+
 const ReplicationQueuePopulator =
     require('../../../extensions/replication/ReplicationQueuePopulator');
+const ReplicationAPI = require('../../../extensions/replication/ReplicationAPI');
 
 const fakeLogger = require('../../utils/fakeLogger');
 
@@ -380,5 +383,226 @@ describe('replication queue populator', () => {
 
         assert.doesNotThrow(() => rqp._filterKeyOp(entry));
         assert.deepStrictEqual(rqp.getState(), {});
+    });
+});
+
+/**
+ * Records every published message, whatever the topic, so localization
+ * entries (data mover topic) can be inspected.
+ * @class
+ */
+class RecordingQueuePopulatorMock extends ReplicationQueuePopulator {
+    constructor(params) {
+        super(params);
+
+        this.published = [];
+    }
+
+    publish(topic, key, message) {
+        this.published.push({ topic, key, message });
+    }
+}
+
+describe('replication queue populator: clean room localization', () => {
+    const CRR_LOCATION = 'location-crr-source';
+    const LOCAL_LOCATION = 'us-east-1';
+    const RESULTS_TOPIC = 'test-transition-results';
+    const VERSION_ID = '98477724999464999999RG001  1.30.12';
+    const VERSIONED_KEY = `a-test-key\u0000${VERSION_ID}`;
+
+    let params;
+    let rqp;
+
+    function makeValue(overrides = {}) {
+        return JSON.stringify({
+            ...kafkaValue,
+            dataStoreName: CRR_LOCATION,
+            location: [{
+                key: 'some-data-key',
+                size: 128,
+                start: 0,
+                dataStoreName: CRR_LOCATION,
+                dataStoreETag: '1:d41d8cd98f00b204e9800118ecf8427e',
+            }],
+            ...overrides,
+        });
+    }
+
+    function makeEntry(value, key = VERSIONED_KEY) {
+        return {
+            type: 'put',
+            bucket: 'test-bucket-source',
+            key,
+            value,
+            overheadFields: { commitTimestamp: '2024-05-06T10:11:12.000Z' },
+            logReader: { getMetricLabels: stubMetricLabels() },
+        };
+    }
+
+    beforeEach(() => {
+        params = {
+            config: {
+                topic: TOPIC,
+                localization: {
+                    toLocation: LOCAL_LOCATION,
+                    resultsTopic: RESULTS_TOPIC,
+                },
+            },
+            logger: fakeLogger,
+            metricsHandler: {
+                bytes: sinon.spy(),
+                objects: sinon.spy(),
+                localizationBytes: sinon.spy(),
+                localizationObjects: sinon.spy(),
+            },
+        };
+        rqp = new RecordingQueuePopulatorMock(params);
+    });
+
+    it('should publish a copyLocation action for a non-localized object', () => {
+        rqp._filterKeyOp(makeEntry(makeValue()));
+
+        assert.strictEqual(rqp.published.length, 1);
+        const [{ topic, key, message }] = rqp.published;
+        assert.strictEqual(topic, ReplicationAPI.getDataMoverTopic());
+        assert.strictEqual(key, 'test-bucket-source/a-test-key');
+
+        const action = JSON.parse(message);
+        assert.strictEqual(action.action, 'copyLocation');
+        assert.strictEqual(action.toLocation, LOCAL_LOCATION);
+        assert.strictEqual(action.resultsTopic, RESULTS_TOPIC);
+        assert.strictEqual(action.contextInfo.ruleType, 'transition');
+        assert.strictEqual(action.contextInfo.origin, 'localization');
+        assert.deepStrictEqual(action.target, {
+            owner: kafkaValue['owner-id'],
+            bucket: 'test-bucket-source',
+            key: 'a-test-key',
+            version: encode(VERSION_ID),
+            eTag: `"${kafkaValue['content-md5']}"`,
+            lastModified: kafkaValue['last-modified'],
+        });
+        // resolved by the transition processor, not by the populator
+        assert.strictEqual(action.target.accountId, undefined);
+        assert.deepStrictEqual(action.source, {
+            bucket: 'test-bucket-source',
+            objectKey: 'a-test-key',
+            storageClass: CRR_LOCATION,
+        });
+        assert.strictEqual(action.metrics.fromLocation, CRR_LOCATION);
+        assert.strictEqual(action.metrics.contentLength, 128);
+        assert.strictEqual(action.metrics.transitionTime,
+            '2024-05-06T10:11:12.000Z');
+    });
+
+    it('should account localized objects and bytes', () => {
+        rqp._filterKeyOp(makeEntry(makeValue()));
+
+        sinon.assert.calledOnceWithExactly(
+            params.metricsHandler.localizationBytes, labels, 128);
+        sinon.assert.calledOnceWithExactly(
+            params.metricsHandler.localizationObjects, labels);
+        sinon.assert.notCalled(params.metricsHandler.objects);
+    });
+
+    // localization is about where the data lives, forward replication is
+    // about where it has been copied to: the two are independent.
+    ['PENDING', 'COMPLETED', 'FAILED'].forEach(status => {
+        it(`should publish regardless of replication status ${status}`, () => {
+            const value = makeValue({
+                replicationInfo: { ...repInfo, status },
+            });
+            rqp._filterKeyOp(makeEntry(value));
+
+            assert.strictEqual(rqp.published.length, 1);
+        });
+    });
+
+    it('should publish when there is no replication configured', () => {
+        const value = makeValue({ replicationInfo: null });
+        rqp._filterKeyOp(makeEntry(value));
+
+        assert.strictEqual(rqp.published.length, 1);
+    });
+
+    it('should propagate the transition attempt count', () => {
+        const value = makeValue({
+            'x-amz-meta-scal-s3-transition-attempt': '3',
+        });
+        rqp._filterKeyOp(makeEntry(value));
+
+        assert.strictEqual(rqp.published.length, 1);
+        const action = JSON.parse(rqp.published[0].message);
+        assert.strictEqual(action.target.attempt, 3);
+    });
+
+    it('should not set an attempt count for a first copy', () => {
+        rqp._filterKeyOp(makeEntry(makeValue()));
+
+        const action = JSON.parse(rqp.published[0].message);
+        assert.strictEqual(action.target.attempt, undefined);
+    });
+
+    it('should skip master keys', () => {
+        rqp._filterKeyOp(makeEntry(makeValue(), 'a-test-key'));
+
+        assert.strictEqual(rqp.published.length, 0);
+    });
+
+    it('should skip delete markers', () => {
+        const value = makeValue({ isDeleteMarker: true });
+        rqp._filterKeyOp(makeEntry(value));
+
+        assert.strictEqual(rqp.published.length, 0);
+    });
+
+    it('should skip empty objects', () => {
+        const value = makeValue({
+            'location': null,
+            'content-length': 0,
+        });
+        rqp._filterKeyOp(makeEntry(value));
+
+        assert.strictEqual(rqp.published.length, 0);
+    });
+
+    it('should skip and report non-empty objects without location', () => {
+        const errorSpy = sinon.spy(rqp.log, 'error');
+        const value = makeValue({ location: null });
+        rqp._filterKeyOp(makeEntry(value));
+
+        assert.strictEqual(rqp.published.length, 0);
+        sinon.assert.calledOnce(errorSpy);
+        errorSpy.restore();
+    });
+
+    // partial oplog projections (change stream `update` events) may not carry
+    // the location: they cannot be localized, and behave as before.
+    it('should not localize entries with no dataStoreName', () => {
+        const value = makeValue({ dataStoreName: undefined });
+        rqp._filterKeyOp(makeEntry(value));
+
+        sinon.assert.notCalled(params.metricsHandler.localizationObjects);
+        assert.strictEqual(
+            rqp.published.filter(
+                p => p.topic === ReplicationAPI.getDataMoverTopic()).length,
+            0);
+    });
+
+    it('should not localize objects on a regular location', () => {
+        const value = makeValue({ dataStoreName: LOCAL_LOCATION });
+        rqp._filterKeyOp(makeEntry(value));
+
+        assert.strictEqual(rqp.published.length, 1);
+        assert.strictEqual(rqp.published[0].topic, TOPIC);
+        sinon.assert.notCalled(params.metricsHandler.localizationObjects);
+    });
+
+    it('should fall back to replication when localization is disabled', () => {
+        delete params.config.localization;
+        rqp = new RecordingQueuePopulatorMock(params);
+        rqp._filterKeyOp(makeEntry(makeValue()));
+
+        assert.strictEqual(rqp.published.length, 1);
+        assert.strictEqual(rqp.published[0].topic, TOPIC);
     });
 });

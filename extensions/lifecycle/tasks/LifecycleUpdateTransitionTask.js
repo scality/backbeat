@@ -253,6 +253,34 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
     }
 
     /**
+     * Actions published by the lifecycle conductor carry the account id;
+     * those published by the queue populator (clean room localization) only
+     * know the object owner's canonical id. Resolve it once, up-front, so the
+     * rest of the task - and the garbage collection entry it emits - can use
+     * `target.accountId` as usual.
+     * @param {ActionQueueEntry} entry - action entry to execute
+     * @param {Logger} log - logger instance
+     * @param {Function} cb - callback function
+     * @return {undefined}
+     */
+    _resolveAccountId(entry, log, cb) {
+        const { accountId, owner } = this.getTargetAttribute(entry);
+        if (accountId || !owner) {
+            return process.nextTick(cb);
+        }
+
+        log.debug('no account id in entry, resolving from canonical id',
+            { owner });
+        return this.getAccountId(owner, log, (err, resolvedAccountId) => {
+            if (err) {
+                return cb(err);
+            }
+            entry.setAttribute('target.accountId', resolvedAccountId);
+            return cb();
+        });
+    }
+
+    /**
      *
      * @param {ActionQueueEntry} entry - action entry to execute
      * @param {Function} done - callback funtion
@@ -268,11 +296,17 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
             lastModified: 'target.lastModified',
         });
         log.addDefaultFields(entry.getLogInfo());
-        if (entry.getStatus() === 'success') {
-            return this.handleSuccessfullTransition(entry, log, done);
-        }
 
-        return this.handleFailedTransition(entry, log, done);
+        return this._resolveAccountId(entry, log, err => {
+            if (err) {
+                return done(err);
+            }
+            if (entry.getStatus() === 'success') {
+                return this.handleSuccessfullTransition(entry, log, done);
+            }
+
+            return this.handleFailedTransition(entry, log, done);
+        });
     }
 }
 

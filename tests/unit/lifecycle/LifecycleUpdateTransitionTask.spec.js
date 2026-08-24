@@ -169,4 +169,47 @@ describe('LifecycleUpdateTransitionTask', () => {
             done();
         });
     });
+
+    // clean room localization actions are published by the queue populator,
+    // which only knows the object owner's canonical id
+    describe('account id resolution', () => {
+        it('should not look up the account id when the entry has one', done => {
+            actionEntry.setAttribute('target.accountId', '000000000042');
+            actionEntry.setAttribute('target.owner', 'some-canonical-id');
+            task.processActionEntry(actionEntry, err => {
+                assert.ifError(err);
+                assert.strictEqual(objectProcessor.accountIdLookups, 0);
+                done();
+            });
+        });
+
+        it('should resolve the account id from the owner canonical id', done => {
+            objectProcessor.setAccountId('some-canonical-id', '000000000042');
+            actionEntry.setAttribute('target.owner', 'some-canonical-id');
+            task.processActionEntry(actionEntry, err => {
+                assert.ifError(err);
+                assert.strictEqual(objectProcessor.accountIdLookups, 1);
+                assert.strictEqual(
+                    actionEntry.getAttribute('target.accountId'),
+                    '000000000042');
+                // the garbage collection entry must not resolve it again
+                const receivedGcEntry = gcProducer.getReceivedEntry();
+                assert.strictEqual(
+                    receivedGcEntry.getAttribute('target.accountId'),
+                    '000000000042');
+                done();
+            });
+        });
+
+        it('should fail the entry when the account id cannot be resolved',
+        done => {
+            actionEntry.setAttribute('target.owner', 'unknown-canonical-id');
+            task.processActionEntry(actionEntry, err => {
+                assert(err);
+                assert.strictEqual(
+                    backbeatMetadataProxyClient.getReceivedMd(), null);
+                done();
+            });
+        });
+    });
 });

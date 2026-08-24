@@ -154,6 +154,16 @@ if [[ "$EXTENSIONS_REPLICATION_DEST_BOOTSTRAPLIST" ]]; then
     fi
 fi
 
+# Clean room: localize objects whose data still lives on the source (isCRR)
+# location. Setting the target location enables the trigger.
+if [[ "$EXTENSIONS_REPLICATION_LOCALIZATION_TO_LOCATION" ]]; then
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .extensions.replication.localization.toLocation=\"$EXTENSIONS_REPLICATION_LOCALIZATION_TO_LOCATION\""
+fi
+
+if [[ "$EXTENSIONS_REPLICATION_LOCALIZATION_RESULTS_TOPIC" ]]; then
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .extensions.replication.localization.resultsTopic=\"$EXTENSIONS_REPLICATION_LOCALIZATION_RESULTS_TOPIC\""
+fi
+
 # START Retry config
 
 # AWS_S3
