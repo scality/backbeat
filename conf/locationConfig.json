@@ -42,5 +42,12 @@
     "legacyAwsBehavior": false,
     "isCold": true,
     "details": {}
+  },
+  "location-crr-source": {
+    "type": "scality",
+    "objectId": "location-crr-source",
+    "legacyAwsBehavior": false,
+    "isCRR": true,
+    "details": {}
   }
 }

@@ -6,6 +6,7 @@ const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const ObjectMD = require('arsenal').models.ObjectMD;
 const { LifecycleMetrics } = require('../LifecycleMetrics');
+const { filterOutCRRLocations, getCRRLocationNames } = require('../../../lib/util/locations');
 /** @typedef { import('../objectProcessor/LifecycleObjectProcessor.js') } LifecycleObjectProcessor */
 
 class LifecycleUpdateTransitionTask extends BackbeatTask {
@@ -112,6 +113,21 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
 
     _garbageCollectLocation(entry, locations, log, done) {
         const { bucket, key, version, eTag, accountId, owner } = this.getTargetAttribute(entry);
+        // Data stored on a CRR location belongs to the remote site: the copy we
+        // just made is an extra local copy, the source must be left untouched.
+        const locationsToGC = filterOutCRRLocations(locations);
+        if (locationsToGC.length !== locations.length) {
+            log.info('skipping garbage collection of data on CRR location', {
+                method: 'LifecycleUpdateTransitionTask._garbageCollectLocation',
+                bucket,
+                objectKey: key,
+                versionId: version,
+                dataStoreNames: getCRRLocationNames(locations),
+            });
+        }
+        if (locationsToGC.length === 0) {
+            return process.nextTick(done);
+        }
         const gcEntry = ActionQueueEntry.create('deleteData')
               .addContext({
                   origin: 'lifecycle',
@@ -126,7 +142,7 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
               .setAttribute('serviceName', 'lifecycle-transition')
               .setAttribute('target.accountId', accountId)
               .setAttribute('target.owner', owner)
-              .setAttribute('target.locations', locations);
+              .setAttribute('target.locations', locationsToGC);
         this.gcProducer.publishActionEntry(gcEntry);
         return process.nextTick(done);
     }
