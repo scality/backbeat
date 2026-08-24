@@ -275,7 +275,9 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
             if (err) {
                 return cb(err);
             }
-            entry.setAttribute('target.accountId', resolvedAccountId);
+            if (resolvedAccountId) {
+                entry.setAttribute('target.accountId', resolvedAccountId);
+            }
             return cb();
         });
     }

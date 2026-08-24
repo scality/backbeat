@@ -2,6 +2,7 @@
 
 const { EventEmitter } = require('events');
 const Logger = require('werelogs').Logger;
+const { errors } = require('arsenal');
 
 const BackbeatConsumerManager = require('../../../lib/BackbeatConsumerManager');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
@@ -91,7 +92,14 @@ class LifecycleObjectProcessor extends EventEmitter {
             return process.nextTick(cb);
         }
 
-        if (this._accountIdCache.isKnown(ownerId)) {
+        // A cached miss must fail like a fresh lookup would: `isKnown()` is also
+        // true for misses, and `get()` would then hand back `undefined`.
+        if (this._accountIdCache.isMiss(ownerId)) {
+            log.error('canonical id does not exist (cached)', { ownerId });
+            return process.nextTick(cb, errors.NoSuchEntity);
+        }
+
+        if (this._accountIdCache.has(ownerId)) {
             return process.nextTick(cb, null, this._accountIdCache.get(ownerId));
         }
 

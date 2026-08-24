@@ -1,5 +1,6 @@
 const assert = require('assert');
 const sinon = require('sinon');
+const { errors } = require('arsenal');
 const config = require('../../config.json');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const LifecycleObjectTransitionProcessor =
@@ -122,6 +123,94 @@ describe('LifecycleObjectTransitionProcessor', () => {
                 assert.ifError(cbErr);
                 assert.strictEqual(spy.callCount, 0);
                 done();
+            });
+        });
+    });
+
+    describe('getAccountId', () => {
+        const ownerId = 'canonical-id-1';
+        const accountId = '834789881858';
+        let processor;
+        let log;
+
+        beforeEach(() => {
+            processor = new LifecycleObjectTransitionProcessor(
+                config.zookeeper,
+                config.kafka,
+                {
+                    ...config.extensions.lifecycle,
+                    transitionProcessor: {
+                        ...config.extensions.lifecycle.transitionProcessor,
+                        auth: { type: 'assumeRole', roleName: 'role' },
+                    },
+                },
+                config.s3,
+            );
+            log = { debug: () => {}, error: () => {} };
+        });
+
+        afterEach(() => {
+            sinon.restore();
+        });
+
+        it('should skip the lookup when auth type is not assume role', done => {
+            const spy = sinon.spy(objectProcessor.vaultClientWrapper, 'getAccountId');
+            objectProcessor.getAccountId(ownerId, log, (err, id) => {
+                assert.ifError(err);
+                assert.strictEqual(id, undefined);
+                assert.strictEqual(spy.callCount, 0);
+                done();
+            });
+        });
+
+        it('should resolve through vault and cache the result', done => {
+            const stub = sinon.stub(processor.vaultClientWrapper, 'getAccountId')
+                .yields(null, accountId);
+
+            processor.getAccountId(ownerId, log, (err, id) => {
+                assert.ifError(err);
+                assert.strictEqual(id, accountId);
+                assert.strictEqual(stub.callCount, 1);
+
+                processor.getAccountId(ownerId, log, (err2, id2) => {
+                    assert.ifError(err2);
+                    assert.strictEqual(id2, accountId);
+                    assert.strictEqual(stub.callCount, 1);
+                    done();
+                });
+            });
+        });
+
+        it('should fail on a cached miss instead of returning no account id', done => {
+            const stub = sinon.stub(processor.vaultClientWrapper, 'getAccountId')
+                .yields(errors.NoSuchEntity);
+
+            processor.getAccountId(ownerId, log, err => {
+                assert(err.NoSuchEntity);
+                assert.strictEqual(stub.callCount, 1);
+
+                // the miss is cached, but must still surface as an error
+                processor.getAccountId(ownerId, log, (err2, id2) => {
+                    assert(err2.NoSuchEntity);
+                    assert.strictEqual(id2, undefined);
+                    assert.strictEqual(stub.callCount, 1);
+                    done();
+                });
+            });
+        });
+
+        it('should propagate other vault errors without caching them', done => {
+            const stub = sinon.stub(processor.vaultClientWrapper, 'getAccountId')
+                .yields(errors.InternalError);
+
+            processor.getAccountId(ownerId, log, err => {
+                assert(err.InternalError);
+
+                processor.getAccountId(ownerId, log, err2 => {
+                    assert(err2.InternalError);
+                    assert.strictEqual(stub.callCount, 2);
+                    done();
+                });
             });
         });
     });
