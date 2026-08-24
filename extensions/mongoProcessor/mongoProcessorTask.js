@@ -21,6 +21,7 @@ const mongoProcessorConfig = config.extensions.mongoProcessor;
 // TODO: consider whether we would want a separate mongo config
 // for the consumer side
 const mongoClientConfig = config.queuePopulator.mongo;
+const gcConfig = config.extensions.gc;
 
 const log = new werelogs.Logger('Backbeat:MongoProcessor:task');
 const mongoProcessorLogConfig = mongoProcessorConfig.log ?? config.log;
@@ -28,7 +29,7 @@ werelogs.configure({ level: mongoProcessorLogConfig.logLevel,
     dump: mongoProcessorLogConfig.dumpLevel });
 
 const mqp = new MongoQueueProcessor(kafkaConfig, mongoProcessorConfig,
-    mongoClientConfig, mConfig);
+    mongoClientConfig, mConfig, gcConfig);
 
 /**
  * Handle ProbeServer liveness check
