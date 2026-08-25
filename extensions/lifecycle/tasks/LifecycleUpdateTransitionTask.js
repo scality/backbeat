@@ -6,6 +6,10 @@ const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const ObjectMD = require('arsenal').models.ObjectMD;
 const { LifecycleMetrics } = require('../LifecycleMetrics');
+const {
+    TRANSITION_ATTEMPT_MD,
+    getTransitionAttempt,
+} = require('../../../lib/util/transitionAttempt');
 /** @typedef { import('../objectProcessor/LifecycleObjectProcessor.js') } LifecycleObjectProcessor */
 
 class LifecycleUpdateTransitionTask extends BackbeatTask {
@@ -71,9 +75,7 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
             .setDataStoreName(newLocationName)
             .setAmzStorageClass(newLocationName)
             .setOriginOp('s3:LifecycleTransition')
-            .setUserMetadata({
-                'x-amz-meta-scal-s3-transition-attempt': undefined,
-            })
+            .setUserMetadata({ [TRANSITION_ATTEMPT_MD]: undefined })
             .setTransitionInProgress(false);
     }
 
@@ -232,20 +234,10 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
                 next(err, objMD);
             }),
             (objMD, next) => {
-                const userMDStr = objMD.getUserMetadata() || '{}';
-                const userMD = JSON.parse(userMDStr);
-
-                let tryCount = userMD['x-amz-meta-scal-s3-transition-attempt'];
-                if (tryCount === undefined) {
-                    tryCount = 1;
-                } else {
-                    tryCount = parseInt(tryCount, 10) + 1;
-                }
+                const tryCount = (getTransitionAttempt(objMD) || 0) + 1;
 
                 objMD.setTransitionInProgress(false)
-                    .setUserMetadata({
-                        'x-amz-meta-scal-s3-transition-attempt': tryCount,
-                    });
+                    .setUserMetadata({ [TRANSITION_ATTEMPT_MD]: tryCount });
 
                 return this._putMetadata(entry, objMD, log, next);
             },

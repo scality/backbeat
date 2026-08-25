@@ -1,6 +1,7 @@
 'use strict';
 
 const { LifecycleRequeueTask } = require('./LifecycleRequeueTask');
+const { TRANSITION_ATTEMPT_MD } = require('../../../lib/util/transitionAttempt');
 const locationsConfig = require('../../../conf/locationConfig.json') || {};
 
 class LifecycleResetTransitionInProgressTask extends LifecycleRequeueTask {
@@ -23,9 +24,7 @@ class LifecycleResetTransitionInProgressTask extends LifecycleRequeueTask {
             // Keep the flag as the queue populator keys on it to trigger the next attempt
             md.setTransitionInProgress(false);
         }
-        md.setUserMetadata({
-            'x-amz-meta-scal-s3-transition-attempt': try_,
-        });
+        md.setUserMetadata({ [TRANSITION_ATTEMPT_MD]: try_ });
         return true;
     }
 

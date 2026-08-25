@@ -2375,7 +2375,7 @@ describe('lifecycle task helper methods', () => {
                 getDataStoreName: () => 'local-site',
                 getDataStoreVersionId: () => 'version-123',
                 getContentLength: () => 1024,
-                getUserMetadata: () => null,
+                getValue: () => ({}),
             };
 
             sinon.stub(lifecycleTask, '_canUnconditionallyGarbageCollect').returns(true);
@@ -2416,7 +2416,7 @@ describe('lifecycle task helper methods', () => {
                 getDataStoreName: () => 'local-site',
                 getDataStoreVersionId: () => 'version-123',
                 getContentLength: () => 1024,
-                getUserMetadata: () => JSON.stringify({
+                getValue: () => ({
                     'x-amz-meta-scal-s3-transition-attempt': '3'
                 }),
             };
@@ -2435,7 +2435,7 @@ describe('lifecycle task helper methods', () => {
                 getDataStoreName: () => 'aws-location',
                 getDataStoreVersionId: () => null,
                 getContentLength: () => 2048,
-                getUserMetadata: () => null,
+                getValue: () => ({}),
                 getLocation: () => [{ name: 'aws-location', dataStoreVersionId: null }],
             };
 
@@ -2457,7 +2457,7 @@ describe('lifecycle task helper methods', () => {
                 getDataStoreName: () => 'aws-location',
                 getDataStoreVersionId: () => null,
                 getContentLength: () => 2048,
-                getUserMetadata: () => null,
+                getValue: () => ({}),
                 getLocation: () => [{ name: 'aws-location', dataStoreVersionId: null }],
             };
 

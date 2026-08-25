@@ -4,6 +4,7 @@ const ObjectMDArchive = require('arsenal').models.ObjectMDArchive;
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const LifecycleUpdateTransitionTask = require('./LifecycleUpdateTransitionTask');
 const { LifecycleMetrics } = require('../LifecycleMetrics');
+const { TRANSITION_ATTEMPT_MD } = require('../../../lib/util/transitionAttempt');
 
 class SkipMdUpdateError extends Error {}
 
@@ -119,7 +120,7 @@ class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
                         .setAmzStorageClass(coldLocation)
                         .setTransitionInProgress(false)
                         .setOriginOp(isDirectToCold ? 's3:LifecycleTransition:Direct' : 's3:LifecycleTransition')
-                        .setUserMetadata({ 'x-amz-meta-scal-s3-transition-attempt': undefined });
+                        .setUserMetadata({ [TRANSITION_ATTEMPT_MD]: undefined });
                 }
 
                 this._putMetadata(entry, objectMD, log, err => {
