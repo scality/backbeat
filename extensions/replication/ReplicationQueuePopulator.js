@@ -1,11 +1,15 @@
 const { isMasterKey } = require('arsenal').versioning;
-const { usersBucket, mpuBucketPrefix } = require('arsenal').constants;
+const { usersBucket, mpuBucketPrefix, externalBackends } = require('arsenal').constants;
 
 const QueuePopulatorExtension =
           require('../../lib/queuePopulator/QueuePopulatorExtension');
 const ObjectQueueEntry = require('../../lib/models/ObjectQueueEntry');
+const ReplicationAPI = require('./ReplicationAPI');
+const { LifecycleMetrics, PULL_REPLICATION_TYPE } = require('../lifecycle/LifecycleMetrics');
+const config = require('../../lib/Config');
 const locationsConfig = require('../../conf/locationConfig.json') || {};
 const safeJsonParse = require('../../lib/util/safeJsonParse');
+const { getTransitionAttempt } = require('../../lib/util/transitionAttempt');
 const { traceHeadersFromEntry } = require('arsenal/build/lib/tracing').kafka;
 
 class ReplicationQueuePopulator extends QueuePopulatorExtension {
@@ -13,6 +17,14 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
         super(params);
         this.repConfig = params.config;
         this.metricsHandler = params.metricsHandler;
+        this.transitionTasksTopic = config.extensions?.lifecycle?.transitionTasksTopic;
+
+        // Where the data is fetched to when the object metadata does not name a
+        // usable target. Any location will do, as long as it can hold the data.
+        this.defaultLocalLocation = ['us-east-1', ...Object.keys(locationsConfig)].find(name => {
+            const loc = locationsConfig[name];
+            return loc && !loc.isCold && !loc.isCRR && !loc.isTransient && !externalBackends[loc.type];
+        });
     }
 
     filter(entry) {
@@ -73,19 +85,24 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
         if (sanityCheckRes) {
             return;
         }
+        const locationConfig = locationsConfig[queueEntry.getDataStoreName()] || {};
         // Allow a non-versioned object if being replicated from an NFS bucket.
         // Or if the master key is of a non versioned object
         if (!this._entryCanBeReplicated(queueEntry)) {
             return;
         }
+        // Data still on the source location has to be fetched first. This is
+        // unrelated to replicationInfo, which tracks replication of a *local*
+        // object to remote sites, hence the check before any of its conditions.
+        if (locationConfig.isCRR && this.transitionTasksTopic) {
+            this._publishPullReplicationAction(entry, queueEntry, value);
+            return;
+        }
         if (queueEntry.getReplicationStatus() !== 'PENDING') {
             return;
         }
-        const dataStoreName = queueEntry.getDataStoreName();
-        const isObjectCold = dataStoreName && locationsConfig[dataStoreName]
-            && locationsConfig[dataStoreName].isCold;
         // We do not replicate cold objects.
-        if (isObjectCold) {
+        if (locationConfig.isCold) {
             return;
         }
 
@@ -122,6 +139,125 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
                      JSON.stringify(publishedEntry),
                      undefined,
                      traceHeaders);
+    }
+
+    /**
+     * Queue a copyLocation action for an object whose data still lives on the
+     * source location: the data mover copies it over, and the transition
+     * processor merges the new location into the object metadata.
+     *
+     * Duplicates are expected (and harmless): the same object may show up
+     * several times in the oplog, and the copy is idempotent.
+     *
+     * @param {Object} entry - raw metadata log entry
+     * @param {ObjectQueueEntry} queueEntry - parsed entry
+     * @param {Object} value - parsed entry metadata
+     * @return {undefined}
+     */
+    _publishPullReplicationAction(entry, queueEntry, value) {
+        if (queueEntry.getIsDeleteMarker()) {
+            return;
+        }
+
+        // Fail if the object is not empty, but has no location to pull data from
+        const contentLength = queueEntry.getContentLength();
+        const locations = queueEntry.getLocation();
+        if (!locations?.length && contentLength > 0) {
+            this.log.error('non-empty object without location, skipping pull replication', {
+                method: 'ReplicationQueuePopulator._publishPullReplicationAction',
+                ...queueEntry.getLogInfo(),
+                dataStoreName: queueEntry.getDataStoreName(),
+                contentLength,
+            });
+            return;
+        }
+
+        const bucket = queueEntry.getBucket();
+        const objectKey = queueEntry.getObjectKey();
+        const targetLocation = this._getPullReplicationTarget(queueEntry, locations);
+        if (!targetLocation) {
+            return;
+        }
+        const transitionTime = new Date(entry.overheadFields?.commitTimestamp ?? Date.now());
+        const action = ReplicationAPI.createCopyLocationAction({
+            bucketName: bucket,
+            objectKey,
+            owner: queueEntry.getOwnerId(),
+            versionId: queueEntry.getEncodedVersionId() || 'null',
+            eTag: `"${queueEntry.getContentMd5()}"`,
+            lastModified: queueEntry.getLastModified(),
+            toLocation: targetLocation,
+            originLabel: PULL_REPLICATION,
+            fromLocation: queueEntry.getDataStoreName(),
+            contentLength,
+            resultsTopic: this.transitionTasksTopic,
+            transitionTime: transitionTime.toISOString(),
+            attempt: getTransitionAttempt(queueEntry),
+        });
+        // 'transition' is what the lifecycle transition processor dispatches
+        // on to pick up the copyLocation result.
+        action.addContext({
+            origin: PULL_REPLICATION,
+            ruleType: 'transition',
+            bucketName: bucket,
+            objectKey,
+            versionId: value.versionId,
+        });
+        action.setAttribute('source', {
+            bucket,
+            objectKey,
+            storageClass: queueEntry.getDataStoreName(),
+        });
+
+        LifecycleMetrics.onLifecycleTriggered(this.log, 'queuePopulator',
+            PULL_REPLICATION, targetLocation, Date.now() - transitionTime.getTime());
+
+        this.log.trace('publishing pull replication entry', { entry: queueEntry.getLogInfo() });
+        this.publish(ReplicationAPI.getDataMoverTopic(),
+                     `${bucket}/${objectKey}`,
+                     action.toKafkaMessage(),
+                     undefined,
+                     traceHeadersFromEntry(value));
+    }
+
+    /**
+     * Local location the object data must be copied to.
+     *
+     * The metadata may not name a usable target, typically if that location
+     * was deleted/renamed since. This is not recoverable here, but copying
+     * the data anywhere local beats leaving it on the source forever.
+     *
+     * The locations may also be missing altogether, which could be the case
+     * for empty objects where there is no actual data to copy: only metadata
+     * to update to mark the transition as complete.
+     *
+     * @param {ObjectQueueEntry} queueEntry - parsed entry
+     * @param {Object[]} [locations] - object data locations
+     * @return {String|undefined} target location, undefined if there is none
+     */
+    _getPullReplicationTarget(queueEntry, locations) {
+        const { targetLocation } = locations?.[0] ?? {};
+        if (locationsConfig[targetLocation]) {
+            return targetLocation;
+        }
+
+        if (!this.defaultLocalLocation) {
+            this.log.error('invalid target location and no local location ' +
+                'to fall back to, skipping pull replication', {
+                method: 'ReplicationQueuePopulator._getPullReplicationTarget',
+                ...queueEntry.getLogInfo(),
+                targetLocation,
+            });
+            return undefined;
+        }
+
+        this.log.warn('invalid target location in object metadata', {
+            method: 'ReplicationQueuePopulator._getPullReplicationTarget',
+            ...queueEntry.getLogInfo(),
+            targetLocation,
+            fallbackLocation: this.defaultLocalLocation,
+        });
+        return this.defaultLocalLocation;
     }
 
     /**

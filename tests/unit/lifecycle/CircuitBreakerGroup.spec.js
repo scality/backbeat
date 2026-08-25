@@ -436,6 +436,11 @@ describe('extractBucketProcessorCircuitBreakerConfigs', () => {
                                     '${location}',
                                     'location-dmf-v1',
                                 ),
+                                formatProbeConfig(
+                                    topicSpecificLocationTemplateProbe,
+                                    '${location}',
+                                    'location-crr-source',
+                                ),
                             ],
                         },
                         global: [],
@@ -492,6 +497,11 @@ describe('extractBucketProcessorCircuitBreakerConfigs', () => {
                                     topicSpecificLocationTemplateProbe,
                                     '${location}',
                                     'location-dmf-v1',
+                                ),
+                                formatProbeConfig(
+                                    topicSpecificLocationTemplateProbe,
+                                    '${location}',
+                                    'location-crr-source',
                                 ),
                             ],
                         },
