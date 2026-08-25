@@ -155,6 +155,7 @@ describe('LifecycleQueuePopulator', () => {
 
     describe(':_handleRestoreOp', () => {
         let lcqp;
+        const handleRestoreOp = entry => lcqp._handleRestoreOp(entry, JSON.parse(entry.value));
         const getAccountIdStub = sinon.stub().yields(null,
             '79a59df900b949e55d96a1e698fbacedfd6e09d98eacf8f8d5218e7cd47ef2be');
         beforeEach(() => {
@@ -167,37 +168,6 @@ describe('LifecycleQueuePopulator', () => {
         afterEach(() => {
             sinon.restore();
         });
-        [
-            {
-                event: 's3:ObjectRestore',
-                ignore: false,
-            },
-            {
-                event: 's3:ObjectRestore:Post',
-                ignore: false,
-            },
-            {
-                event: 's3:ObjectRestore:Retry',
-                ignore: false,
-            },
-            {
-                event: 's3:ObjectCreated:Put',
-                ignore: true,
-            },
-        ].forEach(params => {
-            const outcome = params.ignore ? 'ignore' : 'consider';
-            it(`should ${outcome} ${params.event} event`, () => {
-                const getAccountIdStub = sinon.stub().yields(null,
-                    '79a59df900b949e55d96a1e698fbacedfd6e09d98eacf8f8d5218e7cd47ef2be');
-                        lcqp.vaultClientWrapper = {
-                    getAccountId: getAccountIdStub,
-                };
-                const entry = getKafkaEntry(params.event);
-                lcqp._handleRestoreOp(entry);
-                assert.strictEqual(getAccountIdStub.calledOnce, !params.ignore);
-            });
-        });
-
         describe('restore requests', () => {
             const kafkaSendStub = sinon.stub().yields();
             const kafkaAdjustSendStub = sinon.stub().yields();
@@ -268,7 +238,7 @@ describe('LifecycleQueuePopulator', () => {
                         value: JSON.stringify(objMd),
                     };
 
-                    lcqp._handleRestoreOp(entry);
+                    handleRestoreOp(entry);
 
                     assert(!kafkaAdjustSendStub.calledOnce);
                     assert(kafkaSendStub.calledOnce);
@@ -323,7 +293,7 @@ describe('LifecycleQueuePopulator', () => {
                     value: JSON.stringify(objMd),
                 };
 
-                lcqp._handleRestoreOp(entry);
+                handleRestoreOp(entry);
 
                 assert(kafkaAdjustSendStub.calledOnce);
                 assert(!kafkaSendStub.calledOnce);
@@ -375,7 +345,7 @@ describe('LifecycleQueuePopulator', () => {
                     value: JSON.stringify(objMd),
                 };
 
-                lcqp._handleRestoreOp(entry);
+                handleRestoreOp(entry);
 
                 assert(!kafkaAdjustSendStub.calledOnce);
                 assert(!kafkaSendStub.calledOnce);
@@ -391,6 +361,8 @@ describe('LifecycleQueuePopulator', () => {
         let lcqp;
         let getAccountIdStub;
         let kafkaSendStub;
+
+        const handleTransitionOp = entry => lcqp._handleTransitionOp(entry, JSON.parse(entry.value));
 
         function getTransitionEntry(overrides) {
             const value = Object.assign({
@@ -443,26 +415,8 @@ describe('LifecycleQueuePopulator', () => {
             sinon.restore();
         });
 
-        [
-            { originOp: 's3:ObjectCreated:Put', ignore: false },
-            { originOp: 's3:ObjectCreated:CompleteMultipartUpload', ignore: false },
-            { originOp: 's3:ObjectCreated:Copy', ignore: false },
-            { originOp: 's3:LifecycleTransition:Retry', ignore: false },
-            { originOp: 's3:LifecycleTransition:Start', ignore: true },
-            { originOp: 's3:LifecycleTransition:SetArchive', ignore: true },
-            { originOp: 's3:LifecycleTransition:Direct', ignore: true },
-            { originOp: 's3:LifecycleTransition', ignore: true },
-            { originOp: 's3:ObjectRestore:Post', ignore: true },
-        ].forEach(({ originOp, ignore }) => {
-            const outcome = ignore ? 'ignore' : 'consider';
-            it(`should ${outcome} ${originOp} event`, () => {
-                lcqp._handleTransitionOp(getTransitionEntry({ originOp }));
-                assert.strictEqual(kafkaSendStub.calledOnce, !ignore);
-            });
-        });
-
         it('should publish an archive request matching the bucket processor message', () => {
-            lcqp._handleTransitionOp(getTransitionEntry());
+            handleTransitionOp(getTransitionEntry());
 
             assert(kafkaSendStub.calledOnce);
             const kafkaEntry = kafkaSendStub.args[0][0][0];
@@ -483,7 +437,7 @@ describe('LifecycleQueuePopulator', () => {
         });
 
         it('should fall back on last-modified when no transition time is set', () => {
-            lcqp._handleTransitionOp(getTransitionEntry({
+            handleTransitionOp(getTransitionEntry({
                 'x-amz-scal-transition-time': undefined,
             }));
 
@@ -493,7 +447,7 @@ describe('LifecycleQueuePopulator', () => {
         });
 
         it('should publish the transition attempt count', () => {
-            lcqp._handleTransitionOp(getTransitionEntry({
+            handleTransitionOp(getTransitionEntry({
                 'originOp': 's3:LifecycleTransition:Retry',
                 'x-amz-meta-scal-s3-transition-attempt': '3',
             }));
@@ -506,7 +460,7 @@ describe('LifecycleQueuePopulator', () => {
         it('should not set objectVersion for a non-versioned object', () => {
             const entry = getTransitionEntry({ versionId: undefined });
             entry.key = 'hosts';
-            lcqp._handleTransitionOp(entry);
+            handleTransitionOp(entry);
 
             assert(kafkaSendStub.calledOnce);
             const message = JSON.parse(kafkaSendStub.args[0][0][0].message);
@@ -543,7 +497,7 @@ describe('LifecycleQueuePopulator', () => {
             },
         ].forEach(({ desc, overrides }) => {
             it(`should not publish when ${desc}`, () => {
-                lcqp._handleTransitionOp(getTransitionEntry(overrides));
+                handleTransitionOp(getTransitionEntry(overrides));
                 assert(!getAccountIdStub.called);
                 assert(!kafkaSendStub.called);
             });
@@ -552,39 +506,32 @@ describe('LifecycleQueuePopulator', () => {
         it('should skip the master key of a versioned object', () => {
             const entry = getTransitionEntry();
             entry.key = 'hosts';
-            lcqp._handleTransitionOp(entry);
+            handleTransitionOp(entry);
             assert(!kafkaSendStub.called);
         });
 
         it('should skip mpu shadow bucket entries', () => {
             const entry = getTransitionEntry();
             entry.key = `mpuShadowBucket${entry.key}`;
-            lcqp._handleTransitionOp(entry);
-            assert(!kafkaSendStub.called);
-        });
-
-        it('should skip delete operations', () => {
-            const entry = getTransitionEntry();
-            entry.type = 'delete';
-            lcqp._handleTransitionOp(entry);
+            handleTransitionOp(entry);
             assert(!kafkaSendStub.called);
         });
 
         it('should do nothing without a vault client', () => {
             lcqp.vaultClientWrapper = null;
-            lcqp._handleTransitionOp(getTransitionEntry());
+            handleTransitionOp(getTransitionEntry());
             assert(!kafkaSendStub.called);
         });
 
         it('should not publish when the account cannot be resolved', () => {
             getAccountIdStub.yields(errors.InternalError);
-            lcqp._handleTransitionOp(getTransitionEntry());
+            handleTransitionOp(getTransitionEntry());
             assert(!kafkaSendStub.called);
         });
 
         it('should not throw when no producer is available', () => {
             delete lcqp._producers[archiveTopic];
-            lcqp._handleTransitionOp(getTransitionEntry());
+            handleTransitionOp(getTransitionEntry());
             assert(getAccountIdStub.calledOnce);
         });
     });
@@ -622,10 +569,28 @@ describe('LifecycleQueuePopulator', () => {
             assert(handleDeleteStub.calledOnce);
         });
 
-        it('should call _handleTransitionOp on put message', () => {
-            const handleTransitionStub = sinon.stub(lcqp, '_handleTransitionOp').returns();
-            lcqp.filter(getKafkaEntry('s3:ObjectCreated:Put'));
-            assert(handleTransitionStub.calledOnce);
+        [
+            { originOp: 's3:ObjectRestore', handler: '_handleRestoreOp' },
+            { originOp: 's3:ObjectRestore:Post', handler: '_handleRestoreOp' },
+            { originOp: 's3:ObjectRestore:Retry', handler: '_handleRestoreOp' },
+            { originOp: 's3:ObjectCreated:Put', handler: '_handleTransitionOp' },
+            { originOp: 's3:ObjectCreated:CompleteMultipartUpload', handler: '_handleTransitionOp' },
+            { originOp: 's3:ObjectCreated:Copy', handler: '_handleTransitionOp' },
+            { originOp: 's3:LifecycleTransition:Retry', handler: '_handleTransitionOp' },
+            { originOp: 's3:LifecycleTransition:Start', handler: null },
+            { originOp: 's3:LifecycleTransition:SetArchive', handler: null },
+            { originOp: 's3:LifecycleTransition:Direct', handler: null },
+            { originOp: 's3:LifecycleTransition', handler: null },
+        ].forEach(({ originOp, handler }) => {
+            it(`should dispatch ${originOp} to ${handler || 'no handler'}`, () => {
+                const restoreStub = sinon.stub(lcqp, '_handleRestoreOp').returns();
+                const transitionStub = sinon.stub(lcqp, '_handleTransitionOp').returns();
+
+                lcqp.filter(getKafkaEntry(originOp));
+
+                assert.strictEqual(restoreStub.calledOnce, handler === '_handleRestoreOp');
+                assert.strictEqual(transitionStub.calledOnce, handler === '_handleTransitionOp');
+            });
         });
 
         it('should not update zookeeper when bucketSource is mongodb (default)', () => {

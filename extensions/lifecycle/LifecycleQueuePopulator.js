@@ -25,15 +25,6 @@ const {
 const BackbeatProducer = require('../../lib/BackbeatProducer');
 const locations = require('../../conf/locationConfig.json') || {};
 
-// Object creation is the only operation which may declare a cold storage class, and a retry asks
-// for a new attempt. Any other originOp comes from backbeat itself, and must not re-trigger.
-const transitionOriginOps = [
-    's3:ObjectCreated:Put',
-    's3:ObjectCreated:CompleteMultipartUpload',
-    's3:ObjectCreated:Copy',
-    's3:LifecycleTransition:Retry',
-];
-
 const nSecsPerDay = () => Math.ceil(scaleMsPerDay(config.timeOptions.timeProgressionFactor) / 1000);
 
 class LifecycleQueuePopulator extends QueuePopulatorExtension {
@@ -280,19 +271,19 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
      * (Sorbet, cold status processor, garbage collector) is reused unchanged.
      *
      * @param {Object} entry - The record log entry from metadata.
+     * @param {Object} [value] - The object metadata, already decoded by the caller.
      * @return {undefined}
      */
-    _handleTransitionOp(entry) {
+    _handleTransitionOp(entry, value) {
         if (!this.vaultClientWrapper) {
             return;
         }
 
-        if (entry.type !== 'put' || entry.key.startsWith(mpuBucketPrefix)) {
+        if (entry.key.startsWith(mpuBucketPrefix)) {
             return;
         }
 
-        const value = JSON.parse(entry.value);
-        if (!transitionOriginOps.includes(value.originOp) || !this._isDirectToCold(value)) {
+        if (!this._isDirectToCold(value)) {
             return;
         }
 
@@ -367,23 +358,12 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
         });
     }
 
-    _handleRestoreOp(entry) {
+    _handleRestoreOp(entry, value) {
         if (!this.vaultClientWrapper) {
             return;
         }
 
-        if (entry.type !== 'put' ||
-            entry.key.startsWith(mpuBucketPrefix)) {
-            return;
-        }
-
-        const value = JSON.parse(entry.value);
-
-        const operation = value.originOp;
-        // supporting both 's3:ObjectRestore' and 's3:ObjectRestore:Post' to keep
-        // compatibility with older cloudserver versions, the switch to 's3:ObjectRestore:Post'
-        // was made to have the correct event type for bucket notifications
-        if (!['s3:ObjectRestore', 's3:ObjectRestore:Post', 's3:ObjectRestore:Retry'].includes(operation)) {
+        if (entry.key.startsWith(mpuBucketPrefix)) {
             return;
         }
 
@@ -632,8 +612,42 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
             return undefined;
         }
 
-        this._handleRestoreOp(entry);
-        this._handleTransitionOp(entry);
+        // The entry is decoded once here, then dispatched to the single handler which may be
+        // interested in it: most entries are of no interest to any of them.
+        const { error, result: value } = safeJsonParse(entry.value);
+        if (error) {
+            this.log.error('could not parse log entry', {
+                method: 'LifecycleQueuePopulator.filter',
+                bucket: entry.bucket,
+                key: entry.key,
+                error,
+            });
+            return undefined;
+        }
+
+        switch (value.originOp) {
+        // supporting both 's3:ObjectRestore' and 's3:ObjectRestore:Post' to keep compatibility with
+        // older cloudserver versions, the switch to 's3:ObjectRestore:Post' was made to have the
+        // correct event type for bucket notifications
+        case 's3:ObjectRestore':
+        case 's3:ObjectRestore:Post':
+        case 's3:ObjectRestore:Retry':
+            this._handleRestoreOp(entry, value);
+            break;
+
+        // Object creation is the only operation which may declare a cold storage class, and a retry
+        // asks for a new attempt: any other originOp comes from backbeat itself, and must not
+        // re-trigger a transition.
+        case 's3:ObjectCreated:Put':
+        case 's3:ObjectCreated:CompleteMultipartUpload':
+        case 's3:ObjectCreated:Copy':
+        case 's3:LifecycleTransition:Retry':
+            this._handleTransitionOp(entry, value);
+            break;
+
+        default:
+            break;
+        }
 
         if (this.extConfig.conductor.bucketSource !== 'zookeeper') {
             this.log.debug('bucket source is not zookeeper, skipping entry', {
@@ -644,15 +658,7 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
 
         let bucketValue = {};
         if (this._isBucketEntryFromBucketd(entry)) {
-            const parsedEntry = safeJsonParse(entry.value);
-            if (parsedEntry.error) {
-                this.log.error('could not parse raft log entry', {
-                    value: entry.value,
-                    error: parsedEntry.error,
-                });
-                return undefined;
-            }
-            const parsedAttr = safeJsonParse(parsedEntry.result.attributes);
+            const parsedAttr = safeJsonParse(value.attributes);
             if (parsedAttr.error) {
                 this.log.error('could not parse raft log entry attribute', {
                     value: entry.value,
@@ -662,13 +668,7 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
             }
             bucketValue = parsedAttr.result;
         } else if (this._isBucketEntryFromFileMD(entry)) {
-            const { error, result } = safeJsonParse(entry.value);
-            if (error) {
-                this.log.error('could not parse file md log entry',
-                    { value: entry.value, error });
-                return undefined;
-            }
-            bucketValue = result;
+            bucketValue = value;
         } else {
             // not a bucket entry
             return undefined;
