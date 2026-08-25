@@ -1,6 +1,7 @@
 'use strict';
 const assert = require('assert');
 const async = require('async');
+const { errors } = require('arsenal');
 
 const ColdStorageStatusQueueEntry = require('../../../lib/models/ColdStorageStatusQueueEntry');
 const { LifecycleMetrics } = require('../LifecycleMetrics');
@@ -14,6 +15,9 @@ const { updateCircuitBreakerConfigForImplicitOutputQueue } = require('../../../l
 const { LifecycleRetriggerRestoreTask } = require('../tasks/LifecycleRetriggerRestoreTask');
 const BackbeatProducer = require('../../../lib/BackbeatProducer');
 const GarbageCollectorProducer = require('../../gc/GarbageCollectorProducer');
+const VaultClientWrapper = require('../../utils/VaultClientWrapper');
+const { AccountIdCache } = require('../../utils/AccountIdCache');
+const { authTypeAssumeRole } = require('../../../lib/constants');
 
 class LifecycleObjectTransitionProcessor extends LifecycleObjectProcessor {
 
@@ -44,9 +48,68 @@ class LifecycleObjectTransitionProcessor extends LifecycleObjectProcessor {
      * @param {Number} s3Config.port - s3 endpoint port
      * @param {String} [transport="http"] - transport method ("http"
      *  or "https")
+     * @param {Object} [vaultAdminConfig] - vault admin endpoint, used to
+     *  resolve canonical ids into account ids
      */
-    constructor(zkConfig, kafkaConfig, lcConfig, s3Config, transport = 'http') {
+    constructor(zkConfig, kafkaConfig, lcConfig, s3Config, transport = 'http',
+        vaultAdminConfig = undefined) {
         super(zkConfig, kafkaConfig, lcConfig, s3Config, transport);
+
+        const authConfig = this.getAuthConfig(this._lcConfig);
+        if (authConfig.type === authTypeAssumeRole) {
+            this.vaultClientWrapper = new VaultClientWrapper(
+                `lifecycle:${this.getProcessorType()}`,
+                vaultAdminConfig,
+                authConfig,
+                this._log,
+            );
+            this._accountIdCache = new AccountIdCache(
+                this._processConfig.concurrency);
+        }
+    }
+
+    /**
+     * Resolve the account id of a canonical id. Actions published by the
+     * lifecycle conductor already carry the account id; those published by the
+     * queue populator (pull replication) only know the canonical id.
+     * @param {String} ownerId - canonical id of the object owner
+     * @param {Logger} log - logger instance
+     * @param {Function} cb - callback: cb(err, accountId)
+     * @return {undefined}
+     */
+    getAccountId(ownerId, log, cb) {
+        if (!this.vaultClientWrapper) {
+            log.debug('skipping: not assume role auth type');
+            return process.nextTick(cb);
+        }
+
+        // A cached miss must fail like a fresh lookup would: `isKnown()` is also
+        // true for misses, and `get()` would then hand back `undefined`.
+        if (this._accountIdCache.isMiss(ownerId)) {
+            log.error('canonical id does not exist (cached)', { ownerId });
+            return process.nextTick(cb, errors.NoSuchEntity);
+        }
+
+        if (this._accountIdCache.has(ownerId)) {
+            return process.nextTick(cb, null, this._accountIdCache.get(ownerId));
+        }
+
+        return this.vaultClientWrapper.getAccountId(ownerId, (err, accountId) => {
+            if (err) {
+                if (err.NoSuchEntity) {
+                    log.error('canonical id does not exist', { error: err, ownerId });
+                    this._accountIdCache.miss(ownerId);
+                } else {
+                    log.error('could not get account id', { error: err, ownerId });
+                }
+                return cb(err);
+            }
+
+            this._accountIdCache.set(ownerId, accountId);
+            this._accountIdCache.expireOldest();
+
+            return cb(null, accountId);
+        });
     }
 
     /**
@@ -56,6 +119,7 @@ class LifecycleObjectTransitionProcessor extends LifecycleObjectProcessor {
      * @return {undefined}
      */
     start(done) {
+        this.vaultClientWrapper?.init();
         async.waterfall([
             next => super.start(next),
             next => {
@@ -226,7 +290,12 @@ class LifecycleObjectTransitionProcessor extends LifecycleObjectProcessor {
             ...super.getStateVars(),
             coldProducer: this._coldProducer,
             gcProducer: this._gcProducer,
+            getAccountId: this.getAccountId.bind(this),
         };
+    }
+
+    isReady() {
+        return super.isReady() && (!this.vaultClientWrapper || this.vaultClientWrapper.tempCredentialsReady());
     }
 }
 

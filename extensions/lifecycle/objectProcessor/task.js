@@ -32,7 +32,7 @@ let objectProcessor;
 switch (process.env.LIFECYCLE_OBJECT_PROCESSOR_TYPE) {
     case 'transition':
         objectProcessor = new LifecycleObjectTransitionProcessor(
-            zkConfig, kafkaConfig, lcConfig, s3Config, transport);
+            zkConfig, kafkaConfig, lcConfig, s3Config, transport, config.vaultAdmin);
         break;
     case 'expiration': // fallthrough
     default:
