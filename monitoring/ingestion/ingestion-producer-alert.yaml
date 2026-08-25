@@ -84,7 +84,7 @@ groups:
       description: "Ingestion producer source error rate has increased to 3% in the last 5 minutes"
       summary: "Ingestion producer source error rate has increased"
 
-  - alert: IngestionProducerSourceErrorRate3Percent
+  - alert: IngestionProducerSourceErrorRate5Percent
     Expr: |
       sum(rate(s3_ingestion_source_operations_total{status="error", namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
         /
@@ -97,6 +97,22 @@ groups:
       zenko_service: backbeat-ingestion-producer
       description: "Ingestion producer source error rate has increased to 5% in the last 5 minutes"
       summary: "Ingestion producer source error rate has increased"
+
+  # The setup of a reader is retried on every cron tick, so a source that cannot
+  # be resolved fails continuously. It is a handful of errors against the reads
+  # of every healthy source, so it only shows up on the absolute rate: the ratio
+  # alerts above stay far below their threshold when a single source is stuck.
+  - alert: IngestionProducerSourceSetupFailing
+    Expr: |
+      sum(rate(s3_ingestion_source_operations_total{op="getRaftId", status="error", namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
+      > 0
+    For:   "10m"
+    Labels:
+      severity: warning
+    Annotations:
+      zenko_service: backbeat-ingestion-producer
+      description: "Ingestion producer has been unable to start reading from a source for the last 10 minutes, so the objects of that location are not ingested. Check the producer logs for the bucket it fails to resolve."
+      summary: "Ingestion producer cannot start reading from a source"
 
   - alert: IngestionProducerZookeeperErrorRate3Percent
     Expr: |
