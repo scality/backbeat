@@ -1,9 +1,12 @@
 const assert = require('assert');
+const sinon = require('sinon');
 
 const MongoQueueProcessor =
     require('../../../extensions/mongoProcessor/MongoQueueProcessor');
 const ObjectQueueEntry =
     require('../../../lib/models/ObjectQueueEntry');
+const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
+const Config = require('../../../lib/Config');
 
 function _makeProcessor(bootstrapList) {
     const proc = Object.create(MongoQueueProcessor.prototype);
@@ -232,5 +235,41 @@ describe('MongoQueueProcessor._updateReplicationInfo', () => {
         assert.strictEqual(bySite['cloud-b'].destination, undefined);
         assert.strictEqual(bySite['cloud-b'].role, undefined);
         assert.strictEqual(bySite['cloud-b'].status, 'PENDING');
+    });
+});
+
+describe('MongoQueueProcessor.start', () => {
+    afterEach(() => {
+        sinon.restore();
+    });
+
+    function startProcessor() {
+        sinon.stub(BackbeatConsumer.prototype, '_init');
+        sinon.stub(Config, 'getBootstrapList').returns([]);
+        sinon.stub(Config, 'on');
+
+        const proc = _makeProcessor([]);
+        proc.logger = { info: () => {}, error: () => {}, fatal: () => {} };
+        proc.kafkaConfig = { hosts: 'localhost:9092' };
+        proc.mongoProcessorConfig = {
+            topic: 'backbeat-ingestion',
+            groupId: 'backbeat-ingestion-group',
+            concurrency: 5,
+        };
+        proc._setupMetricsClients = cb => cb();
+        proc._mongoClient = { setup: cb => cb() };
+
+        proc.start();
+
+        return proc;
+    }
+
+    it('starts the consumer at the earliest offset', done => {
+        const proc = startProcessor();
+
+        setImmediate(() => {
+            assert.strictEqual(proc._consumer._fromOffset, 'earliest');
+            done();
+        });
     });
 });
