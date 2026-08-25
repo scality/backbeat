@@ -357,6 +357,35 @@ describe('Ingestion Populator', () => {
             });
         });
 
+        it('should not activate a log reader when its setup succeeds and ' +
+        'its source is no longer configured', done => {
+            const logReaderMock = createLogReaderMock(WORKING_BUCKET, null);
+            delete ip._ingestionSources[WORKING_BUCKET];
+            ip.logReadersUpdate = [logReaderMock];
+
+            ip._setupUpdatedReaders(err => {
+                assert.ifError(err);
+                assert.deepStrictEqual(ip.logReaders, []);
+                assert.deepStrictEqual(ip.logReadersUpdate, []);
+                done();
+            });
+        });
+
+        it('should not activate a log reader when its setup succeeds and ' +
+        'its source has been registered with another reader', done => {
+            const staleReader = createLogReaderMock(WORKING_BUCKET, null);
+            const currentReader = createLogReaderMock(WORKING_BUCKET, null);
+            ip._ingestionSources[WORKING_BUCKET] = currentReader;
+            ip.logReadersUpdate = [staleReader];
+
+            ip._setupUpdatedReaders(err => {
+                assert.ifError(err);
+                assert.deepStrictEqual(ip.logReaders, []);
+                assert.deepStrictEqual(ip.logReadersUpdate, []);
+                done();
+            });
+        });
+
         it('should keep setting up other log readers when one fails', done => {
             const failingReader =
                 createLogReaderMock(FAILING_BUCKET, errors.InternalError);
@@ -371,6 +400,197 @@ describe('Ingestion Populator', () => {
                 assert.deepStrictEqual(ip.logReadersUpdate, [failingReader]);
                 done();
             });
+        });
+    });
+
+    describe('removing a source while its setup is in flight', () => {
+        const REMOVED_BUCKET = 'removed-zenko-bucket';
+
+        // `IngestionPopulatorMock` stubs out `_closeLogState`, so a real
+        // populator is needed to exercise the removal path.
+        let populator;
+
+        beforeEach(() => {
+            populator = new IngestionPopulator(
+                zkConfig,
+                kafkaConfig,
+                qpConfig,
+                mConfig,
+                rConfig,
+                ingestionConfig,
+                s3Config,
+            );
+        });
+
+        /**
+         * Build a reader whose `setup` stays pending until it is released, to
+         * hold the reader in neither `logReaders` nor `logReadersUpdate`.
+         *
+         * @param {string} zenkoBucket - target zenko bucket of the reader
+         * @param {Error|null} setupError - error to fail `setup` with
+         * @return {object} the stubbed reader and the release function
+         */
+        function createPendingLogReaderMock(zenkoBucket, setupError) {
+            const logReader = sinon.createStubInstance(IngestionReader);
+            logReader.getTargetZenkoBucketName.returns(zenkoBucket);
+
+            let setupCb = null;
+            logReader.setup.callsFake(cb => {
+                setupCb = cb;
+            });
+
+            return { logReader, release: () => setupCb(setupError) };
+        }
+
+        it('should not queue a log reader again when its source is removed ' +
+        'while its setup fails', done => {
+            const { logReader, release } =
+                createPendingLogReaderMock(REMOVED_BUCKET, errors.InternalError);
+            populator._ingestionSources[REMOVED_BUCKET] = logReader;
+            populator.logReadersUpdate = [logReader];
+
+            populator._setupUpdatedReaders(err => {
+                assert.ifError(err);
+                assert.deepStrictEqual(populator.logReadersUpdate, []);
+                done();
+            });
+
+            populator._closeLogState(REMOVED_BUCKET);
+            assert.strictEqual(populator._ingestionSources[REMOVED_BUCKET],
+                undefined);
+
+            release();
+        });
+
+        it('should not activate a log reader when its source is removed ' +
+        'while its setup succeeds', done => {
+            const { logReader, release } =
+                createPendingLogReaderMock(REMOVED_BUCKET, null);
+            populator._ingestionSources[REMOVED_BUCKET] = logReader;
+            populator.logReadersUpdate = [logReader];
+
+            populator._setupUpdatedReaders(err => {
+                assert.ifError(err);
+                assert.deepStrictEqual(populator.logReaders, []);
+                assert.deepStrictEqual(populator.logReadersUpdate, []);
+                done();
+            });
+
+            populator._closeLogState(REMOVED_BUCKET);
+            release();
+        });
+
+        it('should not activate a log reader when its source is replaced ' +
+        'while its setup succeeds', done => {
+            const { logReader, release } =
+                createPendingLogReaderMock(REMOVED_BUCKET, null);
+            const freshReader = sinon.createStubInstance(IngestionReader);
+            freshReader.getTargetZenkoBucketName.returns(REMOVED_BUCKET);
+
+            populator._ingestionSources[REMOVED_BUCKET] = logReader;
+            populator.logReadersUpdate = [logReader];
+
+            populator._setupUpdatedReaders(err => {
+                assert.ifError(err);
+                assert.deepStrictEqual(populator.logReaders, []);
+                assert.deepStrictEqual(populator.logReadersUpdate, []);
+                // the reader registered in the meantime is left untouched
+                assert.strictEqual(populator._ingestionSources[REMOVED_BUCKET],
+                    freshReader);
+                done();
+            });
+
+            // the source is removed, then configured again before the setup
+            // of the first reader completes
+            populator._closeLogState(REMOVED_BUCKET);
+            populator._ingestionSources[REMOVED_BUCKET] = freshReader;
+
+            release();
+        });
+    });
+
+    describe('_closeLogState', () => {
+        const ACTIVE_BUCKET = 'active-zenko-bucket';
+        const PENDING_BUCKET = 'pending-zenko-bucket';
+
+        // `IngestionPopulatorMock` stubs out `_closeLogState`, so a real
+        // populator is needed to exercise it.
+        let populator;
+        let removeReaderState;
+
+        beforeEach(() => {
+            populator = new IngestionPopulator(
+                zkConfig,
+                kafkaConfig,
+                qpConfig,
+                mConfig,
+                rConfig,
+                ingestionConfig,
+                s3Config,
+            );
+            // `_removeReaderState` polls the reader on a timer that would
+            // outlive the test
+            removeReaderState = sinon.stub(populator, '_removeReaderState');
+        });
+
+        /**
+         * @param {string} zenkoBucket - target zenko bucket of the reader
+         * @return {object} the stubbed reader
+         */
+        function createReaderMock(zenkoBucket) {
+            const logReader = sinon.createStubInstance(IngestionReader);
+            logReader.getTargetZenkoBucketName.returns(zenkoBucket);
+            return logReader;
+        }
+
+        it('should unregister a source whose reader is still pending setup',
+        () => {
+            const logReader = createReaderMock(PENDING_BUCKET);
+            populator._ingestionSources[PENDING_BUCKET] = logReader;
+            populator.logReadersUpdate = [logReader];
+
+            populator._closeLogState(PENDING_BUCKET);
+
+            assert.deepStrictEqual(populator.logReadersUpdate, []);
+            assert.strictEqual(populator._ingestionSources[PENDING_BUCKET],
+                undefined);
+            // zookeeper state is only created once the setup succeeded
+            assert.strictEqual(removeReaderState.called, false);
+        });
+
+        it('should unregister an active source and clean its zookeeper state',
+        () => {
+            const logReader = createReaderMock(ACTIVE_BUCKET);
+            populator._ingestionSources[ACTIVE_BUCKET] = logReader;
+            populator.logReaders = [logReader];
+
+            populator._closeLogState(ACTIVE_BUCKET);
+
+            assert.deepStrictEqual(populator.logReaders, []);
+            assert.strictEqual(populator._ingestionSources[ACTIVE_BUCKET],
+                undefined);
+            // the reader is read before being unregistered, as
+            // `_removeReaderState` polls it until its batch completes
+            assert.strictEqual(removeReaderState.calledOnce, true);
+            assert.strictEqual(removeReaderState.firstCall.args[0], logReader);
+        });
+
+        it('should unregister a source whose setup is still in flight', () => {
+            const logReader = createReaderMock(PENDING_BUCKET);
+            populator._ingestionSources[PENDING_BUCKET] = logReader;
+
+            populator._closeLogState(PENDING_BUCKET);
+
+            assert.strictEqual(populator._ingestionSources[PENDING_BUCKET],
+                undefined);
+            assert.strictEqual(removeReaderState.called, false);
+        });
+
+        it('should not throw when the source is unknown', () => {
+            populator._closeLogState('never-configured-bucket');
+
+            assert.deepStrictEqual(populator._ingestionSources, {});
+            assert.strictEqual(removeReaderState.called, false);
         });
     });
 
