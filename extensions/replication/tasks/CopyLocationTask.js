@@ -16,7 +16,7 @@ const {
     MultipleBackendAbortMPUCommand,
     addContentLengthMiddleware,
 } = require('@scality/cloudserverclient');
-const { LifecycleMetrics } = require('../../lifecycle/LifecycleMetrics');
+const { LifecycleMetrics, getCopyLocationMetricsType } = require('../../lifecycle/LifecycleMetrics');
 const ReplicationMetric = require('../ReplicationMetric');
 const ReplicationMetrics = require('../ReplicationMetrics');
 const { isRetryableMiddleware, TIMEOUT_MS } = require('../../../lib/clients/utils');
@@ -138,7 +138,7 @@ class CopyLocationTask extends BackbeatTask {
 
                 const transitionTime = actionEntry.getAttribute('metrics.transitionTime') ||
                     objMD.getTransitionTime();
-                LifecycleMetrics.onLifecycleStarted(log, 'transition',
+                LifecycleMetrics.onLifecycleStarted(log, getCopyLocationMetricsType(actionEntry),
                     actionEntry.getAttribute('toLocation'),
                     startTime - Date.parse(transitionTime));
 

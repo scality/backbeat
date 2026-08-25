@@ -5,7 +5,7 @@ const errors = require('arsenal').errors;
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const ObjectMD = require('arsenal').models.ObjectMD;
-const { LifecycleMetrics } = require('../LifecycleMetrics');
+const { LifecycleMetrics, getCopyLocationMetricsType } = require('../LifecycleMetrics');
 const {
     TRANSITION_ATTEMPT_MD,
     getTransitionAttempt,
@@ -202,7 +202,7 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
                     const transitionTime = entry.getAttribute('metrics.transitionTime') ||
                         objMD.getTransitionTime();
                     const locationName = entry.getAttribute('toLocation');
-                    LifecycleMetrics.onLifecycleCompleted(log, 'transition',
+                    LifecycleMetrics.onLifecycleCompleted(log, getCopyLocationMetricsType(entry),
                         locationName, Date.now() - Date.parse(transitionTime));
                     next(err);
                 });
