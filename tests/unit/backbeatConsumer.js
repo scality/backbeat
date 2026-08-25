@@ -577,6 +577,19 @@ describe('backbeatConsumer', () => {
             }
         });
 
+        it('should synchronise the assignment on an arbitrary rebalance error', () => {
+            // librdkafka requires assign(NULL) in this case, and the event has
+            // already superseded whatever revoke was pending
+            consumer._onRebalance({ code: -1 }, partitions);
+            assert(consumer._consumer.unassign.calledOnce);
+        });
+
+        it('should leave an arbitrary rebalance error during shutdown to close()', () => {
+            consumer._shuttingDown = true;
+            consumer._onRebalance({ code: -1 }, partitions);
+            assert(consumer._consumer.unassign.notCalled);
+        });
+
         it('should leave a revoke arriving during shutdown to close()', () => {
             consumer._shuttingDown = true;
             consumer._onRebalance(REVOKE, partitions);
