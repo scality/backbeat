@@ -197,7 +197,7 @@ class CopyLocationTask extends BackbeatTask {
             const s3Client = this._getAssumedRoleS3Client(locationConfig, part.role, log);
             const command = new AwsGetObjectCommand({
                 Bucket: part.bucket,
-                Key: objMD.getKey(),
+                Key: part.key,
                 VersionId: part.dataStoreVersionId,
                 Range: range && `bytes=${range.start}-${range.end}`,
             });

@@ -364,7 +364,7 @@ describe('CopyLocationTask', () => {
             });
             const objMd = new ObjectMD();
             objMd.setDataStoreName('source-site');
-            objMd.setKey('backups/vm001.vbk');
+            objMd.setKey('vm001.vbk');
             objMd.setLocation([{
                 key: 'backups/vm001.vbk',
                 size: 1048576,
