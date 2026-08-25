@@ -7,7 +7,8 @@ const config = require('../../../lib/Config');
 const {
     coldStorageRestoreAdjustTopicPrefix,
     coldStorageRestoreTopicPrefix,
-    coldStorageGCTopicPrefix
+    coldStorageGCTopicPrefix,
+    coldStorageArchiveTopicPrefix
 } = config.extensions.lifecycle;
 
 const LifecycleQueuePopulator = require('../../../extensions/lifecycle/LifecycleQueuePopulator');
@@ -78,6 +79,10 @@ const templateEntry = {
     'versionId': '98500086134471999999RG001  0',
     'isNFS': true,
     'archive': {
+        archiveInfo: {
+            archiveId: '04425717-a65c-4e8a-95e1-fa1d902d9d9f',
+            archiveVersion: 7504504064263669,
+        },
         restoreRequestedAt: Date.now(),
         restoreRequestedDays: 1,
     },
@@ -131,16 +136,17 @@ describe('LifecycleQueuePopulator', () => {
                 done();
             });
         });
-        it('should have three producers per cold location', done => {
+        it('should have four producers per cold location', done => {
             lcqp.locationConfigs = Object.assign({}, locationConfigs, coldLocationConfigs);
             lcqp.setupProducers(() => {
                 const producers = Object.keys(lcqp._producers);
                 const coldLocations = Object.keys(coldLocationConfigs);
-                assert.strictEqual(producers.length, coldLocations.length * 3);
+                assert.strictEqual(producers.length, coldLocations.length * 4);
                 coldLocations.forEach(loc => {
                     assert(producers.includes(`${coldStorageRestoreAdjustTopicPrefix}${loc}`));
                     assert(producers.includes(`${coldStorageRestoreTopicPrefix}${loc}`));
                     assert(producers.includes(`${coldStorageGCTopicPrefix}${loc}`));
+                    assert(producers.includes(`${coldStorageArchiveTopicPrefix}${loc}`));
                 });
                 done();
             });
@@ -377,6 +383,212 @@ describe('LifecycleQueuePopulator', () => {
         });
     });
 
+    describe(':_handleTransitionOp', () => {
+        const accountId = '79a59df900b949e55d96a1e698fbacedfd6e09d98eacf8f8d5218e7cd47ef2be';
+        const versionId = '98500086134471999999RG001  0';
+        const archiveTopic = `${coldStorageArchiveTopicPrefix}dmf-v1`;
+
+        let lcqp;
+        let getAccountIdStub;
+        let kafkaSendStub;
+
+        function getTransitionEntry(overrides) {
+            const value = Object.assign({
+                'md-model-version': 2,
+                'owner-display-name': 'Bart',
+                'owner-id': accountId,
+                'content-length': 542,
+                'content-type': 'text/plain',
+                'last-modified': '2017-07-13T02:44:25.519Z',
+                'content-md5': '01064f35c238bd2b785e34508c3d27f4',
+                'x-amz-storage-class': 'dmf-v1',
+                'x-amz-scal-transition-in-progress': true,
+                'x-amz-scal-transition-time': '2017-07-13T02:44:20.000Z',
+                'key': 'hosts',
+                'location': [],
+                'isDeleteMarker': false,
+                'isNull': false,
+                versionId,
+                'dataStoreName': 'us-east-1',
+                'originOp': 's3:ObjectCreated:Put',
+            }, overrides);
+            // allow overrides to remove a field by passing `undefined`
+            Object.keys(value).forEach(k => {
+                if (value[k] === undefined) {
+                    delete value[k];
+                }
+            });
+            return {
+                type: 'put',
+                bucket: 'lc-queue-populator-test-bucket',
+                key: `hosts\x00${versionId}`,
+                value: JSON.stringify(value),
+            };
+        }
+
+        beforeEach(() => {
+            lcqp = new LifecycleQueuePopulator(params);
+            lcqp.locationConfigs = Object.assign({}, coldLocationConfigs, locationConfigs);
+            getAccountIdStub = sinon.stub().yields(null, accountId);
+            lcqp.vaultClientWrapper = {
+                getAccountId: getAccountIdStub,
+            };
+            kafkaSendStub = sinon.stub().yields();
+            lcqp._producers[archiveTopic] = {
+                send: kafkaSendStub,
+            };
+        });
+
+        afterEach(() => {
+            sinon.restore();
+        });
+
+        [
+            { originOp: 's3:ObjectCreated:Put', ignore: false },
+            { originOp: 's3:ObjectCreated:CompleteMultipartUpload', ignore: false },
+            { originOp: 's3:ObjectCreated:Copy', ignore: false },
+            { originOp: 's3:LifecycleTransition:Retry', ignore: false },
+            { originOp: 's3:LifecycleTransition:Start', ignore: true },
+            { originOp: 's3:LifecycleTransition:SetArchive', ignore: true },
+            { originOp: 's3:LifecycleTransition:Direct', ignore: true },
+            { originOp: 's3:LifecycleTransition', ignore: true },
+            { originOp: 's3:ObjectRestore:Post', ignore: true },
+        ].forEach(({ originOp, ignore }) => {
+            const outcome = ignore ? 'ignore' : 'consider';
+            it(`should ${outcome} ${originOp} event`, () => {
+                lcqp._handleTransitionOp(getTransitionEntry({ originOp }));
+                assert.strictEqual(kafkaSendStub.calledOnce, !ignore);
+            });
+        });
+
+        it('should publish an archive request matching the bucket processor message', () => {
+            lcqp._handleTransitionOp(getTransitionEntry());
+
+            assert(kafkaSendStub.calledOnce);
+            const kafkaEntry = kafkaSendStub.args[0][0][0];
+            assert.strictEqual(kafkaEntry.key, 'lc-queue-populator-test-bucket/hosts');
+
+            const message = JSON.parse(kafkaEntry.message);
+            assert.deepStrictEqual(message, {
+                accountId,
+                bucketName: 'lc-queue-populator-test-bucket',
+                objectKey: 'hosts',
+                objectVersion: encode(versionId),
+                requestId: message.requestId,
+                size: 542,
+                eTag: '"01064f35c238bd2b785e34508c3d27f4"',
+                transitionTime: '2017-07-13T02:44:20.000Z',
+            });
+            assert(message.requestId);
+        });
+
+        it('should fall back on last-modified when no transition time is set', () => {
+            lcqp._handleTransitionOp(getTransitionEntry({
+                'x-amz-scal-transition-time': undefined,
+            }));
+
+            assert(kafkaSendStub.calledOnce);
+            const message = JSON.parse(kafkaSendStub.args[0][0][0].message);
+            assert.strictEqual(message.transitionTime, '2017-07-13T02:44:25.519Z');
+        });
+
+        it('should publish the transition attempt count', () => {
+            lcqp._handleTransitionOp(getTransitionEntry({
+                'originOp': 's3:LifecycleTransition:Retry',
+                'x-amz-meta-scal-s3-transition-attempt': '3',
+            }));
+
+            assert(kafkaSendStub.calledOnce);
+            const message = JSON.parse(kafkaSendStub.args[0][0][0].message);
+            assert.strictEqual(message.try, 3);
+        });
+
+        it('should not set objectVersion for a non-versioned object', () => {
+            const entry = getTransitionEntry({ versionId: undefined });
+            entry.key = 'hosts';
+            lcqp._handleTransitionOp(entry);
+
+            assert(kafkaSendStub.calledOnce);
+            const message = JSON.parse(kafkaSendStub.args[0][0][0].message);
+            assert.strictEqual(message.objectVersion, undefined);
+        });
+
+        [
+            {
+                desc: 'transition is not in progress',
+                overrides: { 'x-amz-scal-transition-in-progress': undefined },
+            },
+            {
+                desc: 'the storage class is not cold',
+                overrides: { 'x-amz-storage-class': 'us-east-2' },
+            },
+            {
+                desc: 'the object has no storage class',
+                overrides: { 'x-amz-storage-class': undefined },
+            },
+            {
+                desc: 'the data is already in the cold location',
+                overrides: { dataStoreName: 'dmf-v1' },
+            },
+            {
+                desc: 'the object is already archived',
+                overrides: {
+                    archive: {
+                        archiveInfo: {
+                            archiveId: '04425717-a65c-4e8a-95e1-fa1d902d9d9f',
+                            archiveVersion: 7504504064263669,
+                        },
+                    },
+                },
+            },
+        ].forEach(({ desc, overrides }) => {
+            it(`should not publish when ${desc}`, () => {
+                lcqp._handleTransitionOp(getTransitionEntry(overrides));
+                assert(!getAccountIdStub.called);
+                assert(!kafkaSendStub.called);
+            });
+        });
+
+        it('should skip the master key of a versioned object', () => {
+            const entry = getTransitionEntry();
+            entry.key = 'hosts';
+            lcqp._handleTransitionOp(entry);
+            assert(!kafkaSendStub.called);
+        });
+
+        it('should skip mpu shadow bucket entries', () => {
+            const entry = getTransitionEntry();
+            entry.key = `mpuShadowBucket${entry.key}`;
+            lcqp._handleTransitionOp(entry);
+            assert(!kafkaSendStub.called);
+        });
+
+        it('should skip delete operations', () => {
+            const entry = getTransitionEntry();
+            entry.type = 'delete';
+            lcqp._handleTransitionOp(entry);
+            assert(!kafkaSendStub.called);
+        });
+
+        it('should do nothing without a vault client', () => {
+            lcqp.vaultClientWrapper = null;
+            lcqp._handleTransitionOp(getTransitionEntry());
+            assert(!kafkaSendStub.called);
+        });
+
+        it('should not publish when the account cannot be resolved', () => {
+            getAccountIdStub.yields(errors.InternalError);
+            lcqp._handleTransitionOp(getTransitionEntry());
+            assert(!kafkaSendStub.called);
+        });
+
+        it('should not throw when no producer is available', () => {
+            delete lcqp._producers[archiveTopic];
+            lcqp._handleTransitionOp(getTransitionEntry());
+            assert(getAccountIdStub.calledOnce);
+        });
+    });
+
     describe(':filter', () => {
         const bucketMD = {
             name: 'lc-queue-populator-test-bucket',
@@ -408,6 +620,12 @@ describe('LifecycleQueuePopulator', () => {
                 value: JSON.stringify(templateEntry),
             });
             assert(handleDeleteStub.calledOnce);
+        });
+
+        it('should call _handleTransitionOp on put message', () => {
+            const handleTransitionStub = sinon.stub(lcqp, '_handleTransitionOp').returns();
+            lcqp.filter(getKafkaEntry('s3:ObjectCreated:Put'));
+            assert(handleTransitionStub.calledOnce);
         });
 
         it('should not update zookeeper when bucketSource is mongodb (default)', () => {

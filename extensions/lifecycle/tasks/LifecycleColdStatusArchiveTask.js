@@ -112,13 +112,14 @@ class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
                 objectMD.setOriginOp('s3:LifecycleTransition:SetArchive');
 
                 if (skipLocationDeletion) {
+                    // Only a direct transition can declare the cold class at this point.
+                    const isDirectToCold = objectMD.getAmzStorageClass() === coldLocation;
+
                     objectMD.setDataStoreName(coldLocation)
                         .setAmzStorageClass(coldLocation)
                         .setTransitionInProgress(false)
-                        .setOriginOp('s3:LifecycleTransition')
-                        .setUserMetadata({
-                            'x-amz-meta-scal-s3-transition-attempt': undefined,
-                        });
+                        .setOriginOp(isDirectToCold ? 's3:LifecycleTransition:Direct' : 's3:LifecycleTransition')
+                        .setUserMetadata({ 'x-amz-meta-scal-s3-transition-attempt': undefined });
                 }
 
                 this._putMetadata(entry, objectMD, log, err => {

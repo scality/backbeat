@@ -286,14 +286,15 @@ class GarbageCollectorTask extends BackbeatTask {
                     version,
                 });
 
+                // Only a direct transition can declare the cold class at this point.
+                const isDirectToCold = objMD.getAmzStorageClass() === newLocation;
+
                 objMD.setLocation()
                     .setDataStoreName(newLocation)
                     .setAmzStorageClass(newLocation)
-                    .setOriginOp('s3:LifecycleTransition')
                     .setTransitionInProgress(false)
-                    .setUserMetadata({
-                        'x-amz-meta-scal-s3-transition-attempt': undefined,
-                    });
+                    .setOriginOp(isDirectToCold ? 's3:LifecycleTransition:Direct' : 's3:LifecycleTransition')
+                    .setUserMetadata({ 'x-amz-meta-scal-s3-transition-attempt': undefined });
                 this._putMetadata(entry, objMD, log, err => {
                     GarbageCollectorMetrics.onS3Request(log, 'putMetadata', 'archive', err);
                     if (!err) {

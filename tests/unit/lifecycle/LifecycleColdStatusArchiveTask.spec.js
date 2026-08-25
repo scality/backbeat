@@ -117,6 +117,7 @@ describe('LifecycleColdStatusArchiveTask', () => {
             assert.strictEqual(gcEntry, null);
             assert.strictEqual(updatedMD.dataStoreName, 'cold');
             assert.strictEqual(updatedMD['x-amz-storage-class'], 'cold');
+            assert.strictEqual(updatedMD.originOp, 's3:LifecycleTransition');
             assert.deepStrictEqual(updatedMD.archive.archiveInfo, {
                 archiveId: 'da80b6dc-280d-4dce-83b5-d5b40276e321',
                 archiveVersion: 5166759712787974,
@@ -140,6 +141,26 @@ describe('LifecycleColdStatusArchiveTask', () => {
         archiveTask.processEntry(coldLocation, entry, (err, commitInfo) => {
             assert.strictEqual(err, putError);
             assert.strictEqual(commitInfo, undefined);
+            done();
+        });
+    });
+
+    it('should set the direct transition origin op if the cold class was requested', done => {
+        backbeatClient.batchDeleteResponse = { error: { statusCode: 404 }, res: null };
+
+        const entry = ColdStorageStatusQueueEntry.createFromKafkaEntry({ value: message });
+        mdObj.setLocation()
+            .setDataStoreName('us-east-1')
+            .setAmzStorageClass(coldLocation)
+            .setArchive(null);
+        backbeatMetadataProxyClient.setMdObj(mdObj);
+
+        archiveTask.processEntry(coldLocation, entry, err => {
+            assert.ifError(err);
+
+            const updatedMD = backbeatMetadataProxyClient.getReceivedMd();
+            assert.strictEqual(updatedMD.dataStoreName, 'cold');
+            assert.strictEqual(updatedMD.originOp, 's3:LifecycleTransition:Direct');
             done();
         });
     });

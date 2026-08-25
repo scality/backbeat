@@ -1,6 +1,7 @@
 'use strict';
 
 const { LifecycleRequeueTask } = require('./LifecycleRequeueTask');
+const locationsConfig = require('../../../conf/locationConfig.json') || {};
 
 class LifecycleResetTransitionInProgressTask extends LifecycleRequeueTask {
     /**
@@ -18,11 +19,25 @@ class LifecycleResetTransitionInProgressTask extends LifecycleRequeueTask {
             return false;
         }
         md.setOriginOp('s3:LifecycleTransition:Retry');
-        md.setTransitionInProgress(false);
+        if (!this._isDirectToCold(md)) {
+            // Keep the flag as the queue populator keys on it to trigger the next attempt
+            md.setTransitionInProgress(false);
+        }
         md.setUserMetadata({
             'x-amz-meta-scal-s3-transition-attempt': try_,
         });
         return true;
+    }
+
+    /**
+     * Check if object transition was initiated by direct-to-cold request instead of lifecycle rule.
+     *
+     * @param {ObjectMD} md - object metadata
+     * @return {boolean} true if this is a pending direct transition
+     */
+    _isDirectToCold(md) {
+        return locationsConfig[md.getAmzStorageClass()]?.isCold
+            && !locationsConfig[md.getDataStoreName()]?.isCold;
     }
 
     shouldSkipObject(md, expectedEtag, log) {

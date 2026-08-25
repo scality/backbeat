@@ -12,6 +12,7 @@ const LifecycleTaskV2 = require(
     '../../../extensions/lifecycle/tasks/LifecycleTaskV2');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const { LifecycleMetrics } = require('../../../extensions/lifecycle/LifecycleMetrics');
+const ReplicationAPI = require('../../../extensions/replication/ReplicationAPI');
 const fakeLogger = require('../../utils/fakeLogger');
 const { withActiveSpan } = require('../../utils/withActiveSpan');
 const { timeOptions } = require('../../functional/lifecycle/configObjects');
@@ -2468,6 +2469,67 @@ describe('lifecycle task helper methods', () => {
             lifecycleTask._getTransitionActionEntry(testParams, mockObjectMD, fakeLogger, (err, entry) => {
                 assert.deepStrictEqual(err, expectedError);
                 assert.strictEqual(entry, undefined);
+                done();
+            });
+        });
+    });
+
+    describe('_applyTransitionRule', () => {
+        const testParams = {
+            bucket: 'test-bucket',
+            owner: 'test-owner',
+            objectKey: 'test-key',
+            site: 'us-east-2',
+            transitionTime: Date.now(),
+        };
+
+        let lifecycleTask;
+
+        beforeEach(() => {
+            lifecycleTask = new LifecycleTask(lp);
+            lifecycleTask.pausedLocations = new Set();
+            lifecycleTask.circuitBreakers = { tripped: () => false };
+        });
+
+        afterEach(() => {
+            sinon.restore();
+        });
+
+        function stubObjectMD(overrides) {
+            const objectMD = Object.assign({
+                getReplicationStatus: () => 'COMPLETED',
+                getDataStoreName: () => 'us-east-1',
+                getAmzStorageClass: () => 'us-east-1',
+                getTransitionInProgress: () => false,
+                getArchive: () => undefined,
+                setTransitionInProgress: () => {},
+                setOriginOp: () => {},
+                getSerialized: () => '{}',
+            }, overrides);
+            sinon.stub(lifecycleTask, '_getObjectMD').yields(null, objectMD);
+        }
+
+        it('should not transition an object declared as cold', done => {
+            stubObjectMD({ getAmzStorageClass: () => 'location-dmf-v1' });
+            const getEntryStub = sinon.stub(lifecycleTask, '_getTransitionActionEntry');
+
+            lifecycleTask._applyTransitionRule(testParams, fakeLogger, err => {
+                assert.strictEqual(err.description,
+                    'transitioning an object declared as cold is forbidden');
+                assert(!getEntryStub.called);
+                done();
+            });
+        });
+
+        it('should transition an object with a hot storage class', done => {
+            stubObjectMD();
+            const getEntryStub = sinon.stub(lifecycleTask, '_getTransitionActionEntry').yields(null, {});
+            sinon.stub(ReplicationAPI, 'sendDataMoverAction').yields();
+            sinon.stub(lifecycleTask, '_putObjectMD').yields();
+
+            lifecycleTask._applyTransitionRule(testParams, fakeLogger, err => {
+                assert.ifError(err);
+                assert(getEntryStub.calledOnce);
                 done();
             });
         });

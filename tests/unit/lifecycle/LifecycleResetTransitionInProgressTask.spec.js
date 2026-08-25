@@ -38,6 +38,18 @@ describe('LifecycleResetTransitionInProgressTask', () => {
         .setUserMetadata({
             'x-amz-meta-scal-s3-transition-attempt': 11,
         });
+    // "direct" transition: the cold storage class was requested in the PUT request, and the
+    // data still lies in the hot location
+    const objectDirectTransitioning = new ObjectMD()
+        .setContentMd5('etag1')
+        .setTransitionInProgress(true)
+        .setAmzStorageClass('location-dmf-v1')
+        .setDataStoreName('us-east-1');
+    const objectDirectTransitioned = new ObjectMD()
+        .setContentMd5('etag1')
+        .setTransitionInProgress(true)
+        .setAmzStorageClass('location-dmf-v1')
+        .setDataStoreName('location-dmf-v1');
 
     beforeEach(() => {
         backbeatMetadataProxyClient = new BackbeatMetadataProxyMock();
@@ -81,6 +93,33 @@ describe('LifecycleResetTransitionInProgressTask', () => {
 
     it('should reset transition in progress flag', done => {
         backbeatMetadataProxyClient.setMdObj(objectTransitioning);
+        task.processActionEntry(actionEntry, err => {
+            assert.ifError(err);
+
+            const md = backbeatMetadataProxyClient.mdObj;
+            assert.ok(!md.getTransitionInProgress());
+
+            done();
+        });
+    });
+
+    it('should keep transition in progress flag for a direct transition', done => {
+        backbeatMetadataProxyClient.setMdObj(objectDirectTransitioning);
+        task.processActionEntry(actionEntry, err => {
+            assert.ifError(err);
+
+            const md = backbeatMetadataProxyClient.mdObj;
+            assert.ok(md.getTransitionInProgress());
+            assert.strictEqual(md.getOriginOp(), 's3:LifecycleTransition:Retry');
+            const umd = JSON.parse(md.getUserMetadata());
+            assert.strictEqual(umd['x-amz-meta-scal-s3-transition-attempt'], 12);
+
+            done();
+        });
+    });
+
+    it('should reset transition in progress flag once the object is in the cold location', done => {
+        backbeatMetadataProxyClient.setMdObj(objectDirectTransitioned);
         task.processActionEntry(actionEntry, err => {
             assert.ifError(err);
 
