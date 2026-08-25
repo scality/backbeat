@@ -12,6 +12,9 @@ const LIFECYCLE_LABEL_CONDUCTOR_SCAN_ID = 'conductor_scan_id';
 
 const LIFECYCLE_MARKER_METRICS_LOCATION = '-delete-marker-';
 
+const TRANSITION_TYPE = 'transition';
+const PULL_REPLICATION_TYPE = 'pullReplication';
+
 // Keep per-scan series long enough for scraping and debugging recent overlap,
 // but remove them from prom-client after a configurable retention interval.
 // We intentionally do not cap the number of tracked scan IDs: if overlapping
@@ -447,9 +450,21 @@ class LifecycleMetrics {
     }
 }
 
+/**
+ * Metrics type of a copyLocation action.
+ * @param {ActionQueueEntry} actionEntry - copyLocation action
+ * @return {string} metrics type
+ */
+function getCopyLocationMetricsType(actionEntry) {
+    return actionEntry.getAttribute('metrics.origin') === PULL_REPLICATION_TYPE ?
+        PULL_REPLICATION_TYPE : TRANSITION_TYPE;
+}
+
 module.exports = {
     DEFAULT_SCAN_METRIC_RETENTION_S,
     LifecycleMetrics,
     LIFECYCLE_MARKER_METRICS_LOCATION,
+    PULL_REPLICATION_TYPE,
+    getCopyLocationMetricsType,
     resetLifecycleScanMetricCleanupTimers,
 };

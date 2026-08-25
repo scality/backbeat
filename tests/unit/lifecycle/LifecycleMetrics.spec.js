@@ -2,8 +2,10 @@ const assert = require('assert');
 const sinon = require('sinon');
 const {
     LifecycleMetrics,
+    getCopyLocationMetricsType,
     resetLifecycleScanMetricCleanupTimers,
 } = require('../../../extensions/lifecycle/LifecycleMetrics');
+const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const { ZenkoMetrics } = require('arsenal').metrics;
 
 describe('LifecycleMetrics', () => {
@@ -18,6 +20,23 @@ describe('LifecycleMetrics', () => {
     afterEach(() => {
         resetLifecycleScanMetricCleanupTimers();
         sinon.restore();
+    });
+
+    describe('getCopyLocationMetricsType', () => {
+        [
+            ['pullReplication', 'pullReplication'],
+            ['lifecycle', 'transition'],
+            [undefined, 'transition'],
+        ].forEach(([origin, expected]) => {
+            it(`should report ${origin} actions as ${expected}`, () => {
+                const entry = ActionQueueEntry.create('copyLocation');
+                if (origin !== undefined) {
+                    entry.setAttribute('metrics', { origin });
+                }
+
+                assert.strictEqual(getCopyLocationMetricsType(entry), expected);
+            });
+        });
     });
 
     describe('error handling', () => {
