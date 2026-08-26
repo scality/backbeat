@@ -18,9 +18,10 @@ const { startProbeServer } = require('../../lib/util/probe');
 const kafkaConfig = config.kafka;
 const mConfig = config.metrics;
 const mongoProcessorConfig = config.extensions.mongoProcessor;
-// TODO: consider whether we would want a separate mongo config
-// for the consumer side
-const mongoClientConfig = config.queuePopulator.mongo;
+// the queue populator's mongo config is the fallback for a deployment that
+// runs one beside this process; a D/R sink runs none, so it configures its own
+const mongoClientConfig =
+    mongoProcessorConfig.mongodb ?? config.queuePopulator?.mongo;
 
 const log = new werelogs.Logger('Backbeat:MongoProcessor:task');
 const mongoProcessorLogConfig = mongoProcessorConfig.log ?? config.log;
