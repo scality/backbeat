@@ -34,6 +34,17 @@ describe('backbeatConsumer', () => {
         });
         assert.strictEqual(backbeatConsumer._topic, 'testing.my-test-topic');
     });
+
+    it('should commit the offsets it stores itself', () => {
+        const consumer = new BackbeatConsumerMock({
+            kafka,
+            groupId: 'unittest-group',
+            topic: 'my-test-topic',
+        });
+        assert.strictEqual(consumer.consumerConfig['enable.auto.offset.store'],
+            false);
+        assert.strictEqual(consumer.consumerConfig['enable.auto.commit'], true);
+    });
     
     describe('pause/resume topic partitions on circuit breaker', () => {
         let consumer;
