@@ -243,14 +243,14 @@ describe('MongoQueueProcessor.start', () => {
         sinon.restore();
     });
 
-    function startProcessor() {
+    function startProcessor(kafkaConfig = { hosts: 'localhost:9092' }) {
         sinon.stub(BackbeatConsumer.prototype, '_init');
         sinon.stub(Config, 'getBootstrapList').returns([]);
         sinon.stub(Config, 'on');
 
         const proc = _makeProcessor([]);
         proc.logger = { info: () => {}, error: () => {}, fatal: () => {} };
-        proc.kafkaConfig = { hosts: 'localhost:9092' };
+        proc.kafkaConfig = kafkaConfig;
         proc.mongoProcessorConfig = {
             topic: 'backbeat-ingestion',
             groupId: 'backbeat-ingestion-group',
@@ -269,6 +269,19 @@ describe('MongoQueueProcessor.start', () => {
 
         setImmediate(() => {
             assert.strictEqual(proc._consumer._fromOffset, 'earliest');
+            done();
+        });
+    });
+
+    it('forwards the configured kafka consumer params', done => {
+        const proc = startProcessor({
+            hosts: 'localhost:9092',
+            consumerParams: { 'security.protocol': 'ssl' },
+        });
+
+        setImmediate(() => {
+            assert.deepStrictEqual(proc._consumer._consumerParams,
+                { 'security.protocol': 'ssl' });
             done();
         });
     });

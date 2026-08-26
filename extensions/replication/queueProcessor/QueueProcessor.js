@@ -395,6 +395,7 @@ class QueueProcessor extends EventEmitter {
                     this.kafkaConfig.backlogMetrics : undefined,
                 compressionType: this.kafkaConfig.compressionType,
                 requiredAcks: this.kafkaConfig.requiredAcks,
+                consumerParams: this.kafkaConfig.consumerParams,
                 maxPollIntervalMs: this.repConfig.queueProcessor.maxPollIntervalMs,
             },
             topic,
