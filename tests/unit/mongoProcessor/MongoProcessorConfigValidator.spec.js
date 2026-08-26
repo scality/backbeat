@@ -83,6 +83,21 @@ describe('MongoProcessorConfigValidator mode', () => {
         assert.strictEqual(validated.mode, 'ingestion');
     });
 
+    it('should accept the dr mode', () => {
+        const validated = configValidator(globalConfig, { ...baseExtConfig, mode: 'dr' });
+        assert.strictEqual(validated.mode, 'dr');
+    });
+
+    it('should accept the mode from the environment', () => {
+        process.env.EXTENSIONS_MONGO_PROCESSOR_MODE = 'dr';
+        try {
+            const validated = configValidator(globalConfig, baseExtConfig);
+            assert.strictEqual(validated.mode, 'dr');
+        } finally {
+            delete process.env.EXTENSIONS_MONGO_PROCESSOR_MODE;
+        }
+    });
+
     it('should reject a mode with no implementation', () => {
         let err;
         try {
