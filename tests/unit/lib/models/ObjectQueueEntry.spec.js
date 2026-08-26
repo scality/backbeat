@@ -384,5 +384,22 @@ describe('ObjectQueueEntry', () => {
             assert.strictEqual(entry.getKey(), 'key');
             assert.deepStrictEqual(entry.getOverheadField('foo'), 'bar');
         });
+
+        it('should create a DeleteOpQueueEntry with object overhead fields',
+        () => {
+            const entry = QueueEntry.createFromKafkaEntry({
+                value: JSON.stringify({
+                    type: 'del',
+                    bucket: 'bucket',
+                    key: 'key',
+                    overheadFields: { foo: 'bar' },
+                }),
+            });
+
+            assert(entry instanceof DeleteOpQueueEntry);
+            assert.strictEqual(entry.getBucket(), 'bucket');
+            assert.strictEqual(entry.getKey(), 'key');
+            assert.deepStrictEqual(entry.getOverheadField('foo'), 'bar');
+        });
     });
 });
