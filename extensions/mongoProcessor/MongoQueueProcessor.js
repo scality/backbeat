@@ -13,6 +13,7 @@ const { extractVersionId } = require('../../lib/util/versioning');
 
 const Config = require('../../lib/Config');
 const BackbeatConsumer = require('../../lib/BackbeatConsumer');
+const ActionQueueEntry = require('../../lib/models/ActionQueueEntry');
 const QueueEntry = require('../../lib/models/QueueEntry');
 const DeleteOpQueueEntry = require('../../lib/models/DeleteOpQueueEntry');
 const ObjectQueueEntry = require('../../lib/models/ObjectQueueEntry');
@@ -22,6 +23,8 @@ const { metricsExtension, metricsTypeCompleted, metricsTypePendingOnly } =
 const getContentType = require('./utils/contentTypeHelper');
 const BucketMemState = require('./utils/BucketMemState');
 const MongoProcessorMetrics = require('./MongoProcessorMetrics');
+const GarbageCollectorProducer = require('../gc/GarbageCollectorProducer');
+const { isCRRLocation, filterOutCRRLocations } = require('../../lib/util/locations');
 
 // batch metrics by location and send to kafka metrics topic every 5 seconds
 const METRIC_REPORT_INTERVAL_MS = process.env.CI === 'true' ? 1000 : 5000;
@@ -64,13 +67,17 @@ class MongoQueueProcessor {
      * @param {number} [mongoProcessorConfig.concurrency] - consumer concurrency
      * @param {Object} mongoClientConfig - config for connecting to mongo
      * @param {Object} mConfig - metrics config
+     * @param {Object} [gcConfig] - garbage collector config, required to reclaim
+     *   the data of localized objects
      */
-    constructor(kafkaConfig, mongoProcessorConfig, mongoClientConfig, mConfig) {
+    constructor(kafkaConfig, mongoProcessorConfig, mongoClientConfig, mConfig, gcConfig) {
         this.kafkaConfig = kafkaConfig;
         this.mongoProcessorConfig = mongoProcessorConfig;
         this.mongoClientConfig = mongoClientConfig;
         this._mConfig = mConfig;
+        this._gcConfig = gcConfig;
 
+        this._gcProducer = null;
         this._consumer = null;
         this._bootstrapList = null;
         this.logger = new Logger('Backbeat:Ingestion:MongoProcessor');
@@ -119,6 +126,16 @@ class MongoQueueProcessor {
                 }
                 return next(err);
             }),
+            next => {
+                if (!this._gcConfig) {
+                    this.logger.info('no garbage collector configured', {
+                        method: 'MongoQueueProcessor.start',
+                    });
+                    return next();
+                }
+                this._gcProducer = new GarbageCollectorProducer();
+                return this._gcProducer.setupProducer(next);
+            },
         ], error => {
             if (error) {
                 this.logger.fatal('error starting mongo queue processor');
@@ -377,16 +394,24 @@ class MongoQueueProcessor {
         async.waterfall([
             cb => this._getZenkoObjectMetadata(log, sourceEntry, versionId, cb),
             (zenkoObjMd, cb) => {
+                // In a clean room the bucket location constraint is the (isCRR) source
+                // location: once an object has been localized its data does not live there
+                // anymore, so it looks exactly like a transitioned object. It must still be
+                // deleted, and the local copy of the data reclaimed.
+                const localizedLocations = isCRRLocation(location) ?
+                    filterOutCRRLocations(zenkoObjMd.location) : [];
+
                 // Skip if the object is in a different location, i.e. when the delete was caused
                 // by restored-object expiration or transition. It works because the dataStoreName
                 // is updated before actually sending the object to GC to effectively delete the
                 // data.
                 const encode = versionId => (versionId ? VersionID.encode(versionId) : 'null');
-                if (zenkoObjMd.dataStoreName !== location ||
+                if (localizedLocations.length === 0 && (
+                    zenkoObjMd.dataStoreName !== location ||
                     zenkoObjMd.location?.length !== 1 ||
                     zenkoObjMd.location[0].dataStoreName !== location ||
                     zenkoObjMd.location[0].key !== key ||
-                    (zenkoObjMd.location[0].dataStoreVersionId || 'null') !== encode(entryVersionId)
+                    (zenkoObjMd.location[0].dataStoreVersionId || 'null') !== encode(entryVersionId))
                 ) {
                     log.end().info('ignore delete entry, transitioned to another location', {
                         entry: sourceEntry.getLogInfo(),
@@ -395,9 +420,9 @@ class MongoQueueProcessor {
                     return done();
                 }
 
-                return cb(null, zenkoObjMd);
+                return cb(null, zenkoObjMd, localizedLocations);
             },
-            (zenkoObjMd, cb) => {
+            (zenkoObjMd, localizedLocations, cb) => {
                 const options = {};
 
                 // Calling deleteObject with empty options to use deleteObjectNoVer which is used
@@ -418,7 +443,19 @@ class MongoQueueProcessor {
                     options.doesNotNeedOpogUpdate = true;
                 }
 
-                return this._mongoClient.deleteObject(bucket, key, options, log, cb);
+                return this._mongoClient.deleteObject(bucket, key, options, log, err => {
+                    if (err) {
+                        return cb(err);
+                    }
+                    // The data copied locally is not referenced by anything anymore: reclaim
+                    // it. Doing it after the metadata delete means a failure here leaks the
+                    // data, instead of losing it.
+                    if (localizedLocations.length > 0) {
+                        this._garbageCollectData(log, sourceEntry, zenkoObjMd, versionId,
+                            localizedLocations);
+                    }
+                    return cb();
+                });
             },
         ], err => {
             if (err?.is.NoSuchKey) {
@@ -446,6 +483,53 @@ class MongoQueueProcessor {
             });
             return done();
         });
+    }
+
+    /**
+     * Publish a garbage collection entry to reclaim the data of an object which has just
+     * been deleted from mongo.
+     * @param {Logger.newRequestLogger} log - request logger object
+     * @param {DeleteOpQueueEntry} sourceEntry - delete object entry
+     * @param {Object} zenkoObjMd - metadata of the object which was deleted
+     * @param {string} versionId - decoded version id of the object which was deleted
+     * @param {Object[]} locations - location parts to delete
+     * @return {undefined}
+     */
+    _garbageCollectData(log, sourceEntry, zenkoObjMd, versionId, locations) {
+        const bucket = sourceEntry.getBucket();
+        const key = sourceEntry.getObjectKey();
+
+        if (!this._gcProducer) {
+            log.error('no garbage collector configured, cannot reclaim the data', {
+                bucket,
+                objectKey: key,
+                versionId,
+            });
+            return;
+        }
+
+        // The version is already gone, so no lastModified is passed along: the GC must not
+        // send any conditional header, only the locations matter here.
+        const gcEntry = ActionQueueEntry.create('deleteData')
+            .addContext({
+                origin: 'localization',
+                ruleType: 'transition',
+                reqId: log.getSerializedUids(),
+                bucketName: bucket,
+                objectKey: key,
+                versionId: versionId ? VersionID.encode(versionId) : undefined,
+                eTag: zenkoObjMd['content-md5'],
+            })
+            .setAttribute('source', {
+                bucket,
+                objectKey: key,
+                storageClass: zenkoObjMd.dataStoreName,
+            })
+            .setAttribute('serviceName', 'md-ingestion')
+            .setAttribute('target.owner', zenkoObjMd['owner-id'])
+            .setAttribute('target.locations', locations);
+
+        this._gcProducer.publishActionEntry(gcEntry);
     }
 
     /**
