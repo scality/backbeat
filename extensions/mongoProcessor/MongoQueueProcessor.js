@@ -147,6 +147,7 @@ class MongoQueueProcessor {
                 },
                 concurrency: this.mongoProcessorConfig.concurrency,
                 maxQueued: this.mongoProcessorConfig.maxQueued,
+                fromOffset: 'earliest',
             });
             this._consumer.on('error', () => {
                 MongoProcessorMetrics.onIngestionKafkaConsume('error');
