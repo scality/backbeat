@@ -41,3 +41,38 @@ describe('MongoProcessorConfigValidator log override', () => {
         }
     });
 });
+
+describe('MongoProcessorConfigValidator mongodb', () => {
+    const mongodb = {
+        replicaSetHosts: 'mongo:27017',
+        database: 'datadb',
+        authCredentials: { username: 'u', password: 'p' },
+    };
+
+    it('should accept a mongodb client config', () => {
+        const validated = configValidator(globalConfig, { ...baseExtConfig, mongodb });
+        assert.strictEqual(validated.mongodb.replicaSetHosts, 'mongo:27017');
+        assert.strictEqual(validated.mongodb.database, 'datadb');
+        assert.deepStrictEqual(validated.mongodb.authCredentials,
+            { username: 'u', password: 'p' });
+    });
+
+    it('should leave mongodb undefined when not set, deferring to the ' +
+    'queue populator config', () => {
+        const validated = configValidator(globalConfig, baseExtConfig);
+        assert.strictEqual(validated.mongodb, undefined);
+    });
+
+    it('should reject credentials missing a password', () => {
+        let err;
+        try {
+            configValidator(globalConfig, {
+                ...baseExtConfig,
+                mongodb: { ...mongodb, authCredentials: { username: 'u' } },
+            });
+        } catch (e) {
+            err = e;
+        }
+        assert(err, 'expected configValidator to throw on partial credentials');
+    });
+});
