@@ -315,6 +315,37 @@ describe('backbeatConsumer', () => {
         });
     });
 
+    describe('_tryConsume', () => {
+        let consumer;
+
+        beforeEach(() => {
+            consumer = new BackbeatConsumerMock({
+                kafka,
+                groupId: 'unittest-group',
+                topic: 'my-test-topic',
+            });
+            consumer._processingQueue = {
+                length: () => 0,
+                running: () => 0,
+            };
+            consumer._consumer = { consume: sinon.stub() };
+        });
+
+        it('should fetch while the consumer is running', () => {
+            consumer._tryConsume();
+
+            assert.strictEqual(consumer._consumer.consume.calledOnce, true);
+        });
+
+        it('should not fetch once the shutdown has started', () => {
+            consumer._shuttingDown = true;
+
+            consumer._tryConsume();
+
+            assert.strictEqual(consumer._consumer.consume.called, false);
+        });
+    });
+
     describe('_getAvailableSlotsInPipeline', () => {
         let consumer;
 
