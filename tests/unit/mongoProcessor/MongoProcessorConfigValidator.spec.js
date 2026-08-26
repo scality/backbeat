@@ -76,3 +76,21 @@ describe('MongoProcessorConfigValidator mongodb', () => {
         assert(err, 'expected configValidator to throw on partial credentials');
     });
 });
+
+describe('MongoProcessorConfigValidator mode', () => {
+    it('should default to ingestion so an existing config is unchanged', () => {
+        const validated = configValidator(globalConfig, baseExtConfig);
+        assert.strictEqual(validated.mode, 'ingestion');
+    });
+
+    it('should reject a mode with no implementation', () => {
+        let err;
+        try {
+            configValidator(globalConfig, { ...baseExtConfig, mode: 'sideways' });
+        } catch (e) {
+            err = e;
+        }
+        assert(err, 'expected configValidator to throw on an unknown mode');
+        assert.match(err.message, /mode/);
+    });
+});

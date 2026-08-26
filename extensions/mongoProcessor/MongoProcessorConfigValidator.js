@@ -1,4 +1,5 @@
 const joi = require('joi');
+const { modes, defaultMode } = require('./modes');
 const { retryParamsJoi, probeServerJoi, logJoiOptional, mongoJoi } =
     require('../../lib/config/configItems.joi');
 const { extensionConfigValidator } = require('../../lib/config/extensionConfigValidator');
@@ -8,6 +9,7 @@ const { MAX_QUEUED_DEFAULT }  = require('../../lib/constants').backbeatConsumer;
 const joiSchema = joi.object({
     topic: joi.string().required(),
     groupId: joi.string().required(),
+    mode: joi.string().valid(...Object.keys(modes)).default(defaultMode),
     mongodb: mongoJoi,
     retry: retryParamsJoi,
     concurrency: joi.number().greater(0).default(1),
