@@ -6,7 +6,7 @@ const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const ObjectMD = require('arsenal').models.ObjectMD;
 const { LifecycleMetrics } = require('../LifecycleMetrics');
-const { filterOutCRRLocations, getCRRLocationNames } = require('../../../lib/util/locations');
+const { isCRRLocation } = require('../../../lib/util/locations');
 /** @typedef { import('../objectProcessor/LifecycleObjectProcessor.js') } LifecycleObjectProcessor */
 
 class LifecycleUpdateTransitionTask extends BackbeatTask {
@@ -115,17 +115,14 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
         const { bucket, key, version, eTag, accountId, owner } = this.getTargetAttribute(entry);
         // Data stored on a CRR location belongs to the remote site: the copy we
         // just made is an extra local copy, the source must be left untouched.
-        const locationsToGC = filterOutCRRLocations(locations);
-        if (locationsToGC.length !== locations.length) {
-            log.info('skipping garbage collection of data on CRR location', {
+        if (locations.some(location => isCRRLocation(location.dataStoreName))) {
+            log.info('skipping garbage collection of data on a CRR location', {
                 method: 'LifecycleUpdateTransitionTask._garbageCollectLocation',
                 bucket,
                 objectKey: key,
                 versionId: version,
-                dataStoreNames: getCRRLocationNames(locations),
+                dataStoreName: locations[0]?.dataStoreName,
             });
-        }
-        if (locationsToGC.length === 0) {
             return process.nextTick(done);
         }
         const gcEntry = ActionQueueEntry.create('deleteData')
@@ -142,7 +139,7 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
               .setAttribute('serviceName', 'lifecycle-transition')
               .setAttribute('target.accountId', accountId)
               .setAttribute('target.owner', owner)
-              .setAttribute('target.locations', locationsToGC);
+              .setAttribute('target.locations', locations);
         this.gcProducer.publishActionEntry(gcEntry);
         return process.nextTick(done);
     }

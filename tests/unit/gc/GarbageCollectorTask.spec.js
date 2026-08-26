@@ -453,9 +453,9 @@ describe('GarbageCollectorTask', () => {
                 assert.strictEqual(backbeatClient.times.batchDeleteResponse, 0);
                 assert.strictEqual(onGcCompletedSpy.callCount, 0);
                 assert.strictEqual(log.warn.callCount, 1);
-                assert.deepStrictEqual(
-                    log.warn.firstCall.args[1].dataStoreNames,
-                    ['location-crr-source']);
+                assert.strictEqual(
+                    log.warn.firstCall.args[1].dataStoreName,
+                    'location-crr-source');
                 assert.strictEqual(entry.getStatus(), 'success');
                 batchDeleteDataSpy.restore();
                 onGcCompletedSpy.restore();
@@ -463,17 +463,16 @@ describe('GarbageCollectorTask', () => {
             });
         });
 
-        it('should only delete the parts which are not on a CRR location', done => {
-            const entry = createDeleteDataEntry([crrLocation, regularLocation]);
+        it('should not delete anything when any location is on a CRR ' +
+        'location', done => {
+            const entry = createDeleteDataEntry([regularLocation, crrLocation]);
             const batchDeleteDataSpy = sinon.spy(gcTask, '_batchDeleteData');
 
             gcTask.processActionEntry(entry, err => {
                 assert.ifError(err);
-                assert.strictEqual(batchDeleteDataSpy.callCount, 1);
-                assert.deepStrictEqual(
-                    batchDeleteDataSpy.firstCall.args[0].Locations,
-                    [regularLocation]);
+                assert.strictEqual(batchDeleteDataSpy.callCount, 0);
                 assert.strictEqual(log.warn.callCount, 1);
+                assert.strictEqual(entry.getStatus(), 'success');
                 batchDeleteDataSpy.restore();
                 done();
             });

@@ -5,7 +5,7 @@ const { ObjectMD } = require('arsenal').models;
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const { BatchDeleteCommand } = require('@scality/cloudserverclient');
 const { GarbageCollectorMetrics } = require('../GarbageCollectorMetrics');
-const { filterOutCRRLocations, getCRRLocationNames } = require('../../../lib/util/locations');
+const { isCRRLocation } = require('../../../lib/util/locations');
 /** @typedef { import('../GarbageCollector.js') } GarbageCollector */
 
 class GarbageCollectorTask extends BackbeatTask {
@@ -145,24 +145,17 @@ class GarbageCollectorTask extends BackbeatTask {
         const ruleType = entry.getContextAttribute('ruleType');
         // Last line of defense: whoever published this entry, data on a CRR
         // location belongs to the remote site and must never be deleted.
-        const locationsToDelete = filterOutCRRLocations(locations);
-        if (locationsToDelete.length !== (locations || []).length) {
-            log.warn('refusing to delete data on CRR location', {
+        if (locations.some(location => isCRRLocation(location.dataStoreName))) {
+            log.warn('refusing to delete data on a CRR location', Object.assign({
                 method: 'GarbageCollectorTask._executeDeleteDataOnce',
-                bucket: entry.getAttribute('source.bucket'),
-                objectKey: entry.getAttribute('source.objectKey'),
-                dataStoreNames: getCRRLocationNames(locations),
+                dataStoreName: locations[0]?.dataStoreName,
                 ruleType,
-                ...entry.getLogInfo(),
-            });
-        }
-        if (locationsToDelete.length === 0) {
+            }, entry.getLogInfo()));
             entry.setEnd(null);
-            log.info('action execution ended, nothing to delete', entry.getLogInfo());
             return process.nextTick(done);
         }
         const params = {
-            Locations: locationsToDelete.map(location => ({
+            Locations: locations.map(location => ({
                 key: location.key,
                 dataStoreName: location.dataStoreName,
                 size: location.size,
@@ -203,7 +196,7 @@ class GarbageCollectorTask extends BackbeatTask {
             }
 
             GarbageCollectorMetrics.onGcCompleted(log, ruleType,
-                locationsToDelete[0]?.dataStoreName, Date.now() - entry.getAttribute('timestamp'));
+                locations[0]?.dataStoreName, Date.now() - entry.getAttribute('timestamp'));
             return done();
         });
     }

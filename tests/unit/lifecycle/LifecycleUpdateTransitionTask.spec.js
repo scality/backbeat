@@ -162,15 +162,13 @@ describe('LifecycleUpdateTransitionTask', () => {
         });
     });
 
-    it('should only GC the parts which are not on a CRR location', done => {
+    it('should not GC anything when any part is on a CRR location', done => {
         const crrPart = Object.assign({}, oldLocation[0],
             { key: 'crrKey', dataStoreName: 'location-crr-source' });
         mdObj.setLocation([crrPart, ...oldLocation]);
         task.processActionEntry(actionEntry, err => {
             assert.ifError(err);
-            const receivedGcEntry = gcProducer.getReceivedEntry();
-            assert.deepStrictEqual(
-                receivedGcEntry.getAttribute('target.locations'), oldLocation);
+            assert.strictEqual(gcProducer.getReceivedEntry(), null);
             done();
         });
     });
