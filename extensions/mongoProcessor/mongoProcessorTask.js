@@ -64,10 +64,13 @@ async function handleMetrics(res, log) {
 }
 
 function loadManagementDatabase() {
-    const ingestionServiceAuth = config.extensions.ingestion.auth;
+    // the ingestion extension's auth is the fallback for a deployment that
+    // configures it; a D/R sink enables no extension but this one
+    const serviceAuth =
+        mongoProcessorConfig.auth ?? config.extensions.ingestion?.auth;
     initManagement({
         serviceName: 'md-ingestion',
-        serviceAccount: ingestionServiceAuth.account,
+        serviceAccount: serviceAuth.account,
     }, error => {
         if (error) {
             log.error('could not load management db', { error });
