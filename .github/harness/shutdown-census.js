@@ -153,6 +153,7 @@ function startPod(role, topic, groupId, cfg, outDir, logPath) {
             ROLE: role,
             OUT_DIR: outDir,
             SLOW_MS: String(cfg.slowMs),
+            DROP_EVERY: process.env.DROP_EVERY || '',
             CONCURRENCY: String(cfg.concurrency),
         },
     });
@@ -256,6 +257,7 @@ async function runIteration(idx) {
     const logPath = path.join(outDir, 'pods.log');
     const record = {
         arm: ARM, scenario: SCENARIO, job: JOB, iteration: idx,
+        dropEvery: Number(process.env.DROP_EVERY || 0),
         messages: cfg.messages, concurrency: cfg.concurrency,
     };
     let leaving;

@@ -28,6 +28,7 @@ const {
 } = process.env;
 
 const slowMs = Number(SLOW_MS || 0);
+const dropEvery = Number(process.env.DROP_EVERY || 0);
 const concurrency = Number(CONCURRENCY || 1);
 const processedFile = path.join(OUT_DIR, `processed-${ROLE}.txt`);
 
@@ -90,7 +91,12 @@ const consumer = new BackbeatConsumer({
         // recorded on completion, so a task cut short by the shutdown is not
         // counted as processed
         const done = () => {
-            buffer.push(seq);
+            // negative control: deliberately fail to record a known fraction,
+            // so a run that reports zero loss proves the accounting is blind
+            // rather than proving the code is correct
+            if (!(dropEvery > 0 && seq % dropEvery === 0)) {
+                buffer.push(seq);
+            }
             processed++;
             cb();
         };

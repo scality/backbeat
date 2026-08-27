@@ -15,8 +15,8 @@ on:
     - .github/harness/**
 
 env:
-  JOBS_PER_CELL: '6'
-  ITERATIONS_PER_JOB: '10'
+  JOBS_PER_CELL: '3'
+  ITERATIONS_PER_JOB: '8'
 
 jobs:
   build:
@@ -68,10 +68,12 @@ jobs:
         # patched: apply the unmerged BB-843 librdkafka fix and rebuild.
         # librdkafka master (2.15) does NOT carry that fix, so the 2.12 arm
         # is a control for "newer librdkafka" as distinct from "this patch".
+        # 'control' drops every 10th record on purpose: it MUST report loss.
+        # A run where it reports zero means the accounting cannot count, and
+        # every previous "zero loss" result is void.
         arms = [
-            {'arm': 'cur', 'sha': 'c2b11561', 'nrk': '', 'patched': False, 'bound': ''},
-            {'arm': 'varD', 'sha': '637e3bd3', 'nrk': '', 'patched': False, 'bound': ''},
-            {'arm': 'varE', 'sha': 'cfda2287', 'nrk': '', 'patched': False, 'bound': ''},
+            {'arm': 'live', 'sha': '98e19e3f', 'nrk': '', 'patched': False, 'bound': '', 'drop': ''},
+            {'arm': 'control', 'sha': '98e19e3f', 'nrk': '', 'patched': False, 'bound': '', 'drop': '10'},
         ]
         scenarios = ['idle', 'rejoining', 'draining', 'backlog']
         include = [
@@ -207,6 +209,7 @@ jobs:
         ARM: ${{ matrix.arm }}
         SCENARIO: ${{ matrix.scenario }}
         JOB_INDEX: ${{ matrix.idx }}
+        DROP_EVERY: ${{ matrix.drop }}
         ITERATIONS: ${{ env.ITERATIONS_PER_JOB }}
         HOSTS: localhost:9092
       run: node .github/harness/shutdown-census.js 2>&1 | tee census.log
