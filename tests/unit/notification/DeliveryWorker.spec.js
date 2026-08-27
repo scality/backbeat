@@ -1,5 +1,6 @@
 const assert = require('assert');
 const sinon = require('sinon');
+const Logger = require('werelogs').Logger;
 const { ZenkoMetrics } = require('arsenal').metrics;
 
 const FakeLogger = require('../../utils/fakeLogger');
@@ -470,6 +471,49 @@ describe('notification DeliveryWorker', () => {
 
         it('should build its filter from a legal workgroups document', () => {
             assert.ifError(validateWorkgroupsDoc(workgroupsDocFixture).error);
+        });
+
+        describe('destinations routed by a prefix of their name', () => {
+            // werelogs builds every logger over one shared prototype, and the
+            // worker makes its own logger, so this is where the constructor's
+            // warnings can be caught
+            const loggerProto = Object.getPrototypeOf(
+                new Logger('Backbeat:Notification:DeliveryWorker'));
+
+            const pipeConfig = {
+                ...notifConfig,
+                destinations: [
+                    ...notifConfig.destinations,
+                    { ...notifConfig.destinations[0], resource: 'acme|events' },
+                ],
+            };
+
+            it('should warn once when serving a workgroup', () => {
+                const warn = sinon.stub(loggerProto, 'warn');
+
+                new DeliveryWorker(kafkaConfig, pipeConfig, workgroup);
+
+                assert(warn.calledOnce);
+                const [, payload] = warn.args[0];
+                assert.strictEqual(payload.destinationId, 'acme|events');
+                assert.strictEqual(payload.token, 'acme');
+            });
+
+            it('should stay silent when no workgroup is configured', () => {
+                const warn = sinon.stub(loggerProto, 'warn');
+
+                new DeliveryWorker(kafkaConfig, pipeConfig);
+
+                assert(warn.notCalled);
+            });
+
+            it('should stay silent for destinations with plain names', () => {
+                const warn = sinon.stub(loggerProto, 'warn');
+
+                new DeliveryWorker(kafkaConfig, notifConfig, workgroup);
+
+                assert(warn.notCalled);
+            });
         });
 
         describe('consumer group id', () => {

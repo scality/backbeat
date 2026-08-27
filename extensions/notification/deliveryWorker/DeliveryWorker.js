@@ -10,6 +10,8 @@ const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 const messageUtil = require('../utils/message');
 const DeliveryProducerPool = require('./DeliveryProducerPool');
 const {
+    destinationTokenFromKey,
+    encodeDestinationToken,
     isBarrierKey,
     parseBarrierRecord,
     SKIP_BARRIER,
@@ -123,6 +125,39 @@ class DeliveryWorker extends EventEmitter {
         this._producerPool = null;
 
         this.logger = new Logger('Backbeat:Notification:DeliveryWorker');
+
+        if (this._workgroup) {
+            this._warnOnPrefixRoutedDestinations();
+        }
+    }
+
+    /**
+     * Warn about every configured destination that a workgroup routes by a
+     * prefix of its name.
+     *
+     * The record key of a destination is its resource name run through
+     * encodeURIComponent, and everything from the sub key separator onwards
+     * is cut off to get the routing token. A resource holding a separator of
+     * its own therefore routes on the part before it. Ownership stays total,
+     * disjoint and deterministic, so no record is lost, but a static rule
+     * naming the whole resource would never match it, which is why such a
+     * rule is refused outright when the document is validated.
+     *
+     * @return {undefined}
+     */
+    _warnOnPrefixRoutedDestinations() {
+        Object.keys(this._destinationsById).forEach(destinationId => {
+            const encoded = encodeDestinationToken(destinationId);
+            const token = destinationTokenFromKey(encoded);
+            if (token !== encoded) {
+                this.logger.warn('destination is routed by a prefix of its ' +
+                    'name, so a static workgroup rule cannot name it', {
+                    method: 'DeliveryWorker._warnOnPrefixRoutedDestinations',
+                    destinationId,
+                    token,
+                });
+            }
+        });
     }
 
     /**
