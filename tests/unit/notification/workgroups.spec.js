@@ -101,6 +101,37 @@ describe('notification workgroups membership ::', () => {
             assert.deepStrictEqual(value.barriers, { 0: 154023, 1: 0 });
         });
 
+        it('should pass the previous group ids through untouched', () => {
+            const previousGroups = [
+                'backbeat-notification-delivery-wg-bulk-a-gen2',
+                'backbeat-notification-delivery',
+            ];
+            const { error, value } = validateWorkgroupsDoc(makeDoc([
+                { id: 'wg-only', rule: hashmod(1, [0]) },
+            ], { previousGroups }));
+            assert.ifError(error);
+            assert.deepStrictEqual(value.previousGroups, previousGroups);
+        });
+
+        it('should accept a document with no previous groups', () => {
+            const { error, value } = validateWorkgroupsDoc(makeDoc([
+                { id: 'wg-only', rule: hashmod(1, [0]) },
+            ]));
+            assert.ifError(error);
+            assert.strictEqual(value.previousGroups, undefined);
+        });
+
+        it('should keep the previous groups out of the ownership index', () => {
+            const doc = makeDoc([
+                { id: 'wg-a', rule: hashmod(2, [0]) },
+                { id: 'wg-b', rule: hashmod(2, [1]) },
+            ], { previousGroups: ['wg-a', 'some-old-group'] });
+            const { error, value } = validateWorkgroupsDoc(doc);
+            assert.ifError(error);
+            assert.deepStrictEqual(buildOwnershipIndex(value),
+                buildOwnershipIndex(makeDoc(doc.workgroups)));
+        });
+
         const rejected = [
             {
                 description: 'a config version other than 1',
@@ -194,6 +225,21 @@ describe('notification workgroups membership ::', () => {
                 description: 'a barrier key that is not a partition number',
                 doc: makeDoc([{ id: 'wg-a', rule: hashmod(1, [0]) }],
                     { barriers: { notAPartition: 12 } }),
+            },
+            {
+                description: 'previous groups that are not an array',
+                doc: makeDoc([{ id: 'wg-a', rule: hashmod(1, [0]) }],
+                    { previousGroups: 'backbeat-notification-delivery' }),
+            },
+            {
+                description: 'a previous group that is not a string',
+                doc: makeDoc([{ id: 'wg-a', rule: hashmod(1, [0]) }],
+                    { previousGroups: ['a-real-group', 42] }),
+            },
+            {
+                description: 'a previous group that is the empty string',
+                doc: makeDoc([{ id: 'wg-a', rule: hashmod(1, [0]) }],
+                    { previousGroups: [''] }),
             },
             {
                 description: 'an unknown rule type',

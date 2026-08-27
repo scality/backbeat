@@ -49,6 +49,10 @@ const workgroupsDocSchema = joi.object({
     })),
     // partition number as a JSON object key, barrier offset as its value
     barriers: joi.object().pattern(/^\d+$/, joi.number().integer().min(0)),
+    // the previous generation's consumer group ids, written by the cutover
+    // tool and read by its drain report. Workers never look at it, so it takes
+    // no part in the ownership rules or in the ownership index
+    previousGroups: joi.array().items(joi.string().min(1)),
 });
 
 /**
