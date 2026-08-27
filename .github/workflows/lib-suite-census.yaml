@@ -1,0 +1,200 @@
+---
+# Throwaway workflow (BB-833): does the BB-833 stack make the lib suite worse
+# than 9.5 does on its own? One run of ft_test:lib per job, N per tree.
+# A healthy run is ~14-18 min, so the timeout doubles as a "wedged" signal.
+name: lib-suite-census
+
+on:
+  push:
+    branches:
+    - poc/BB-833-shutdown-census
+    paths:
+    - .github/workflows/lib-suite-census.yaml
+
+env:
+  RUNS_PER_ARM: '15'
+
+jobs:
+  build:
+    name: build ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+        - name: ci-kafka
+          context: .github/dockerfiles/kafka
+          file: ""
+        - name: syntheticbucketd
+          context: .
+          file: .github/dockerfiles/syntheticbucketd/Dockerfile
+        - name: ci-mongodb
+          context: .github/dockerfiles/mongodb
+          file: ""
+    steps:
+    - uses: actions/checkout@v4
+    - uses: docker/setup-buildx-action@v3
+    - uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.repository_owner }}
+        password: ${{ github.token }}
+    - uses: docker/build-push-action@v6
+      with:
+        push: true
+        context: ${{ matrix.context }}
+        file: ${{ matrix.file || format('{0}/Dockerfile', matrix.context) }}
+        tags: ghcr.io/${{ github.repository }}/${{ matrix.name }}:${{ github.sha }}
+        cache-from: type=gha,scope=${{ matrix.name }}
+        cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.gen.outputs.matrix }}
+    steps:
+    - id: gen
+      run: |
+        python3 - "$RUNS_PER_ARM" >> "$GITHUB_OUTPUT" <<'PY'
+        import json
+        import sys
+
+        n = int(sys.argv[1])
+        arms = [
+            {'arm': 'base-95', 'sha': 'c93ef79b'},
+            {'arm': 'bb835', 'sha': '750c68e5'},
+            {'arm': 'bb833', 'sha': 'c2b11561'},
+        ]
+        print('matrix=' + json.dumps(
+            [dict(a, idx=i) for a in arms for i in range(1, n + 1)]))
+        PY
+
+  suite:
+    needs: [build, prepare]
+    name: ${{ matrix.arm }} ${{ matrix.idx }}
+    runs-on: ubuntu-latest
+    # a healthy run is ~14-18 min; past this the process is wedged, and
+    # letting it sit for 6h only burns a runner
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.prepare.outputs.matrix) }}
+    services:
+      redis:
+        image: redis:alpine
+        ports:
+        - 6379:6379
+      syntheticbucketd:
+        image: ghcr.io/${{ github.repository }}/syntheticbucketd:${{ github.sha }}
+        ports:
+        - 9001:9001
+      zookeeper:
+        image: zookeeper:3.9.4
+        ports:
+        - 2181:2181
+        env:
+          ZOOKEEPER_CLIENT_PORT: 2181
+          ZOOKEEPER_TICK_TIME: 2000
+      kafka:
+        image: ghcr.io/${{ github.repository }}/ci-kafka:${{ github.sha }}
+        credentials:
+          username: ${{ github.repository_owner }}
+          password: ${{ github.token }}
+        ports:
+        - 9092:9092
+        env:
+          KAFKA_BROKER_ID: 1
+          KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+          KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+          KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+          KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      mongo:
+        image: ghcr.io/${{ github.repository}}/ci-mongodb:${{ github.sha }}
+        ports:
+        - 27017:27017
+        - 27018:27018
+        - 27019:27019
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    - name: Fetch the arm trees
+      run: git fetch --no-tags --force origin '+refs/heads/*:refs/remotes/origin/*'
+    - name: Check out arm tree ${{ matrix.sha }}
+      run: git checkout --detach ${{ matrix.sha }}
+    - uses: actions/setup-node@v6
+      with:
+        node-version: '22'
+        cache: yarn
+    - name: Install node dependencies
+      run: yarn install --ignore-engines --frozen-lockfile --network-concurrency 1
+    - name: Report effective versions
+      run: |
+        node -e "console.log('node-rdkafka', require('node-rdkafka/package.json').version,
+                             '/ librdkafka', require('node-rdkafka').librdkafkaVersion)"
+        echo "arm tree: $(git rev-parse --short HEAD)"
+    - name: Wait for services
+      run: |
+        timeout 60 bash -c 'until nc -z localhost 9092; do sleep 1; done'
+        timeout 60 bash -c 'until nc -z localhost 2181; do sleep 1; done'
+        timeout 60 bash -c 'until nc -z localhost 27017; do sleep 1; done'
+    # shell: bash gives -o pipefail, without which tee masks a mocha failure
+    - name: Run lib suite
+      shell: bash
+      env:
+        BACKBEAT_CONFIG_FILE: tests/config.json
+      run: .github/scripts/run_ft_tests.bash ft_test:lib 2>&1 | tee suite.log
+    - name: Upload log
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: suite-${{ matrix.arm }}-${{ matrix.idx }}
+        path: suite.log
+        retention-days: 7
+
+  summary:
+    needs: suite
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/download-artifact@v4
+      with:
+        pattern: suite-*
+        path: logs
+    - name: Tabulate
+      run: |
+        python3 - >> "$GITHUB_STEP_SUMMARY" <<'PY'
+        import collections
+        import pathlib
+        import re
+
+        per = collections.defaultdict(collections.Counter)
+        firstfail = collections.defaultdict(collections.Counter)
+        for log in sorted(pathlib.Path('logs').glob('suite-*/suite.log')):
+            arm = log.parent.name.split('-', 1)[1].rsplit('-', 1)[0]
+            text = log.read_text(errors='replace')
+            p = re.search(r'(\d+) passing', text)
+            f = re.search(r'(\d+) failing', text)
+            if not p:
+                per[arm]['no-summary (wedged)'] += 1
+                continue
+            per[arm]['green' if not f else 'red'] += 1
+            if f:
+                m = re.search(r'^\s+1\) (.+?):?$', text, re.M)
+                firstfail[arm][m.group(1).strip() if m else '?'] += 1
+
+        print('## lib suite: does the BB-833 stack make it worse than 9.5?\n')
+        print('| tree | green | red | wedged (no summary) |')
+        print('|---|---|---|---|')
+        for arm in ('base-95', 'bb835', 'bb833'):
+            c = per[arm]
+            print('| %s | %d | %d | %d |' % (
+                arm, c['green'], c['red'], c['no-summary (wedged)']))
+        print('\n### First failure per run\n')
+        for arm, c in firstfail.items():
+            for name, n in c.most_common():
+                print('- `%s` x%d: %s' % (arm, n, name))
+        PY

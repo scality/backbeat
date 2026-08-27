@@ -10,6 +10,9 @@ on:
   push:
     branches:
     - poc/BB-833-shutdown-census
+    paths:
+    - .github/workflows/shutdown-census.yaml
+    - .github/harness/**
 
 env:
   JOBS_PER_CELL: '12'
