@@ -66,10 +66,10 @@ jobs:
         # librdkafka master (2.15) does NOT carry that fix, so the 2.12 arm
         # is a control for "newer librdkafka" as distinct from "this patch".
         arms = [
-            {'arm': 'prefix', 'sha': 'fa04a32a', 'nrk': '', 'patched': False},
-            {'arm': 'fixed', 'sha': '7c660cd0', 'nrk': '', 'patched': False},
-            {'arm': 'fixed-bb843', 'sha': '7c660cd0', 'nrk': '', 'patched': True},
-            {'arm': 'fixed-212', 'sha': '7c660cd0', 'nrk': '3.6.1', 'patched': False},
+            {'arm': 'prefix-212', 'sha': '750c68e5', 'nrk': '', 'patched': False},
+            {'arm': 'prefix-212-bb843', 'sha': '750c68e5', 'nrk': '', 'patched': True},
+            {'arm': 'fixed-212', 'sha': 'c2b11561', 'nrk': '', 'patched': False},
+            {'arm': 'fixed-212-bb843', 'sha': 'c2b11561', 'nrk': '', 'patched': True},
         ]
         scenarios = ['idle', 'rejoining', 'draining', 'backlog']
         include = [
@@ -117,6 +117,11 @@ jobs:
 
     # the measurement code must not vary between arms, or the A/B is
     # comparing two different harnesses rather than two trees
+    # the arm trees live on other branches and are not ancestors of this
+    # one, so they have to be fetched explicitly before checkout
+    - name: Fetch the arm trees
+      run: git fetch --no-tags --force origin '+refs/heads/*:refs/remotes/origin/*'
+
     - name: Stash the harness
       run: cp -r .github/harness /tmp/harness
 
@@ -145,11 +150,13 @@ jobs:
       env:
         JOBS: max
       run: |
+        BASE=$(node -e "console.log(require('node-rdkafka').librdkafkaVersion)")
+        echo "patching librdkafka $BASE"
         cd node_modules/node-rdkafka/deps/librdkafka
         patch -p1 < "$GITHUB_WORKSPACE/.github/harness/bb843-joingroup-member-id.patch"
         # makes the patched build self-identifying through
         # require('node-rdkafka').librdkafkaVersion
-        sed -i '1i #define LIBRDKAFKA_GIT_VERSION "2.3.0-bb843"' src/rdkafka.c
+        sed -i "1i #define LIBRDKAFKA_GIT_VERSION \"${BASE}-bb843\"" src/rdkafka.c
         cd "$GITHUB_WORKSPACE/node_modules/node-rdkafka"
         npx node-gyp rebuild
 
