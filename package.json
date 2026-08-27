@@ -37,7 +37,8 @@
     "notification_populator": "BACKBEAT_QUEUEPOPULATOR_EXTENSIONS=notification node bin/queuePopulator.js",
     "notification_processor": "node extensions/notification/queueProcessor/task.js",
     "notification_delivery_worker": "node extensions/notification/deliveryWorker/task.js",
-    "notification_delivery_replay": "node bin/notificationDeliveryReplay.js"
+    "notification_delivery_replay": "node bin/notificationDeliveryReplay.js",
+    "notification_workgroup_cutover": "node bin/notificationWorkgroupCutover.js"
   },
   "repository": {
     "type": "git",
