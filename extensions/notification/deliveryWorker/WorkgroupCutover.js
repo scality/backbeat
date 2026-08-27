@@ -280,7 +280,12 @@ class WorkgroupCutover {
 
     /**
      * Builds the document the options describe, at the generation that
-     * follows the one in zookeeper
+     * follows the one in zookeeper.
+     *
+     * The set of groups this generation replaces is recorded in the document
+     * itself, because it cannot be derived once the document it comes from
+     * has been overwritten: a cutover that renames or merges workgroups
+     * leaves no trace of the ids the previous generation ran under.
      *
      * @param {Object} [currentDoc] - document currently in zookeeper
      * @return {Object} { error, doc }
@@ -310,6 +315,7 @@ class WorkgroupCutover {
             topic: this._deliveryPoolConfig.topic,
             updatedAt: new Date().toISOString(),
             workgroups: built.workgroups,
+            previousGroups: this.previousGroupIds(currentDoc),
         });
         if (error) {
             return { error: errors.InternalError.customizeDescription(
@@ -352,10 +358,12 @@ class WorkgroupCutover {
     /**
      * Group ids of the generation before the one now in zookeeper.
      *
-     * verify runs after the document has been replaced, so the previous
-     * generation's ids are derived from the workgroups the new document
-     * lists, one generation back. --from-group is the way to name them when
-     * the workgroup ids themselves changed in the cutover.
+     * The document records the set the cutover replaced, so that is the
+     * authority. Deriving it from the workgroups the new document lists, one
+     * generation back, is only a fallback for a document written before the
+     * tool recorded the set: that derivation misses every group whose
+     * workgroup was renamed, merged or dropped by the same cutover.
+     * --from-group overrides both.
      *
      * @param {Object} doc - document currently in zookeeper
      * @return {String[]} group ids
@@ -365,7 +373,17 @@ class WorkgroupCutover {
         if (fromGroup && fromGroup.length > 0) {
             return fromGroup;
         }
+        if (doc.previousGroups && doc.previousGroups.length > 0) {
+            return doc.previousGroups;
+        }
         const base = this._deliveryPoolConfig.groupId;
+        this._log.warn('the workgroups document does not record the groups ' +
+            'it replaced, falling back to deriving them from the workgroups ' +
+            'it lists: a workgroup renamed by that cutover will be missing ' +
+            'from the drain report, name it with --from-group', {
+            method: 'WorkgroupCutover.previousGroupIdsOfRunning',
+            generation: doc.generation,
+        });
         if (doc.generation <= 1) {
             return [base];
         }

@@ -147,6 +147,77 @@ function makeGroupConsumer(params) {
     return consumer;
 }
 
+/**
+ * Zookeeper client stub holding one document, so a test can assert what a
+ * cutover committed
+ *
+ * @param {Object} [initialDoc] - document already in zookeeper
+ * @return {Object} zookeeper client stub
+ */
+function makeZkClient(initialDoc) {
+    const client = {
+        writes: [],
+        stored: initialDoc ? Buffer.from(JSON.stringify(initialDoc)) : null,
+        getData(zkPath, watcher, cb) {
+            return process.nextTick(() => (client.stored ?
+                cb(null, client.stored) : cb({ name: 'NO_NODE' })));
+        },
+        setOrCreate(zkPath, data, cb) {
+            client.writes.push(JSON.parse(data.toString()));
+            client.stored = data;
+            return process.nextTick(cb);
+        },
+        close: () => {},
+    };
+    return client;
+}
+
+function makeMetadataConsumer(partitions) {
+    return {
+        on: () => {},
+        connect: (options, cb) => process.nextTick(() => cb(null)),
+        disconnect: cb => process.nextTick(cb),
+        getMetadata: (options, cb) => process.nextTick(() => cb(null, {
+            topics: [{
+                name: options.topic,
+                partitions: partitions.map(id => ({ id })),
+            }],
+        })),
+    };
+}
+
+/**
+ * Group client factory backed by one shared offset store, so offsets a
+ * pre-seed commits are what a later committed() call reads back
+ *
+ * @param {Object} [preset] - group id to committed offsets by partition, for
+ *   groups this test never seeds
+ * @return {Object} { factory, seeded }
+ */
+function makeGroupWorld(preset) {
+    const seeded = Object.assign({}, preset);
+    const factory = groupId => ({
+        connect: (options, cb) => process.nextTick(() => cb(null)),
+        disconnect: cb => process.nextTick(cb),
+        assign: () => {},
+        commitSync(toppars) {
+            seeded[groupId] = seeded[groupId] || {};
+            toppars.forEach(tp => {
+                seeded[groupId][tp.partition] = tp.offset;
+            });
+        },
+        committed(toppars, timeout, cb) {
+            const offsets = seeded[groupId] || {};
+            return process.nextTick(() => cb(null, toppars.map(tp =>
+                Object.assign({}, tp, {
+                    offset: offsets[tp.partition] !== undefined ?
+                        offsets[tp.partition] : -1001,
+                }))));
+        },
+    });
+    return { factory, seeded };
+}
+
 describe('WorkgroupCutover', () => {
     let tmpDir;
 
@@ -224,7 +295,8 @@ describe('WorkgroupCutover', () => {
             const tool = makeTool({
                 options: { modulo: '1', workgroup: ['wg-a:0'] },
             });
-            const { doc } = tool.buildDocument({ generation: 4 });
+            const { doc } = tool.buildDocument(
+                { generation: 4, workgroups: [{ id: 'wg-a' }] });
             assert.strictEqual(doc.generation, 5);
         });
 
@@ -232,9 +304,33 @@ describe('WorkgroupCutover', () => {
             const tool = makeTool({
                 options: { modulo: '1', workgroup: ['wg-a:0'], generation: '7' },
             });
-            const { error } = tool.buildDocument({ generation: 4 });
+            const { error } = tool.buildDocument(
+                { generation: 4, workgroups: [{ id: 'wg-a' }] });
             assert(error);
             assert(error.description.includes('does not follow generation 4'));
+        });
+
+        it('should record the groups the new generation replaces', () => {
+            const tool = makeTool({
+                options: { modulo: '1', workgroup: ['wg-merged:0'] },
+            });
+            const { doc } = tool.buildDocument({
+                generation: 1,
+                workgroups: [{ id: 'wg-a' }, { id: 'wg-b' }],
+            });
+            assert.deepStrictEqual(doc.previousGroups, [
+                `${BASE_GROUP}-wg-a-gen1`,
+                `${BASE_GROUP}-wg-b-gen1`,
+            ]);
+        });
+
+        it('should record the single pool as what a first cutover replaces',
+        () => {
+            const tool = makeTool({
+                options: { modulo: '1', workgroup: ['wg-a:0'] },
+            });
+            const { doc } = tool.buildDocument(null);
+            assert.deepStrictEqual(doc.previousGroups, [BASE_GROUP]);
         });
 
         it('should allow a generation that skips ahead with --force', () => {
@@ -246,7 +342,8 @@ describe('WorkgroupCutover', () => {
                     force: true,
                 },
             });
-            const { error, doc } = tool.buildDocument({ generation: 4 });
+            const { error, doc } = tool.buildDocument(
+                { generation: 4, workgroups: [{ id: 'wg-a' }] });
             assert.ifError(error);
             assert.strictEqual(doc.generation, 7);
         });
@@ -279,7 +376,19 @@ describe('WorkgroupCutover', () => {
                 ['legacy-group']);
         });
 
-        it('should step one generation back for a verify run', () => {
+        it('should prefer the groups the document records having replaced',
+        () => {
+            const tool = makeTool({});
+            assert.deepStrictEqual(tool.previousGroupIdsOfRunning({
+                generation: 2,
+                workgroups: [{ id: 'wg-merged' }],
+                previousGroups: [`${BASE_GROUP}-wg-a-gen1`,
+                    `${BASE_GROUP}-wg-b-gen1`],
+            }), [`${BASE_GROUP}-wg-a-gen1`, `${BASE_GROUP}-wg-b-gen1`]);
+        });
+
+        it('should step one generation back when the document records ' +
+        'nothing', () => {
             const tool = makeTool({});
             assert.deepStrictEqual(tool.previousGroupIdsOfRunning({
                 generation: 5,
@@ -293,6 +402,15 @@ describe('WorkgroupCutover', () => {
                 generation: 1,
                 workgroups: [{ id: 'wg-a' }],
             }), [BASE_GROUP]);
+        });
+
+        it('should let --from-group override the recorded groups', () => {
+            const tool = makeTool({ options: { fromGroup: ['legacy-group'] } });
+            assert.deepStrictEqual(tool.previousGroupIdsOfRunning({
+                generation: 2,
+                workgroups: [{ id: 'wg-merged' }],
+                previousGroups: [`${BASE_GROUP}-wg-a-gen1`],
+            }), ['legacy-group']);
         });
     });
 
@@ -479,6 +597,102 @@ describe('WorkgroupCutover', () => {
             }, err => {
                 assert(err);
                 assert(err.description.includes('partitions 1'));
+                done();
+            });
+        });
+    });
+
+    describe('cutover', () => {
+        it('should commit a document carrying the groups it replaces',
+        done => {
+            const zkClient = makeZkClient({
+                configVersion: 1,
+                generation: 1,
+                topic: TOPIC,
+                workgroups: [{ id: 'wg-a' }, { id: 'wg-b' }],
+                barriers: { 0: 5, 1: 5 },
+            });
+            const tool = makeTool({
+                options: { modulo: '1', workgroup: ['wg-merged:0'] },
+                zkClient,
+                consumer: makeMetadataConsumer([0, 1]),
+                producer: makeProducer(),
+                groupClientFactory: makeGroupWorld({}).factory,
+            });
+            tool.cutover((err, result) => {
+                assert.ifError(err);
+                assert.strictEqual(zkClient.writes.length, 1);
+                const written = zkClient.writes[0];
+                assert.strictEqual(written.generation, 2);
+                assert.deepStrictEqual(written.barriers, { 0: 1000, 1: 1001 });
+                assert.deepStrictEqual(written.previousGroups, [
+                    `${BASE_GROUP}-wg-a-gen1`,
+                    `${BASE_GROUP}-wg-b-gen1`,
+                ]);
+                assert.deepStrictEqual(result.groupIds,
+                    [`${BASE_GROUP}-wg-merged-gen2`]);
+                done();
+            });
+        });
+    });
+
+    describe('verify', () => {
+        it('should report on the groups the document records having ' +
+        'replaced', done => {
+            const previousGroups = [
+                `${BASE_GROUP}-wg-a-gen1`,
+                `${BASE_GROUP}-wg-b-gen1`,
+            ];
+            const tool = makeTool({
+                zkClient: makeZkClient({
+                    configVersion: 1,
+                    generation: 2,
+                    topic: TOPIC,
+                    workgroups: [{ id: 'wg-merged' }],
+                    barriers: { 0: 100 },
+                    previousGroups,
+                }),
+                groupClientFactory: makeGroupWorld({
+                    [previousGroups[0]]: { 0: 100 },
+                    [previousGroups[1]]: { 0: 40 },
+                }).factory,
+            });
+            tool.verify((err, report) => {
+                assert.ifError(err);
+                assert.deepStrictEqual(report.rows.map(row => row.groupId),
+                    previousGroups);
+                assert.deepStrictEqual(report.rows.map(row => row.remaining),
+                    [0, 60]);
+                assert.strictEqual(report.drained, false);
+                done();
+            });
+        });
+
+        it('should fall back to derivation for a document that records ' +
+        'nothing', done => {
+            const logger = makeLogger();
+            const derived = `${BASE_GROUP}-wg-merged-gen1`;
+            const tool = makeTool({
+                logger,
+                zkClient: makeZkClient({
+                    configVersion: 1,
+                    generation: 2,
+                    topic: TOPIC,
+                    workgroups: [{ id: 'wg-merged' }],
+                    barriers: { 0: 100 },
+                }),
+                groupClientFactory: makeGroupWorld({
+                    [derived]: { 0: 100 },
+                }).factory,
+            });
+            tool.verify((err, report) => {
+                assert.ifError(err);
+                assert.deepStrictEqual(report.rows.map(row => row.groupId),
+                    [derived]);
+                assert.strictEqual(report.drained, true);
+                assert(logger.warns.some(entry =>
+                    entry.msg.includes('does not record the groups it ' +
+                        'replaced')));
                 done();
             });
         });

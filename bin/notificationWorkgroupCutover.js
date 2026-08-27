@@ -65,7 +65,9 @@ function documentOptions(command) {
 function fromGroupOption(command) {
     return command.option('--from-group <groupId>',
         'previous generation group to drain-report on, repeatable, ' +
-        'defaults to the derived set', collect, []);
+        'defaults to the groups the document records having replaced, and ' +
+        'to a set derived from the workgroups it lists for a document ' +
+        'written before the tool recorded them', collect, []);
 }
 
 function timeoutOption(command) {
