@@ -299,4 +299,188 @@ describe('CopyLocationTask', () => {
             assert.strictEqual(task.retryParams.maxRetries, 13);
         });
     });
+
+    describe('_sendGetObject', () => {
+        let task;
+        let config;
+
+        beforeEach(() => {
+            config = require('../../../lib/Config');
+            task = new CopyLocationTask({
+                getStateVars: () => ({
+                    mProducer: { getProducer: () => {} },
+                    sourceConfig: { transport: 'http' },
+                }),
+            });
+        });
+
+        afterEach(() => {
+            sinon.restore();
+        });
+
+        it('should read through Cloudserver when the location is not isCRR', () => {
+            sinon.stub(config, 'getLocationConstraint').returns({ locationType: 'location-aws-s3-v1', isCRR: false });
+            task.backbeatClient = { send: sinon.stub().resolves({ Body: 'stream' }) };
+
+            const entry = new ActionQueueEntry({
+                target: { bucket: 'bucket', key: 'key', version: 'v1' },
+            });
+            const objMd = new ObjectMD();
+            objMd.setDataStoreName('some-location');
+
+            return task._sendGetObject(entry, objMd, undefined, fakeLogger, new AbortController())
+                .then(response => {
+                    assert.deepStrictEqual(response, { Body: 'stream' });
+                    assert(task.backbeatClient.send.calledOnce);
+                    const command = task.backbeatClient.send.firstCall.args[0];
+                    assert.strictEqual(command.input.Bucket, 'bucket');
+                    assert.strictEqual(command.input.Key, 'key');
+                    assert.strictEqual(command.input.VersionId, 'v1');
+                    assert.strictEqual(command.input.LocationConstraint, 'some-location');
+                });
+        });
+
+        it('should read directly from the CRR source location when isCRR', () => {
+            sinon.stub(config, 'getLocationConstraint').returns({
+                locationType: 'location-scality-crr-v1',
+                isCRR: true,
+                details: {
+                    servers: ['production.example.com:443'],
+                    transport: 'https',
+                    sts: {
+                        host: 'sts.production.example.com',
+                        port: '443',
+                        accessKey: 'AK',
+                        secretKey: 'SK',
+                    },
+                },
+            });
+
+            const fakeS3Client = { send: sinon.stub().resolves({ Body: 'remote-stream' }) };
+            sinon.stub(task, '_getAssumedRoleS3Client').returns(fakeS3Client);
+
+            const entry = new ActionQueueEntry({
+                target: { bucket: 'local-bucket', key: 'key', version: 'v1' },
+            });
+            const objMd = new ObjectMD();
+            objMd.setDataStoreName('source-site');
+            objMd.setKey('backups/vm001.vbk');
+            objMd.setLocation([{
+                key: 'backups/vm001.vbk',
+                size: 1048576,
+                start: 0,
+                dataStoreName: 'source-site',
+                dataStoreType: 'aws_s3',
+                dataStoreETag: '1:9b2cf535f27731c974343645a3985328',
+                dataStoreVersionId: 'aJdO95zrzY5BKLXf9GHFItC0d1CkQ0Ei',
+                bucket: 'backup-repo-01',
+                role: 'arn:aws:iam::123456789012:role/clean-room-read',
+            }]);
+
+            return task._sendGetObject(entry, objMd, undefined, fakeLogger, new AbortController())
+                .then(response => {
+                    assert.deepStrictEqual(response, { Body: 'remote-stream' });
+                    assert(task._getAssumedRoleS3Client.calledOnce);
+                    const [locationConfig, roleArn] = task._getAssumedRoleS3Client.firstCall.args;
+                    assert.strictEqual(locationConfig.isCRR, true);
+                    assert.strictEqual(roleArn, 'arn:aws:iam::123456789012:role/clean-room-read');
+                    assert(fakeS3Client.send.calledOnce);
+                    const command = fakeS3Client.send.firstCall.args[0];
+                    assert.strictEqual(command.input.Bucket, 'backup-repo-01');
+                    assert.strictEqual(command.input.Key, 'backups/vm001.vbk');
+                    assert.strictEqual(command.input.VersionId, 'aJdO95zrzY5BKLXf9GHFItC0d1CkQ0Ei');
+                });
+        });
+
+        it('should reject without calling Cloudserver or the remote site when the role is missing', () => {
+            sinon.stub(config, 'getLocationConstraint').returns({
+                locationType: 'location-scality-crr-v1',
+                isCRR: true,
+                details: {},
+            });
+            task.backbeatClient = { send: sinon.stub() };
+            sinon.stub(task, '_getAssumedRoleS3Client');
+
+            const entry = new ActionQueueEntry({ target: {} });
+            const objMd = new ObjectMD();
+            objMd.setDataStoreName('source-site');
+            objMd.setLocation([{
+                key: 'k',
+                bucket: 'b',
+                dataStoreName: 'source-site',
+                // no role: owner absent from the ownerId->role map
+            }]);
+
+            return task._sendGetObject(entry, objMd, undefined, fakeLogger, new AbortController())
+                .then(() => assert.fail('expected rejection'))
+                .catch(err => {
+                    assert(err.AccessDenied);
+                    assert.strictEqual(err.retryable, true);
+                    assert(task.backbeatClient.send.notCalled);
+                    assert(task._getAssumedRoleS3Client.notCalled);
+                });
+        });
+    });
+
+    describe('_getAssumedRoleS3Client', () => {
+        let task;
+        const locationConfig = {
+            details: {
+                servers: ['production.example.com:443'],
+                transport: 'https',
+                sts: {
+                    host: 'sts.production.example.com',
+                    port: '443',
+                    accessKey: 'AK',
+                    secretKey: 'SK',
+                },
+            },
+        };
+        const roleArn = 'arn:aws:iam::123456789012:role/clean-room-read';
+
+        beforeEach(() => {
+            task = new CopyLocationTask({
+                getStateVars: () => ({
+                    mProducer: { getProducer: () => {} },
+                    sourceConfig: { transport: 'http' },
+                    assumedRoleCredentialsManager: {
+                        getCredentials: sinon.stub().returns({
+                            getCredentialsProvider: () => async () => ({}),
+                        }),
+                    },
+                    assumedRoleS3Clients: {},
+                }),
+            });
+        });
+
+        afterEach(() => {
+            sinon.restore();
+        });
+
+        it('should cache and reuse the S3 client for the same endpoint and role', () => {
+            const client1 = task._getAssumedRoleS3Client(locationConfig, roleArn, fakeLogger);
+            const client2 = task._getAssumedRoleS3Client(locationConfig, roleArn, fakeLogger);
+            assert.strictEqual(client1, client2);
+            assert(task.assumedRoleCredentialsManager.getCredentials.calledOnce);
+        });
+
+        it('should log and throw a retryable AccessDenied when credentials cannot be obtained', () => {
+            task.assumedRoleCredentialsManager.getCredentials.returns(null);
+            const logSpy = sinon.spy(fakeLogger, 'error');
+
+            assert.throws(
+                () => task._getAssumedRoleS3Client(locationConfig, roleArn, fakeLogger),
+                err => err.AccessDenied && err.retryable === true);
+            assert(logSpy.calledOnce);
+        });
+
+        it('should keep the full role name, including any path, when the role ARN has one', () => {
+            const pathedRoleArn = 'arn:aws:iam::123456789012:role/service-role/clean-room-read';
+
+            task._getAssumedRoleS3Client(locationConfig, pathedRoleArn, fakeLogger);
+
+            const params = task.assumedRoleCredentialsManager.getCredentials.firstCall.args[0];
+            assert.strictEqual(params.authConfig.roleName, 'service-role/clean-room-read');
+        });
+    });
 });

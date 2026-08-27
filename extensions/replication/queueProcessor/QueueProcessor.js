@@ -15,6 +15,7 @@ const RoundRobin = require('arsenal').network.RoundRobin;
 const BackbeatProducer = require('../../../lib/BackbeatProducer');
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 const VaultClientCache = require('../../../lib/clients/VaultClientCache');
+const CredentialsManager = require('../../../lib/credentials/CredentialsManager');
 const QueueEntry = require('../../../lib/models/QueueEntry');
 const TaskScheduler = require('../../../lib/tasks/TaskScheduler');
 const { getTaskSchedulerQueueKey,
@@ -228,6 +229,12 @@ class QueueProcessor extends EventEmitter {
 
         this.logger = new Logger(
             `Backbeat:Replication:QueueProcessor:${this.site}`);
+
+        this.assumedRoleCredentialsManager = new CredentialsManager(
+            'replication-copy-location', this.logger);
+        this.assumedRoleS3Clients = {};
+        this.assumedRoleHTTPAgent = new HttpAgent.Agent({ keepAlive: true });
+        this.assumedRoleHTTPSAgent = new HttpsAgent.Agent({ keepAlive: true });
 
         // global variables
         if (sourceConfig.transport === 'https') {
@@ -690,6 +697,10 @@ class QueueProcessor extends EventEmitter {
             destHTTPAgent: this.destHTTPAgent,
             vaultclientCache: this.vaultclientCache,
             accountCredsCache: this.accountCredsCache,
+            assumedRoleCredentialsManager: this.assumedRoleCredentialsManager,
+            assumedRoleS3Clients: this.assumedRoleS3Clients,
+            assumedRoleHTTPAgent: this.assumedRoleHTTPAgent,
+            assumedRoleHTTPSAgent: this.assumedRoleHTTPSAgent,
             replicationStatusProducer: this.replicationStatusProducer,
             mProducer: this._mProducer,
             logger: this.logger,
