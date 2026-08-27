@@ -42,6 +42,7 @@ class FailedCRRConsumer {
                 site: this._kafkaConfig.site,
                 compressionType: this._kafkaConfig.compressionType,
                 requiredAcks: this._kafkaConfig.requiredAcks,
+                consumerParams: this._kafkaConfig.consumerParams,
             },
             topic: this._topic,
             groupId: 'backbeat-retry-group',

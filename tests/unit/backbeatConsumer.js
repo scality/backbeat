@@ -34,6 +34,17 @@ describe('backbeatConsumer', () => {
         });
         assert.strictEqual(backbeatConsumer._topic, 'testing.my-test-topic');
     });
+
+    it('should commit the offsets it stores itself', () => {
+        const consumer = new BackbeatConsumerMock({
+            kafka,
+            groupId: 'unittest-group',
+            topic: 'my-test-topic',
+        });
+        assert.strictEqual(consumer.consumerConfig['enable.auto.offset.store'],
+            false);
+        assert.strictEqual(consumer.consumerConfig['enable.auto.commit'], true);
+    });
     
     describe('pause/resume topic partitions on circuit breaker', () => {
         let consumer;
@@ -395,6 +406,120 @@ describe('backbeatConsumer', () => {
                 const availableSlots = consumer._getAvailableSlotsInPipeline();
                 assert.strictEqual(availableSlots, params.expectedSlots);
             });
+        });
+    });
+
+    describe('consumerParams', () => {
+        it('should include extra consumerParams in consumerConfig', () => {
+            const consumer = new BackbeatConsumerMock({
+                kafka: {
+                    ...kafka,
+                    consumerParams: {
+                        'security.protocol': 'ssl',
+                        'ssl.ca.location': '/kafka-certs/ca/ca.crt',
+                    },
+                },
+                groupId: 'unittest-group',
+                topic: 'my-test-topic',
+            });
+            const config = consumer.consumerConfig;
+            assert.strictEqual(config['security.protocol'], 'ssl');
+            assert.strictEqual(config['ssl.ca.location'],
+                '/kafka-certs/ca/ca.crt');
+        });
+
+        it('should reject critical built-in params via Joi', () => {
+            assert.throws(
+                () => new BackbeatConsumerMock({
+                    kafka: {
+                        ...kafka,
+                        consumerParams: { 'group.id': 'hijacked-group' },
+                    },
+                    groupId: 'unittest-group',
+                    topic: 'my-test-topic',
+                }),
+                /group\.id/,
+            );
+            assert.throws(
+                () => new BackbeatConsumerMock({
+                    kafka: {
+                        ...kafka,
+                        consumerParams: { 'max.poll.interval.ms': 1000 },
+                    },
+                    groupId: 'unittest-group',
+                    topic: 'my-test-topic',
+                }),
+                /max\.poll\.interval\.ms/,
+            );
+            assert.throws(
+                () => new BackbeatConsumerMock({
+                    kafka: {
+                        ...kafka,
+                        consumerParams: { 'auto.offset.reset': 'latest' },
+                    },
+                    groupId: 'unittest-group',
+                    topic: 'my-test-topic',
+                }),
+                /auto\.offset\.reset/,
+            );
+            assert.throws(
+                () => new BackbeatConsumerMock({
+                    kafka: {
+                        ...kafka,
+                        consumerParams: { 'enable.auto.commit': false },
+                    },
+                    groupId: 'unittest-group',
+                    topic: 'my-test-topic',
+                }),
+                /enable\.auto\.commit/,
+            );
+        });
+
+        it('should throw on invalid librdkafka consumerParams keys', () => {
+            let err;
+            try {
+                new BackbeatConsumer({
+                    kafka: {
+                        ...kafka,
+                        consumerParams: { 'not.a.valid.librdkafka.option': 'value' },
+                    },
+                    groupId: 'unittest-group',
+                    topic: 'my-test-topic',
+                });
+            } catch (e) {
+                err = e;
+            }
+            assert(err, 'expected BackbeatConsumer to throw on invalid consumerParams key');
+            assert.match(err.message,
+                /No such configuration property: "not\.a\.valid\.librdkafka\.option"/);
+        });
+
+        it('should throw on out-of-range librdkafka consumerParams values', () => {
+            let err;
+            try {
+                new BackbeatConsumer({
+                    kafka: {
+                        ...kafka,
+                        consumerParams: { 'fetch.min.bytes': -1 },
+                    },
+                    groupId: 'unittest-group',
+                    topic: 'my-test-topic',
+                });
+            } catch (e) {
+                err = e;
+            }
+            assert(err, 'expected BackbeatConsumer to throw on out-of-range value');
+            assert.match(err.message,
+                /Configuration property "fetch\.min\.bytes" value -1 is outside allowed range/);
+        });
+
+        it('should default to empty consumerParams when not provided', () => {
+            const consumer = new BackbeatConsumerMock({
+                kafka,
+                groupId: 'unittest-group',
+                topic: 'my-test-topic',
+            });
+            assert.deepStrictEqual(consumer._consumerParams, {});
         });
     });
 });

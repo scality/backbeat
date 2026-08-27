@@ -447,6 +447,7 @@ class LifecycleBucketProcessor {
                 backlogMetrics: this._kafkaConfig.backlogMetrics,
                 compressionType: this._kafkaConfig.compressionType,
                 requiredAcks: this._kafkaConfig.requiredAcks,
+                consumerParams: this._kafkaConfig.consumerParams,
             },
             topic: this._lcConfig.bucketTasksTopic,
             groupId: this._lcConfig.bucketProcessor.groupId,

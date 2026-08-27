@@ -358,6 +358,7 @@ class ReplicationStatusProcessor {
                 site: this.kafkaConfig.site,
                 compressionType: this.kafkaConfig.compressionType,
                 requiredAcks: this.kafkaConfig.requiredAcks,
+                consumerParams: this.kafkaConfig.consumerParams,
             },
             topic: this.repConfig.replicationStatusTopic,
             groupId: this.repConfig.replicationStatusProcessor.groupId,

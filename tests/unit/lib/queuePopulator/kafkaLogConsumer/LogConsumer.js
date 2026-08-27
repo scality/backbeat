@@ -63,6 +63,33 @@ describe('LogConsumer', () => {
         sinon.restore();
     });
 
+    describe('setup', () => {
+        it('should forward the configured consumer params to rdkafka', done => {
+            const fakeConsumer = {
+                connect: () => {},
+                once: (event, cb) => (event === 'ready' ? cb() : undefined),
+                subscribe: () => {},
+            };
+            const ctor = sinon.stub(kafka, 'KafkaConsumer').returns(fakeConsumer);
+            const consumer = new LogConsumer({
+                ...kafkaConfig,
+                consumerParams: {
+                    'security.protocol': 'ssl',
+                    'partition.assignment.strategy': 'hijacked',
+                },
+            }, logger);
+
+            consumer.setup(() => {
+                const params = ctor.firstCall.args[0];
+                assert.strictEqual(params['security.protocol'], 'ssl');
+                // the keys the consumer sets itself still win
+                assert.strictEqual(params['partition.assignment.strategy'],
+                    'range,roundrobin');
+                done();
+            });
+        });
+    });
+
     describe('_resetRecordStream', () => {
         it('should initialize record stream', () => {
             logConsumer._resetRecordStream();
