@@ -3,6 +3,7 @@ const { probeServerJoi } = require('../../lib/config/configItems.joi');
 const { supportedSaslProtocols, supportedScramMechanisms } = require('./constants');
 
 const { MAX_QUEUED_DEFAULT }  = require('../../lib/constants').backbeatConsumer;
+const { WORKGROUP_ID_PATTERN } = require('./utils/workgroups');
 
 const sslSchema = joi.object({
     ssl: joi.boolean().default(false),
@@ -117,6 +118,18 @@ const joiSchema = joi.object({
         concurrency: joi.number().greater(0).default(1000),
         maxQueued: joi.number().greater(0).default(MAX_QUEUED_DEFAULT),
         probeServer: probeServerJoi.optional(),
+        // several consumer groups over the same delivery topic, each owning
+        // a rule defined slice of the destinations. Absent means the single
+        // pool: no zookeeper connection, no slice filter, and the configured
+        // groupId is used as it is.
+        workgroups: joi.object({
+            id: joi.string().pattern(WORKGROUP_ID_PATTERN),
+            zookeeperPath: joi.string()
+                .default('/notification/delivery-workgroups'),
+            cachePath: joi.string()
+                .default('/tmp/backbeat-delivery-workgroups.json'),
+            generation: joi.number().integer().min(1),
+        }).optional(),
     }).optional(),
     destinations: joi.array().items(destinationSchema).default([]),
     // TODO: BB-625 reset to being required after supporting probeserver in S3C

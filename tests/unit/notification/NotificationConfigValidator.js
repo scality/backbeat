@@ -580,4 +580,63 @@ describe('NotificationConfigValidator delivery pool ::', () => {
             },
         }));
     });
+
+    describe('workgroups', () => {
+        const enabledPool = {
+            enabled: true,
+            topic: 'delivery-topic',
+            groupId: 'delivery-group',
+        };
+
+        const validate = workgroups => notificationConfigValidator(null, {
+            ...defaultExtConfig,
+            deliveryPool: { ...enabledPool, workgroups },
+        });
+
+        it('should leave the pool without a workgroups block when unset', () => {
+            const config = notificationConfigValidator(null, {
+                ...defaultExtConfig,
+                deliveryPool: enabledPool,
+            });
+            assert.strictEqual('workgroups' in config.deliveryPool, false);
+        });
+
+        it('should fill both path defaults for an empty workgroups block', () => {
+            const { workgroups } = validate({}).deliveryPool;
+            assert.strictEqual(workgroups.zookeeperPath,
+                '/notification/delivery-workgroups');
+            assert.strictEqual(workgroups.cachePath,
+                '/tmp/backbeat-delivery-workgroups.json');
+            assert.strictEqual(workgroups.id, undefined);
+            assert.strictEqual(workgroups.generation, undefined);
+        });
+
+        it('should reject a workgroup id that fails the pattern', () => {
+            ['-wg-bulk-a', 'wg bulk a', 'wg.bulk', ''].forEach(id =>
+                assert.throws(() => validate({ id }), `accepted "${id}"`));
+        });
+
+        it('should accept a valid workgroup id', () => {
+            assert.strictEqual(
+                validate({ id: 'wg-bulk-a' }).deliveryPool.workgroups.id,
+                'wg-bulk-a');
+        });
+
+        it('should reject generation 0 and accept generation 1', () => {
+            assert.throws(() => validate({ generation: 0 }));
+            assert.strictEqual(
+                validate({ generation: 1 }).deliveryPool.workgroups.generation, 1);
+        });
+
+        it('should round trip a full workgroups block', () => {
+            const workgroups = {
+                id: 'wg-whale',
+                zookeeperPath: '/notification/delivery-workgroups',
+                cachePath: '/var/lib/backbeat/delivery-workgroups.json',
+                generation: 3,
+            };
+            assert.deepStrictEqual(
+                validate(workgroups).deliveryPool.workgroups, workgroups);
+        });
+    });
 });
