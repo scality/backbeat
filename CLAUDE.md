@@ -13,6 +13,16 @@ This is a **Node.js asynchronous queue and job manager** for Scality's S3C and A
 - CommonJS modules; legacy code is callback-based, migrating to async/await (see below)
 - Mocha + Sinon test suites (`tests/unit/`, `tests/functional/`, `tests/behavior/`)
 
+## Configuration
+
+Every configuration field is settable from the environment, with the variable name derived from the joi schema — see [docs/configuration.md](docs/configuration.md):
+
+- Add a setting by declaring it in the joi schema (`lib/config.joi.js`, `lib/config/configItems.joi.js`, or the extension's own validator). The env var follows from the config path, so nothing else is needed, and the value is validated.
+- Do not read `process.env` directly for something the configuration could hold, and do not
+  hand-roll parsing: prefer a schema field, an `env`/`envVarAlias` annotation to adjust variable
+  name, or an `envDecodeHook` for custom decoding of the value.
+- Anything that escapes that path — a variable read straight from `process.env`, one setting several fields, or a decode hook — is invisible to the schema, so document it in [docs/configuration.md](docs/configuration.md) in the same change, and cover it with a test.
+
 ## Async code style
 
 The codebase is migrating from callbacks and the `async` library to async/await, per the [Scality migration guide](https://scality.atlassian.net/wiki/spaces/OS/pages/3523346468/2025-10-30+-+Async+Await+migration):
