@@ -252,6 +252,7 @@ async function runIteration(idx) {
     const topic = `bb833-census-${stamp}`;
     const groupId = `bb833-census-group-${stamp}`;
     const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bb833-'));
+    const keepDir = path.join(REPO, 'census-pod-logs');
     const logPath = path.join(outDir, 'pods.log');
     const record = {
         arm: ARM, scenario: SCENARIO, job: JOB, iteration: idx,
@@ -270,10 +271,15 @@ async function runIteration(idx) {
             record.skipped = 'leaving never took every partition';
             return record;
         }
-        // it must be genuinely working before the survivor perturbs anything
-        if (SCENARIO === 'backlog'
-            && await waitFor(() => leaving.started >= 50, SETTLE_TIMEOUT_MS) < 0) {
-            record.skipped = 'leaving never started enough tasks';
+        // it must be genuinely working before the survivor perturbs anything:
+        // terminating a pod that has processed nothing exercises no drain, no
+        // commit and no handover, and cannot distinguish a clean departure
+        // from a broker that never delivered anything
+        const workThreshold = SCENARIO === 'backlog' ? 50 : 5;
+        if (await waitFor(() => leaving.processed >= workThreshold,
+            SETTLE_TIMEOUT_MS) < 0) {
+            record.skipped = 'leaving never processed enough messages';
+            record.leavingProcessedIpc = leaving.processed;
             return record;
         }
 
@@ -374,6 +380,13 @@ async function runIteration(idx) {
         record.committedTotal = await committedOffsets(topic, groupId);
 
         // 7. anything the pods shouted about
+        // the pods' own counters, independent of the files: distinguishes
+        // "never consumed it" from "processed it but the record never landed"
+        record.leavingProcessedIpc = leaving.processed;
+        record.survivorProcessedIpc = survivor.processed;
+        record.survivorHeld = survivor.held;
+        record.leavingFileCount = fromLeaving.length;
+        record.survivorFileCount = fromSurvivor.length;
         record.errors = leaving.errors.length + survivor.errors.length;
         record.uncaught = leaving.uncaught || survivor.uncaught || null;
         const podLogs = fs.existsSync(logPath) ?
@@ -391,7 +404,13 @@ async function runIteration(idx) {
                 } catch (e) { /* best effort */ } // eslint-disable-line no-unused-vars
             }
         });
-        await sleep(1500);
+        await sleep(4000);
+        try {
+            fs.mkdirSync(keepDir, { recursive: true });
+            if (fs.existsSync(logPath)) {
+                fs.copyFileSync(logPath, path.join(keepDir, `${stamp}.log`));
+            }
+        } catch (e) { /* best effort */ } // eslint-disable-line no-unused-vars
         try {
             fs.rmSync(outDir, { recursive: true, force: true });
         } catch (e) { /* best effort */ } // eslint-disable-line no-unused-vars

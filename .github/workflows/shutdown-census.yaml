@@ -162,6 +162,15 @@ jobs:
         path: census.log
         retention-days: 7
 
+    - name: Upload pod logs
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: pods-${{ matrix.arm }}-${{ matrix.scenario }}-${{ matrix.idx }}
+        path: census-pod-logs
+        retention-days: 7
+        if-no-files-found: ignore
+
   summary:
     needs: census
     if: always()
