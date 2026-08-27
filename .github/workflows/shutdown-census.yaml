@@ -12,8 +12,8 @@ on:
     - poc/BB-833-shutdown-census
 
 env:
-  JOBS_PER_CELL: '6'
-  ITERATIONS_PER_JOB: '10'
+  JOBS_PER_CELL: '12'
+  ITERATIONS_PER_JOB: '25'
 
 jobs:
   build:
@@ -66,10 +66,9 @@ jobs:
         # librdkafka master (2.15) does NOT carry that fix, so the 2.12 arm
         # is a control for "newer librdkafka" as distinct from "this patch".
         arms = [
-            {'arm': 'prefix-212', 'sha': '750c68e5', 'nrk': '', 'patched': False},
-            {'arm': 'prefix-212-bb843', 'sha': '750c68e5', 'nrk': '', 'patched': True},
-            {'arm': 'fixed-212', 'sha': 'c2b11561', 'nrk': '', 'patched': False},
-            {'arm': 'fixed-212-bb843', 'sha': 'c2b11561', 'nrk': '', 'patched': True},
+            {'arm': 'bound-05s', 'sha': 'c2b11561', 'nrk': '', 'patched': False, 'bound': ''},
+            {'arm': 'bound-15s', 'sha': 'c2b11561', 'nrk': '', 'patched': False, 'bound': '15000'},
+            {'arm': 'bound-25s', 'sha': 'c2b11561', 'nrk': '', 'patched': False, 'bound': '25000'},
         ]
         scenarios = ['idle', 'rejoining', 'draining', 'backlog']
         include = [
@@ -140,6 +139,16 @@ jobs:
 
     - name: Install node dependencies
       run: yarn install --ignore-engines --frozen-lockfile --network-concurrency 1
+
+    # the 5s default cuts the disconnect off mid-rebalance, before the
+    # LeaveGroup can go out; sweep it rather than guessing a replacement
+    - name: Override the disconnect bound to ${{ matrix.bound }}ms
+      if: matrix.bound != ''
+      run: |
+        sed -i "s/^const DISCONNECT_TIMEOUT_MS = [0-9]*;/const DISCONNECT_TIMEOUT_MS = ${{ matrix.bound }};/" lib/BackbeatConsumer.js
+        grep -n 'DISCONNECT_TIMEOUT_MS = ' lib/BackbeatConsumer.js
+        grep -q "DISCONNECT_TIMEOUT_MS = ${{ matrix.bound }};" lib/BackbeatConsumer.js \
+          || { echo 'ERROR: the bound override did not take'; exit 1; }
 
     - name: Force node-rdkafka ${{ matrix.nrk }}
       if: matrix.nrk != ''
