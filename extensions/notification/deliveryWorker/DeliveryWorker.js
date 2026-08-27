@@ -9,6 +9,13 @@ const { ZenkoMetrics } = require('arsenal').metrics;
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 const messageUtil = require('../utils/message');
 const DeliveryProducerPool = require('./DeliveryProducerPool');
+const {
+    destinationTokenFromKey,
+    encodeDestinationToken,
+    isBarrierKey,
+    parseBarrierRecord,
+    SKIP_BARRIER,
+} = require('../utils/workgroups');
 
 // target label used when the entry could not be parsed, so no destination
 // is known for it
@@ -17,32 +24,56 @@ const UNKNOWN_TARGET = 'unknown';
 const deliveredEvents = ZenkoMetrics.createCounter({
     name: 's3_notification_delivery_worker_delivered_total',
     help: 'Total number of notifications delivered to an external destination',
-    labelNames: ['target'],
+    labelNames: ['workgroup', 'target'],
 });
 
 const droppedEvents = ZenkoMetrics.createCounter({
     name: 's3_notification_delivery_worker_dropped_total',
     help: 'Total number of notifications dropped without being delivered',
-    labelNames: ['target', 'reason'],
+    labelNames: ['workgroup', 'target', 'reason'],
 });
 
 const deliveryDelay = ZenkoMetrics.createHistogram({
     name: 's3_notification_delivery_worker_delivery_delay_seconds',
     help: 'Time between sending a notification and receiving its delivery report',
-    labelNames: ['target', 'status'],
+    labelNames: ['workgroup', 'target', 'status'],
     buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30],
 });
 
-function onDelivered(target) {
-    deliveredEvents.inc({ target });
+const skippedEvents = ZenkoMetrics.createCounter({
+    name: 's3_notification_delivery_worker_skipped_total',
+    help: 'Total number of records committed without being delivered because ' +
+        'they do not belong to this workgroup',
+    labelNames: ['workgroup', 'reason'],
+});
+
+const barriersSeen = ZenkoMetrics.createCounter({
+    name: 's3_notification_delivery_worker_barrier_seen_total',
+    help: 'Total number of cutover barrier records consumed, by whether the ' +
+        'barrier belongs to the generation this worker runs',
+    labelNames: ['workgroup', 'match'],
+});
+
+// wgLabels is {} when workgroups are off, so the spread adds nothing and
+// prom-client emits the same label set, hence the same series, as before
+function onDelivered(wgLabels, target) {
+    deliveredEvents.inc({ ...wgLabels, target });
 }
 
-function onDropped(target, reason) {
-    droppedEvents.inc({ target, reason });
+function onDropped(wgLabels, target, reason) {
+    droppedEvents.inc({ ...wgLabels, target, reason });
 }
 
-function observeDelay(target, status, delay) {
-    deliveryDelay.observe({ target, status }, delay);
+function observeDelay(wgLabels, target, status, delay) {
+    deliveryDelay.observe({ ...wgLabels, target, status }, delay);
+}
+
+function onSkipped(wgLabels, reason) {
+    skippedEvents.inc({ ...wgLabels, reason });
+}
+
+function onBarrierSeen(wgLabels, match) {
+    barriersSeen.inc({ ...wgLabels, match });
 }
 
 class DeliveryWorker extends EventEmitter {
@@ -70,12 +101,22 @@ class DeliveryWorker extends EventEmitter {
      *   notifications can be in flight at once
      * @param {number} notifConfig.deliveryPool.maxQueued - how many
      *   notifications can be queued for processing
+     * @param {Object} [workgroup] - workgroup this worker serves, absent when
+     *   the pool runs as a single group
+     * @param {String} workgroup.id - workgroup id, used as a metric label
+     * @param {Number} workgroup.generation - config generation
+     * @param {String} workgroup.groupId - consumer group id to join
+     * @param {Object} workgroup.filter - slice filter, classify(key) returns
+     *   null for a record this workgroup owns and a skip reason otherwise
      */
-    constructor(kafkaConfig, notifConfig) {
+    constructor(kafkaConfig, notifConfig, workgroup) {
         super();
         this.kafkaConfig = kafkaConfig;
         this.notifConfig = notifConfig;
         this.deliveryPoolConfig = notifConfig.deliveryPool;
+        this._workgroup = workgroup || null;
+        this._wgLabels = workgroup ? { workgroup: workgroup.id } : {};
+        this._filter = workgroup ? workgroup.filter : null;
         this._destinationsById = {};
         (notifConfig.destinations || []).forEach(destConfig => {
             this._destinationsById[destConfig.resource] = destConfig;
@@ -84,6 +125,56 @@ class DeliveryWorker extends EventEmitter {
         this._producerPool = null;
 
         this.logger = new Logger('Backbeat:Notification:DeliveryWorker');
+
+        if (this._workgroup) {
+            this._warnOnPrefixRoutedDestinations();
+        }
+    }
+
+    /**
+     * Warn about every configured destination that a workgroup routes by a
+     * prefix of its name.
+     *
+     * The record key of a destination is its resource name run through
+     * encodeURIComponent, and everything from the sub key separator onwards
+     * is cut off to get the routing token. A resource holding a separator of
+     * its own therefore routes on the part before it. Ownership stays total,
+     * disjoint and deterministic, so no record is lost, but a static rule
+     * naming the whole resource would never match it, which is why such a
+     * rule is refused outright when the document is validated.
+     *
+     * @return {undefined}
+     */
+    _warnOnPrefixRoutedDestinations() {
+        Object.keys(this._destinationsById).forEach(destinationId => {
+            const encoded = encodeDestinationToken(destinationId);
+            const token = destinationTokenFromKey(encoded);
+            if (token !== encoded) {
+                this.logger.warn('destination is routed by a prefix of its ' +
+                    'name, so a static workgroup rule cannot name it', {
+                    method: 'DeliveryWorker._warnOnPrefixRoutedDestinations',
+                    destinationId,
+                    token,
+                });
+            }
+        });
+    }
+
+    /**
+     * Decide whether a consumed record belongs to this workgroup.
+     *
+     * Barrier records are skipped by every worker of every generation, with
+     * or without a workgroup filter: they are markers written by the cutover
+     * tool and carry no notification.
+     *
+     * @param {object} entry - consumed kafka entry
+     * @return {string|null} skip reason, or null to deliver the record
+     */
+    _classifyEntry(entry) {
+        if (this._filter) {
+            return this._filter.classify(entry.key);
+        }
+        return isBarrierKey(entry.key) ? SKIP_BARRIER : null;
     }
 
     /**
@@ -104,6 +195,14 @@ class DeliveryWorker extends EventEmitter {
     _orderBy(ctx) {
         const entry = ctx && ctx.entry;
         if (!entry) {
+            return undefined;
+        }
+        const skipReason = this._classifyEntry(entry);
+        entry._notifSkip = skipReason;
+        if (skipReason) {
+            // committed without being delivered, counted by
+            // processKafkaEntry: no parse, and no ordering queue for a
+            // destination this workgroup does not serve
             return undefined;
         }
         let parsed;
@@ -141,7 +240,9 @@ class DeliveryWorker extends EventEmitter {
                     this.emit('ready');
                     return process.nextTick(next);
                 }
-                const { topic, groupId, concurrency, maxQueued } = this.deliveryPoolConfig;
+                const { topic, concurrency, maxQueued } = this.deliveryPoolConfig;
+                const groupId = this._workgroup ?
+                    this._workgroup.groupId : this.deliveryPoolConfig.groupId;
                 this._consumer = new BackbeatConsumer({
                     kafka: {
                         hosts: this.kafkaConfig.hosts,
@@ -171,7 +272,12 @@ class DeliveryWorker extends EventEmitter {
                 this._consumer.on('ready', () => {
                     this._consumer.subscribe();
                     this.logger.info('delivery worker is ready to consume ' +
-                        'notification entries');
+                        'notification entries', {
+                        groupId,
+                        workgroup: this._workgroup && this._workgroup.id,
+                        generation: this._workgroup &&
+                            this._workgroup.generation,
+                    });
                     this.emit('ready');
                     return next();
                 });
@@ -225,6 +331,15 @@ class DeliveryWorker extends EventEmitter {
      * @return {undefined}
      */
     processKafkaEntry(kafkaEntry, done) {
+        const skipReason = kafkaEntry._notifSkip !== undefined ?
+            kafkaEntry._notifSkip : this._classifyEntry(kafkaEntry);
+        if (skipReason) {
+            if (skipReason === SKIP_BARRIER) {
+                this._countBarrier(kafkaEntry);
+            }
+            onSkipped(this._wgLabels, skipReason);
+            return done();
+        }
         let parsed = kafkaEntry._notifEntry;
         if (!parsed) {
             try {
@@ -234,7 +349,7 @@ class DeliveryWorker extends EventEmitter {
                     method: 'DeliveryWorker.processKafkaEntry',
                     error: error.message,
                 });
-                onDropped(UNKNOWN_TARGET, 'parse_error');
+                onDropped(this._wgLabels, UNKNOWN_TARGET, 'parse_error');
                 return done();
             }
         }
@@ -247,7 +362,8 @@ class DeliveryWorker extends EventEmitter {
                 bucket,
                 key,
             });
-            onDropped(destinationId || UNKNOWN_TARGET, 'unknown_destination');
+            onDropped(this._wgLabels, destinationId || UNKNOWN_TARGET,
+                'unknown_destination');
             return done();
         }
         return this._producerPool.get(destinationId, (err, producer) => {
@@ -259,7 +375,7 @@ class DeliveryWorker extends EventEmitter {
                     key,
                     error: err.message,
                 });
-                onDropped(destinationId, 'producer_error');
+                onDropped(this._wgLabels, destinationId, 'producer_error');
                 return done();
             }
             const message = messageUtil.transformToSpec(parsed);
@@ -293,15 +409,42 @@ class DeliveryWorker extends EventEmitter {
                         reason,
                         error: sendErr.message,
                     });
-                    observeDelay(destinationId, 'failure', delay);
-                    onDropped(destinationId, reason);
+                    observeDelay(this._wgLabels, destinationId, 'failure', delay);
+                    onDropped(this._wgLabels, destinationId, reason);
                     return done();
                 }
-                observeDelay(destinationId, 'success', delay);
-                onDelivered(destinationId);
+                observeDelay(this._wgLabels, destinationId, 'success', delay);
+                onDelivered(this._wgLabels, destinationId);
                 return done();
             });
         });
+    }
+
+    /**
+     * Count a barrier record against the generation this worker runs.
+     *
+     * A generation is pre-seeded at exactly its barrier offset, so a worker
+     * starting a fresh generation sees one matching barrier per partition.
+     * A mismatch is logged and counted rather than fatal: after any later
+     * restart the barrier is long behind the committed offset, so crashing
+     * on it would make every restart fatal.
+     *
+     * @param {object} entry - consumed kafka entry
+     * @return {undefined}
+     */
+    _countBarrier(entry) {
+        const barrier = parseBarrierRecord(entry.value);
+        const generation = this._workgroup && this._workgroup.generation;
+        const match = barrier && barrier.generation === generation ?
+            'current' : 'other';
+        this.logger.info('consumed a cutover barrier record', {
+            method: 'DeliveryWorker._countBarrier',
+            partition: entry.partition,
+            offset: entry.offset,
+            barrierGeneration: barrier && barrier.generation,
+            generation,
+        });
+        onBarrierSeen(this._wgLabels, match);
     }
 
     /**

@@ -1,17 +1,32 @@
 const assert = require('assert');
 const sinon = require('sinon');
+const Logger = require('werelogs').Logger;
 const { ZenkoMetrics } = require('arsenal').metrics;
 
 const FakeLogger = require('../../utils/fakeLogger');
 
+const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 const DeliveryWorker = require(
     '../../../extensions/notification/deliveryWorker/DeliveryWorker');
+const DeliveryProducerPool = require(
+    '../../../extensions/notification/deliveryWorker/DeliveryProducerPool');
 const { DELIVERY_POOL_PROBE_PORT_ENV, resolveProbeServerConfig } = require(
     '../../../extensions/notification/deliveryWorker/probeConfig');
+const {
+    BARRIER_KEY,
+    SKIP_BARRIER,
+    SKIP_NOT_IN_SLICE,
+    buildBarrierRecord,
+    buildGroupId,
+    createSliceFilter,
+    validateWorkgroupsDoc,
+} = require('../../../extensions/notification/utils/workgroups');
 
 const DELIVERED_METRIC = 's3_notification_delivery_worker_delivered_total';
 const DROPPED_METRIC = 's3_notification_delivery_worker_dropped_total';
 const DELAY_METRIC = 's3_notification_delivery_worker_delivery_delay_seconds';
+const SKIPPED_METRIC = 's3_notification_delivery_worker_skipped_total';
+const BARRIER_METRIC = 's3_notification_delivery_worker_barrier_seen_total';
 
 const kafkaConfig = {
     hosts: 'internal-kafka-host:9092',
@@ -50,14 +65,45 @@ const notifRecord = {
     size: 42,
 };
 
-function makeEntry(value) {
+// 'destId' is claimed statically, so it is owned by wg-mine whatever it
+// hashes to, and modulo 1 gives every other destination to wg-other
+const workgroupsDocFixture = {
+    configVersion: 1,
+    generation: 3,
+    topic: 'delivery-topic',
+    workgroups: [
+        { id: 'wg-mine', rule: { type: 'static', destinationIds: ['destId'] } },
+        { id: 'wg-other', rule: { type: 'hashmod', modulo: 1, remainders: [0] } },
+    ],
+};
+
+const workgroup = {
+    id: 'wg-mine',
+    generation: 3,
+    groupId: buildGroupId(notifConfig.deliveryPool.groupId, 'wg-mine', 3),
+    filter: createSliceFilter({
+        doc: workgroupsDocFixture,
+        workgroupId: 'wg-mine',
+    }),
+};
+
+function makeEntry(value, key) {
     return {
         topic: 'delivery-topic',
         partition: 0,
         offset: 42,
-        key: Buffer.from('destId'),
+        key: key === undefined ? Buffer.from('destId') : key,
         value: typeof value === 'string' ? value : JSON.stringify(value),
     };
+}
+
+function makeBarrierEntry(generation) {
+    return makeEntry(buildBarrierRecord({ generation, partition: 0 }),
+        Buffer.from(BARRIER_KEY));
+}
+
+function makeForeignEntry(value) {
+    return makeEntry(value, Buffer.from('otherDest'));
 }
 
 /**
@@ -84,6 +130,60 @@ async function delayObservations(labels) {
         value.metricName === `${DELAY_METRIC}_count` &&
         Object.entries(labels).every(([label, expected]) => value.labels[label] === expected));
     return entry ? entry.value : 0;
+}
+
+/**
+ * Compare a rendered label set against a complete expected one. The loose
+ * helpers above would match a workgroup labelled series too, which is exactly
+ * what the flag-off assertions have to tell apart
+ * @param {object} actual - labels of a rendered series
+ * @param {object} expected - the complete label set expected
+ * @return {boolean} true when the two label sets are identical
+ */
+function sameLabels(actual, expected) {
+    const keys = Object.keys(actual || {});
+    return keys.length === Object.keys(expected).length &&
+        keys.every(key => actual[key] === expected[key]);
+}
+
+/**
+ * Read the value of the counter series whose label set is exactly the one given
+ * @param {string} name - metric name
+ * @param {object} labels - the complete label set of the series
+ * @return {Promise<number>} current counter value
+ */
+async function exactCounterValue(name, labels) {
+    const data = await ZenkoMetrics.getMetric(name).get();
+    const entry = data.values.find(value => sameLabels(value.labels, labels));
+    return entry ? entry.value : 0;
+}
+
+/**
+ * Read how many observations the histogram series with exactly these labels got
+ * @param {object} labels - the complete label set of the series
+ * @return {Promise<number>} number of observations
+ */
+async function exactDelayObservations(labels) {
+    const data = await ZenkoMetrics.getMetric(DELAY_METRIC).get();
+    const entry = data.values.find(value =>
+        value.metricName === `${DELAY_METRIC}_count` &&
+        sameLabels(value.labels, labels));
+    return entry ? entry.value : 0;
+}
+
+/**
+ * Sum a counter over every series matching the labels given, whatever other
+ * labels those series carry
+ * @param {string} name - metric name
+ * @param {object} labels - labels to match
+ * @return {Promise<number>} sum of the matching series
+ */
+async function counterTotal(name, labels) {
+    const data = await ZenkoMetrics.getMetric(name).get();
+    return data.values
+        .filter(value => Object.entries(labels)
+            .every(([label, expected]) => value.labels[label] === expected))
+        .reduce((sum, value) => sum + value.value, 0);
 }
 
 /**
@@ -359,6 +459,383 @@ describe('notification DeliveryWorker', () => {
         it('should follow the consumer readiness', () => {
             worker._consumer = { isReady: () => true };
             assert.strictEqual(worker.isReady(), true);
+        });
+    });
+
+    describe('workgroups', () => {
+        let wgWorker;
+
+        beforeEach(() => {
+            wgWorker = new DeliveryWorker(kafkaConfig, notifConfig, workgroup);
+        });
+
+        it('should build its filter from a legal workgroups document', () => {
+            assert.ifError(validateWorkgroupsDoc(workgroupsDocFixture).error);
+        });
+
+        describe('destinations routed by a prefix of their name', () => {
+            // werelogs builds every logger over one shared prototype, and the
+            // worker makes its own logger, so this is where the constructor's
+            // warnings can be caught
+            const loggerProto = Object.getPrototypeOf(
+                new Logger('Backbeat:Notification:DeliveryWorker'));
+
+            const pipeConfig = {
+                ...notifConfig,
+                destinations: [
+                    ...notifConfig.destinations,
+                    { ...notifConfig.destinations[0], resource: 'acme|events' },
+                ],
+            };
+
+            it('should warn once when serving a workgroup', () => {
+                const warn = sinon.stub(loggerProto, 'warn');
+
+                new DeliveryWorker(kafkaConfig, pipeConfig, workgroup);
+
+                assert(warn.calledOnce);
+                const [, payload] = warn.args[0];
+                assert.strictEqual(payload.destinationId, 'acme|events');
+                assert.strictEqual(payload.token, 'acme');
+            });
+
+            it('should stay silent when no workgroup is configured', () => {
+                const warn = sinon.stub(loggerProto, 'warn');
+
+                new DeliveryWorker(kafkaConfig, pipeConfig);
+
+                assert(warn.notCalled);
+            });
+
+            it('should stay silent for destinations with plain names', () => {
+                const warn = sinon.stub(loggerProto, 'warn');
+
+                new DeliveryWorker(kafkaConfig, notifConfig, workgroup);
+
+                assert(warn.notCalled);
+            });
+        });
+
+        describe('consumer group id', () => {
+            /**
+             * Start a worker far enough to construct its consumer, without
+             * connecting anything: _init is where BackbeatConsumer builds its
+             * rdkafka client
+             * @param {DeliveryWorker} target - worker to start
+             * @param {function} cb - callback: cb(consumer)
+             * @return {undefined}
+             */
+            function captureConsumer(target, cb) {
+                sinon.stub(BackbeatConsumer.prototype, '_init');
+                sinon.stub(DeliveryProducerPool.prototype, 'start');
+                target.start(null, () => {});
+                setImmediate(() => {
+                    const consumer = target._consumer;
+                    assert(consumer, 'the consumer was never constructed');
+                    cb(consumer);
+                });
+            }
+
+            it('should join the configured group when flag-off', done => {
+                captureConsumer(worker, consumer => {
+                    assert.strictEqual(consumer._groupId, 'delivery-group');
+                    done();
+                });
+            });
+
+            it('should join the workgroup group when flag-on', done => {
+                captureConsumer(wgWorker, consumer => {
+                    assert.strictEqual(consumer._groupId,
+                        'delivery-group-wg-mine-gen3');
+                    done();
+                });
+            });
+        });
+
+        describe('flag-off', () => {
+            it('should render a delivered series with no workgroup label', async () => {
+                worker._producerPool = fakePool((messages, cb) => cb());
+
+                await new Promise(resolve => worker.processKafkaEntry(
+                    makeEntry(notifRecord), err => {
+                        assert.ifError(err);
+                        resolve();
+                    }));
+
+                const data = await ZenkoMetrics.getMetric(DELIVERED_METRIC).get();
+                const entry = data.values.find(value =>
+                    sameLabels(value.labels, { target: 'destId' }));
+                assert(entry, 'no delivered series without a workgroup label');
+                assert.deepStrictEqual(Object.keys(entry.labels), ['target']);
+            });
+
+            it('should skip a barrier record and commit it', async () => {
+                const pool = fakePool((messages, cb) => cb());
+                worker._producerPool = pool;
+
+                const labels = { reason: SKIP_BARRIER };
+                const before = await exactCounterValue(SKIPPED_METRIC, labels);
+
+                await new Promise(resolve => worker.processKafkaEntry(
+                    makeBarrierEntry(3), (...args) => {
+                        assert.strictEqual(args.length, 0);
+                        resolve();
+                    }));
+
+                assert(pool.send.notCalled);
+                assert.strictEqual(
+                    await exactCounterValue(SKIPPED_METRIC, labels), before + 1);
+            });
+
+            it('should deliver every non barrier record', async () => {
+                const pool = fakePool((messages, cb) => cb());
+                worker._producerPool = pool;
+
+                await new Promise(resolve => worker.processKafkaEntry(
+                    makeForeignEntry(notifRecord), err => {
+                        assert.ifError(err);
+                        resolve();
+                    }));
+
+                assert(pool.send.calledOnce);
+            });
+        });
+
+        describe('flag-on metric labels', () => {
+            it('should label a delivered sample and its delay', async () => {
+                wgWorker._producerPool = fakePool((messages, cb) => cb());
+
+                const labels = { workgroup: 'wg-mine', target: 'destId' };
+                const deliveredBefore =
+                    await exactCounterValue(DELIVERED_METRIC, labels);
+                const observedBefore = await exactDelayObservations(
+                    { ...labels, status: 'success' });
+
+                await new Promise(resolve => wgWorker.processKafkaEntry(
+                    makeEntry(notifRecord), err => {
+                        assert.ifError(err);
+                        resolve();
+                    }));
+
+                assert.strictEqual(await exactCounterValue(DELIVERED_METRIC, labels),
+                    deliveredBefore + 1);
+                assert.strictEqual(await exactDelayObservations(
+                    { ...labels, status: 'success' }), observedBefore + 1);
+            });
+
+            it('should label a dropped sample and its delay', async () => {
+                wgWorker._producerPool = fakePool(
+                    (messages, cb) => cb(new Error('delivery error')));
+
+                const labels = {
+                    workgroup: 'wg-mine',
+                    target: 'destId',
+                    reason: 'delivery_error',
+                };
+                const droppedBefore =
+                    await exactCounterValue(DROPPED_METRIC, labels);
+                const observedBefore = await exactDelayObservations(
+                    { workgroup: 'wg-mine', target: 'destId', status: 'failure' });
+
+                await new Promise(resolve => wgWorker.processKafkaEntry(
+                    makeEntry(notifRecord), err => {
+                        assert.ifError(err);
+                        resolve();
+                    }));
+
+                assert.strictEqual(await exactCounterValue(DROPPED_METRIC, labels),
+                    droppedBefore + 1);
+                assert.strictEqual(await exactDelayObservations(
+                    { workgroup: 'wg-mine', target: 'destId', status: 'failure' }),
+                    observedBefore + 1);
+            });
+        });
+
+        describe('records outside the slice', () => {
+            const skipLabels = {
+                workgroup: 'wg-mine',
+                reason: SKIP_NOT_IN_SLICE,
+            };
+
+            it('should commit a foreign record without delivering it', async () => {
+                const pool = fakePool((messages, cb) => cb());
+                wgWorker._producerPool = pool;
+
+                const before = await exactCounterValue(SKIPPED_METRIC, skipLabels);
+
+                await new Promise(resolve => wgWorker.processKafkaEntry(
+                    makeForeignEntry({ ...notifRecord, destinationId: 'otherDest' }),
+                    (...args) => {
+                        assert.strictEqual(args.length, 0);
+                        resolve();
+                    }));
+
+                assert(pool.get.notCalled);
+                assert(pool.send.notCalled);
+                assert.strictEqual(
+                    await exactCounterValue(SKIPPED_METRIC, skipLabels), before + 1);
+            });
+
+            it('should never parse the payload of a foreign record', async () => {
+                wgWorker._producerPool = fakePool((messages, cb) => cb());
+
+                const skippedBefore =
+                    await exactCounterValue(SKIPPED_METRIC, skipLabels);
+                const parseBefore =
+                    await counterTotal(DROPPED_METRIC, { reason: 'parse_error' });
+
+                await new Promise(resolve => wgWorker.processKafkaEntry(
+                    makeForeignEntry('this is not json'), err => {
+                        assert.ifError(err);
+                        resolve();
+                    }));
+
+                assert.strictEqual(
+                    await exactCounterValue(SKIPPED_METRIC, skipLabels),
+                    skippedBefore + 1);
+                assert.strictEqual(
+                    await counterTotal(DROPPED_METRIC, { reason: 'parse_error' }),
+                    parseBefore);
+            });
+
+            it('should never count a foreign record as an unknown destination', async () => {
+                wgWorker._producerPool = fakePool((messages, cb) => cb());
+
+                const droppedBefore = await counterTotal(DROPPED_METRIC,
+                    { reason: 'unknown_destination' });
+
+                await new Promise(resolve => wgWorker.processKafkaEntry(
+                    makeForeignEntry({ ...notifRecord, destinationId: 'goneDestId' }),
+                    err => {
+                        assert.ifError(err);
+                        resolve();
+                    }));
+
+                assert.strictEqual(await counterTotal(DROPPED_METRIC,
+                    { reason: 'unknown_destination' }), droppedBefore);
+            });
+        });
+
+        describe('the skip decision', () => {
+            it('should stash a null reason for a record this workgroup owns', () => {
+                const entry = makeEntry(notifRecord);
+                assert.strictEqual(wgWorker._orderBy({ entry }),
+                    'destId|mybucket/mykey');
+                assert.strictEqual(entry._notifSkip, null);
+            });
+
+            it('should stash the reason and leave a foreign record unordered', () => {
+                const entry = makeForeignEntry(notifRecord);
+                assert.strictEqual(wgWorker._orderBy({ entry }), undefined);
+                assert.strictEqual(entry._notifSkip, SKIP_NOT_IN_SLICE);
+                assert.strictEqual(entry._notifEntry, undefined);
+            });
+
+            it('should stash a null reason when no workgroup is configured', () => {
+                const entry = makeEntry(notifRecord);
+                assert.strictEqual(worker._orderBy({ entry }),
+                    'destId|mybucket/mykey');
+                assert.strictEqual(entry._notifSkip, null);
+            });
+
+            it('should leave a barrier record unordered with no workgroup', () => {
+                const entry = makeBarrierEntry(3);
+                assert.strictEqual(worker._orderBy({ entry }), undefined);
+                assert.strictEqual(entry._notifSkip, SKIP_BARRIER);
+            });
+
+            it('should classify from the key when nothing was stashed', async () => {
+                const pool = fakePool((messages, cb) => cb());
+                wgWorker._producerPool = pool;
+
+                const before = await exactCounterValue(SKIPPED_METRIC,
+                    { workgroup: 'wg-mine', reason: SKIP_NOT_IN_SLICE });
+                const entry = makeForeignEntry(notifRecord);
+                assert.strictEqual(entry._notifSkip, undefined);
+
+                await new Promise(resolve => wgWorker.processKafkaEntry(entry,
+                    err => {
+                        assert.ifError(err);
+                        resolve();
+                    }));
+
+                assert(pool.send.notCalled);
+                assert.strictEqual(await exactCounterValue(SKIPPED_METRIC,
+                    { workgroup: 'wg-mine', reason: SKIP_NOT_IN_SLICE }), before + 1);
+            });
+
+            it('should trust a stashed decision over the key', async () => {
+                const pool = fakePool((messages, cb) => cb());
+                wgWorker._producerPool = pool;
+
+                const entry = makeForeignEntry(notifRecord);
+                entry._notifSkip = null;
+
+                await new Promise(resolve => wgWorker.processKafkaEntry(entry,
+                    err => {
+                        assert.ifError(err);
+                        resolve();
+                    }));
+
+                assert(pool.send.calledOnce);
+            });
+        });
+
+        describe('barrier records', () => {
+            it('should count a barrier of the running generation as current', async () => {
+                const pool = fakePool((messages, cb) => cb());
+                wgWorker._producerPool = pool;
+
+                const matchLabels = { workgroup: 'wg-mine', match: 'current' };
+                const skipLabels = { workgroup: 'wg-mine', reason: SKIP_BARRIER };
+                const seenBefore = await exactCounterValue(BARRIER_METRIC, matchLabels);
+                const skippedBefore = await exactCounterValue(SKIPPED_METRIC, skipLabels);
+
+                await new Promise(resolve => wgWorker.processKafkaEntry(
+                    makeBarrierEntry(3), (...args) => {
+                        assert.strictEqual(args.length, 0);
+                        resolve();
+                    }));
+
+                assert(pool.send.notCalled);
+                assert.strictEqual(
+                    await exactCounterValue(BARRIER_METRIC, matchLabels), seenBefore + 1);
+                assert.strictEqual(
+                    await exactCounterValue(SKIPPED_METRIC, skipLabels), skippedBefore + 1);
+            });
+
+            it('should count a barrier of another generation as other', async () => {
+                wgWorker._producerPool = fakePool((messages, cb) => cb());
+
+                const labels = { workgroup: 'wg-mine', match: 'other' };
+                const before = await exactCounterValue(BARRIER_METRIC, labels);
+
+                await new Promise(resolve => wgWorker.processKafkaEntry(
+                    makeBarrierEntry(2), (...args) => {
+                        assert.strictEqual(args.length, 0);
+                        resolve();
+                    }));
+
+                assert.strictEqual(
+                    await exactCounterValue(BARRIER_METRIC, labels), before + 1);
+            });
+
+            it('should count a barrier keyed record with no barrier payload', async () => {
+                wgWorker._producerPool = fakePool((messages, cb) => cb());
+
+                const labels = { workgroup: 'wg-mine', match: 'other' };
+                const before = await exactCounterValue(BARRIER_METRIC, labels);
+
+                await new Promise(resolve => wgWorker.processKafkaEntry(
+                    makeEntry('this is not json', Buffer.from(BARRIER_KEY)),
+                    (...args) => {
+                        assert.strictEqual(args.length, 0);
+                        resolve();
+                    }));
+
+                assert.strictEqual(
+                    await exactCounterValue(BARRIER_METRIC, labels), before + 1);
+            });
         });
     });
 });
