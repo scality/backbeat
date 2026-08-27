@@ -13,7 +13,7 @@ on:
 
 env:
   JOBS_PER_CELL: '6'
-  ITERATIONS_PER_JOB: '6'
+  ITERATIONS_PER_JOB: '10'
 
 jobs:
   build:
@@ -61,9 +61,15 @@ jobs:
         # sha: tree whose lib/ is under test. The harness itself is taken from
         # the census branch in every job, so both arms are measured by
         # identical code and only lib/ differs.
+        # nrk: node-rdkafka version to force ('' keeps the tree's pin).
+        # patched: apply the unmerged BB-843 librdkafka fix and rebuild.
+        # librdkafka master (2.15) does NOT carry that fix, so the 2.12 arm
+        # is a control for "newer librdkafka" as distinct from "this patch".
         arms = [
-            {'arm': 'prefix', 'sha': 'fa04a32a'},
-            {'arm': 'fixed', 'sha': '7c660cd0'},
+            {'arm': 'prefix', 'sha': 'fa04a32a', 'nrk': '', 'patched': False},
+            {'arm': 'fixed', 'sha': '7c660cd0', 'nrk': '', 'patched': False},
+            {'arm': 'fixed-bb843', 'sha': '7c660cd0', 'nrk': '', 'patched': True},
+            {'arm': 'fixed-212', 'sha': '7c660cd0', 'nrk': '3.6.1', 'patched': False},
         ]
         scenarios = ['idle', 'rejoining', 'draining', 'backlog']
         include = [
@@ -77,7 +83,7 @@ jobs:
     needs: [build, prepare]
     name: ${{ matrix.arm }} ${{ matrix.scenario }} ${{ matrix.idx }}
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -129,6 +135,38 @@ jobs:
 
     - name: Install node dependencies
       run: yarn install --ignore-engines --frozen-lockfile --network-concurrency 1
+
+    - name: Force node-rdkafka ${{ matrix.nrk }}
+      if: matrix.nrk != ''
+      run: yarn add node-rdkafka@${{ matrix.nrk }} --ignore-engines --network-concurrency 1
+
+    - name: Apply BB-843 to librdkafka and rebuild
+      if: matrix.patched
+      env:
+        JOBS: max
+      run: |
+        cd node_modules/node-rdkafka/deps/librdkafka
+        patch -p1 < "$GITHUB_WORKSPACE/.github/harness/bb843-joingroup-member-id.patch"
+        # makes the patched build self-identifying through
+        # require('node-rdkafka').librdkafkaVersion
+        sed -i '1i #define LIBRDKAFKA_GIT_VERSION "2.3.0-bb843"' src/rdkafka.c
+        cd "$GITHUB_WORKSPACE/node_modules/node-rdkafka"
+        npx node-gyp rebuild
+
+    # a job that silently runs the wrong binary would produce a confident
+    # wrong answer, so refuse to run unless the build matches the arm
+    - name: Verify the build matches the arm
+      env:
+        PATCHED: ${{ matrix.patched }}
+      run: |
+        V=$(node -e "console.log(require('node-rdkafka').librdkafkaVersion)")
+        echo "librdkafkaVersion=$V  patched-arm=$PATCHED"
+        case "$V:$PATCHED" in
+          *bb843*:true) echo 'patched build confirmed' ;;
+          *bb843*:false) echo "ERROR: stock arm is running a patched build ($V)"; exit 1 ;;
+          *:true) echo "ERROR: patched arm is running a stock build ($V)"; exit 1 ;;
+          *) echo 'stock build confirmed' ;;
+        esac
 
     - name: Report effective versions
       run: |
