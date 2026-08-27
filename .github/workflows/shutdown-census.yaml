@@ -70,9 +70,8 @@ jobs:
         # is a control for "newer librdkafka" as distinct from "this patch".
         arms = [
             {'arm': 'cur', 'sha': 'c2b11561', 'nrk': '', 'patched': False, 'bound': ''},
-            {'arm': 'varA', 'sha': '390e5c81', 'nrk': '', 'patched': False, 'bound': ''},
-            {'arm': 'varB', 'sha': '7b0cfb8f', 'nrk': '', 'patched': False, 'bound': ''},
-            {'arm': 'varC', 'sha': '3ba3eeb3', 'nrk': '', 'patched': False, 'bound': ''},
+            {'arm': 'varD', 'sha': '637e3bd3', 'nrk': '', 'patched': False, 'bound': ''},
+            {'arm': 'varE', 'sha': 'cfda2287', 'nrk': '', 'patched': False, 'bound': ''},
         ]
         scenarios = ['idle', 'rejoining', 'draining', 'backlog']
         include = [

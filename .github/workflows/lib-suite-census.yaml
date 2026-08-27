@@ -65,9 +65,8 @@ jobs:
         arms = [
             {'arm': 'base-95', 'sha': 'c93ef79b'},
             {'arm': 'cur', 'sha': 'c2b11561'},
-            {'arm': 'varA', 'sha': '390e5c81'},
-            {'arm': 'varB', 'sha': '7b0cfb8f'},
-            {'arm': 'varC', 'sha': '3ba3eeb3'},
+            {'arm': 'varD', 'sha': '637e3bd3'},
+            {'arm': 'varE', 'sha': 'cfda2287'},
         ]
         print('matrix=' + json.dumps(
             [dict(a, idx=i) for a in arms for i in range(1, n + 1)]))
@@ -191,7 +190,7 @@ jobs:
         print('## lib suite: does the BB-833 stack make it worse than 9.5?\n')
         print('| tree | green | red | wedged (no summary) |')
         print('|---|---|---|---|')
-        for arm in ('base-95', 'cur', 'varA', 'varB', 'varC'):
+        for arm in ('base-95', 'cur', 'varD', 'varE'):
             c = per[arm]
             print('| %s | %d | %d | %d |' % (
                 arm, c['green'], c['red'], c['no-summary (wedged)']))
