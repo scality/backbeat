@@ -63,7 +63,7 @@ jobs:
         # identical code and only lib/ differs.
         arms = [
             {'arm': 'prefix', 'sha': 'fa04a32a'},
-            {'arm': 'fixed', 'sha': '51e6b5d1'},
+            {'arm': 'fixed', 'sha': '7c660cd0'},
         ]
         scenarios = ['idle', 'rejoining', 'draining', 'backlog']
         include = [
