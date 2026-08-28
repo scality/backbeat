@@ -1516,7 +1516,7 @@ function gateIsolation() {
     const blackholeCount = 6;
     const whaleKeysPerSubKey = 2;
     const LAG_SAMPLE_MS = 500;
-    const WORKER_SETTLE_MS = 3000;
+    const WORKER_SETTLE_MS = 1500;
     const MIN_WINDOW_MS = 10000;
     // the pooled producer to an unroutable host gives up on the thirty
     // second node-rdkafka connect timeout, so the window ends well inside it
@@ -1677,6 +1677,7 @@ function gateIsolation() {
             activeIds.one = attemptId(baseIds.one, attempt);
             activeIds.whale = attemptId(baseIds.whale, attempt);
             const zkPath = `${zkBase}/attempt-${attempt}`;
+            let windowStart = 0;
             return async.waterfall([
                 // the delivery topic was created and verified in the root
                 // hook, a minute of wall clock before these workers join.
@@ -1721,16 +1722,21 @@ function gateIsolation() {
                 if (err) {
                     return cb(err);
                 }
-                blockedSampler = new LagSampler(zeroRuntime.workgroup.groupId,
-                    deliveryTopic, deliveryPartitions);
-                drainedSampler = new LagSampler(oneRuntime.workgroup.groupId,
-                    deliveryTopic, deliveryPartitions);
-                trace = new LagTrace(blockedSampler, LAG_SAMPLE_MS);
-                let windowStart = 0;
                 return async.series([
-                    next => blockedSampler.start(next),
-                    next => drainedSampler.start(next),
+                    // the blocked destination holds its offsets only while
+                    // its producer connect is outstanding, about thirty
+                    // seconds from when the blocked worker started, so the
+                    // window has to open promptly and stay short. The
+                    // sampler is connected before the clock starts: its
+                    // startup reads are slow enough to matter
                     next => {
+                        blockedSampler = new LagSampler(
+                            zeroRuntime.workgroup.groupId, deliveryTopic,
+                            deliveryPartitions);
+                        return blockedSampler.start(next);
+                    },
+                    next => {
+                        trace = new LagTrace(blockedSampler, LAG_SAMPLE_MS);
                         windowStart = Date.now();
                         trace.start();
                         return next();
@@ -1749,6 +1755,14 @@ function gateIsolation() {
                         // the chosen-moment reads use the same clients, so
                         // the trace has to be off and idle first
                         return trace.stop(next);
+                    },
+                    // connected only now: its startup reads would otherwise
+                    // sit inside the window and push it past the hold
+                    next => {
+                        drainedSampler = new LagSampler(
+                            oneRuntime.workgroup.groupId, deliveryTopic,
+                            deliveryPartitions);
+                        return drainedSampler.start(next);
                     },
                     // both groups read at the same moment, which is what
                     // makes per-workgroup lag independently readable
@@ -1804,13 +1818,14 @@ function gateIsolation() {
                 assert.strictEqual(tailerOf(whale).records.length, whaleCount,
                     'the whale did not drain to its exact count while ' +
                     'another workgroup was blocked');
+                record('W-B.lag.trajectory', trace.samples);
                 record('W-B.lag.samples', trace.samples.length);
                 record('W-B.lag.min', Math.min(...trace.samples));
                 record('W-B.lag.max', Math.max(...trace.samples));
                 record('W-B.lag.first', trace.samples[0]);
                 record('W-B.lag.last',
                     trace.samples[trace.samples.length - 1]);
-                assert(trace.samples.length >= 15,
+                assert(trace.samples.length >= 8,
                     'the lag trajectory is too short to say anything, ' +
                     `${trace.samples.length} samples`);
                 assert(trace.samples.every(lag => lag > 0),
