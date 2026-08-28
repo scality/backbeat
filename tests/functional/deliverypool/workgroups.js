@@ -494,6 +494,12 @@ function histogramBound(name, labels, quantile, done) {
  * single client kept open for a whole observation window: connecting one
  * client per sample would leave dozens of kafka clients behind.
  *
+ * The end of each partition is read once, at start: this gate produces
+ * everything before its workers join, so the high watermark does not move
+ * while the window is open. Reading it per sample instead cost about five
+ * seconds a sample, which is far too coarse to say anything about a lag
+ * trajectory.
+ *
  * The client only ever calls committed() and queryWatermarkOffsets(), never
  * subscribe, assign or commit, so it does not join the group it reads and
  * the running worker keeps its partitions.
@@ -507,6 +513,7 @@ class LagSampler {
             this._toppars.push({ topic, partition: i });
         }
         this._consumer = null;
+        this._marks = new Map();
     }
 
     start(done) {
@@ -518,8 +525,21 @@ class LagSampler {
         }, {});
         this._consumer.on('error', () => {});
         this._consumer.on('event.error', () => {});
-        return this._consumer.connect({ timeout: CONNECT_TIMEOUT },
-            err => done(err));
+        return this._consumer.connect({ timeout: CONNECT_TIMEOUT }, err => {
+            if (err) {
+                return done(err);
+            }
+            return async.eachSeries(this._toppars, (tp, next) =>
+                callOrFail(next, () =>
+                    this._consumer.queryWatermarkOffsets(this.topic,
+                        tp.partition, METADATA_TIMEOUT, (wErr, marks) => {
+                            if (wErr) {
+                                return next(wErr);
+                            }
+                            this._marks.set(tp.partition, marks);
+                            return next();
+                        })), done);
+        });
     }
 
     /**
@@ -536,27 +556,15 @@ class LagSampler {
                 (committed || []).forEach(tp => {
                     offsets[tp.partition] = tp.offset;
                 });
-                return async.mapSeries(this._toppars, (tp, next) =>
-                    callOrFail(next, () =>
-                        this._consumer.queryWatermarkOffsets(this.topic,
-                            tp.partition, METADATA_TIMEOUT, (wErr, marks) => {
-                                if (wErr) {
-                                    return next(wErr);
-                                }
-                                // an unset offset means the group has
-                                // delivered nothing of that partition
-                                const seen = offsets[tp.partition] >= 0 ?
-                                    offsets[tp.partition] : marks.lowOffset;
-                                return next(null,
-                                    Math.max(0, marks.highOffset - seen));
-                            })),
-                    (mapErr, lags) => {
-                        if (mapErr) {
-                            return done(mapErr);
-                        }
-                        return done(null,
-                            lags.reduce((total, lag) => total + lag, 0));
-                    });
+                const lag = this._toppars.reduce((total, tp) => {
+                    const marks = this._marks.get(tp.partition);
+                    // an unset offset means the group has delivered nothing
+                    // of that partition
+                    const seen = offsets[tp.partition] >= 0 ?
+                        offsets[tp.partition] : marks.lowOffset;
+                    return total + Math.max(0, marks.highOffset - seen);
+                }, 0);
+                return done(null, lag);
             }));
     }
 
@@ -1458,7 +1466,7 @@ function gateIsolation() {
     // not the one this gate is about
     const blackholeCount = 6;
     const whaleKeysPerSubKey = 2;
-    const LAG_SAMPLE_MS = 500;
+    const LAG_SAMPLE_MS = 250;
     const WORKER_SETTLE_MS = 3000;
     const MIN_WINDOW_MS = 10000;
     // the pooled producer to an unroutable host gives up on the thirty
