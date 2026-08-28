@@ -42,6 +42,8 @@ const ZK_BASE = `/poc-workgroups-${RUN_ID}`;
 const DELIVERED_METRIC = 's3_notification_delivery_worker_delivered_total';
 const DROPPED_METRIC = 's3_notification_delivery_worker_dropped_total';
 const SKIPPED_METRIC = 's3_notification_delivery_worker_skipped_total';
+const DELAY_METRIC =
+    's3_notification_delivery_worker_delivery_delay_seconds';
 
 const kafkaConfig = { hosts: KAFKA_HOSTS };
 
@@ -87,6 +89,12 @@ const A_CUSTOMER_COUNT = 6;
 const TOPICS = {
     aDelivery: { name: `poc-wg-a-delivery-${RUN_ID}`, partitions: 12 },
     aWhaleCustomer: { name: `poc-wg-a-whale-customer-${RUN_ID}`,
+        partitions: 1 },
+    bDelivery: { name: `poc-wg-b-delivery-${RUN_ID}`, partitions: 6 },
+    bZeroCustomer: { name: `poc-wg-b-zero-customer-${RUN_ID}`, partitions: 1 },
+    bOneCustomer0: { name: `poc-wg-b-one-customer-0-${RUN_ID}`, partitions: 1 },
+    bOneCustomer1: { name: `poc-wg-b-one-customer-1-${RUN_ID}`, partitions: 1 },
+    bWhaleCustomer: { name: `poc-wg-b-whale-customer-${RUN_ID}`,
         partitions: 1 },
 };
 for (let i = 0; i < A_CUSTOMER_COUNT; i++) {
@@ -420,6 +428,165 @@ function readCounter(name, labels, done) {
         }
         return done(null, values.reduce((total, v) => total + v.value, 0));
     });
+}
+
+/**
+ * The bucket upper bound the given quantile of a histogram's samples falls
+ * in, aggregated over every label set that matches.
+ *
+ * Prometheus histograms carry cumulative buckets, so this resolves to a
+ * bucket bound rather than to an interpolated value, which is also what an
+ * operator reading the panel gets.
+ *
+ * @param {String} name - metric name
+ * @param {Object} labels - labels the samples have to match
+ * @param {Number} quantile - quantile to resolve, as 0.99
+ * @param {Function} done - callback: done(err, { count, bound })
+ * @return {undefined}
+ */
+function histogramBound(name, labels, quantile, done) {
+    return readSeries(name, labels, (err, values) => {
+        if (err) {
+            return done(err);
+        }
+        const byBound = new Map();
+        values.filter(v => v.labels.le !== undefined).forEach(v => {
+            const bound = v.labels.le === '+Inf' ? Infinity :
+                Number(v.labels.le);
+            byBound.set(bound, (byBound.get(bound) || 0) + v.value);
+        });
+        const ordered = [...byBound.entries()]
+            .map(([bound, count]) => ({ bound, count }))
+            .sort((a, b) => a.bound - b.bound);
+        const count = ordered.length === 0 ?
+            0 : ordered[ordered.length - 1].count;
+        if (count === 0) {
+            return done(null, { count: 0, bound: null });
+        }
+        const hit = ordered.find(entry => entry.count >= quantile * count);
+        return done(null, { count, bound: hit.bound });
+    });
+}
+
+/**
+ * Reads how far one consumer group is behind the end of a topic, from a
+ * single client kept open for a whole observation window: connecting one
+ * client per sample would leave dozens of kafka clients behind.
+ *
+ * The client only ever calls committed() and queryWatermarkOffsets(), never
+ * subscribe, assign or commit, so it does not join the group it reads and
+ * the running worker keeps its partitions.
+ */
+class LagSampler {
+    constructor(groupId, topic, partitionCount) {
+        this.groupId = groupId;
+        this.topic = topic;
+        this._toppars = [];
+        for (let i = 0; i < partitionCount; i++) {
+            this._toppars.push({ topic, partition: i });
+        }
+        this._consumer = null;
+    }
+
+    start(done) {
+        this._consumer = new KafkaConsumer({
+            'metadata.broker.list': KAFKA_HOSTS,
+            'group.id': this.groupId,
+            'enable.auto.commit': false,
+            'enable.auto.offset.store': false,
+        }, {});
+        this._consumer.on('error', () => {});
+        this._consumer.on('event.error', () => {});
+        return this._consumer.connect({ timeout: CONNECT_TIMEOUT },
+            err => done(err));
+    }
+
+    /**
+     * @param {Function} done - callback: done(err, lag)
+     * @return {undefined}
+     */
+    sample(done) {
+        return callOrFail(done, () => this._consumer.committed(this._toppars,
+            METADATA_TIMEOUT, (err, committed) => {
+                if (err) {
+                    return done(err);
+                }
+                const offsets = {};
+                (committed || []).forEach(tp => {
+                    offsets[tp.partition] = tp.offset;
+                });
+                return async.mapSeries(this._toppars, (tp, next) =>
+                    callOrFail(next, () =>
+                        this._consumer.queryWatermarkOffsets(this.topic,
+                            tp.partition, METADATA_TIMEOUT, (wErr, marks) => {
+                                if (wErr) {
+                                    return next(wErr);
+                                }
+                                // an unset offset means the group has
+                                // delivered nothing of that partition
+                                const seen = offsets[tp.partition] >= 0 ?
+                                    offsets[tp.partition] : marks.lowOffset;
+                                return next(null,
+                                    Math.max(0, marks.highOffset - seen));
+                            })),
+                    (mapErr, lags) => {
+                        if (mapErr) {
+                            return done(mapErr);
+                        }
+                        return done(null,
+                            lags.reduce((total, lag) => total + lag, 0));
+                    });
+            }));
+    }
+
+    stop(done) {
+        if (!this._consumer) {
+            return process.nextTick(done);
+        }
+        return this._consumer.disconnect(() => done());
+    }
+}
+
+/**
+ * Samples a group's lag on a timer and keeps every sample, so a gate can
+ * assert on the whole trajectory rather than on one lucky look
+ */
+class LagTrace {
+    constructor(sampler, intervalMs) {
+        this.samples = [];
+        this.errors = 0;
+        this._sampler = sampler;
+        this._intervalMs = intervalMs;
+        this._stopped = false;
+        this._timer = null;
+    }
+
+    start() {
+        this._tick();
+    }
+
+    _tick() {
+        if (this._stopped) {
+            return;
+        }
+        this._sampler.sample((err, lag) => {
+            if (err) {
+                this.errors += 1;
+            } else {
+                this.samples.push(lag);
+            }
+            if (this._stopped) {
+                return;
+            }
+            this._timer = setTimeout(() => this._tick(), this._intervalMs);
+        });
+    }
+
+    stop() {
+        this._stopped = true;
+        clearTimeout(this._timer);
+        this._timer = null;
+    }
 }
 
 /**
@@ -1203,4 +1370,361 @@ function gateSliceEnforcement() {
             'the consumer group id has to be the pinned derivation');
         return done();
     }));
+});
+
+describe('GATE W-B :: a blocked workgroup does not touch the others',
+function gateIsolation() {
+    this.timeout(600000);
+
+    const deliveryTopic = TOPICS.bDelivery.name;
+    const deliveryPartitions = TOPICS.bDelivery.partitions;
+    const baseGroupId = `poc-wg-b-group-${RUN_ID}`;
+    const zkBase = `${ZK_BASE}/gate-b`;
+    const healthyCount = 6;
+    // more records than the pool has lanes, so the blackholed destination
+    // opens a second producer after the first connect expires and the block
+    // outlasts any observation window this gate uses
+    const blackholeCount = 15;
+    const whaleKeysPerSubKey = 2;
+    const LAG_SAMPLE_MS = 500;
+    const MIN_WINDOW_MS = 12000;
+    const MAX_DRAIN_WAIT_MS = 25000;
+
+    const baseIds = { zero: 'wgb-zero', one: 'wgb-one', whale: 'wgb-whale' };
+    const activeIds = { ...baseIds };
+
+    const whaleResource = `poc-wg-b-whale-dest-${RUN_ID}`;
+    const whale = destinationConfig({
+        resource: whaleResource,
+        topic: TOPICS.bWhaleCustomer.name,
+        spreadFactor: 6,
+    });
+
+    const planDoc = buildSlicedDocument({
+        topic: deliveryTopic,
+        generation: 1,
+        ids: baseIds,
+        whaleResource,
+    });
+    const selected = selectDestinations(planDoc, 'poc-wg-b-dest', [
+        { workgroupId: baseIds.zero, count: 2 },
+        { workgroupId: baseIds.one, count: 2 },
+    ]);
+    const [zeroHealthyResource, blackholeResource] =
+        selected.get(baseIds.zero);
+    const oneResources = selected.get(baseIds.one);
+
+    const zeroHealthy = destinationConfig({
+        resource: zeroHealthyResource,
+        topic: TOPICS.bZeroCustomer.name,
+    });
+    const blackhole = destinationConfig({
+        resource: blackholeResource,
+        // TEST-NET-1, so the packets go nowhere and the producer only fails
+        // when the node-rdkafka connect timeout expires
+        host: '192.0.2.1',
+        port: 9092,
+        topic: `poc-wg-b-blackhole-topic-${RUN_ID}`,
+    });
+    const oneDestinations = oneResources.map((resource, index) =>
+        destinationConfig({
+            resource,
+            topic: TOPICS[`bOneCustomer${index}`].name,
+        }));
+    const unblocked = oneDestinations.concat([whale]);
+    const allDestinations = [zeroHealthy, blackhole]
+        .concat(oneDestinations).concat([whale]);
+
+    const notifConfig = {
+        destinations: allDestinations,
+        deliveryPool: deliveryPoolConfig({
+            topic: deliveryTopic,
+            groupId: baseGroupId,
+            // the joi minimum: a record that cannot be delivered expires
+            // instead of holding its offset forever
+            deliveryTimeoutMs: 6000,
+            concurrency: 10,
+        }),
+    };
+
+    const whaleKeys = keysCoveringEverySubKey(whale, 'b-whale-obj',
+        whaleKeysPerSubKey);
+    const whaleCount = whaleKeys.length;
+    const oneOwned = oneDestinations.length * healthyCount;
+
+    const tailers = new Map();
+    let zeroRuntime = null;
+    let oneRuntime = null;
+    let whaleRuntime = null;
+    let blockedSampler = null;
+    let drainedSampler = null;
+    let trace = null;
+
+    function tailerOf(destination) {
+        return tailers.get(destination.topic);
+    }
+
+    function writeDocument(zkPath, done) {
+        return writeWorkgroupsDocument(zkPath, buildSlicedDocument({
+            topic: deliveryTopic,
+            generation: 1,
+            ids: activeIds,
+            whaleResource,
+        }), done);
+    }
+
+    function unblockedDrained() {
+        return oneDestinations.every(destination =>
+            tailerOf(destination).records.length >= healthyCount) &&
+            tailerOf(whale).records.length >= whaleCount;
+    }
+
+    before(done => {
+        const records = [];
+        const rounds = Math.max(healthyCount, blackholeCount);
+        for (let i = 0; i < rounds; i++) {
+            if (i < healthyCount) {
+                [zeroHealthy].concat(oneDestinations).forEach(
+                    (destination, index) => records.push(addressedRecord({
+                        destination,
+                        key: `b${index}-obj-${`${i}`.padStart(3, '0')}`,
+                        eventType: 's3:ObjectCreated:Put',
+                        dateTime: eventTime(i),
+                    })));
+            }
+            if (i < blackholeCount) {
+                records.push(addressedRecord({
+                    destination: blackhole,
+                    key: `b-black-obj-${`${i}`.padStart(3, '0')}`,
+                    eventType: 's3:ObjectCreated:Put',
+                    dateTime: eventTime(i),
+                }));
+            }
+        }
+        whaleKeys.forEach((key, index) => records.push(addressedRecord({
+            destination: whale,
+            key,
+            eventType: 's3:ObjectCreated:Put',
+            dateTime: eventTime(index),
+        })));
+        record('W-B.destinations.zeroHealthy', zeroHealthyResource);
+        record('W-B.destinations.blackhole', blackholeResource);
+        record('W-B.destinations.one', oneResources);
+        record('W-B.destinations.whale', whaleResource);
+        record('W-B.records.total', records.length);
+        record('W-B.records.blackhole', blackholeCount);
+        record('W-B.records.ownedByOne', oneOwned);
+        record('W-B.records.ownedByWhale', whaleCount);
+        return async.series([
+            next => produceRecords(deliveryTopic, records, next),
+            next => async.eachSeries(
+                [zeroHealthy].concat(unblocked), (destination, tailDone) => {
+                    const tailer = new TopicTailer(destination.topic);
+                    tailers.set(destination.topic, tailer);
+                    return tailer.start(tailDone);
+                }, next),
+        ], done);
+    });
+
+    after(done => async.series([
+        next => {
+            if (trace) {
+                trace.stop();
+            }
+            return next();
+        },
+        next => (blockedSampler ? blockedSampler.stop(next) : next()),
+        next => (drainedSampler ? drainedSampler.stop(next) : next()),
+        next => stopWorkgroup(zeroRuntime, next),
+        next => stopWorkgroup(oneRuntime, next),
+        next => stopWorkgroup(whaleRuntime, next),
+        next => async.eachSeries([...tailers.values()],
+            (tailer, tailDone) => tailer.stop(tailDone), next),
+    ], done));
+
+    it('should drain the unblocked workgroups while the blocked one keeps ' +
+    'lag on the delivery topic', done => withWedgeRetry({
+        label: 'W-B',
+        run: (attempt, cb) => {
+            activeIds.zero = attemptId(baseIds.zero, attempt);
+            activeIds.one = attemptId(baseIds.one, attempt);
+            activeIds.whale = attemptId(baseIds.whale, attempt);
+            const zkPath = `${zkBase}/attempt-${attempt}`;
+            return async.waterfall([
+                next => writeDocument(zkPath, err => next(err)),
+                next => startWorkgroup({
+                    zkPath,
+                    workgroupId: activeIds.zero,
+                    baseGroupId,
+                    notifConfig,
+                }, next),
+                (runtime, next) => {
+                    zeroRuntime = runtime;
+                    return startWorkgroup({
+                        zkPath,
+                        workgroupId: activeIds.one,
+                        baseGroupId,
+                        notifConfig,
+                    }, next);
+                },
+                (runtime, next) => {
+                    oneRuntime = runtime;
+                    return startWorkgroup({
+                        zkPath,
+                        workgroupId: activeIds.whale,
+                        baseGroupId,
+                        notifConfig,
+                    }, next);
+                },
+            ], (err, runtime) => {
+                whaleRuntime = runtime || whaleRuntime;
+                if (err) {
+                    return cb(err);
+                }
+                blockedSampler = new LagSampler(zeroRuntime.workgroup.groupId,
+                    deliveryTopic, deliveryPartitions);
+                drainedSampler = new LagSampler(oneRuntime.workgroup.groupId,
+                    deliveryTopic, deliveryPartitions);
+                trace = new LagTrace(blockedSampler, LAG_SAMPLE_MS);
+                let windowStart = 0;
+                return async.series([
+                    next => blockedSampler.start(next),
+                    next => drainedSampler.start(next),
+                    next => {
+                        windowStart = Date.now();
+                        trace.start();
+                        return next();
+                    },
+                    next => waitFor(() => 'the unblocked workgroups to ' +
+                        `drain (${oneDestinations.map(d =>
+                            tailerOf(d).records.length).join(', ')} and ` +
+                        `${tailerOf(whale).records.length})`,
+                        unblockedDrained, MAX_DRAIN_WAIT_MS, next),
+                    // the guarantee is about the whole window, not about one
+                    // lucky look, so the window has a floor of its own
+                    next => setTimeout(next, Math.max(0,
+                        MIN_WINDOW_MS - (Date.now() - windowStart))),
+                    // both groups read at the same moment, which is what
+                    // makes per-workgroup lag independently readable
+                    next => blockedSampler.sample((sampleErr, lag) => {
+                        record('W-B.lag.blockedAtChosenMoment', lag);
+                        return next(sampleErr);
+                    }),
+                    next => drainedSampler.sample((sampleErr, lag) => {
+                        record('W-B.lag.drainedAtChosenMoment', lag);
+                        return next(sampleErr);
+                    }),
+                ], seriesErr => {
+                    trace.stop();
+                    record('W-B.window.ms', Date.now() - windowStart);
+                    return cb(seriesErr);
+                });
+            });
+        },
+        progress: (attempt, cb) => async.map(
+            [baseIds.zero, baseIds.one, baseIds.whale],
+            (base, next) => readCounter(DELIVERED_METRIC,
+                { workgroup: attemptId(base, attempt) }, next),
+            (err, values) => cb(err, (values || [])
+                .reduce((total, value) => total + value, 0))),
+        cleanup: (attempt, cb) => {
+            if (trace) {
+                trace.stop();
+            }
+            return async.series([
+                next => (blockedSampler ? blockedSampler.stop(next) : next()),
+                next => (drainedSampler ? drainedSampler.stop(next) : next()),
+                next => stopWorkgroup(zeroRuntime, () => {
+                    zeroRuntime = null;
+                    return next();
+                }),
+                next => stopWorkgroup(oneRuntime, () => {
+                    oneRuntime = null;
+                    return next();
+                }),
+                next => stopWorkgroup(whaleRuntime, () => {
+                    whaleRuntime = null;
+                    return next();
+                }),
+            ], () => {
+                blockedSampler = null;
+                drainedSampler = null;
+                trace = null;
+                return cb();
+            });
+        },
+    }, err => {
+        assert.ifError(err);
+        return async.series([
+            next => async.eachSeries(unblocked, (destination, destDone) =>
+                waitUntilQuiet(tailerOf(destination), 500, destDone), next),
+            next => {
+                oneDestinations.forEach(destination =>
+                    assert.strictEqual(tailerOf(destination).records.length,
+                        healthyCount,
+                        `${destination.resource} did not drain to its exact ` +
+                        'count while another workgroup was blocked'));
+                assert.strictEqual(tailerOf(whale).records.length, whaleCount,
+                    'the whale did not drain to its exact count while ' +
+                    'another workgroup was blocked');
+                record('W-B.lag.samples', trace.samples.length);
+                record('W-B.lag.min', Math.min(...trace.samples));
+                record('W-B.lag.max', Math.max(...trace.samples));
+                record('W-B.lag.first', trace.samples[0]);
+                record('W-B.lag.last',
+                    trace.samples[trace.samples.length - 1]);
+                assert(trace.samples.length >= 20,
+                    'the lag trajectory is too short to say anything, ' +
+                    `${trace.samples.length} samples`);
+                assert(trace.samples.every(lag => lag > 0),
+                    'the blocked workgroup drained during the window, so ' +
+                    'nothing was observed about isolation');
+                return next();
+            },
+            // the blocked workgroup is blocked, not wedged: it is still
+            // classifying and committing the records it does not own
+            next => readCounter(SKIPPED_METRIC,
+                { workgroup: activeIds.zero, reason: 'not_in_slice' },
+                (err2, value) => {
+                    assert.ifError(err2);
+                    record('W-B.blocked.skippedNotInSlice', value);
+                    assert(value > 0,
+                        'the blocked workgroup consumed nothing at all, ' +
+                        'which is a wedge rather than a block');
+                    return next();
+                }),
+            next => readCounter(DELIVERED_METRIC,
+                { target: zeroHealthyResource }, (err2, value) => {
+                    assert.ifError(err2);
+                    record('W-B.blocked.healthyDelivered', value);
+                    return next();
+                }),
+        ], done);
+    }));
+
+    it('should deliver nothing at all to the blackholed destination',
+    done => readCounter(DELIVERED_METRIC, { target: blackholeResource },
+        (err, value) => {
+            assert.ifError(err);
+            record('W-B.blackhole.delivered', value);
+            assert.strictEqual(value, 0,
+                'a destination that cannot be reached cannot have delivered');
+            return done();
+        }));
+
+    it('should keep the unblocked workgroups under a second at the 99th ' +
+    'percentile of their delivery delay', done => async.eachSeries(
+        [activeIds.one, activeIds.whale], (workgroupId, next) =>
+            histogramBound(DELAY_METRIC, { workgroup: workgroupId }, 0.99,
+                (err, result) => {
+                    assert.ifError(err);
+                    record(`W-B.p99.${workgroupId}.count`, result.count);
+                    record(`W-B.p99.${workgroupId}.bound`, result.bound);
+                    assert(result.count > 0,
+                        `${workgroupId} recorded no delivery delay at all`);
+                    assert(result.bound <= 1,
+                        `${workgroupId} p99 delivery delay fell in the ` +
+                        `${result.bound} second bucket`);
+                    return next();
+                }), done));
 });
