@@ -1053,6 +1053,11 @@ function installUncaughtFilter() {
             });
             return;
         }
+        if (mochaUncaught.length === 0) {
+            // nothing was captured to hand it back to, so this filter must
+            // not become the place uncaught exceptions go to disappear
+            throw err;
+        }
         mochaUncaught.forEach(listener => listener(err, origin));
     });
 }
