@@ -13,6 +13,10 @@ const DeliveryWorker =
     require('../../../extensions/notification/deliveryWorker/DeliveryWorker');
 const WorkgroupConfigLoader =
     require('../../../extensions/notification/deliveryWorker/WorkgroupConfigLoader');
+const WorkgroupCutover =
+    require('../../../extensions/notification/deliveryWorker/WorkgroupCutover');
+const { assertSeededOffsets } =
+    require('../../../extensions/notification/deliveryWorker/seededOffsets');
 const { buildDeliveryKey } =
     require('../../../extensions/notification/utils/deliveryKey');
 const {
@@ -44,6 +48,8 @@ const DROPPED_METRIC = 's3_notification_delivery_worker_dropped_total';
 const SKIPPED_METRIC = 's3_notification_delivery_worker_skipped_total';
 const DELAY_METRIC =
     's3_notification_delivery_worker_delivery_delay_seconds';
+const BARRIER_METRIC =
+    's3_notification_delivery_worker_barrier_seen_total';
 
 const kafkaConfig = { hosts: KAFKA_HOSTS };
 
@@ -78,6 +84,7 @@ function record(name, value) {
 }
 
 const A_CUSTOMER_COUNT = 6;
+const C_CUSTOMER_COUNT = 4;
 
 /**
  * Every topic of the run, created once before anything consumes. A broker
@@ -96,7 +103,14 @@ const TOPICS = {
     bOneCustomer1: { name: `poc-wg-b-one-customer-1-${RUN_ID}`, partitions: 1 },
     bWhaleCustomer: { name: `poc-wg-b-whale-customer-${RUN_ID}`,
         partitions: 1 },
+    cDelivery: { name: `poc-wg-c-delivery-${RUN_ID}`, partitions: 4 },
 };
+for (let i = 0; i < C_CUSTOMER_COUNT; i++) {
+    TOPICS[`cCustomer${i}`] = {
+        name: `poc-wg-c-customer-${i}-${RUN_ID}`,
+        partitions: 1,
+    };
+}
 for (let i = 0; i < A_CUSTOMER_COUNT; i++) {
     TOPICS[`aCustomer${i}`] = {
         name: `poc-wg-a-customer-${i}-${RUN_ID}`,
@@ -448,6 +462,107 @@ function readCounter(name, labels, done) {
             return done(err);
         }
         return done(null, values.reduce((total, v) => total + v.value, 0));
+    });
+}
+
+/**
+ * Produces batches on one open producer, on a timer, so a gate can run a
+ * cutover while records are still arriving on the delivery topic
+ */
+class RecordStream {
+    constructor(params) {
+        this.topic = params.topic;
+        this.batches = params.batches;
+        this.gapMs = params.gapMs;
+        this.finished = false;
+        this.error = null;
+        this.sent = 0;
+        this._producer = null;
+        this._index = 0;
+    }
+
+    start(done) {
+        this._producer = new BackbeatProducer({
+            kafka: kafkaConfig,
+            topic: this.topic,
+            pollIntervalMs: 100,
+        });
+        this._producer.once('error', done);
+        return this._producer.once('ready', () => {
+            this._producer.removeAllListeners('error');
+            // BackbeatProducer emits error from its delivery report path, and
+            // an unhandled error event would take the whole process down
+            this._producer.on('error', () => {});
+            this._sendNext();
+            return done();
+        });
+    }
+
+    _sendNext() {
+        if (this._index >= this.batches.length) {
+            this.finished = true;
+            return;
+        }
+        const batch = this.batches[this._index];
+        this._index += 1;
+        this._producer.send(batch, err => {
+            if (err) {
+                this.error = err;
+                this.finished = true;
+                return;
+            }
+            this.sent += batch.length;
+            setTimeout(() => this._sendNext(), this.gapMs);
+        });
+    }
+
+    close(done) {
+        const producer = this._producer;
+        if (!producer) {
+            return process.nextTick(done);
+        }
+        // closing twice is a real possibility: the gate closes the stream
+        // when it finishes and the after hook closes it again
+        this._producer = null;
+        return producer.close(() => done());
+    }
+}
+
+/**
+ * Waits for something, and when the wait fails having made no progress at
+ * all, restarts the workers behind it and waits once more.
+ *
+ * A fresh worker on the same consumer group id resumes from that group's
+ * committed offset, so a pre-seeded generation never has to be seeded again.
+ * See design/06-backbeatconsumer-wedge.md for what this works around.
+ *
+ * @param {Object} params - label, wait, progress and restart
+ * @param {Function} done - callback
+ * @return {undefined}
+ */
+function restartOnWedge(params, done) {
+    const before = params.progress();
+    return params.wait(err => {
+        if (!err) {
+            return done();
+        }
+        if (params.progress() > before) {
+            return done(err);
+        }
+        WEDGES.push({
+            phase: params.label,
+            attempt: 1,
+            error: err.message,
+        });
+        suiteLog.warn('a phase made no progress at all, restarting its ' +
+            'workers once and recording the occurrence as the pre-existing ' +
+            'consumer wedge', { phase: params.label, error: err.message });
+        return params.restart(restartErr => {
+            if (restartErr) {
+                return done(restartErr);
+            }
+            return params.wait(done);
+        });
     });
 }
 
@@ -1882,4 +1997,529 @@ function gateIsolation() {
                         `${result.bound} second bucket`);
                     return next();
                 }), done));
+});
+
+describe('GATE W-C :: a real cutover from the single pool to generation 1',
+function gateGenerationSwap() {
+    this.timeout(900000);
+
+    const deliveryTopic = TOPICS.cDelivery.name;
+    const deliveryPartitions = TOPICS.cDelivery.partitions;
+    const baseGroupId = `poc-wg-c-group-${RUN_ID}`;
+    const zkPath = `${ZK_BASE}/gate-c`;
+    const cachePath = cachePathFor('gate-c-cutover');
+    const objectsPerDestination = 6;
+    const BATCH_SIZE = 3;
+    const BATCH_GAP_MS = 400;
+    const CUTOVER_DELAY_MS = 2000;
+    const DRAIN_POLL_MS = 2000;
+    const DRAIN_TIMEOUT_MS = 60000;
+
+    const ids = { zero: 'wgc-zero', one: 'wgc-one' };
+    const eventTypes = ['s3:ObjectCreated:Put', 's3:ObjectCreated:Put',
+        's3:ObjectRemoved:Delete'];
+    const roundTimes = eventTypes.map((_, index) => eventTime(index));
+
+    // this document is never written: it only proposes destination names, so
+    // that the cutover the tool actually runs puts two of them in each
+    // workgroup
+    const { error: planError, value: planDoc } = validateWorkgroupsDoc({
+        configVersion: CONFIG_VERSION,
+        generation: 1,
+        topic: deliveryTopic,
+        workgroups: [
+            { id: ids.zero,
+                rule: { type: 'hashmod', modulo: 2, remainders: [0] } },
+            { id: ids.one,
+                rule: { type: 'hashmod', modulo: 2, remainders: [1] } },
+        ],
+    });
+    assert.ifError(planError);
+    const selected = selectDestinations(planDoc, 'poc-wg-c-dest', [
+        { workgroupId: ids.zero, count: 2 },
+        { workgroupId: ids.one, count: 2 },
+    ]);
+    const destinations = selected.get(ids.zero).concat(selected.get(ids.one))
+        .map((resource, index) => destinationConfig({
+            resource,
+            topic: TOPICS[`cCustomer${index}`].name,
+        }));
+
+    const poolNotifConfig = {
+        destinations,
+        deliveryPool: deliveryPoolConfig({
+            topic: deliveryTopic,
+            groupId: baseGroupId,
+            concurrency: 10,
+        }),
+    };
+    // the same pool config, plus the block that turns workgroups on. The
+    // flag-off worker above never sees it, which is what makes its series
+    // the flag-off ones
+    const cutoverNotifConfig = {
+        destinations,
+        deliveryPool: {
+            ...deliveryPoolConfig({
+                topic: deliveryTopic,
+                groupId: baseGroupId,
+                concurrency: 10,
+            }),
+            workgroups: { zookeeperPath: zkPath, cachePath },
+        },
+    };
+
+    const objectKeysOf = index => {
+        const keys = [];
+        for (let i = 0; i < objectsPerDestination; i++) {
+            keys.push(`c${index}-obj-${`${i}`.padStart(3, '0')}`);
+        }
+        return keys;
+    };
+
+    const produced = new Set();
+    const primingRecords = [];
+    const streamBatches = [];
+    eventTypes.forEach((eventType, round) => {
+        const roundRecords = [];
+        destinations.forEach((destination, index) =>
+            objectKeysOf(index).forEach(key => {
+                produced.add(`${destination.topic}|${key}|${roundTimes[round]}`);
+                roundRecords.push(addressedRecord({
+                    destination,
+                    key,
+                    eventType,
+                    dateTime: roundTimes[round],
+                }));
+            }));
+        if (round === 0) {
+            // the topic is not empty when the pool worker joins, which is
+            // what the lab looks like and what the wedge write up says is
+            // the friendlier of the two orders
+            primingRecords.push(...roundRecords);
+            return;
+        }
+        for (let i = 0; i < roundRecords.length; i += BATCH_SIZE) {
+            streamBatches.push(roundRecords.slice(i, i + BATCH_SIZE));
+        }
+    });
+    const totalProduced = produced.size;
+
+    const tailers = new Map();
+    let poolWorker = null;
+    let stream = null;
+    let cutoverResult = null;
+    let verifier = null;
+    let boundary = new Map();
+    let zeroRuntime = null;
+    let oneRuntime = null;
+    const drainPolls = [];
+    let seededError = null;
+    let generationZeroDelivered = 0;
+    let drainReport = null;
+
+    function distinctDelivered() {
+        return new Set(deliveredByGeneration()
+            .map(r => `${r.topic}|${r.key}|${roundTimes[r.round]}`)).size;
+    }
+
+    function deliveredCount() {
+        return [...tailers.values()]
+            .reduce((total, tailer) => total + tailer.records.length, 0);
+    }
+
+    /**
+     * Every delivered record, tagged with the generation that delivered it.
+     * The two generations never ran at the same time, so on each partition
+     * of each customer topic the boundary offset separates them.
+     *
+     * @return {Object[]} delivered records with a generation
+     */
+    function deliveredByGeneration() {
+        const all = [];
+        tailers.forEach((tailer, topic) => {
+            const marks = boundary.get(topic) || new Map();
+            tailer.records.forEach(raw => {
+                const event = deliveredEvent(raw);
+                const mark = marks.get(raw.partition);
+                all.push({
+                    topic,
+                    partition: raw.partition,
+                    offset: raw.offset,
+                    key: event.key,
+                    round: roundTimes.indexOf(event.eventTime),
+                    generation: mark !== undefined && raw.offset <= mark ? 0 : 1,
+                });
+            });
+        });
+        return all;
+    }
+
+    function snapshotBoundary() {
+        const snapshot = new Map();
+        tailers.forEach((tailer, topic) => {
+            const byPartition = new Map();
+            tailer.records.forEach(raw => {
+                const seen = byPartition.get(raw.partition);
+                if (seen === undefined || raw.offset > seen) {
+                    byPartition.set(raw.partition, raw.offset);
+                }
+            });
+            snapshot.set(topic, byPartition);
+        });
+        return snapshot;
+    }
+
+    function waitForDrain(startedAt, done) {
+        const deadline = Date.now() + DRAIN_TIMEOUT_MS;
+        const attempt = () => verifier.verify((err, report) => {
+            if (err) {
+                return done(err);
+            }
+            drainPolls.push({
+                atMs: Date.now() - startedAt,
+                remaining: report.rows
+                    .reduce((total, row) => total + row.remaining, 0),
+                drained: report.drained,
+            });
+            if (report.drained) {
+                return done(null, report);
+            }
+            if (Date.now() >= deadline) {
+                return done(new Error('the single pool never committed past ' +
+                    'every barrier, so the cutover could not proceed'));
+            }
+            return setTimeout(attempt, DRAIN_POLL_MS);
+        });
+        return attempt();
+    }
+
+    before(done => {
+        record('W-C.destinations', destinations.map(d => d.resource));
+        record('W-C.records.produced', totalProduced);
+        record('W-C.stream.batches', streamBatches.length);
+        let cutoverStartedAt = 0;
+        return async.series([
+            next => waitForTopics([TOPICS.cDelivery], err => next(err)),
+            next => async.eachSeries(destinations, (destination, tailDone) => {
+                const tailer = new TopicTailer(destination.topic);
+                tailers.set(destination.topic, tailer);
+                return tailer.start(tailDone);
+            }, next),
+            next => produceRecords(deliveryTopic, primingRecords, next),
+            next => {
+                poolWorker = new DeliveryWorker(kafkaConfig, poolNotifConfig);
+                return poolWorker.start(null, next);
+            },
+            // the pool has to be consuming before the cutover, otherwise the
+            // barriers would be the first thing it ever sees. Counted on
+            // this gate's own customer topics: the delivered counter is
+            // process wide and the earlier gates already moved it
+            next => restartOnWedge({
+                label: 'W-C single pool',
+                wait: cb => waitFor(() => 'the single pool to deliver its ' +
+                    `first record (${deliveredCount()} so far)`,
+                    () => deliveredCount() > 0, 60000, cb),
+                progress: () => deliveredCount(),
+                restart: cb => stopWorker(poolWorker, () => {
+                    poolWorker = new DeliveryWorker(kafkaConfig,
+                        poolNotifConfig);
+                    return poolWorker.start(null, cb);
+                }),
+            }, next),
+            next => {
+                stream = new RecordStream({
+                    topic: deliveryTopic,
+                    batches: streamBatches,
+                    gapMs: BATCH_GAP_MS,
+                });
+                return stream.start(next);
+            },
+            next => setTimeout(next, CUTOVER_DELAY_MS),
+            next => {
+                cutoverStartedAt = Date.now();
+                const cutover = new WorkgroupCutover({
+                    kafkaConfig,
+                    zkConfig: {
+                        connectionString: ZOOKEEPER_HOSTS,
+                        autoCreateNamespace: false,
+                    },
+                    notifConfig: cutoverNotifConfig,
+                    options: {
+                        modulo: 2,
+                        workgroup: [`${ids.zero}:0`, `${ids.one}:1`],
+                        timeout: 10000,
+                    },
+                    logger: new werelogs.Logger('WorkgroupCutover:ft'),
+                });
+                return cutover.cutover((err, result) => {
+                    cutoverResult = result;
+                    record('W-C.cutover.ms', Date.now() - cutoverStartedAt);
+                    record('W-C.cutover.recordsStreamedSoFar', stream.sent);
+                    return cutover.close(() => next(err));
+                });
+            },
+            next => waitFor(() => `the record stream to finish (${stream.sent}` +
+                ` of ${streamBatches.length * BATCH_SIZE})`,
+                () => stream.finished, 60000, next),
+            next => stream.close(next),
+            next => {
+                assert.ifError(stream.error);
+                verifier = new WorkgroupCutover({
+                    kafkaConfig,
+                    zkConfig: {
+                        connectionString: ZOOKEEPER_HOSTS,
+                        autoCreateNamespace: false,
+                    },
+                    notifConfig: cutoverNotifConfig,
+                    options: { timeout: 10000 },
+                    logger: new werelogs.Logger('WorkgroupCutover:verify'),
+                });
+                return next();
+            },
+            // the drain only finishes if the single pool is still consuming,
+            // so it gets the same one-shot restart as the other waits
+            next => restartOnWedge({
+                label: 'W-C drain of the single pool',
+                wait: cb => waitForDrain(Date.now(), (err, report) => {
+                    drainReport = report;
+                    return cb(err);
+                }),
+                progress: () => deliveredCount(),
+                restart: cb => stopWorker(poolWorker, () => {
+                    poolWorker = new DeliveryWorker(kafkaConfig,
+                        poolNotifConfig);
+                    return poolWorker.start(null, cb);
+                }),
+            }, err => {
+                if (err) {
+                    return next(err);
+                }
+                record('W-C.drain.polls', drainPolls);
+                record('W-C.drain.finalRemaining', drainReport.rows
+                    .reduce((total, row) => total + row.remaining, 0));
+                return next();
+            }),
+            // only now may the previous generation be stopped
+            next => stopWorker(poolWorker, () => {
+                poolWorker = null;
+                return next();
+            }),
+            next => async.eachSeries([...tailers.values()],
+                (tailer, quietDone) => waitUntilQuiet(tailer, 500, quietDone),
+                next),
+            next => {
+                boundary = snapshotBoundary();
+                generationZeroDelivered = deliveredCount();
+                record('W-C.generation0.delivered', generationZeroDelivered);
+                return next();
+            },
+            // the guard rail, on the groups the cutover really seeded
+            next => async.eachSeries(cutoverResult.groupIds, (groupId, cb) =>
+                assertSeededOffsets({
+                    kafkaConfig,
+                    topic: deliveryTopic,
+                    groupId,
+                    barriers: cutoverResult.doc.barriers,
+                    logger: new werelogs.Logger('seededOffsets:ft'),
+                }, cb), next),
+            // and the same guard rail refusing a group nobody seeded
+            next => assertSeededOffsets({
+                kafkaConfig,
+                topic: deliveryTopic,
+                groupId: `poc-wg-c-never-seeded-${RUN_ID}`,
+                logger: new werelogs.Logger('seededOffsets:ft'),
+            }, err => {
+                seededError = err;
+                return next();
+            }),
+            next => startWorkgroup({
+                zkPath,
+                workgroupId: ids.zero,
+                baseGroupId,
+                notifConfig: cutoverNotifConfig,
+            }, (err, runtime) => {
+                zeroRuntime = runtime;
+                return next(err);
+            }),
+            next => startWorkgroup({
+                zkPath,
+                workgroupId: ids.one,
+                baseGroupId,
+                notifConfig: cutoverNotifConfig,
+            }, (err, runtime) => {
+                oneRuntime = runtime;
+                return next(err);
+            }),
+            next => restartOnWedge({
+                label: 'W-C generation 1',
+                wait: cb => waitFor(() => 'the new generation to cover the ' +
+                    `produced set (${distinctDelivered()} of ` +
+                    `${totalProduced})`,
+                    () => distinctDelivered() === totalProduced, 90000, cb),
+                progress: () => deliveredCount() - generationZeroDelivered,
+                // a fresh worker on the same group resumes from that group's
+                // committed offset, so nothing has to be seeded again
+                restart: cb => async.series([
+                    step => stopWorkgroup(zeroRuntime, step),
+                    step => stopWorkgroup(oneRuntime, step),
+                    step => startWorkgroup({
+                        zkPath,
+                        workgroupId: ids.zero,
+                        baseGroupId,
+                        notifConfig: cutoverNotifConfig,
+                    }, (err, runtime) => {
+                        zeroRuntime = runtime;
+                        return step(err);
+                    }),
+                    step => startWorkgroup({
+                        zkPath,
+                        workgroupId: ids.one,
+                        baseGroupId,
+                        notifConfig: cutoverNotifConfig,
+                    }, (err, runtime) => {
+                        oneRuntime = runtime;
+                        return step(err);
+                    }),
+                ], cb),
+            }, next),
+            next => async.eachSeries([...tailers.values()],
+                (tailer, quietDone) => waitUntilQuiet(tailer, 500, quietDone),
+                next),
+        ], done);
+    });
+
+    after(done => async.series([
+        next => (stream ? stream.close(next) : next()),
+        next => stopWorker(poolWorker, next),
+        next => stopWorkgroup(zeroRuntime, next),
+        next => stopWorkgroup(oneRuntime, next),
+        next => (verifier ? verifier.close(next) : next()),
+        next => async.eachSeries([...tailers.values()],
+            (tailer, tailDone) => tailer.stop(tailDone), next),
+    ], done));
+
+    it('should write generation 1 with a barrier on every partition and the ' +
+    'groups it replaces', done => {
+        const doc = cutoverResult.doc;
+        record('W-C.doc.generation', doc.generation);
+        record('W-C.doc.previousGroups', doc.previousGroups);
+        record('W-C.doc.barriers', doc.barriers);
+        record('W-C.doc.groupIds', cutoverResult.groupIds);
+        assert.strictEqual(doc.generation, 1);
+        assert.strictEqual(doc.topic, deliveryTopic);
+        assert.deepStrictEqual(doc.previousGroups, [baseGroupId],
+            'the document has to record the single pool as the group it ' +
+            'replaces, so a later verify does not have to derive it');
+        assert.strictEqual(Object.keys(doc.barriers).length,
+            deliveryPartitions,
+            'every partition needs a barrier or the new generation has a ' +
+            'partition nobody seeded');
+        assert.deepStrictEqual(cutoverResult.groupIds.slice().sort(),
+            [buildGroupId(baseGroupId, ids.zero, 1),
+                buildGroupId(baseGroupId, ids.one, 1)].sort());
+        return done();
+    });
+
+    it('should hold the cutover until the single pool has committed past ' +
+    'every barrier', done => {
+        const last = drainPolls[drainPolls.length - 1];
+        assert(drainReport, 'the drain report never came back');
+        record('W-C.drain.pollCount', drainPolls.length);
+        record('W-C.drain.firstRemaining', drainPolls[0].remaining);
+        record('W-C.drain.elapsedMs', last.atMs);
+        assert(last.drained,
+            'the drain report never reported the previous generation drained');
+        assert.strictEqual(last.remaining, 0);
+        return done();
+    });
+
+    it('should deliver the union of both generations with no gap', done => {
+        const all = deliveredByGeneration();
+        const seen = new Set(all
+            .map(r => `${r.topic}|${r.key}|${roundTimes[r.round]}`));
+        const missing = [...produced].filter(triple => !seen.has(triple));
+        const byGeneration = { 0: 0, 1: 0 };
+        all.forEach(r => { byGeneration[r.generation] += 1; });
+        record('W-C.union.produced', totalProduced);
+        record('W-C.union.deliveredRecords', all.length);
+        record('W-C.union.distinctDelivered', seen.size);
+        record('W-C.union.duplicates', all.length - seen.size);
+        record('W-C.union.byGeneration', byGeneration);
+        assert.deepStrictEqual(missing, [],
+            'a record the produced set holds was delivered by neither ' +
+            'generation, which is the gap this design exists to prevent');
+        assert.strictEqual(seen.size, totalProduced);
+        assert(byGeneration[0] > 0,
+            'the single pool delivered nothing, so no seam was crossed');
+        assert(byGeneration[1] > 0,
+            'the new generation delivered nothing, so no seam was crossed');
+        return done();
+    });
+
+    it('should keep every object key in order within each generation',
+    done => {
+        const bySeries = new Map();
+        deliveredByGeneration().forEach(r => {
+            const seriesKey =
+                `${r.generation}|${r.topic}|${r.partition}|${r.key}`;
+            if (!bySeries.has(seriesKey)) {
+                bySeries.set(seriesKey, []);
+            }
+            bySeries.get(seriesKey).push(r);
+        });
+        let checked = 0;
+        bySeries.forEach((events, seriesKey) => {
+            const rounds = events.slice()
+                .sort((a, b) => a.offset - b.offset)
+                .map(r => r.round);
+            for (let i = 1; i < rounds.length; i++) {
+                // no inversion. Equal neighbours are a duplicate of one
+                // event, which at least once allows and which the union
+                // case counts, and are not an ordering failure
+                assert(rounds[i] >= rounds[i - 1],
+                    `${seriesKey} was delivered out of order: ` +
+                    `${rounds.join(', ')}`);
+            }
+            checked += 1;
+        });
+        record('W-C.order.seriesChecked', checked);
+        assert(checked > 0);
+        return done();
+    });
+
+    it('should show each new workgroup exactly one barrier of its own ' +
+    'generation per partition', done => async.eachSeries([ids.zero, ids.one],
+        (workgroupId, next) => readCounter(BARRIER_METRIC,
+            { workgroup: workgroupId, match: 'current' }, (err, value) => {
+                assert.ifError(err);
+                record(`W-C.barriers.${workgroupId}.current`, value);
+                assert.strictEqual(value, deliveryPartitions,
+                    `${workgroupId} saw ${value} barriers of its own ` +
+                    'generation, one per partition would be ' +
+                    `${deliveryPartitions}`);
+                return next();
+            }), err => {
+        assert.ifError(err);
+        return readCounter(BARRIER_METRIC, { match: 'other' },
+            (err2, value) => {
+                assert.ifError(err2);
+                // the single pool consumed the same barriers while it was
+                // still running, and it belongs to no generation
+                record('W-C.barriers.other', value);
+                return done();
+            });
+    }));
+
+    it('should refuse to start on a consumer group that was never seeded',
+    done => {
+        assert(seededError,
+            'the startup assertion accepted a group with no committed offset');
+        const message = seededError.description || seededError.message;
+        record('W-C.seededAssertion.message', message);
+        assert(message.includes('has no committed offset on partitions'),
+            `unexpected message: ${message}`);
+        assert(message.includes('notificationWorkgroupCutover preseed'),
+            `the message has to say what to run, got: ${message}`);
+        return done();
+    });
 });
