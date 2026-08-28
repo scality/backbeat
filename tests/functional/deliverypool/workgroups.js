@@ -1068,6 +1068,38 @@ function attemptId(base, attempt) {
 }
 
 /**
+ * Wraps a mocha done so a chain that is still running after mocha has
+ * already reported its case cannot throw into the next one.
+ *
+ * These gates hold kafka clients that keep calling back after a case times
+ * out, and an assertion raised on one of those late callbacks lands on
+ * whichever case is running by then. That happened: an isolation gate
+ * failure surfaced inside the cutover gate's before hook and took it down
+ * with it.
+ *
+ * @param {Function} done - mocha callback
+ * @return {Function} callback that drops everything after the first call
+ */
+function runGuarded(done, body) {
+    return body(settleOnce(done));
+}
+
+function settleOnce(done) {
+    let settled = false;
+    return err => {
+        if (settled) {
+            suiteLog.warn('a gate called back after its case had already ' +
+                'been reported, dropping the result', {
+                error: err && err.message,
+            });
+            return;
+        }
+        settled = true;
+        done(err);
+    };
+}
+
+/**
  * Runs a phase, and runs it a second time when the first attempt failed
  * having consumed nothing at all.
  *
@@ -1445,7 +1477,7 @@ function gateSliceEnforcement() {
     ], done));
 
     it('should let the first workgroup drain its own destinations, skip ' +
-    'every other record and touch nothing else', done => withWedgeRetry({
+    'every other record and touch nothing else', done => runGuarded(done, finish => withWedgeRetry({
         label: 'W-A phase 1',
         run: (attempt, cb) => {
             activeIds.zero = attemptId(baseIds.zero, attempt);
@@ -1477,7 +1509,9 @@ function gateSliceEnforcement() {
             return cb();
         }),
     }, err => {
-        assert.ifError(err);
+        if (err) {
+            return finish(err);
+        }
         return async.series([
             next => async.eachSeries(zeroDestinations,
                 (destination, destDone) => waitUntilQuiet(
@@ -1532,12 +1566,12 @@ function gateSliceEnforcement() {
                     registerWorkgroup(zeroRuntime);
                     return next();
                 }),
-        ], done);
-    }));
+        ], finish);
+    })));
 
     it('should deliver every destination to its exact count once the other ' +
     'workgroups join, and spread the whale over several partitions',
-    done => withWedgeRetry({
+    done => runGuarded(done, finish => withWedgeRetry({
         label: 'W-A phase 2',
         run: (attempt, cb) => {
             activeIds.one = attemptId(baseIds.one, attempt);
@@ -1585,7 +1619,9 @@ function gateSliceEnforcement() {
             }),
         ], () => cb()),
     }, err => {
-        assert.ifError(err);
+        if (err) {
+            return finish(err);
+        }
         return async.series([
             next => async.eachSeries(allDestinations,
                 (destination, destDone) => waitUntilQuiet(
@@ -1649,8 +1685,8 @@ function gateSliceEnforcement() {
                     `one partition, it occupied ${partitions.length}`);
                 return next();
             },
-        ], done);
-    }));
+        ], finish);
+    })));
 
     it('should attribute every delivery of a workgroup to a destination ' +
     'that workgroup owns', done => async.eachSeries(
@@ -1851,7 +1887,7 @@ function gateIsolation() {
     ], done));
 
     it('should drain the unblocked workgroups while the blocked one keeps ' +
-    'lag on the delivery topic', done => withWedgeRetry({
+    'lag on the delivery topic', done => runGuarded(done, finish => withWedgeRetry({
         label: 'W-B',
         run: (attempt, cb) => {
             activeIds.zero = attemptId(baseIds.zero, attempt);
@@ -1986,7 +2022,9 @@ function gateIsolation() {
             return cb();
         }),
     }, err => {
-        assert.ifError(err);
+        if (err) {
+            return finish(err);
+        }
         return async.series([
             next => async.eachSeries(unblocked, (destination, destDone) =>
                 waitUntilQuiet(tailerOf(destination), 500, destDone), next),
@@ -2034,8 +2072,8 @@ function gateIsolation() {
                         .forEach(registerWorkgroup);
                     return next();
                 }),
-        ], done);
-    }));
+        ], finish);
+    })));
 
     it('should deliver nothing at all to the blackholed destination',
     done => {
