@@ -360,6 +360,30 @@ describe('TaskScheduler', () => {
                 }, 10);
             });
         });
+        it('should log the tasks skipped by deduplication', done => {
+            let blockedTaskResolve;
+            const blockedTaskPromise = new Promise(resolve => { blockedTaskResolve = resolve; });
+            const processingFunc = sinon.stub().callsFake((ctx, cb) => {
+                if (ctx.id === 'block') {
+                    return blockedTaskPromise.then(() => cb());
+                }
+                return cb();
+            });
+            const logger = { debug: sinon.spy() };
+            const taskScheduler = new TaskScheduler(
+                processingFunc, null, ctx => ctx.dedupeKey, logger);
+
+            taskScheduler.push({ id: 'block', dedupeKey: 'key' }, () => {});
+            taskScheduler.push({ dedupeKey: 'key' }, () => {});
+
+            process.nextTick(() => {
+                assert(logger.debug.calledOnce);
+                assert.deepStrictEqual(logger.debug.firstCall.args[1],
+                                       { dedupeKey: 'key' });
+                blockedTaskResolve();
+                done();
+            });
+        });
         it('should remove dedup key after task completion', done => {
             const processingFunc = sinon.stub().yields();
             const taskScheduler = new TaskScheduler(processingFunc, ctx => ctx.queueKey, null);

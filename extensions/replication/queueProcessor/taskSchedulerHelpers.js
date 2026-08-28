@@ -14,15 +14,15 @@ function getTaskSchedulerQueueKey(entry) {
 
 function getTaskSchedulerDedupeKey(entry) {
     if (entry instanceof ObjectQueueEntry) {
-        const key = entry.getCanonicalKey();
+        const canonicalKey = entry.getCanonicalKey();
         const version = entry.getVersionId();
         const contentMd5 = entry.getContentMd5();
-        return `${key}:${version || ''}:${contentMd5}`;
+        return `${canonicalKey}:${version || ''}:${contentMd5}`;
     }
     if (entry instanceof ActionQueueEntry) {
-        const { key, version, contentMd5 } =
-              entry.getAttribute('target');
-        return `${key}:${version || ''}:${contentMd5}`;
+        const { bucket, key, version, eTag } = entry.getAttribute('target');
+        const objectETag = (eTag || '').replace(/"/g, '');
+        return `${bucket}/${key}:${version || ''}:${objectETag}`;
     }
     return undefined;
 }

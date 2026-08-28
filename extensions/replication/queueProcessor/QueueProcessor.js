@@ -264,11 +264,18 @@ class QueueProcessor extends EventEmitter {
             }
         }
 
-        this.taskScheduler = new TaskScheduler(
+        // The two consumers' entries must not deduplicate against each other
+        this.taskScheduler = this._createTaskScheduler();
+        this.dataMoverTaskScheduler = this._createTaskScheduler();
+    }
+
+    _createTaskScheduler() {
+        return new TaskScheduler(
             (ctx, done) => ctx.task.processQueueEntry(
                 ctx.entry, ctx.kafkaEntry, done),
             ctx => getTaskSchedulerQueueKey(ctx.entry),
-            ctx => getTaskSchedulerDedupeKey(ctx.entry));
+            ctx => getTaskSchedulerDedupeKey(ctx.entry),
+            this.logger);
     }
 
     _setupVaultclientCache() {
@@ -990,9 +997,10 @@ class QueueProcessor extends EventEmitter {
             this.logger.debug('data mover entry is being pushed', {
                 entry: actionEntry.getLogInfo(),
             });
-            return this.taskScheduler.push({ task, entry: actionEntry,
-                                             kafkaEntry },
-                                           done);
+            return this.dataMoverTaskScheduler.push(
+                { task, entry: actionEntry, kafkaEntry },
+                done,
+            );
         }
         this.logger.debug('skip data mover entry', {
             entry: actionEntry.getLogInfo(),

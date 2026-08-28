@@ -305,6 +305,36 @@ describe('Queue Processor', () => {
         });
     });
 
+    describe('processDataMoverEntry', () => {
+        beforeEach(() => {
+            qp.taskScheduler = { push: sinon.stub().callsArgWith(1, null) };
+            qp.dataMoverTaskScheduler = {
+                push: sinon.stub().callsArgWith(1, null),
+            };
+            qp._mProducer = { getProducer: () => null };
+        });
+
+        it('dispatches copyLocation actions to the data mover scheduler',
+        done => {
+            const kafkaEntry = {
+                value: JSON.stringify({
+                    action: 'copyLocation',
+                    toLocation: 'site-crr',
+                    target: {
+                        bucket: 'src-bucket',
+                        key: 'obj',
+                        eTag: '"d41d8cd98f00b204e9800998ecf8427e"',
+                    },
+                }),
+            };
+            qp.processDataMoverEntry(kafkaEntry, () => {
+                sinon.assert.calledOnce(qp.dataMoverTaskScheduler.push);
+                sinon.assert.notCalled(qp.taskScheduler.push);
+                done();
+            });
+        });
+    });
+
     describe('constructor', () => {
         it('should use s3c site\'s host as a destination host', () => {
             const config = getQueueProcessorConfig();
