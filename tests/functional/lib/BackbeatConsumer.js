@@ -2,10 +2,13 @@ const assert = require('assert');
 const async = require('async');
 const sinon = require('sinon');
 const werelogs = require('werelogs');
+const { promisify } = require('util');
+const Kafka = require('node-rdkafka');
 
 const { metrics } = require('arsenal');
 
 const ZookeeperManager = require('../../../lib/clients/ZookeeperManager');
+const { withTopicPrefix } = require('../../../lib/util/topic');
 const BackbeatProducer = require('../../../lib/BackbeatProducer');
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 const { BreakerState, CircuitBreaker } = require('breakbeat').CircuitBreaker;
@@ -1289,6 +1292,188 @@ describe('BackbeatConsumer shutdown tests', () => {
             },
         ], done);
     }).timeout(60000);
+});
+
+describe('BackbeatConsumer group departure tests', () => {
+    const topic = 'backbeat-consumer-spec-departure';
+    const groupId = `bucket-processor-${Math.random()}`;
+    // enough partitions for every member to hold a share, so the group is
+    // observably settled before a departure is timed
+    const wantedPartitions = 3;
+    // a member that never sends LeaveGroup is only evicted once
+    // session.timeout.ms (45s) expires; leaving cleanly takes a few seconds
+    const takeoverBudgetMs = 30000;
+    const adminTimeoutMs = 20000;
+    const settleTimeoutMs = 60000;
+    const messages = Array.from({ length: 12 }, (_, i) =>
+        ({ key: `key-${i}`, message: `{"value":"${i}"}` }));
+    // read back rather than assumed: a topic left over from an earlier run
+    // may be wider than we asked for
+    let partitionCount;
+    let admin;
+    let producer;
+    let leaving;
+    let survivor;
+    let newcomer;
+    // the survivor holds its tasks so its un-assign stays deferred, which is
+    // what keeps a rebalance in progress for as long as a test needs
+    let inFlight;
+    let holdTasks;
+
+    function createConsumer(clientId, queueProcessor) {
+        return new BackbeatConsumer({
+            clientId,
+            zookeeper: zookeeperConf,
+            kafka: consumerKafkaConf,
+            groupId,
+            topic,
+            concurrency: 1,
+            queueProcessor,
+        });
+    }
+
+    function partitionsHeld(consumer) {
+        // a closed client throws rather than reporting an empty assignment
+        return consumer._consumer.isConnected() ?
+            consumer._consumer.assignments().length : 0;
+    }
+
+    function totalPartitionsHeld(consumers) {
+        return consumers.reduce(
+            (total, consumer) => total + partitionsHeld(consumer), 0);
+    }
+
+    function completeInFlight() {
+        holdTasks = false;
+        const pending = inFlight;
+        inFlight = [];
+        pending.forEach(cb => cb());
+    }
+
+    function close(consumer) {
+        return new Promise(resolve => consumer.close(resolve));
+    }
+
+    before(async function before() {
+        this.timeout(60000);
+        admin = Kafka.AdminClient.create({
+            'client.id': 'kafka-admin',
+            'metadata.broker.list': consumerKafkaConf.hosts,
+        });
+        const { ERR_TOPIC_ALREADY_EXISTS, ERR_INVALID_PARTITIONS } =
+            Kafka.CODES.ERRORS;
+        try {
+            await promisify(admin.createTopic).bind(admin)({
+                topic: withTopicPrefix(topic),
+                num_partitions: wantedPartitions, // eslint-disable-line camelcase
+                replication_factor: 1, // eslint-disable-line camelcase
+            }, adminTimeoutMs);
+        } catch (err) {
+            if (err.code !== ERR_TOPIC_ALREADY_EXISTS) {
+                throw err;
+            }
+            // left over from an earlier run, possibly narrower than we need:
+            // widen it rather than waiting on partitions that never come
+            try {
+                await promisify(admin.createPartitions).bind(admin)(
+                    withTopicPrefix(topic), wantedPartitions, adminTimeoutMs);
+            } catch (widenErr) {
+                if (widenErr.code !== ERR_INVALID_PARTITIONS) {
+                    throw widenErr;
+                }
+            }
+        }
+    });
+
+    after(() => admin.disconnect());
+
+    beforeEach(async function beforeEach() {
+        this.timeout(120000);
+        inFlight = [];
+        holdTasks = true;
+        producer = new BackbeatProducer({
+            kafka: producerKafkaConf,
+            topic,
+            pollIntervalMs: 100,
+        });
+        leaving = createConsumer('BackbeatConsumer-leaving',
+            (message, cb) => cb());
+        survivor = createConsumer('BackbeatConsumer-survivor',
+            (message, cb) => (holdTasks ? inFlight.push(cb) : cb()));
+        newcomer = createConsumer('BackbeatConsumer-newcomer',
+            (message, cb) => cb());
+        await Promise.all([
+            new Promise(resolve => producer.on('ready', resolve)),
+            ...[leaving, survivor, newcomer].map(consumer =>
+                new Promise(resolve => consumer.on('ready', resolve))),
+        ]);
+        const metadata = await promisify(leaving._consumer.getMetadata)
+            .bind(leaving._consumer)({ topic: leaving._topic, timeout: adminTimeoutMs });
+        partitionCount = metadata.topics
+            .find(entry => entry.name === leaving._topic).partitions.length;
+        assert(partitionCount >= wantedPartitions,
+            `topic has ${partitionCount} partitions, need ${wantedPartitions}`);
+
+        leaving.subscribe();
+        survivor.subscribe();
+        await waitFor(
+            () => totalPartitionsHeld([leaving, survivor]) === partitionCount,
+            settleTimeoutMs, 'the group to settle');
+    });
+
+    afterEach(async function afterEach() {
+        this.timeout(30000);
+        // start closing first so the consumers stop fetching, then release
+        // the held tasks so the drain they are waiting on can finish
+        const closed = Promise.all([leaving, survivor, newcomer].map(close));
+        completeInFlight();
+        await closed;
+        await new Promise(resolve => producer.close(resolve));
+    });
+
+    it('should leave the group so the remaining member takes over promptly',
+    async function departure() {
+        this.timeout(90000);
+        const start = Date.now();
+        await close(leaving);
+        await waitFor(() => partitionsHeld(survivor) === partitionCount,
+            takeoverBudgetMs, 'the survivor to take over every partition');
+        const elapsed = Date.now() - start;
+        assert(elapsed < takeoverBudgetMs,
+            `takeover took ${elapsed}ms: the group was not left cleanly`);
+    });
+
+    it('should leave the group when closed during a rebalance',
+    async function departureWhileRebalancing() {
+        this.timeout(90000);
+        // a task in flight on the survivor defers its un-assign, which holds
+        // the rebalance triggered below open for as long as we need
+        producer.send(messages, assert.ifError);
+        await waitFor(() => inFlight.length > 0, settleTimeoutMs,
+            'the survivor to start a task');
+        newcomer.subscribe();
+        // the join revokes both members: `leaving` releases its partitions and
+        // waits to rejoin while the survivor drains, so it is closed holding
+        // no assignment with the rebalance still in progress -- nothing will
+        // revoke back to it to complete the departure
+        await waitFor(() => partitionsHeld(leaving) === 0
+            && partitionsHeld(survivor) > 0,
+        settleTimeoutMs, 'the member being closed to release its partitions');
+        const start = Date.now();
+        await close(leaving);
+        const closedIn = Date.now() - start;
+        assert(closedIn < takeoverBudgetMs,
+            `close() took ${closedIn}ms while rebalancing`);
+        completeInFlight();
+        // the newcomer must be given a share, else the survivor merely still
+        // holds what it had and nothing was actually handed over
+        await waitFor(() => partitionsHeld(newcomer) > 0
+            && totalPartitionsHeld([survivor, newcomer]) === partitionCount,
+        takeoverBudgetMs, 'the remaining members to share every partition');
+        const elapsed = Date.now() - start;
+        assert(elapsed < takeoverBudgetMs,
+            `takeover took ${elapsed}ms: the group was not left cleanly`);
+    });
 });
 
 describe('BackbeatConsumer fromOffset tests', () => {
