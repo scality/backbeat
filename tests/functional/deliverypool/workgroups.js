@@ -2288,6 +2288,7 @@ function gateGenerationSwap() {
     let seededError = null;
     let generationZeroDelivered = 0;
     let drainReport = null;
+    const restartedGenerationOne = new Set();
 
     function distinctDelivered() {
         return new Set(deliveredByGeneration()
@@ -2339,6 +2340,110 @@ function gateGenerationSwap() {
             snapshot.set(topic, byPartition);
         });
         return snapshot;
+    }
+
+    /**
+     * Restarts any generation 1 workgroup that has not seen a barrier on
+     * every partition, on the consumer group it already has.
+     *
+     * Measuring generation 1 as a whole cannot see this: when one of the two
+     * workgroups wedges and the other runs, the pair has made progress while
+     * one worker is deaf. That is what happened, and the barrier wait then
+     * timed out with one workgroup stuck at 1 of 4 and no wedge recorded.
+     * The consumer wedge is a property of one consumer, so it is looked for
+     * one workgroup at a time. See design/06-backbeatconsumer-wedge.md.
+     *
+     * @param {Function} done - callback
+     * @return {undefined}
+     */
+    function restartWedgedGenerationOne(done) {
+        return async.eachSeries([
+            { id: ids.zero, get: () => zeroRuntime,
+                set: runtime => { zeroRuntime = runtime; } },
+            { id: ids.one, get: () => oneRuntime,
+                set: runtime => { oneRuntime = runtime; } },
+        ], (entry, next) => readCounter(BARRIER_METRIC,
+            { workgroup: entry.id, match: 'current' }, (err, seen) => {
+                if (err) {
+                    return next(err);
+                }
+                if (seen >= deliveryPartitions) {
+                    return next();
+                }
+                WEDGES.push({
+                    phase: `W-C generation 1 ${entry.id}`,
+                    attempt: 1,
+                    error: `saw ${seen} of ${deliveryPartitions} barriers`,
+                });
+                restartedGenerationOne.add(entry.id);
+                suiteLog.warn('a generation 1 workgroup did not reach its ' +
+                    'barriers, restarting it on its own group and recording ' +
+                    'the occurrence as the pre-existing consumer wedge', {
+                    workgroup: entry.id,
+                    barriersSeen: seen,
+                });
+                return stopWorkgroup(entry.get(), () => startWorkgroup({
+                    zkPath,
+                    workgroupId: entry.id,
+                    baseGroupId,
+                    notifConfig: cutoverNotifConfig,
+                }, (startErr, runtime) => {
+                    entry.set(runtime);
+                    return next(startErr);
+                }));
+            }), done);
+    }
+
+    /**
+     * Waits until both generation 1 workgroups have seen a barrier on every
+     * partition and have redelivered what follows them
+     *
+     * @param {Function} done - callback
+     * @return {undefined}
+     */
+    function generationOneReady(done) {
+        return async.series([
+            step => waitForCounter(BARRIER_METRIC,
+                { workgroup: ids.zero, match: 'current' },
+                deliveryPartitions, 90000, 500, step),
+            step => waitForCounter(BARRIER_METRIC,
+                { workgroup: ids.one, match: 'current' },
+                deliveryPartitions, 90000, 500, step),
+            step => waitFor(() => 'generation 1 to redeliver what follows ' +
+                `its barriers (${deliveredCount() - generationZeroDelivered}` +
+                ' so far)',
+                () => deliveredCount() > generationZeroDelivered, 60000, step),
+            step => waitFor(() => 'the produced set to be covered ' +
+                `(${distinctDelivered()} of ${totalProduced})`,
+                () => distinctDelivered() === totalProduced, 30000, step),
+        ], err => done(err));
+    }
+
+    /**
+     * Records what each generation 1 workgroup had done when the wait gave
+     * up, so a partial wedge can be told apart from a total one
+     *
+     * @param {Function} done - callback, never called with an error
+     * @return {undefined}
+     */
+    function recordGenerationOneCounters(done) {
+        return async.mapSeries([ids.zero, ids.one],
+            (workgroupId, next) => async.parallel({
+                delivered: step => readCounter(DELIVERED_METRIC,
+                    { workgroup: workgroupId }, step),
+                barriers: step => readCounter(BARRIER_METRIC,
+                    { workgroup: workgroupId, match: 'current' }, step),
+                skipped: step => readCounter(SKIPPED_METRIC,
+                    { workgroup: workgroupId }, step),
+            }, next),
+            (err, counters) => {
+                record('W-C.generation1.countersAtTimeout',
+                    err ? err.message : {
+                        [ids.zero]: counters[0],
+                        [ids.one]: counters[1],
+                    });
+                return done();
+            });
     }
 
     function waitForDrain(startedAt, done) {
@@ -2522,82 +2627,25 @@ function gateGenerationSwap() {
                 oneRuntime = runtime;
                 return next(err);
             }),
-            next => restartOnWedge({
-                label: 'W-C generation 1',
-                // the previous generation had already delivered every
-                // produced record before it was stopped, so covering the
-                // produced set says nothing about generation 1. Its own
-                // barriers, one per partition, and the records that follow
-                // them are what say it ran
-                wait: cb => async.series([
-                    step => waitForCounter(BARRIER_METRIC,
-                        { workgroup: ids.zero, match: 'current' },
-                        deliveryPartitions, 90000, 500, step),
-                    step => waitForCounter(BARRIER_METRIC,
-                        { workgroup: ids.one, match: 'current' },
-                        deliveryPartitions, 90000, 500, step),
-                    step => waitFor(() => 'generation 1 to redeliver what ' +
-                        'follows its barriers (' +
-                        `${deliveredCount() - generationZeroDelivered} so ` +
-                        'far)',
-                        () => deliveredCount() > generationZeroDelivered,
-                        60000, step),
-                    step => waitFor(() => 'the produced set to be covered ' +
-                        `(${distinctDelivered()} of ${totalProduced})`,
-                        () => distinctDelivered() === totalProduced, 30000,
-                        step),
-                ], err => {
-                    if (!err) {
-                        return cb();
-                    }
-                    // diagnostic only, no behaviour change: which of the two
-                    // generation 1 workgroups actually moved, so a partial
-                    // wedge can be told apart from a total one
-                    return async.mapSeries([ids.zero, ids.one],
-                        (workgroupId, next) => async.parallel({
-                            delivered: step => readCounter(DELIVERED_METRIC,
-                                { workgroup: workgroupId }, step),
-                            barriers: step => readCounter(BARRIER_METRIC,
-                                { workgroup: workgroupId, match: 'current' },
-                                step),
-                            skipped: step => readCounter(SKIPPED_METRIC,
-                                { workgroup: workgroupId }, step),
-                        }, next),
-                        (readErr, counters) => {
-                            record('W-C.generation1.countersAtTimeout',
-                                readErr ? readErr.message : {
-                                    [ids.zero]: counters[0],
-                                    [ids.one]: counters[1],
-                                });
-                            return cb(err);
-                        });
-                }),
-                progress: () => deliveredCount() - generationZeroDelivered,
-                // a fresh worker on the same group resumes from that group's
-                // committed offset, so nothing has to be seeded again
-                restart: cb => async.series([
-                    step => stopWorkgroup(zeroRuntime, step),
-                    step => stopWorkgroup(oneRuntime, step),
-                    step => startWorkgroup({
-                        zkPath,
-                        workgroupId: ids.zero,
-                        baseGroupId,
-                        notifConfig: cutoverNotifConfig,
-                    }, (err, runtime) => {
-                        zeroRuntime = runtime;
-                        return step(err);
-                    }),
-                    step => startWorkgroup({
-                        zkPath,
-                        workgroupId: ids.one,
-                        baseGroupId,
-                        notifConfig: cutoverNotifConfig,
-                    }, (err, runtime) => {
-                        oneRuntime = runtime;
-                        return step(err);
-                    }),
-                ], cb),
-            }, next),
+            // the previous generation had already delivered every produced
+            // record before it was stopped, so covering the produced set
+            // says nothing about generation 1. Its own barriers, one per
+            // partition, and the records that follow them are what say it
+            // ran. A workgroup that has not reached its barriers is
+            // restarted one workgroup at a time, because a wedge of one of
+            // the two is invisible in anything measured over the pair
+            next => generationOneReady(waitErr => {
+                if (!waitErr) {
+                    return next();
+                }
+                return recordGenerationOneCounters(() =>
+                    restartWedgedGenerationOne(restartErr => {
+                        if (restartErr) {
+                            return next(restartErr);
+                        }
+                        return generationOneReady(next);
+                    }));
+            }),
             next => async.eachSeries([...tailers.values()],
                 (tailer, quietDone) => waitUntilQuiet(tailer, 500, quietDone),
                 next),
@@ -2713,6 +2761,17 @@ function gateGenerationSwap() {
             { workgroup: workgroupId, match: 'current' }, (err, value) => {
                 assert.ifError(err);
                 record(`W-C.barriers.${workgroupId}.current`, value);
+                if (restartedGenerationOne.has(workgroupId)) {
+                    // this workgroup was restarted around the pre-existing
+                    // wedge, and a restart re-reads every barrier it had not
+                    // already committed past, so the exact count is no
+                    // longer the invariant. The restart is recorded in
+                    // run.wedgeOccurrences.
+                    assert(value >= deliveryPartitions,
+                        `${workgroupId} was restarted and still saw only ` +
+                        `${value} barriers of its own generation`);
+                    return next();
+                }
                 assert.strictEqual(value, deliveryPartitions,
                     `${workgroupId} saw ${value} barriers of its own ` +
                     'generation, one per partition would be ' +
