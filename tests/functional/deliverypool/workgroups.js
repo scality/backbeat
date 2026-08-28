@@ -70,6 +70,22 @@ const OBSERVED = {};
 // design/06-backbeatconsumer-wedge.md and not a workgroups failure
 const WEDGES = [];
 
+// every workgroup whose phase actually passed, with the document it ran, so
+// the observability gate can check the label on it. Registration is explicit
+// rather than a side effect of starting a worker: a workgroup that wedged
+// and was retried started but never ran
+const RAN_WORKGROUPS = [];
+
+/**
+ * Records that a workgroup ran a phase through to its assertions
+ *
+ * @param {Object} runtime - runtime returned by startWorkgroup
+ * @return {undefined}
+ */
+function registerWorkgroup(runtime) {
+    RAN_WORKGROUPS.push({ id: runtime.workgroup.id, doc: runtime.doc });
+}
+
 /**
  * Records a number a gate observed, and puts it in the run output
  *
@@ -1497,6 +1513,7 @@ function gateSliceEnforcement() {
                     assert.strictEqual(value, 0,
                         'a record of another workgroup is not mine, it is ' +
                         'not undeliverable');
+                    registerWorkgroup(zeroRuntime);
                     return next();
                 }),
         ], done);
@@ -1603,6 +1620,8 @@ function gateSliceEnforcement() {
                 assert.ifError(err2);
                 record('W-A.phase2.droppedTotal', value);
                 assert.strictEqual(value, 0);
+                registerWorkgroup(oneRuntime);
+                registerWorkgroup(whaleRuntime);
                 return next();
             }),
             next => {
@@ -1995,6 +2014,8 @@ function gateIsolation() {
                 { target: zeroHealthyResource }, (err2, value) => {
                     assert.ifError(err2);
                     record('W-B.blocked.healthyDelivered', value);
+                    [zeroRuntime, oneRuntime, whaleRuntime]
+                        .forEach(registerWorkgroup);
                     return next();
                 }),
         ], done);
@@ -2435,6 +2456,10 @@ function gateGenerationSwap() {
             next => async.eachSeries([...tailers.values()],
                 (tailer, quietDone) => waitUntilQuiet(tailer, 500, quietDone),
                 next),
+            next => {
+                [zeroRuntime, oneRuntime].forEach(registerWorkgroup);
+                return next();
+            },
         ], done);
     });
 
@@ -2571,5 +2596,105 @@ function gateGenerationSwap() {
         assert(message.includes('notificationWorkgroupCutover preseed'),
             `the message has to say what to run, got: ${message}`);
         return done();
+    });
+});
+
+describe('GATE W-D :: what an operator can read off the metrics',
+function gateObservability() {
+    this.timeout(120000);
+
+    it('should carry the workgroup label, correctly valued, on every ' +
+    'workgroup that ran', done => {
+        assert(RAN_WORKGROUPS.length > 0,
+            'no workgroup ran, so there is nothing to attribute');
+        record('W-D.workgroupsThatRan', RAN_WORKGROUPS.map(ran => ran.id));
+        return async.eachSeries(RAN_WORKGROUPS, (ran, next) => async.series([
+            step => readSeries(DELIVERED_METRIC, { workgroup: ran.id },
+                (err, values) => {
+                    assert.ifError(err);
+                    // a workgroup that was deliberately blocked may have
+                    // delivered nothing, but anything it did deliver has to
+                    // belong to it
+                    values.forEach(v => assert.strictEqual(
+                        workgroupIdForDestination(ran.doc, v.labels.target),
+                        ran.id,
+                        `delivered_total{workgroup="${ran.id}"} names ` +
+                        `${v.labels.target}, which that workgroup does not ` +
+                        'own'));
+                    return step();
+                }),
+            step => readCounter(SKIPPED_METRIC, { workgroup: ran.id },
+                (err, value) => {
+                    assert.ifError(err);
+                    assert(value > 0,
+                        `skipped_total carries no sample for ${ran.id}, so ` +
+                        'its slice cannot be told apart from any other');
+                    return step();
+                }),
+        ], next), done);
+    });
+
+    it('should read the lag of each workgroup independently of the others',
+    done => {
+        const blocked = OBSERVED['W-B.lag.blockedAtChosenMoment'];
+        const drained = OBSERVED['W-B.lag.drainedAtChosenMoment'];
+        assert.strictEqual(typeof blocked, 'number',
+            'the isolation gate did not record a blocked lag');
+        assert.strictEqual(typeof drained, 'number',
+            'the isolation gate did not record a drained lag');
+        assert(blocked > 0,
+            'the blocked workgroup had no lag at the chosen moment');
+        assert.strictEqual(drained, 0,
+            'the drained workgroup still had lag at the chosen moment');
+        assert(blocked !== drained,
+            'the two groups read the same, so per-workgroup lag is not ' +
+            'independently readable');
+        return done();
+    });
+
+    it('should leave the flag-off series of the single pool with no ' +
+    'workgroup label at all', done => {
+        const targets = OBSERVED['W-C.destinations'];
+        assert(Array.isArray(targets) && targets.length > 0,
+            'the cutover gate did not record its destinations');
+        let flagOff = 0;
+        let flagOn = 0;
+        return async.eachSeries(targets, (target, next) =>
+            readSeries(DELIVERED_METRIC, { target }, (err, values) => {
+                assert.ifError(err);
+                values.forEach(v => {
+                    if (v.labels.workgroup === undefined) {
+                        flagOff += v.value;
+                        return;
+                    }
+                    flagOn += v.value;
+                });
+                return next();
+            }), err => {
+            assert.ifError(err);
+            record('W-D.flagOff.delivered', flagOff);
+            record('W-D.flagOn.delivered', flagOn);
+            // the same destinations were served by the single pool and then
+            // by generation 1, so both kinds of series exist side by side on
+            // one target, which is exactly the discontinuity a cutover has
+            assert(flagOff > 0,
+                'the single pool delivered nothing under a series with no ' +
+                'workgroup label');
+            assert(flagOn > 0,
+                'generation 1 delivered nothing under a labelled series');
+            return readSeries(SKIPPED_METRIC, { reason: 'barrier' },
+                (err2, values) => {
+                    assert.ifError(err2);
+                    const unlabelled = values
+                        .filter(v => v.labels.workgroup === undefined)
+                        .reduce((total, v) => total + v.value, 0);
+                    record('W-D.flagOff.barriersSkipped', unlabelled);
+                    assert(unlabelled > 0,
+                        'the single pool skipped no barrier under an ' +
+                        'unlabelled series, so the flag-off path was never ' +
+                        'exercised against a barrier');
+                    return done();
+                });
+        });
     });
 });
