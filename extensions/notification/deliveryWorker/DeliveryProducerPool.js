@@ -97,22 +97,56 @@ class PooledProducer {
         });
     }
 
+    /**
+     * Close the underlying producer, tolerating a client that never connected.
+     *
+     * The producer object is attached before its client connects, so holding
+     * one is not evidence that there is a connection to close. Closing flushes
+     * first, and the flush throws synchronously on a client that is still
+     * connecting, so a producer this pool never saw become ready is treated as
+     * already closed, and a throw from the close itself is caught rather than
+     * left to escape: it would otherwise strand this callback and abort the
+     * close of every other producer in the pool.
+     *
+     * @param {function} [cb] - callback, called exactly once
+     * @return {undefined}
+     */
     close(cb) {
         const done = cb || (() => {});
-        if (!this.producer) {
+        if (!this.producer || !this.ready) {
             return process.nextTick(done);
         }
-        return this.producer.close(err => {
-            if (err) {
-                this._log.error('error closing producer', {
-                    method: 'PooledProducer.close',
-                    destinationId: this.destinationId,
-                    endpoint: this.endpoint,
-                    error: err.message,
-                });
+        let settled = false;
+        // exactly once: a second callback here would abort the async.each
+        // that closeAll runs over the whole pool
+        const settle = () => {
+            if (!settled) {
+                settled = true;
+                done();
             }
-            done();
-        });
+        };
+        try {
+            this.producer.close(err => {
+                if (err) {
+                    this._log.error('error closing producer', {
+                        method: 'PooledProducer.close',
+                        destinationId: this.destinationId,
+                        endpoint: this.endpoint,
+                        error: err.message,
+                    });
+                }
+                settle();
+            });
+        } catch (err) {
+            this._log.warn('producer threw on close, counting it as closed', {
+                method: 'PooledProducer.close',
+                destinationId: this.destinationId,
+                endpoint: this.endpoint,
+                error: err.message,
+            });
+            settle();
+        }
+        return undefined;
     }
 }
 
@@ -369,7 +403,23 @@ class DeliveryProducerPool {
         const entries = [...this._producers.values()];
         this._producers.clear();
         this._updateProducersGauge();
-        return async.each(entries, (entry, next) => entry.close(next), () => done());
+        return async.each(entries, (entry, next) => {
+            try {
+                entry.close(next);
+            } catch (err) {
+                // close is written not to throw, and this is the second line
+                // of that defence: a throw escaping into async.each would
+                // abandon the producers queued behind this one and never call
+                // back, so the pool would never finish closing
+                this._log.warn('unexpected throw while closing a producer', {
+                    method: 'DeliveryProducerPool.closeAll',
+                    destinationId: entry.destinationId,
+                    endpoint: entry.endpoint,
+                    error: err.message,
+                });
+                next();
+            }
+        }, () => done());
     }
 }
 

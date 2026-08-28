@@ -295,4 +295,76 @@ describe('notification DeliveryProducerPool', () => {
             });
         });
     });
+
+    describe('closing a producer that never connected', () => {
+        it('should not flush a producer the pool never saw become ready', done => {
+            connectStub.restore();
+            // stays connecting forever, like a client still handshaking when
+            // the worker is told to stop
+            sinon.stub(DeliveryKafkaProducer.prototype, 'connect')
+                .callsFake(() => {});
+            closeStub.restore();
+            // the real producer flushes on close and throws synchronously
+            // when its client is not connected
+            const close = sinon.stub(DeliveryKafkaProducer.prototype, 'close')
+                .throws(new Error('Producer not connected'));
+
+            const pool = makePool();
+            pool.start();
+            pool.get('destA', () => {});
+            assert.strictEqual(pool._producers.get('destA').ready, false);
+
+            pool.closeAll(() => {
+                assert.strictEqual(close.callCount, 0);
+                assert.strictEqual(pool._producers.size, 0);
+                done();
+            });
+        });
+
+        it('should finish closing the pool when one producer throws', done => {
+            closeStub.restore();
+            const attempted = [];
+            sinon.stub(DeliveryKafkaProducer.prototype, 'close')
+                .callsFake(function close(cb) {
+                    attempted.push(this._topic);
+                    if (this._topic === 'topic-a') {
+                        throw new Error('Producer not connected');
+                    }
+                    return process.nextTick(cb);
+                });
+
+            const pool = makePool();
+            pool.get('destA', errA => {
+                assert.ifError(errA);
+                pool.get('destB', errB => {
+                    assert.ifError(errB);
+                    pool.closeAll(() => {
+                        // the throw on destA did not abandon destB behind it
+                        assert.deepStrictEqual(attempted.sort(),
+                            ['topic-a', 'topic-b']);
+                        assert.strictEqual(pool._producers.size, 0);
+                        done();
+                    });
+                });
+            });
+        });
+
+        it('should still close a connected producer exactly once', done => {
+            const pool = makePool();
+            pool.get('destA', err => {
+                assert.ifError(err);
+                const entry = pool._producers.get('destA');
+                assert.strictEqual(entry.ready, true);
+                let calls = 0;
+                entry.close(() => { calls++; });
+                // the close stub calls back on the next tick, which drains
+                // before this
+                setImmediate(() => {
+                    assert.strictEqual(closeStub.callCount, 1);
+                    assert.strictEqual(calls, 1);
+                    done();
+                });
+            });
+        });
+    });
 });
