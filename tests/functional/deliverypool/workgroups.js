@@ -1886,14 +1886,62 @@ function gateIsolation() {
             (tailer, tailDone) => tailer.stop(tailDone), next),
     ], done));
 
+    /**
+     * Restarts any unblocked workgroup that delivered nothing at all, on the
+     * consumer group it already has.
+     *
+     * A wedged consumer committed nothing, so a fresh worker on that same
+     * group reads from the earliest offset and delivers that workgroup's
+     * records exactly once. Renaming the workgroup instead, which is what
+     * the generic retry does, would make a workgroup that had already
+     * delivered do so a second time and break the exact counts this gate is
+     * stated in.
+     *
+     * @param {Function} done - callback
+     * @return {undefined}
+     */
+    function restartWedgedWorkgroups(done) {
+        const zkPath = `${zkBase}/attempt-1`;
+        return async.eachSeries([
+            { id: activeIds.one, get: () => oneRuntime,
+                set: runtime => { oneRuntime = runtime; } },
+            { id: activeIds.whale, get: () => whaleRuntime,
+                set: runtime => { whaleRuntime = runtime; } },
+        ], (entry, next) => readCounter(DELIVERED_METRIC,
+            { workgroup: entry.id }, (err, delivered) => {
+                if (err) {
+                    return next(err);
+                }
+                if (delivered > 0) {
+                    return next();
+                }
+                WEDGES.push({
+                    phase: `W-B ${entry.id}`,
+                    attempt: 1,
+                    error: 'the workgroup delivered nothing at all',
+                });
+                suiteLog.warn('a workgroup consumed nothing at all, ' +
+                    'restarting it on its own group and recording the ' +
+                    'occurrence as the pre-existing consumer wedge', {
+                    workgroup: entry.id,
+                });
+                return stopWorkgroup(entry.get(), () => startWorkgroup({
+                    zkPath,
+                    workgroupId: entry.id,
+                    baseGroupId,
+                    notifConfig,
+                }, (startErr, runtime) => {
+                    entry.set(runtime);
+                    return next(startErr);
+                }));
+            }), done);
+    }
+
     it('should drain the unblocked workgroups while the blocked one keeps ' +
     'lag on the delivery topic', done => runGuarded(done, finish => withWedgeRetry({
         label: 'W-B',
         run: (attempt, cb) => {
-            activeIds.zero = attemptId(baseIds.zero, attempt);
-            activeIds.one = attemptId(baseIds.one, attempt);
-            activeIds.whale = attemptId(baseIds.whale, attempt);
-            const zkPath = `${zkBase}/attempt-${attempt}`;
+            const zkPath = `${zkBase}/attempt-1`;
             let windowStart = 0;
             return async.waterfall([
                 // the delivery topic was created and verified in the root
@@ -1962,7 +2010,25 @@ function gateIsolation() {
                         `drain (${oneDestinations.map(d =>
                             tailerOf(d).records.length).join(', ')} and ` +
                         `${tailerOf(whale).records.length})`,
-                        unblockedDrained, MAX_DRAIN_WAIT_MS, next),
+                        unblockedDrained, MAX_DRAIN_WAIT_MS,
+                        drainErr => {
+                            if (!drainErr) {
+                                return next();
+                            }
+                            return restartWedgedWorkgroups(restartErr => {
+                                if (restartErr) {
+                                    return next(restartErr);
+                                }
+                                return waitFor(() => 'the restarted ' +
+                                    'workgroups to drain (' +
+                                    `${oneDestinations.map(d =>
+                                        tailerOf(d).records.length)
+                                        .join(', ')} and ` +
+                                    `${tailerOf(whale).records.length})`,
+                                    unblockedDrained, MAX_DRAIN_WAIT_MS,
+                                    next);
+                            });
+                        }),
                     // the guarantee is about the whole window, not about one
                     // lucky look, so the window has a floor of its own
                     next => setTimeout(next, Math.max(0,
