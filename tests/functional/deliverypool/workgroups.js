@@ -782,6 +782,37 @@ class LagTrace {
 }
 
 /**
+ * Polls a counter until it reaches the expected value
+ *
+ * @param {String} name - metric name
+ * @param {Object} labels - labels the counter has to match
+ * @param {Number} expected - value to wait for
+ * @param {Number} timeoutMs - how long to wait for
+ * @param {Number} pollMs - how often to look
+ * @param {Function} done - callback
+ * @return {undefined}
+ */
+function waitForCounter(name, labels, expected, timeoutMs, pollMs, done) {
+    const deadline = Date.now() + timeoutMs;
+    let lastSeen = 0;
+    const check = () => readCounter(name, labels, (err, value) => {
+        if (!err) {
+            lastSeen = value;
+            if (value >= expected) {
+                return done();
+            }
+        }
+        if (Date.now() >= deadline) {
+            return done(new Error(`timed out waiting for ${name} ` +
+                `${JSON.stringify(labels)} to reach ${expected}, last seen ` +
+                `${lastSeen}`));
+        }
+        return setTimeout(check, pollMs);
+    });
+    return check();
+}
+
+/**
  * Builds a destination configuration pointing at a local topic.
  *
  * pollIntervalMs is not part of the destination schema, but the pool hands
@@ -2352,10 +2383,29 @@ function gateGenerationSwap() {
             }),
             next => restartOnWedge({
                 label: 'W-C generation 1',
-                wait: cb => waitFor(() => 'the new generation to cover the ' +
-                    `produced set (${distinctDelivered()} of ` +
-                    `${totalProduced})`,
-                    () => distinctDelivered() === totalProduced, 90000, cb),
+                // the previous generation had already delivered every
+                // produced record before it was stopped, so covering the
+                // produced set says nothing about generation 1. Its own
+                // barriers, one per partition, and the records that follow
+                // them are what say it ran
+                wait: cb => async.series([
+                    step => waitForCounter(BARRIER_METRIC,
+                        { workgroup: ids.zero, match: 'current' },
+                        deliveryPartitions, 90000, 500, step),
+                    step => waitForCounter(BARRIER_METRIC,
+                        { workgroup: ids.one, match: 'current' },
+                        deliveryPartitions, 90000, 500, step),
+                    step => waitFor(() => 'generation 1 to redeliver what ' +
+                        'follows its barriers (' +
+                        `${deliveredCount() - generationZeroDelivered} so ` +
+                        'far)',
+                        () => deliveredCount() > generationZeroDelivered,
+                        60000, step),
+                    step => waitFor(() => 'the produced set to be covered ' +
+                        `(${distinctDelivered()} of ${totalProduced})`,
+                        () => distinctDelivered() === totalProduced, 30000,
+                        step),
+                ], err => cb(err)),
                 progress: () => deliveredCount() - generationZeroDelivered,
                 // a fresh worker on the same group resumes from that group's
                 // committed offset, so nothing has to be seeded again
