@@ -1212,17 +1212,27 @@ before(function createEveryTopic(done) {
     ], done);
 });
 
-// lib/BackbeatConsumer.js:851 calls offsetsStore() with no try/catch, so an
-// offset stored while the consumer is between assignments escapes as an
-// uncaught exception. Mocha fails whichever case is running when that lands,
-// which pre-empts this suite's own wedge handling: the retry then fires
-// seconds after the case has already been failed. That error shape is taken
-// out of mocha's hands here and counted instead. Nothing else is: every
-// other uncaught exception goes straight back to the listeners mocha had.
+// lib/BackbeatConsumer.js:850-853 is the commit path, and it throws out of
+// two different places when an entry finishes while its consumer is between
+// assignments or closing. Both are "Local: Erroneous state" raised
+// synchronously by node-rdkafka:
 //
-// This is pre-existing and out of scope, of a piece with
-// design/06-backbeatconsumer-wedge.md. It is worked around, never hidden:
-// every occurrence is reported in run.offsetStoreThrows.
+//   onEntryCommittable -> isPaused -> KafkaConsumer.subscription
+//   onEntryCommittable -> KafkaConsumer.offsetsStore
+//
+// The second is guarded by the first, and the guard raises the very
+// exception it exists to avoid. The source comment there already flags it.
+//
+// In a service this takes the process down. Here it lands on whichever mocha
+// case is running, which pre-empts this suite's own wedge handling: in one
+// run the retry fired seven seconds after the case had already been failed.
+// Anything that comes through onEntryCommittable is therefore taken out of
+// mocha's hands and counted; every other uncaught exception goes straight
+// back to the listeners mocha installed.
+//
+// Pre-existing and out of scope, of a piece with
+// design/06-backbeatconsumer-wedge.md. Worked around, never hidden: every
+// occurrence is reported in run.commitPathThrows.
 const OFFSET_STORE_THROWS = [];
 let mochaUncaught = [];
 
@@ -1231,10 +1241,16 @@ function installUncaughtFilter() {
     process.removeAllListeners('uncaughtException');
     process.on('uncaughtException', (err, origin) => {
         const stack = (err && err.stack) || '';
-        if (stack.includes('KafkaConsumer.offsetsStore')) {
-            OFFSET_STORE_THROWS.push(err.message);
-            suiteLog.error('a pre-existing offsetsStore throw escaped the ' +
-                'consumer, counted rather than failing the case', {
+        if (stack.includes('BackbeatConsumer.onEntryCommittable')) {
+            OFFSET_STORE_THROWS.push({
+                error: err.message,
+                // which of the two raised it, so the report can tell them
+                // apart without the whole stack
+                via: stack.includes('KafkaConsumer.offsetsStore') ?
+                    'offsetsStore' : 'isPaused',
+            });
+            suiteLog.error('a pre-existing throw escaped the consumer commit ' +
+                'path, counted rather than failing the case', {
                 error: err.message,
             });
             return;
@@ -1265,7 +1281,7 @@ afterEach(function logFailure() {
 
 after(() => {
     record('run.wedgeOccurrences', WEDGES);
-    record('run.offsetStoreThrows', OFFSET_STORE_THROWS);
+    record('run.commitPathThrows', OFFSET_STORE_THROWS);
 });
 
 describe('GATE W-A :: workgroups deliver only their own slice',
