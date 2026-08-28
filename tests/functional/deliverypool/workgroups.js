@@ -414,11 +414,32 @@ function readTopic(topic, minCount, timeoutMs, done) {
 function readSeries(name, labels, done) {
     const metric = ZenkoMetrics.getMetric(name);
     if (!metric) {
-        return process.nextTick(() => done(null, []));
+        process.nextTick(() => done(null, []));
+        return undefined;
     }
-    return metric.get().then(({ values }) => done(null, values
+    // deliberately not returned: a promise handed back to mocha from an it()
+    // is reported as "resolution method is overspecified"
+    metric.get().then(({ values }) => done(null, values
         .filter(v => Object.entries(labels)
             .every(([label, value]) => v.labels[label] === value))), done);
+    return undefined;
+}
+
+/**
+ * The smallest number of records any of these workgroups delivered.
+ *
+ * The consumer wedge is a property of one consumer, so a phase where one
+ * workgroup delivered everything and another delivered nothing is still a
+ * wedge of that second workgroup, and summing the two would hide it.
+ *
+ * @param {String[]} workgroupIds - workgroups that all had to deliver
+ * @param {Function} done - callback: done(err, delivered)
+ * @return {undefined}
+ */
+function minDelivered(workgroupIds, done) {
+    return async.map(workgroupIds, (workgroupId, next) =>
+        readCounter(DELIVERED_METRIC, { workgroup: workgroupId }, next),
+        (err, values) => done(err, err ? 0 : Math.min(...values)));
 }
 
 function readCounter(name, labels, done) {
@@ -996,6 +1017,21 @@ before(function createEveryTopic(done) {
     ], done);
 });
 
+// lib/BackbeatConsumer.js calls offsetsStore() with no try/catch, so an
+// offset stored while the consumer is between assignments escapes as an
+// uncaught exception and fails whichever case happens to be running. That is
+// pre-existing and out of scope here, so it is recorded rather than hidden:
+// adding this listener does not stop mocha from failing the case.
+process.on('uncaughtException', err => {
+    const stack = (err && err.stack) || '';
+    if (stack.includes('KafkaConsumer.offsetsStore')) {
+        WEDGES.push({
+            phase: 'uncaught offsetsStore throw during a rebalance',
+            error: err.message,
+        });
+    }
+});
+
 // a gate that fails has to say why in the run output rather than only in
 // mocha's epilogue: these runs are long, and a later case hanging would
 // otherwise take the reason for the earlier failure with it
@@ -1299,13 +1335,9 @@ function gateSliceEnforcement() {
                         deliveryPartitions, totalRecords, 120000, next), cb);
             });
         },
-        progress: (attempt, cb) => async.map(
+        progress: (attempt, cb) => minDelivered(
             [attemptId(baseIds.one, attempt),
-                attemptId(baseIds.whale, attempt)],
-            (workgroupId, next) => readCounter(DELIVERED_METRIC,
-                { workgroup: workgroupId }, next),
-            (err, values) => cb(err, (values || [])
-                .reduce((total, value) => total + value, 0))),
+                attemptId(baseIds.whale, attempt)], cb),
         cleanup: (attempt, cb) => async.series([
             next => stopWorkgroup(oneRuntime, () => {
                 oneRuntime = null;
@@ -1420,14 +1452,18 @@ function gateIsolation() {
     const baseGroupId = `poc-wg-b-group-${RUN_ID}`;
     const zkBase = `${ZK_BASE}/gate-b`;
     const healthyCount = 6;
-    // more records than the pool has lanes, so the blackholed destination
-    // opens a second producer after the first connect expires and the block
-    // outlasts any observation window this gate uses
-    const blackholeCount = 15;
+    // fewer records than the pool has lanes: the blocked destination has to
+    // hold offsets, not saturate the worker. A saturated worker stops
+    // polling and the broker evicts it, which is a different failure and
+    // not the one this gate is about
+    const blackholeCount = 6;
     const whaleKeysPerSubKey = 2;
     const LAG_SAMPLE_MS = 500;
-    const MIN_WINDOW_MS = 12000;
-    const MAX_DRAIN_WAIT_MS = 45000;
+    const WORKER_SETTLE_MS = 3000;
+    const MIN_WINDOW_MS = 10000;
+    // the pooled producer to an unroutable host gives up on the thirty
+    // second node-rdkafka connect timeout, so the window ends well inside it
+    const MAX_DRAIN_WAIT_MS = 20000;
 
     const baseIds = { zero: 'wgb-zero', one: 'wgb-one', whale: 'wgb-whale' };
     const activeIds = { ...baseIds };
@@ -1594,22 +1630,27 @@ function gateIsolation() {
                 }, next),
                 (runtime, next) => {
                     zeroRuntime = runtime;
-                    return startWorkgroup({
-                        zkPath,
-                        workgroupId: activeIds.one,
-                        baseGroupId,
-                        notifConfig,
-                    }, next);
+                    // a deployment does not start every worker in the same
+                    // millisecond, and three joins at once widen the
+                    // metadata churn window the pre-existing wedge lives in
+                    return setTimeout(next, WORKER_SETTLE_MS);
                 },
+                next => startWorkgroup({
+                    zkPath,
+                    workgroupId: activeIds.one,
+                    baseGroupId,
+                    notifConfig,
+                }, next),
                 (runtime, next) => {
                     oneRuntime = runtime;
-                    return startWorkgroup({
-                        zkPath,
-                        workgroupId: activeIds.whale,
-                        baseGroupId,
-                        notifConfig,
-                    }, next);
+                    return setTimeout(next, WORKER_SETTLE_MS);
                 },
+                next => startWorkgroup({
+                    zkPath,
+                    workgroupId: activeIds.whale,
+                    baseGroupId,
+                    notifConfig,
+                }, next),
             ], (err, runtime) => {
                 whaleRuntime = runtime || whaleRuntime;
                 if (err) {
@@ -1657,12 +1698,11 @@ function gateIsolation() {
                 ], seriesErr => trace.stop(() => cb(seriesErr)));
             });
         },
-        progress: (attempt, cb) => async.map(
-            [baseIds.zero, baseIds.one, baseIds.whale],
-            (base, next) => readCounter(DELIVERED_METRIC,
-                { workgroup: attemptId(base, attempt) }, next),
-            (err, values) => cb(err, (values || [])
-                .reduce((total, value) => total + value, 0))),
+        // the blocked workgroup is meant not to drain, so only the two
+        // unblocked ones say whether a consumer wedged
+        progress: (attempt, cb) => minDelivered(
+            [attemptId(baseIds.one, attempt),
+                attemptId(baseIds.whale, attempt)], cb),
         cleanup: (attempt, cb) => async.series([
                 next => (trace ? trace.stop(next) : next()),
                 next => (blockedSampler ? blockedSampler.stop(next) : next()),
@@ -1735,14 +1775,17 @@ function gateIsolation() {
     }));
 
     it('should deliver nothing at all to the blackholed destination',
-    done => readCounter(DELIVERED_METRIC, { target: blackholeResource },
-        (err, value) => {
-            assert.ifError(err);
-            record('W-B.blackhole.delivered', value);
-            assert.strictEqual(value, 0,
-                'a destination that cannot be reached cannot have delivered');
-            return done();
-        }));
+    done => {
+        readCounter(DELIVERED_METRIC, { target: blackholeResource },
+            (err, value) => {
+                assert.ifError(err);
+                record('W-B.blackhole.delivered', value);
+                assert.strictEqual(value, 0,
+                    'a destination that cannot be reached cannot have ' +
+                    'delivered');
+                return done();
+            });
+    });
 
     it('should keep the unblocked workgroups under a second at the 99th ' +
     'percentile of their delivery delay', done => async.eachSeries(
