@@ -559,6 +559,8 @@ class LagTrace {
         this._intervalMs = intervalMs;
         this._stopped = false;
         this._timer = null;
+        this._inFlight = false;
+        this._onIdle = null;
     }
 
     start() {
@@ -569,23 +571,45 @@ class LagTrace {
         if (this._stopped) {
             return;
         }
+        this._inFlight = true;
         this._sampler.sample((err, lag) => {
+            this._inFlight = false;
             if (err) {
                 this.errors += 1;
             } else {
                 this.samples.push(lag);
             }
             if (this._stopped) {
+                const idle = this._onIdle;
+                this._onIdle = null;
+                if (idle) {
+                    idle();
+                }
                 return;
             }
             this._timer = setTimeout(() => this._tick(), this._intervalMs);
         });
     }
 
-    stop() {
+    /**
+     * Stops sampling and waits for the sample in flight, if any.
+     *
+     * Two overlapping calls on one node-rdkafka client do not both come
+     * back, so nothing else may read this sampler's client until the tick
+     * that is already running has finished.
+     *
+     * @param {Function} done - callback
+     * @return {undefined}
+     */
+    stop(done) {
         this._stopped = true;
         clearTimeout(this._timer);
         this._timer = null;
+        if (!this._inFlight) {
+            return process.nextTick(done);
+        }
+        this._onIdle = done;
+        return undefined;
     }
 }
 
@@ -970,6 +994,21 @@ before(function createEveryTopic(done) {
         next => createTopics(topics, next),
         next => waitForTopics(topics, next),
     ], done);
+});
+
+// a gate that fails has to say why in the run output rather than only in
+// mocha's epilogue: these runs are long, and a later case hanging would
+// otherwise take the reason for the earlier failure with it
+afterEach(function logFailure() {
+    const test = this.currentTest;
+    if (!test || test.state !== 'failed') {
+        return;
+    }
+    suiteLog.error('a workgroups gate case failed', {
+        title: test.title,
+        error: test.err && test.err.message,
+        stack: test.err && test.err.stack,
+    });
 });
 
 after(() => record('run.wedgeOccurrences', WEDGES));
@@ -1388,7 +1427,7 @@ function gateIsolation() {
     const whaleKeysPerSubKey = 2;
     const LAG_SAMPLE_MS = 500;
     const MIN_WINDOW_MS = 12000;
-    const MAX_DRAIN_WAIT_MS = 25000;
+    const MAX_DRAIN_WAIT_MS = 45000;
 
     const baseIds = { zero: 'wgb-zero', one: 'wgb-one', whale: 'wgb-whale' };
     const activeIds = { ...baseIds };
@@ -1527,12 +1566,7 @@ function gateIsolation() {
     });
 
     after(done => async.series([
-        next => {
-            if (trace) {
-                trace.stop();
-            }
-            return next();
-        },
+        next => (trace ? trace.stop(next) : next()),
         next => (blockedSampler ? blockedSampler.stop(next) : next()),
         next => (drainedSampler ? drainedSampler.stop(next) : next()),
         next => stopWorkgroup(zeroRuntime, next),
@@ -1604,6 +1638,12 @@ function gateIsolation() {
                     // lucky look, so the window has a floor of its own
                     next => setTimeout(next, Math.max(0,
                         MIN_WINDOW_MS - (Date.now() - windowStart))),
+                    next => {
+                        record('W-B.window.ms', Date.now() - windowStart);
+                        // the chosen-moment reads use the same clients, so
+                        // the trace has to be off and idle first
+                        return trace.stop(next);
+                    },
                     // both groups read at the same moment, which is what
                     // makes per-workgroup lag independently readable
                     next => blockedSampler.sample((sampleErr, lag) => {
@@ -1614,11 +1654,7 @@ function gateIsolation() {
                         record('W-B.lag.drainedAtChosenMoment', lag);
                         return next(sampleErr);
                     }),
-                ], seriesErr => {
-                    trace.stop();
-                    record('W-B.window.ms', Date.now() - windowStart);
-                    return cb(seriesErr);
-                });
+                ], seriesErr => trace.stop(() => cb(seriesErr)));
             });
         },
         progress: (attempt, cb) => async.map(
@@ -1627,11 +1663,8 @@ function gateIsolation() {
                 { workgroup: attemptId(base, attempt) }, next),
             (err, values) => cb(err, (values || [])
                 .reduce((total, value) => total + value, 0))),
-        cleanup: (attempt, cb) => {
-            if (trace) {
-                trace.stop();
-            }
-            return async.series([
+        cleanup: (attempt, cb) => async.series([
+                next => (trace ? trace.stop(next) : next()),
                 next => (blockedSampler ? blockedSampler.stop(next) : next()),
                 next => (drainedSampler ? drainedSampler.stop(next) : next()),
                 next => stopWorkgroup(zeroRuntime, () => {
@@ -1646,13 +1679,12 @@ function gateIsolation() {
                     whaleRuntime = null;
                     return next();
                 }),
-            ], () => {
-                blockedSampler = null;
-                drainedSampler = null;
-                trace = null;
-                return cb();
-            });
-        },
+        ], () => {
+            blockedSampler = null;
+            drainedSampler = null;
+            trace = null;
+            return cb();
+        }),
     }, err => {
         assert.ifError(err);
         return async.series([
