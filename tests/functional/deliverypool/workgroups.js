@@ -529,16 +529,40 @@ class LagSampler {
             if (err) {
                 return done(err);
             }
-            return async.eachSeries(this._toppars, (tp, next) =>
-                callOrFail(next, () =>
-                    this._consumer.queryWatermarkOffsets(this.topic,
-                        tp.partition, METADATA_TIMEOUT, (wErr, marks) => {
-                            if (wErr) {
-                                return next(wErr);
-                            }
-                            this._marks.set(tp.partition, marks);
-                            return next();
-                        })), done);
+            // the watermarks are read once, so they have to be right the
+            // first time: a client that has not yet learned the topic
+            // answers with zeros, and a zero end of partition would make
+            // every later sample read as no lag at all
+            return callOrFail(done, () => this._consumer.getMetadata({
+                topic: this.topic,
+                timeout: METADATA_TIMEOUT,
+            }, metaErr => {
+                if (metaErr) {
+                    return done(metaErr);
+                }
+                return async.eachSeries(this._toppars, (tp, next) =>
+                    callOrFail(next, () =>
+                        this._consumer.queryWatermarkOffsets(this.topic,
+                            tp.partition, METADATA_TIMEOUT, (wErr, marks) => {
+                                if (wErr) {
+                                    return next(wErr);
+                                }
+                                this._marks.set(tp.partition, marks);
+                                return next();
+                            })), eachErr => {
+                    if (eachErr) {
+                        return done(eachErr);
+                    }
+                    const end = [...this._marks.values()]
+                        .reduce((total, marks) => total + marks.highOffset, 0);
+                    if (end <= 0) {
+                        return done(new Error('the end of every partition of' +
+                            ` ${this.topic} read as ${end}, so no lag could ` +
+                            'ever be observed against it'));
+                    }
+                    return done();
+                });
+            }));
         });
     }
 
@@ -1654,6 +1678,14 @@ function gateIsolation() {
             activeIds.whale = attemptId(baseIds.whale, attempt);
             const zkPath = `${zkBase}/attempt-${attempt}`;
             return async.waterfall([
+                // the delivery topic was created and verified in the root
+                // hook, a minute of wall clock before these workers join.
+                // The broker intermittently answers "unknown topic or
+                // partition" for it anyway, which drops it out of the
+                // effective subscription and starts the rebalance loop of
+                // design/06-backbeatconsumer-wedge.md, so its metadata is
+                // confirmed stable again immediately before the join
+                next => waitForTopics([TOPICS.bDelivery], err => next(err)),
                 next => writeDocument(zkPath, err => next(err)),
                 next => startWorkgroup({
                     zkPath,
