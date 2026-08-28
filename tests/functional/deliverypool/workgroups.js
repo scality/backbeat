@@ -2546,7 +2546,32 @@ function gateGenerationSwap() {
                         `(${distinctDelivered()} of ${totalProduced})`,
                         () => distinctDelivered() === totalProduced, 30000,
                         step),
-                ], err => cb(err)),
+                ], err => {
+                    if (!err) {
+                        return cb();
+                    }
+                    // diagnostic only, no behaviour change: which of the two
+                    // generation 1 workgroups actually moved, so a partial
+                    // wedge can be told apart from a total one
+                    return async.mapSeries([ids.zero, ids.one],
+                        (workgroupId, next) => async.parallel({
+                            delivered: step => readCounter(DELIVERED_METRIC,
+                                { workgroup: workgroupId }, step),
+                            barriers: step => readCounter(BARRIER_METRIC,
+                                { workgroup: workgroupId, match: 'current' },
+                                step),
+                            skipped: step => readCounter(SKIPPED_METRIC,
+                                { workgroup: workgroupId }, step),
+                        }, next),
+                        (readErr, counters) => {
+                            record('W-C.generation1.countersAtTimeout',
+                                readErr ? readErr.message : {
+                                    [ids.zero]: counters[0],
+                                    [ids.one]: counters[1],
+                                });
+                            return cb(err);
+                        });
+                }),
                 progress: () => deliveredCount() - generationZeroDelivered,
                 // a fresh worker on the same group resumes from that group's
                 // committed offset, so nothing has to be seeded again
