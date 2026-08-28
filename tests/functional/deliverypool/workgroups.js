@@ -135,6 +135,19 @@ for (let i = 0; i < A_CUSTOMER_COUNT; i++) {
 }
 
 /**
+ * The topics of one gate. Every key of TOPICS starts with the letter of the
+ * gate that owns it.
+ *
+ * @param {String} prefix - gate letter
+ * @return {Object[]} topics, as { name, partitions }
+ */
+function topicsOf(prefix) {
+    return Object.keys(TOPICS)
+        .filter(key => key.startsWith(prefix))
+        .map(key => TOPICS[key]);
+}
+
+/**
  * Runs fn against a connected consumer, then disconnects it
  *
  * @param {String} groupId - consumer group id, the offsets read by fn are
@@ -230,6 +243,32 @@ function waitForTopics(topics, done) {
             }));
         return check();
     }, done);
+}
+
+/**
+ * Creates the topics of one gate and waits for them to propagate, before
+ * that gate builds any consumer.
+ *
+ * Scoped to the gate rather than done once for the whole run: the root hook
+ * used to create all 18 topics of every gate whatever `--grep` selected, so
+ * iterating on one gate left the broker carrying the other two gates' topics
+ * as well. Several hundred of those accumulate quickly, and topic count is
+ * one of the things that feeds the metadata churn behind the pre-existing
+ * consumer wedge. Each gate's topics still exist, and are still confirmed
+ * stable, before that gate builds a consumer.
+ *
+ * @param {String} prefix - gate letter
+ * @param {Function} done - callback
+ * @return {undefined}
+ */
+function createGateTopics(prefix, done) {
+    const topics = topicsOf(prefix);
+    record(`run.topics.${prefix}`, topics.map(topic =>
+        `${topic.name}(P=${topic.partitions})`));
+    return async.series([
+        next => createTopics(topics, next),
+        next => waitForTopics(topics, next),
+    ], done);
 }
 
 function produceRecords(topic, messages, done) {
@@ -1231,17 +1270,11 @@ function buildSlicedDocument(params) {
 
 // mocha root hook: every topic of the run exists and has propagated before
 // the first consumer of the run is built
-before(function createEveryTopic(done) {
-    this.timeout(TOPIC_PROPAGATION_TIMEOUT + 60000);
+// each gate creates its own topics, so this hook only arms the uncaught
+// filter and names the run
+before(() => {
     installUncaughtFilter();
-    const topics = Object.values(TOPICS);
     record('run.id', RUN_ID);
-    record('run.topics', topics.map(topic =>
-        `${topic.name}(P=${topic.partitions})`));
-    return async.series([
-        next => createTopics(topics, next),
-        next => waitForTopics(topics, next),
-    ], done);
 });
 
 // lib/BackbeatConsumer.js:850-853 is the commit path, and it throws out of
@@ -1436,6 +1469,7 @@ function gateSliceEnforcement() {
         record('W-A.records.ownedByOne', oneOwned);
         record('W-A.records.ownedByWhale', whaleCount);
         return async.series([
+            next => createGateTopics('a', next),
             // produced before any worker exists: a worker joining with a
             // fresh group only sees them because it reads from the earliest
             // offset
@@ -1865,6 +1899,7 @@ function gateIsolation() {
         record('W-B.records.ownedByOne', oneOwned);
         record('W-B.records.ownedByWhale', whaleCount);
         return async.series([
+            next => createGateTopics('b', next),
             next => produceRecords(deliveryTopic, records, next),
             next => async.eachSeries(
                 [zeroHealthy].concat(unblocked), (destination, tailDone) => {
@@ -2476,7 +2511,7 @@ function gateGenerationSwap() {
         record('W-C.stream.batches', streamBatches.length);
         let cutoverStartedAt = 0;
         return async.series([
-            next => waitForTopics([TOPICS.cDelivery], err => next(err)),
+            next => createGateTopics('c', next),
             next => async.eachSeries(destinations, (destination, tailDone) => {
                 const tailer = new TopicTailer(destination.topic);
                 tailers.set(destination.topic, tailer);
