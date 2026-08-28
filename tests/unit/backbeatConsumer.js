@@ -586,12 +586,39 @@ describe('backbeatConsumer', () => {
             }
         });
 
-        it('should leave a revoke arriving during shutdown to close()', () => {
+        it('should decline a partition grant arriving during shutdown', () => {
+            consumer._shuttingDown = true;
+            consumer._onRebalance(ASSIGN, partitions);
+
+            // taking the grant would leave the disconnect an assignment to
+            // revoke all over again, which is what wedges it
+            assert(consumer._consumer.assign.calledOnce);
+            assert.deepStrictEqual(
+                consumer._consumer.assign.firstCall.args[0], []);
+        });
+
+        it('should still answer the grant when assign is refused mid-close',
+        () => {
+            // the binding gates assign() on isConnected(), which is already
+            // false once disconnect() has started, so the decline throws;
+            // unassign() stays permitted and is a valid answer
+            consumer._shuttingDown = true;
+            consumer._consumer.assign = sinon.stub().throws(
+                new Error('KafkaConsumer is not connected'));
+
+            consumer._onRebalance(ASSIGN, partitions);
+
+            assert(consumer._consumer.unassign.calledOnce);
+        });
+
+        it('should answer a revoke arriving during shutdown', () => {
             consumer._shuttingDown = true;
             consumer._onRebalance(REVOKE, partitions);
 
-            // releasing here would cut short the drain close() is waiting on
-            assert(consumer._consumer.unassign.notCalled);
+            // an unanswered rebalance callback leaves the client in the
+            // rebalance and wedges the disconnect; close() cannot be relied
+            // on to answer one raised after it has already un-assigned
+            assert(consumer._consumer.unassign.calledOnce);
             assert.strictEqual(consumer._drainCallback, null);
             assert.strictEqual(consumer._drainProcessQueueTimeout, null);
             assert(KafkaBacklogMetrics.onRebalance.calledWith(
@@ -667,6 +694,7 @@ describe('backbeatConsumer', () => {
 
             onDisconnected = null;
             consumer._consumer = {
+                assign: sinon.stub(),
                 commit: sinon.stub(),
                 unassign: sinon.stub(),
                 unsubscribe: sinon.stub(),
