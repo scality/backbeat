@@ -191,7 +191,9 @@ timeoutOption(program.command('preseed')
     .action(options => run('preseed', options));
 
 timeoutOption(fromGroupOption(program.command('verify')
-    .description('report how far the previous generation has drained')))
+    .description('report how far the previous generation has drained, and ' +
+        'how many records it has already had delivered twice by running on ' +
+        'past its barriers')))
     .action(options => run('verify', options));
 
 program.parse(process.argv);

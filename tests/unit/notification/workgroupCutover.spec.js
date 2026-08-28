@@ -424,9 +424,9 @@ describe('WorkgroupCutover', () => {
             });
             assert.deepStrictEqual(report.rows, [
                 { groupId: BASE_GROUP, partition: 0, barrier: 154023,
-                    committed: 154023, remaining: 0 },
+                    committed: 154023, remaining: 0, overshoot: 0 },
                 { groupId: BASE_GROUP, partition: 1, barrier: 154990,
-                    committed: 154771, remaining: 219 },
+                    committed: 154771, remaining: 219, overshoot: 0 },
             ]);
             assert.strictEqual(report.drained, false);
         });
@@ -452,17 +452,70 @@ describe('WorkgroupCutover', () => {
             assert.strictEqual(report.drained, false);
         });
 
-        it('should render the report as a table', () => {
+        it('should count no overshoot for a group stopped exactly at its ' +
+        'barrier', () => {
+            const report = WorkgroupCutover.buildDrainReport({
+                barriers: { 0: 100, 1: 200 },
+                committedByGroup: { g: { 0: 100, 1: 200 } },
+            });
+            assert.deepStrictEqual(report.rows.map(row => row.overshoot),
+                [0, 0]);
+            assert.strictEqual(report.overshootByGroup.g, 0);
+            assert.strictEqual(report.overshoot, 0);
+        });
+
+        it('should count the records consumed past the barrier as ' +
+        'duplicates', () => {
+            const report = WorkgroupCutover.buildDrainReport({
+                barriers: { 0: 100, 1: 200 },
+                committedByGroup: { g: { 0: 118, 1: 203 } },
+            });
+            assert.deepStrictEqual(report.rows.map(row => row.overshoot),
+                [18, 3]);
+            assert.strictEqual(report.overshootByGroup.g, 21);
+            assert.strictEqual(report.overshoot, 21);
+            // the exit code keys off remaining alone, so a group that ran on
+            // past its barriers still counts as drained
+            assert.strictEqual(report.drained, true);
+        });
+
+        it('should count no overshoot for a group that never committed',
+        () => {
             const report = WorkgroupCutover.buildDrainReport({
                 barriers: { 0: 100 },
-                committedByGroup: { g: { 0: 90 } },
+                committedByGroup: { g: { 0: -1001 } },
             });
-            const lines = WorkgroupCutover.formatDrainReport(report)
-                .split('\n');
-            assert.strictEqual(lines.length, 2);
-            assert(lines[0].startsWith('group'));
-            assert(lines[1].startsWith('g '));
-            assert(lines[1].endsWith('10'));
+            assert.strictEqual(report.rows[0].overshoot, 0);
+            assert.strictEqual(report.overshootByGroup.g, 0);
+        });
+
+        it('should total the overshoot of each group separately', () => {
+            const report = WorkgroupCutover.buildDrainReport({
+                barriers: { 0: 100 },
+                committedByGroup: { 'g-a': { 0: 110 }, 'g-b': { 0: 100 } },
+            });
+            assert.deepStrictEqual(report.overshootByGroup,
+                { 'g-a': 10, 'g-b': 0 });
+            assert.strictEqual(report.overshoot, 10);
+        });
+
+        it('should render the report as a table with the overshoot totals',
+        () => {
+            const report = WorkgroupCutover.buildDrainReport({
+                barriers: { 0: 100, 1: 100 },
+                committedByGroup: { g: { 0: 90, 1: 130 } },
+            });
+            const rendered = WorkgroupCutover.formatDrainReport(report);
+            const lines = rendered.split('\n');
+            const cells = line => line.trim().split(/\s+/);
+            assert.deepStrictEqual(cells(lines[0]), ['group', 'partition',
+                'barrier', 'committed', 'remaining', 'overshoot']);
+            assert.deepStrictEqual(cells(lines[1]),
+                ['g', '0', '100', '90', '10', '0']);
+            assert.deepStrictEqual(cells(lines[2]),
+                ['g', '1', '100', '130', '0', '30']);
+            assert(rendered.includes('delivers a second time'));
+            assert.deepStrictEqual(cells(lines[lines.length - 1]), ['g', '30']);
         });
     });
 
