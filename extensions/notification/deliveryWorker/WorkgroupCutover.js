@@ -424,58 +424,90 @@ class WorkgroupCutover {
      * A group with no committed offset on a partition has delivered nothing
      * of it, so everything up to the barrier is still its responsibility.
      *
+     * Each row carries both directions around the barrier. `remaining` is
+     * what the previous generation still owes and is the only thing the exit
+     * code keys off. `overshoot` is what it has already consumed past the
+     * barrier: the new generation is seeded at the barrier and delivers those
+     * same records again, so each one is a duplicate, and the count keeps
+     * climbing for as long as the previous generation is left running.
+     *
      * @param {Object} params - report params
      * @param {Object} params.barriers - barrier offsets by partition
      * @param {Object} params.committedByGroup - group id to committed
      *   offsets by partition
-     * @return {Object} { rows, drained }
+     * @return {Object} { rows, drained, overshootByGroup, overshoot }
      */
     static buildDrainReport(params) {
         const { barriers, committedByGroup } = params;
         const partitions = WorkgroupCutover.partitionsOf(barriers);
         const rows = [];
+        const overshootByGroup = {};
         Object.keys(committedByGroup).forEach(groupId => {
             const committed = committedByGroup[groupId];
+            overshootByGroup[groupId] = 0;
             partitions.forEach(partition => {
                 const barrier = barriers[partition];
                 const raw = committed[partition];
                 const seen = typeof raw === 'number' && raw >= 0 ? raw : 0;
+                const overshoot = Math.max(0, seen - barrier);
+                overshootByGroup[groupId] += overshoot;
                 rows.push({
                     groupId,
                     partition,
                     barrier,
                     committed: typeof raw === 'number' ? raw : -1,
                     remaining: Math.max(0, barrier - seen),
+                    overshoot,
                 });
             });
         });
-        return { rows, drained: rows.every(row => row.remaining === 0) };
+        return {
+            rows,
+            drained: rows.every(row => row.remaining === 0),
+            overshootByGroup,
+            overshoot: Object.keys(overshootByGroup).reduce(
+                (total, groupId) => total + overshootByGroup[groupId], 0),
+        };
     }
 
     /**
-     * Renders a drain report as a padded table
+     * Renders a drain report as a padded table, followed by what the
+     * overshoot column adds up to for each group
      *
      * @param {Object} report - report from buildDrainReport
      * @return {String} printable table
      */
     static formatDrainReport(report) {
         const header = ['group', 'partition', 'barrier', 'committed',
-            'remaining'];
+            'remaining', 'overshoot'];
         const rows = report.rows.map(row => [
             row.groupId,
             String(row.partition),
             String(row.barrier),
             String(row.committed),
             String(row.remaining),
+            String(row.overshoot),
         ]);
         const widths = header.map((column, index) => Math.max(column.length,
             ...rows.map(row => row[index].length)));
-        return [header].concat(rows)
+        const table = [header].concat(rows)
             .map(row => row
                 .map((cell, index) => cell.padEnd(widths[index]))
                 .join('  ')
                 .trimEnd())
             .join('\n');
+        const totals = Object.keys(report.overshootByGroup).map(groupId =>
+            `  ${groupId.padEnd(widths[0])}  ` +
+            `${report.overshootByGroup[groupId]}`);
+        return [
+            table,
+            '',
+            'records this group consumed past its barrier, which the new ' +
+                'generation',
+            'delivers a second time: each one is a duplicate, and the count ' +
+                'climbs',
+            'for as long as the previous generation keeps running',
+        ].concat(totals).join('\n');
     }
 
     /**
