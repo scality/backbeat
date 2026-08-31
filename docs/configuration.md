@@ -88,6 +88,10 @@ setting a field of the configuration file. No schema declares them, so no name
 is derived for them, and their value is not validated.
 
 - `BACKBEAT_CONFIG_FILE`: path of the configuration file.
+- `BACKBEAT_CONFIG_OVERRIDES`: JSON merge patch applied over the whole
+  configuration, for the fields no name above reaches. The result is validated,
+  unlike the other variables of this section — see
+  [Configuration overrides](/docs/config-overrides.md).
 - `BACKBEAT_QUEUEPOPULATOR_EXTENSIONS`: extensions run by this queue populator,
   comma separated.
 - `BOOTSTRAP_SITE_NAME`: restricts the replication bootstrap list to one site.

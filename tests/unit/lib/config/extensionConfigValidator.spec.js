@@ -79,6 +79,13 @@ describe('extension config validator', () => {
                       /"unknown" is not allowed/);
     });
 
+    it('should leave the schema to report a generic override replacing the config', () => {
+        assert.throws(
+            () => withEnv({ BACKBEAT_CONFIG_OVERRIDES: '{"extensions":{"demo":"nonsense"}}' },
+                () => validator(globalConfig, extConfig())),
+            /"value" must be of type object/);
+    });
+
     /**
      * Every extension is validated through the same factory: the env var of one
      * of its fields is checked here, so that a schema losing the annotations,

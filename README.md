@@ -36,6 +36,7 @@ updates in a FIFO order.
 - [Site Level CRR](/docs/site-level-crr.md)
 - [Transient Source](/docs/transient-crr-source.md)
 - [Out of Band updates from RING](/docs/oob-s3-ring.md)
+- [Configuration overrides](/docs/config-overrides.md)
 
 ## QUICKSTART
 
