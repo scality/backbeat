@@ -555,6 +555,33 @@ describe('backbeatConsumer', () => {
             }
         });
 
+        it('should leave a revoke arriving during shutdown to close()', () => {
+            consumer._shuttingDown = true;
+            consumer._onRebalance(REVOKE, partitions);
+
+            // releasing here would cut short the drain close() is waiting on
+            assert(consumer._consumer.unassign.notCalled);
+            assert.strictEqual(consumer._drainCallback, null);
+            assert.strictEqual(consumer._drainProcessQueueTimeout, null);
+            assert(KafkaBacklogMetrics.onRebalance.calledWith(
+                'my-test-topic', 'unittest-group', unassignStatus.SHUTDOWN));
+        });
+
+        it('should ignore a deferred un-assign once the shutdown owns the ' +
+        'departure', () => {
+            consumer._onRebalance(REVOKE, partitions);
+            const deferredUnassign = drainCallbacks[drainCallbacks.length - 1];
+
+            // close() takes over while the drain is outstanding
+            consumer._shuttingDown = true;
+
+            queueIdle = true;
+            ledgerCount = 0;
+            deferredUnassign();
+
+            assert(consumer._consumer.unassign.notCalled);
+        });
+
         it('should leave the current drain and timeout armed when a superseded ' +
         'un-assign fires', () => {
             consumer._onRebalance(REVOKE, partitions);
@@ -579,6 +606,273 @@ describe('backbeatConsumer', () => {
             assert.strictEqual(consumer._drainCallback, currentDrain);
             assert.strictEqual(consumer._drainProcessQueueTimeout, currentTimeout);
             assert(consumer._consumer.unassign.notCalled);
+        });
+    });
+
+    describe('close', () => {
+        let consumer;
+        let queueIdle;
+        let ledgerCount;
+        let drainCallbacks;
+        let onDisconnected;
+
+        beforeEach(() => {
+            consumer = new BackbeatConsumerMock({
+                kafka,
+                groupId: 'unittest-group',
+                topic: 'my-test-topic',
+            });
+
+            queueIdle = true;
+            ledgerCount = 0;
+            drainCallbacks = [];
+            consumer._processingQueue = {
+                length: () => 0,
+                running: () => (queueIdle ? 0 : 1),
+                idle: () => queueIdle,
+                setDrain: func => drainCallbacks.push(func),
+            };
+            consumer._offsetLedger.getProcessingCount = () => ledgerCount;
+
+            onDisconnected = null;
+            consumer._consumer = {
+                commit: sinon.stub(),
+                unassign: sinon.stub(),
+                unsubscribe: sinon.stub(),
+                // only a real disconnect emits 'disconnected'
+                disconnect: sinon.stub().callsFake(() => {
+                    if (onDisconnected) {
+                        setImmediate(onDisconnected);
+                    }
+                }),
+                assignments: () => [],
+                subscription: () => ['my-test-topic'],
+                isConnected: () => true,
+                once: (event, handler) => {
+                    if (event === 'disconnected') {
+                            setImmediate(handler);
+                    }
+                },
+            };
+        });
+
+        afterEach(() => {
+            sinon.restore();
+        });
+
+        it('should leave the group before disconnecting', done => {
+            consumer.close(() => {
+                const { commit, unassign, unsubscribe, disconnect } = consumer._consumer;
+                assert(commit.calledOnce);
+                assert(unassign.calledOnce);
+                assert(unsubscribe.calledOnce);
+                assert(disconnect.calledOnce);
+                // committing after un-assign would commit nothing, and it is
+                // the un-assign following unsubscribe that sends the LeaveGroup
+                assert(commit.calledBefore(unsubscribe));
+                assert(unsubscribe.calledBefore(unassign));
+                assert(unassign.calledBefore(disconnect));
+                done();
+            });
+        });
+
+        it('should keep waiting for its drain when a grant arrives mid-close', done => {
+            queueIdle = false;
+            ledgerCount = 1;
+
+            let closed = false;
+            consumer.close(() => {
+                closed = true;
+            });
+
+            setImmediate(() => {
+                // a grant must not tear down the wait close() installed
+                consumer._onRebalance(
+                    { code: CODES.ERRORS.ERR__ASSIGN_PARTITIONS },
+                    [{ topic: 'my-test-topic', partition: 0 }]);
+                assert.strictEqual(closed, false);
+
+                queueIdle = true;
+                ledgerCount = 0;
+                drainCallbacks[drainCallbacks.length - 1]();
+
+                setImmediate(() => {
+                    assert.strictEqual(closed, true);
+                    done();
+                });
+            });
+        });
+
+        it('should complete when the consumer was never created', done => {
+            // close() can race startup, before _initConsumer() has run
+            consumer._consumer = null;
+            consumer.close(done);
+        });
+
+        it('should keep leaving the group when a call throws', done => {
+            consumer._consumer.commit.throws(new Error('Local: Erroneous state'));
+            consumer.close(() => {
+                assert(consumer._consumer.unsubscribe.calledOnce);
+                assert(consumer._consumer.unassign.calledOnce);
+                assert(consumer._consumer.disconnect.calledOnce);
+                done();
+            });
+        });
+
+        it('should wait for in-flight work before releasing the partitions', done => {
+            queueIdle = false;
+            ledgerCount = 1;
+
+            let closed = false;
+            consumer.close(() => {
+                closed = true;
+            });
+
+            setImmediate(() => {
+                assert.strictEqual(closed, false);
+                assert(consumer._consumer.unassign.notCalled);
+
+                queueIdle = true;
+                ledgerCount = 0;
+                drainCallbacks[drainCallbacks.length - 1]();
+
+                setImmediate(() => {
+                    assert.strictEqual(closed, true);
+                    assert(consumer._consumer.unassign.calledOnce);
+                    done();
+                });
+            });
+        });
+
+        it('should still complete when a revoke arrives while it waits for ' +
+        'the drain', done => {
+            queueIdle = false;
+            ledgerCount = 1;
+
+            let closed = false;
+            consumer.close(() => {
+                closed = true;
+            });
+
+            setImmediate(() => {
+                // releasing partitions here must not tear down close()'s wait
+                consumer._onRebalance(
+                    { code: CODES.ERRORS.ERR__REVOKE_PARTITIONS },
+                    [{ topic: 'my-test-topic', partition: 0 }]);
+
+                queueIdle = true;
+                ledgerCount = 0;
+                drainCallbacks[drainCallbacks.length - 1]();
+
+                setImmediate(() => {
+                    assert.strictEqual(closed, true);
+                    done();
+                });
+            });
+        });
+
+        it('should leave the group anyway when the drain never completes', done => {
+            const clock = sinon.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+            queueIdle = false;
+            ledgerCount = 1;
+
+            let closed = false;
+            consumer.close(() => {
+                closed = true;
+            });
+
+            setImmediate(() => {
+                assert.strictEqual(closed, false);
+                clock.tick(consumer._maxPollIntervalMs);
+
+                setImmediate(() => {
+                    clock.restore();
+                    assert.strictEqual(closed, true);
+                    assert(consumer._consumer.unassign.calledOnce);
+                    assert(consumer._consumer.unsubscribe.calledOnce);
+                    done();
+                });
+            });
+        });
+
+        it('should leave the group when only the ledger is stuck', done => {
+            // the replication queue processor's shape: its stop() closes the
+            // status producer first, and a task's offset is only committable
+            // from that producer's delivery callback, so a report that never
+            // arrives leaves a ledger entry outstanding with the queue idle
+            const clock = sinon.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+            queueIdle = true;
+            ledgerCount = 1;
+
+            let closed = false;
+            consumer.close(() => {
+                closed = true;
+            });
+
+            setImmediate(() => {
+                assert.strictEqual(closed, false);
+                clock.tick(consumer._maxPollIntervalMs);
+
+                setImmediate(() => {
+                    clock.restore();
+                    assert.strictEqual(closed, true);
+                    assert(consumer._consumer.unassign.calledOnce);
+                    done();
+                });
+            });
+        });
+
+        it('should not wait for the drain once the consumer is disconnected', done => {
+            // the drain watchdog fires on a wedged task and disconnects, so the
+            // work it is waiting on can never complete
+            queueIdle = false;
+            ledgerCount = 1;
+            consumer._consumer.isConnected = () => false;
+
+            consumer.close(() => {
+                assert(consumer._consumer.disconnect.notCalled);
+                done();
+            });
+        });
+
+        it('should not wait for an in-flight offset publish', done => {
+            consumer._publishOffsetsCronActive = true;
+            consumer.close(() => {
+                assert(consumer._consumer.disconnect.calledOnce);
+                done();
+            });
+        });
+
+        it('should stop waiting for a disconnect that never completes', done => {
+            // setImmediate has to stay real, the test drives the flow with it
+            const clock = sinon.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+            consumer._consumer.once = () => {};
+
+            let closed = false;
+            consumer.close(() => {
+                closed = true;
+            });
+
+            setImmediate(() => {
+                clock.tick(10000);
+                setImmediate(() => {
+                    clock.restore();
+                    assert.strictEqual(closed, true);
+                    assert(consumer._consumer.unsubscribe.calledOnce);
+                    done();
+                });
+            });
+        });
+
+        it('should drop a rebalance watchdog armed before the shutdown', done => {
+            consumer._drainProcessQueueTimeout = setTimeout(() => {
+                done(new Error('the rebalance watchdog fired during shutdown'));
+            }, 20);
+
+            consumer.close(() => {
+                assert.strictEqual(consumer._drainProcessQueueTimeout, null);
+                setTimeout(done, 40);
+            });
         });
     });
 });
