@@ -34,6 +34,9 @@ const JOINER_LIFE_MS = parseInt(process.env.JOINER_LIFE_MS || '1500', 10);
 // how long the group is left alone afterwards: long enough for the base
 // member to rebuild a full queue and ledger before the next disturbance
 const SETTLE_MS = parseInt(process.env.SETTLE_MS || '6000', 10);
+// 'shutdown' only: how long after the revoke lands before close() runs.
+// Short, so the deferred un-assign is still pending when it does.
+const CLOSE_DELAY_MS = parseInt(process.env.CLOSE_DELAY_MS || '400', 10);
 const TASK_MS = parseInt(process.env.TASK_MS || '400', 10);
 const LEDGER_MS = parseInt(process.env.LEDGER_MS || '600', 10);
 const DURATION_MS = parseInt(process.env.DURATION_MS || '90000', 10);
@@ -157,6 +160,25 @@ class Member {
         this.consumer.subscribe();
     }
 
+    /**
+     * Leave the group without going through close(), which is the code under
+     * test: on the untreated tree it wedges, so the newcomer would linger for
+     * the whole close bound and depart later on one arm than the other. Churn
+     * has to be identical across arms or the comparison is rigged.
+     *
+     * @returns {undefined}
+     */
+    leaveFast() {
+        this.closed = true;
+        for (const op of ['unsubscribe', 'unassign', 'disconnect']) {
+            try {
+                this.consumer._consumer[op]();
+            } catch (e) { // eslint-disable-line no-unused-vars
+                // already gone, or never got that far
+            }
+        }
+    }
+
     async close() {
         this.closed = true;
         let settled = false;
@@ -222,10 +244,36 @@ async function iteration(index) {
     // churn: a joiner arrives, then leaves, over and over. Each transition
     // forces a rebalance, which is what a rolling update does to the group.
     let churnCycles = 0;
-    const pendingCloses = [];
     let stalledCycles = 0;
     const deadline = Date.now() + DURATION_MS;
-    while (Date.now() < deadline) {
+
+    // In 'shutdown' the member being revoked is also the one going away -- the
+    // rollout shape. close() calls unsubscribe(), which answers the revoke the
+    // deferred un-assign has not answered yet, letting the rebalance proceed
+    // while that un-assign is still outstanding. That is the ordering the
+    // reported trace shows: an ASSIGN 132ms after an unanswered revoke, with
+    // the stale un-assign landing 13ms after that.
+    const closes = [];
+    while (SCENARIO === 'shutdown' && Date.now() < deadline) {
+        const base = new Member(`base${churnCycles}`, topic, groupId);
+        await base.start();
+        members.push(base);
+        await sleep(SETTLE_MS);
+
+        const joiner = new Member(`churn${churnCycles}`, topic, groupId);
+        await joiner.start();
+        // the revoke lands here, with the queue and ledger still full
+        await sleep(CLOSE_DELAY_MS);
+
+        // not awaited: close() is the thing being raced against the drain
+        closes.push(base.close());
+        joiner.leaveFast();
+        churnCycles++;
+        await sleep(CLOSE_TIMEOUT_MS + 1000);
+    }
+    await Promise.all(closes);
+
+    while (SCENARIO !== 'shutdown' && Date.now() < deadline) {
         // a newcomer revokes the base member's partitions while its queue and
         // ledger are still full, which is what defers the un-assign
         const joiner = new Member(`churn${churnCycles}`, topic, groupId);
@@ -233,11 +281,9 @@ async function iteration(index) {
         await sleep(JOINER_LIFE_MS);
 
         // ...and leaves again, so the same partitions are granted straight
-        // back: the revoke -> assign pair from the BB-835 trace.
-        // Not awaited, because a wedged close() must not throttle the churn
-        // rate, or the untreated arm would see fewer rebalances than the fixed
-        // one and the comparison would be rigged.
-        pendingCloses.push(joiner.close().then(() => joiner));
+        // back: the revoke -> assign pair from the BB-835 trace. This has to be
+        // prompt and arm-independent, hence leaveFast rather than close().
+        joiner.leaveFast();
         churnCycles++;
         await sleep(SETTLE_MS);
 
@@ -253,11 +299,12 @@ async function iteration(index) {
         }
     }
 
-    const joiners = await Promise.all(pendingCloses);
 
     clearInterval(feed);
     for (const member of members) {
-        await member.close();
+        if (!member.closed) {
+            await member.close();
+        }
     }
     await new Promise(resolve => producer.close(resolve));
     admin.disconnect();
@@ -276,8 +323,8 @@ async function iteration(index) {
         // the denominator: a zero superseded count only means something if
         // deferred un-assigns actually happened
         deferredUnassigns: deferred,
-        closeTimeouts: [...members, ...joiners]
-            .filter(m => m.closeTimedOut).length,
+        // base members only: the joiners bypass close() by design
+        closeTimeouts: members.filter(m => m.closeTimedOut).length,
         superseded: delta.superseded || 0,
         drained: delta.drained || 0,
         idle: delta.idle || 0,

@@ -15,7 +15,7 @@ on:
     - .github/harness/rebalance-census.js
 
 env:
-  JOBS_PER_ARM: '10'
+  JOBS_PER_ARM: '8'
   ITERATIONS_PER_JOB: '6'
 
 jobs:
@@ -91,6 +91,13 @@ jobs:
         scenarios = [
             {'scenario': 'tight', 'task': 400, 'ledger': 600, 'settle': 6000},
             {'scenario': 'wide', 'task': 2000, 'ledger': 3000, 'settle': 9000},
+            # shutdown: the revoked member is also the one going away, which is
+            # the rollout the ticket names as the trigger. Locally this made
+            # close() wedge before an assign could come back, so it may be the
+            # wrong shape too -- included for volume, not because it is
+            # expected to hit.
+            {'scenario': 'shutdown', 'task': 2000, 'ledger': 3000,
+             'settle': 6000},
         ]
         include = [
             dict(a, **s, idx=i)
