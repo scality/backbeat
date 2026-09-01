@@ -24,16 +24,25 @@ const { withTopicPrefix } = require('../../lib/util/topic');
 
 const HOSTS = process.env.HOSTS || 'localhost:9092';
 const ARM = process.env.ARM || 'unknown';
+const SCENARIO = process.env.SCENARIO || 'default';
 const JOB_INDEX = process.env.JOB_INDEX || '0';
 const ITERATIONS = parseInt(process.env.ITERATIONS || '4', 10);
 const PARTITIONS = parseInt(process.env.PARTITIONS || '5', 10);
-const MEMBERS = parseInt(process.env.MEMBERS || '2', 10);
-const CHURN_MS = parseInt(process.env.CHURN_MS || '3000', 10);
+const MEMBERS = parseInt(process.env.MEMBERS || '1', 10);
+// how long the newcomer stays: short, so the partitions come straight back
+const JOINER_LIFE_MS = parseInt(process.env.JOINER_LIFE_MS || '1500', 10);
+// how long the group is left alone afterwards: long enough for the base
+// member to rebuild a full queue and ledger before the next disturbance
+const SETTLE_MS = parseInt(process.env.SETTLE_MS || '6000', 10);
 const TASK_MS = parseInt(process.env.TASK_MS || '400', 10);
 const LEDGER_MS = parseInt(process.env.LEDGER_MS || '600', 10);
 const DURATION_MS = parseInt(process.env.DURATION_MS || '90000', 10);
 const PRODUCE_EVERY_MS = parseInt(process.env.PRODUCE_EVERY_MS || '100', 10);
 const PRODUCE_BATCH = parseInt(process.env.PRODUCE_BATCH || '5', 10);
+const ZK = process.env.ZK || 'localhost:2181';
+// the untreated arm is the tree where close() can hang outright (BB-833),
+// so an unbounded close would make the two arms incomparable
+const CLOSE_TIMEOUT_MS = parseInt(process.env.CLOSE_TIMEOUT_MS || '5000', 10);
 const ADMIN_TIMEOUT_MS = 20000;
 
 const REBALANCE_METRIC = 's3_backbeat_queue_rebalance_total';
@@ -44,6 +53,9 @@ const kafkaConf = {
     // deciding to un-assign and actually calling it, so keep it on
     backlogMetrics: { zkPath: '/census/kafka-backlog-metrics', intervalS: 1 },
 };
+// backlogMetrics is gated on zookeeper: without this the consumer never
+// reaches 'ready', because _checkIfReady waits on the metrics client too
+const zookeeperConf = { connectionString: ZK };
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -117,8 +129,10 @@ class Member {
         this.consumed = 0;
         this.consumedAtLastCheck = 0;
         this.closed = false;
+        this.closeTimedOut = false;
         this.consumer = new BackbeatConsumer({
             clientId: `census-${name}`,
+            zookeeper: zookeeperConf,
             kafka: kafkaConf,
             groupId,
             topic,
@@ -145,7 +159,24 @@ class Member {
 
     async close() {
         this.closed = true;
-        await new Promise(resolve => this.consumer.close(resolve));
+        let settled = false;
+        await Promise.race([
+            new Promise(resolve => this.consumer.close(() => {
+                settled = true;
+                resolve();
+            })),
+            sleep(CLOSE_TIMEOUT_MS),
+        ]);
+        if (!settled) {
+            this.closeTimedOut = true;
+            // close() is wedged, so the member would linger in the group until
+            // session.timeout.ms. Force it out so churn keeps its cadence.
+            try {
+                this.consumer._consumer.disconnect();
+            } catch (e) { // eslint-disable-line no-unused-vars
+                // already gone
+            }
+        }
     }
 }
 
@@ -191,16 +222,28 @@ async function iteration(index) {
     // churn: a joiner arrives, then leaves, over and over. Each transition
     // forces a rebalance, which is what a rolling update does to the group.
     let churnCycles = 0;
+    const pendingCloses = [];
     let stalledCycles = 0;
     const deadline = Date.now() + DURATION_MS;
     while (Date.now() < deadline) {
+        // a newcomer revokes the base member's partitions while its queue and
+        // ledger are still full, which is what defers the un-assign
         const joiner = new Member(`churn${churnCycles}`, topic, groupId);
         await joiner.start();
-        await sleep(CHURN_MS);
+        await sleep(JOINER_LIFE_MS);
 
-        // a base member that consumed nothing over a whole churn cycle is the
-        // BB-835 end state: still a group member, owning partitions at the
-        // broker, with no local assignment and nothing to trigger recovery
+        // ...and leaves again, so the same partitions are granted straight
+        // back: the revoke -> assign pair from the BB-835 trace.
+        // Not awaited, because a wedged close() must not throttle the churn
+        // rate, or the untreated arm would see fewer rebalances than the fixed
+        // one and the comparison would be rigged.
+        pendingCloses.push(joiner.close().then(() => joiner));
+        churnCycles++;
+        await sleep(SETTLE_MS);
+
+        // checked after the settle: a base member consuming nothing once the
+        // group has restabilised is the BB-835 end state -- still a member,
+        // owning partitions at the broker, with no local assignment
         for (const member of members) {
             const delta = member.consumed - member.consumedAtLastCheck;
             member.consumedAtLastCheck = member.consumed;
@@ -208,11 +251,9 @@ async function iteration(index) {
                 stalledCycles++;
             }
         }
-
-        await joiner.close();
-        churnCycles++;
-        await sleep(CHURN_MS);
     }
+
+    const joiners = await Promise.all(pendingCloses);
 
     clearInterval(feed);
     for (const member of members) {
@@ -226,6 +267,7 @@ async function iteration(index) {
 
     return {
         arm: ARM,
+        scenario: SCENARIO,
         job: JOB_INDEX,
         iteration: index,
         churnCycles,
@@ -234,6 +276,8 @@ async function iteration(index) {
         // the denominator: a zero superseded count only means something if
         // deferred un-assigns actually happened
         deferredUnassigns: deferred,
+        closeTimeouts: [...members, ...joiners]
+            .filter(m => m.closeTimedOut).length,
         superseded: delta.superseded || 0,
         drained: delta.drained || 0,
         idle: delta.idle || 0,
@@ -246,8 +290,9 @@ async function iteration(index) {
  * @returns {Promise<undefined>} resolves when every iteration has reported
  */
 async function main() {
-    console.log(`census arm=${ARM} job=${JOB_INDEX} iterations=${ITERATIONS} ` +
-                `partitions=${PARTITIONS} members=${MEMBERS} churn=${CHURN_MS}ms ` +
+    console.log(`census arm=${ARM} scenario=${SCENARIO} job=${JOB_INDEX} iterations=${ITERATIONS} ` +
+                `partitions=${PARTITIONS} members=${MEMBERS} ` +
+                `joinerLife=${JOINER_LIFE_MS}ms settle=${SETTLE_MS}ms ` +
                 `task=${TASK_MS}ms ledger=${LEDGER_MS}ms duration=${DURATION_MS}ms`);
     for (let i = 1; i <= ITERATIONS; i++) {
         try {
@@ -255,11 +300,15 @@ async function main() {
             console.log(`RESULT ${JSON.stringify(result)}`);
         } catch (err) {
             console.log(`RESULT ${JSON.stringify({
-                arm: ARM, job: JOB_INDEX, iteration: i, error: err.message,
+                arm: ARM, scenario: SCENARIO, job: JOB_INDEX,
+                iteration: i, error: err.message,
             })}`);
         }
     }
-    process.exit(0);
+    // process.exit() runs librdkafka's destructors, which block on the clients
+    // a wedged close() left behind -- the untreated arm would never exit. Flush
+    // stdout (a pipe in CI, so the write is async) then kill outright.
+    process.stdout.write('', () => process.kill(process.pid, 'SIGKILL'));
 }
 
 main().catch(err => {

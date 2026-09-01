@@ -15,8 +15,8 @@ on:
     - .github/harness/rebalance-census.js
 
 env:
-  JOBS_PER_ARM: '12'
-  ITERATIONS_PER_JOB: '4'
+  JOBS_PER_ARM: '10'
+  ITERATIONS_PER_JOB: '6'
 
 jobs:
   build:
@@ -78,13 +78,30 @@ jobs:
             {'arm': 'detect', 'sha': '48422d8a'},
             {'arm': 'fixed', 'sha': '6c6acdae'},
         ]
-        include = [dict(a, idx=i) for a in arms for i in range(1, n + 1)]
+        # The race needs the next rebalance to complete before the drain does.
+        # In the reported trace that margin was 13ms: a 145ms drain against a
+        # 132ms rebalance. Two scenarios, because reachability and rate are
+        # different questions:
+        #
+        # tight: drain ~1s against a newcomer leaving at 1.5s, so the drain
+        #        usually wins. Closest to an unbiased rate.
+        # wide:  drain ~5s against the same 1.5s, so the rebalance usually
+        #        wins. Deliberately biased to hit the window -- this answers
+        #        "is the state reachable at all", not "how often".
+        scenarios = [
+            {'scenario': 'tight', 'task': 400, 'ledger': 600, 'settle': 6000},
+            {'scenario': 'wide', 'task': 2000, 'ledger': 3000, 'settle': 9000},
+        ]
+        include = [
+            dict(a, **s, idx=i)
+            for a in arms for s in scenarios for i in range(1, n + 1)
+        ]
         print('matrix=' + json.dumps(include))
         PY
 
   census:
     needs: [build, prepare]
-    name: ${{ matrix.arm }} ${{ matrix.idx }}
+    name: ${{ matrix.arm }} ${{ matrix.scenario }} ${{ matrix.idx }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     strategy:
@@ -172,8 +189,12 @@ jobs:
       shell: bash
       env:
         ARM: ${{ matrix.arm }}
+        SCENARIO: ${{ matrix.scenario }}
         JOB_INDEX: ${{ matrix.idx }}
         ITERATIONS: ${{ env.ITERATIONS_PER_JOB }}
+        TASK_MS: ${{ matrix.task }}
+        LEDGER_MS: ${{ matrix.ledger }}
+        SETTLE_MS: ${{ matrix.settle }}
         HOSTS: localhost:9092
       run: node .github/harness/rebalance-census.js 2>&1 | tee census.log
 
@@ -181,7 +202,7 @@ jobs:
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: log-${{ matrix.arm }}-${{ matrix.idx }}
+        name: log-${{ matrix.arm }}-${{ matrix.scenario }}-${{ matrix.idx }}
         path: census.log
         retention-days: 7
 
@@ -214,23 +235,23 @@ jobs:
 
         arms = collections.defaultdict(list)
         for r in rows:
-            arms[r.get('arm')].append(r)
+            arms[(r.get('scenario'), r.get('arm'))].append(r)
 
         def total(rs, key):
             return sum(r.get(key, 0) or 0 for r in rs)
 
         print('## BB-835 rebalance census\n')
         print('%d iterations across %d arms\n' % (len(rows), len(arms)))
-        print('| arm | n | churn cycles | deferred un-assigns | '
+        print('| scenario | arm | n | churn cycles | deferred un-assigns | '
               '**superseded** | drained | idle | timeout | stalled cycles | '
               'consumed | errors |')
-        print('|---|---|---|---|---|---|---|---|---|---|---|')
-        for arm in sorted(arms):
-            rs = arms[arm]
+        print('|---|---|---|---|---|---|---|---|---|---|---|---|')
+        for (scenario, arm) in sorted(arms):
+            rs = arms[(scenario, arm)]
             valid = [r for r in rs if not r.get('error')]
             sup = total(valid, 'superseded')
-            print('| %s | %d | %d | %d | %s | %d | %d | %d | %d | %d | %d |' % (
-                arm, len(valid),
+            print('| %s | %s | %d | %d | %d | %s | %d | %d | %d | %d | %d | %d |' % (
+                scenario, arm, len(valid),
                 total(valid, 'churnCycles'),
                 total(valid, 'deferredUnassigns'),
                 ('**%d**' % sup) if sup else '0',
@@ -257,7 +278,7 @@ jobs:
         if bad:
             print('\n### Errors\n')
             for r in bad[:20]:
-                print('- `%s` job %s iter %s: %s' % (
-                    r.get('arm'), r.get('job'), r.get('iteration'),
-                    r.get('error')))
+                print('- `%s/%s` job %s iter %s: %s' % (
+                    r.get('arm'), r.get('scenario'), r.get('job'),
+                    r.get('iteration'), r.get('error')))
         PY
