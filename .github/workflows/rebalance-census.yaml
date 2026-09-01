@@ -1,0 +1,263 @@
+---
+# Throwaway workflow (BB-835): measures how often a deferred un-assign is
+# superseded by a later rebalance, in an untreated tree and in the fixed one.
+# Not part of normal CI.
+name: rebalance-census
+
+# workflow_dispatch only works from the default branch, so this runs on push
+# to the census branch instead; bump JOBS_PER_ARM and push to launch a round.
+on:
+  push:
+    branches:
+    - poc/BB-835-census
+    paths:
+    - .github/workflows/rebalance-census.yaml
+    - .github/harness/rebalance-census.js
+
+env:
+  JOBS_PER_ARM: '12'
+  ITERATIONS_PER_JOB: '4'
+
+jobs:
+  build:
+    name: build ci-kafka
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Login to Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.repository_owner }}
+        password: ${{ github.token }}
+
+    - name: Build and push ci-kafka
+      uses: docker/build-push-action@v6
+      with:
+        push: true
+        context: .github/dockerfiles/kafka
+        tags: ghcr.io/${{ github.repository }}/ci-kafka:${{ github.sha }}
+        cache-from: type=gha,scope=ci-kafka
+        cache-to: type=gha,mode=max,scope=ci-kafka
+
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.gen.outputs.matrix }}
+    steps:
+    - name: Build arm x job matrix
+      id: gen
+      run: |
+        python3 - "$JOBS_PER_ARM" >> "$GITHUB_OUTPUT" <<'PY'
+        import json
+        import sys
+
+        n = int(sys.argv[1])
+        # sha: the tree whose lib/ is under test. The harness itself is taken
+        # from the census branch in every job, so both arms are measured by
+        # identical code and only lib/ differs.
+        #
+        # detect:  development/9.5 plus detection that records a superseded
+        #          deferred un-assign and then performs it anyway. Measures
+        #          the untreated rate, and should reproduce the stall.
+        # fixed:   the BB-835 tree (PR #2818), which skips it instead.
+        #
+        # If 'detect' never records one, the race is unreachable by this
+        # harness and #2818's guard is guarding nothing. Read the count
+        # against deferredUnassigns: a zero numerator over a zero
+        # denominator says only that the harness failed to defer anything.
+        arms = [
+            {'arm': 'detect', 'sha': '48422d8a'},
+            {'arm': 'fixed', 'sha': '6c6acdae'},
+        ]
+        include = [dict(a, idx=i) for a in arms for i in range(1, n + 1)]
+        print('matrix=' + json.dumps(include))
+        PY
+
+  census:
+    needs: [build, prepare]
+    name: ${{ matrix.arm }} ${{ matrix.idx }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.prepare.outputs.matrix) }}
+    services:
+      zookeeper:
+        image: zookeeper:3.9.4
+        ports:
+        - 2181:2181
+        env:
+          ZOOKEEPER_CLIENT_PORT: 2181
+          ZOOKEEPER_TICK_TIME: 2000
+      kafka:
+        image: ghcr.io/${{ github.repository }}/ci-kafka:${{ github.sha }}
+        credentials:
+          username: ${{ github.repository_owner }}
+          password: ${{ github.token }}
+        ports:
+        - 9092:9092
+        env:
+          KAFKA_BROKER_ID: 1
+          KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+          KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+          KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+          KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    # the measurement code must not vary between arms, or the A/B is
+    # comparing two different harnesses rather than two trees
+    - name: Fetch the arm trees
+      run: git fetch --no-tags --force origin '+refs/heads/*:refs/remotes/origin/*'
+
+    - name: Stash the harness
+      run: cp -r .github/harness /tmp/harness
+
+    - name: Check out arm tree ${{ matrix.sha }}
+      run: git checkout --detach ${{ matrix.sha }}
+
+    - name: Restore the harness
+      run: |
+        rm -rf .github/harness
+        cp -r /tmp/harness .github/harness
+
+    - uses: actions/setup-node@v6
+      with:
+        node-version: '22'
+        cache: yarn
+
+    - name: Install node dependencies
+      run: yarn install --ignore-engines --frozen-lockfile --network-concurrency 1
+
+    # a job running the wrong tree would produce a confident wrong answer
+    - name: Verify the build matches the arm
+      env:
+        ARM: ${{ matrix.arm }}
+      run: |
+        node -e "console.log('node-rdkafka', require('node-rdkafka/package.json').version,
+                             '/ librdkafka', require('node-rdkafka').librdkafkaVersion)"
+        echo "arm tree: $(git rev-parse --short HEAD)"
+        HAS_SKIP=$(grep -c 'skipping superseded un-assign' lib/BackbeatConsumer.js || true)
+        HAS_CENSUS=$(grep -c 'CENSUS superseded un-assign' lib/BackbeatConsumer.js || true)
+        echo "guard=$HAS_SKIP detector=$HAS_CENSUS"
+        case "$ARM" in
+          fixed)
+            [ "$HAS_SKIP" -ge 1 ] && [ "$HAS_CENSUS" -eq 0 ] \
+              || { echo 'ERROR: fixed arm is not the BB-835 tree'; exit 1; } ;;
+          detect)
+            [ "$HAS_CENSUS" -ge 1 ] && [ "$HAS_SKIP" -eq 0 ] \
+              || { echo 'ERROR: detect arm is not the detector tree'; exit 1; } ;;
+        esac
+
+    - name: Wait for services
+      run: |
+        timeout 60 bash -c 'until nc -z localhost 9092; do sleep 1; done'
+        timeout 60 bash -c 'until nc -z localhost 2181; do sleep 1; done'
+
+    # shell: bash gives -o pipefail, without which tee masks a failure
+    - name: Run rebalance census
+      shell: bash
+      env:
+        ARM: ${{ matrix.arm }}
+        JOB_INDEX: ${{ matrix.idx }}
+        ITERATIONS: ${{ env.ITERATIONS_PER_JOB }}
+        HOSTS: localhost:9092
+      run: node .github/harness/rebalance-census.js 2>&1 | tee census.log
+
+    - name: Upload log
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: log-${{ matrix.arm }}-${{ matrix.idx }}
+        path: census.log
+        retention-days: 7
+
+  summary:
+    needs: census
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+    - name: Collect logs
+      uses: actions/download-artifact@v4
+      with:
+        pattern: log-*
+        path: logs
+
+    - name: Tabulate
+      run: |
+        python3 - >> "$GITHUB_STEP_SUMMARY" <<'PY'
+        import collections
+        import json
+        import pathlib
+
+        rows = []
+        for log in sorted(pathlib.Path('logs').glob('log-*/census.log')):
+            for line in log.read_text(errors='replace').splitlines():
+                if line.startswith('RESULT '):
+                    try:
+                        rows.append(json.loads(line[len('RESULT '):]))
+                    except json.JSONDecodeError:
+                        pass
+
+        arms = collections.defaultdict(list)
+        for r in rows:
+            arms[r.get('arm')].append(r)
+
+        def total(rs, key):
+            return sum(r.get(key, 0) or 0 for r in rs)
+
+        print('## BB-835 rebalance census\n')
+        print('%d iterations across %d arms\n' % (len(rows), len(arms)))
+        print('| arm | n | churn cycles | deferred un-assigns | '
+              '**superseded** | drained | idle | timeout | stalled cycles | '
+              'consumed | errors |')
+        print('|---|---|---|---|---|---|---|---|---|---|---|')
+        for arm in sorted(arms):
+            rs = arms[arm]
+            valid = [r for r in rs if not r.get('error')]
+            sup = total(valid, 'superseded')
+            print('| %s | %d | %d | %d | %s | %d | %d | %d | %d | %d | %d |' % (
+                arm, len(valid),
+                total(valid, 'churnCycles'),
+                total(valid, 'deferredUnassigns'),
+                ('**%d**' % sup) if sup else '0',
+                total(valid, 'drained'),
+                total(valid, 'idle'),
+                total(valid, 'timeout'),
+                total(valid, 'stalledCycles'),
+                total(valid, 'consumed'),
+                len(rs) - len(valid),
+            ))
+
+        print('\n### How to read this\n')
+        print('- `deferred un-assigns` is the denominator: revokes that '
+              'arrived with work in flight. If it is 0, the harness never '
+              'created the precondition and a 0 in `superseded` means '
+              'nothing at all.')
+        print('- `superseded` on **detect** is the untreated rate of the '
+              'BB-835 race. On **fixed** it is how often the guard fired.')
+        print('- `stalled cycles` counts a base member consuming nothing for '
+              'a whole churn cycle. On **detect** that is the BB-835 end '
+              'state; it should be near zero on **fixed**.')
+
+        bad = [r for r in rows if r.get('error')]
+        if bad:
+            print('\n### Errors\n')
+            for r in bad[:20]:
+                print('- `%s` job %s iter %s: %s' % (
+                    r.get('arm'), r.get('job'), r.get('iteration'),
+                    r.get('error')))
+        PY
