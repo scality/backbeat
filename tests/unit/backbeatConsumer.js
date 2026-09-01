@@ -881,6 +881,33 @@ describe('backbeatConsumer', () => {
             });
         });
 
+        it('should answer every caller once when closed twice', done => {
+            queueIdle = false;
+            ledgerCount = 1;
+
+            let first = false;
+            let second = 0;
+            consumer.close(() => {
+                first = true;
+            });
+            consumer.close(() => {
+                second++;
+            });
+
+            setImmediate(() => {
+                queueIdle = true;
+                ledgerCount = 0;
+                drainCallbacks[drainCallbacks.length - 1]();
+
+                setTimeout(() => {
+                    assert.strictEqual(first, true);
+                    assert.strictEqual(second, 1);
+                    assert(consumer._consumer.disconnect.calledOnce);
+                    done();
+                }, 20);
+            });
+        });
+
         it('should not wait for the drain once the consumer is disconnected', done => {
             // the drain watchdog fires on a wedged task and disconnects, so the
             // work it is waiting on can never complete
