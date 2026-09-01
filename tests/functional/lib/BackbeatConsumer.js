@@ -24,6 +24,22 @@ const consumerKafkaConf = {
 };
 const log = new werelogs.Logger('BackbeatConsumer:test');
 
+function waitFor(predicate, timeoutMs, description) {
+    const deadline = Date.now() + timeoutMs;
+    return new Promise((resolve, reject) => {
+        const check = () => {
+            if (predicate()) {
+                return resolve();
+            }
+            if (Date.now() > deadline) {
+                return reject(new Error(`timed out waiting for ${description}`));
+            }
+            return setTimeout(check, 200);
+        };
+        check();
+    });
+}
+
 describe('BackbeatConsumer main tests', () => {
     const topic = 'backbeat-consumer-spec';
     const groupId = `replication-group-${Math.random()}`;
@@ -1286,20 +1302,6 @@ describe('BackbeatConsumer fromOffset tests', () => {
         process.nextTick(cb);
     }
 
-    function waitFor(predicate, timeoutMs, description, cb) {
-        const deadline = Date.now() + timeoutMs;
-        const check = () => {
-            if (predicate()) {
-                return cb();
-            }
-            if (Date.now() > deadline) {
-                return cb(new Error(`timed out waiting for ${description}`));
-            }
-            return setTimeout(check, 200);
-        };
-        check();
-    }
-
     function startConsumer(cb) {
         consumer = new BackbeatConsumer({
             clientId: 'BackbeatConsumer-fromOffset',
@@ -1369,7 +1371,8 @@ describe('BackbeatConsumer fromOffset tests', () => {
             // session timeout (45s) to settle when a rebalance hits
             // its joining window
             next => waitFor(() => consumedMessages.includes(marker), 75000,
-                'the pre-existing message to be consumed', next),
+                'the pre-existing message to be consumed')
+                .then(() => next(), next),
         ], done);
     });
 });
