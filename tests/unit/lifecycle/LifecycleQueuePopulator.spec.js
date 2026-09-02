@@ -350,6 +350,52 @@ describe('LifecycleQueuePopulator', () => {
                 assert(!kafkaAdjustSendStub.calledOnce);
                 assert(!kafkaSendStub.calledOnce);
             });
+
+            it('should skip send duration-adjust for the master entry of a versioned object', () => {
+                const versionId = '98500086134471999999RG001  0';
+                const objMd = {
+                    'md-model-version': 2,
+                    'owner-display-name': 'Bart',
+                    'owner-id': '79a59df900b949e55d96a1e698fbacedfd6e09d98eacf8f8d5218e7cd47ef2be',
+                    'x-amz-storage-class': 'dmf-v1',
+                    'content-length': 542,
+                    'content-type': 'text/plain',
+                    'last-modified': '2017-07-13T02:44:25.515Z',
+                    'content-md5': '01064f35c238bd2b785e34508c3d27f4',
+                    'key': 'object',
+                    'location': [],
+                    'isDeleteMarker': false,
+                    'isNull': false,
+                    versionId,
+                    'archive': {
+                        archiveInfo: {
+                            archiveId: '04425717-a65c-4e8a-95e1-fa1d902d9d9f',
+                            archiveVersion: 7504504064263669
+                        },
+                        restoreCompletedAt: '2017-07-13T02:44:25.519Z',
+                        restoreWillExpireAt: '2017-07-15T02:44:25.519Z',
+                    },
+                    'dataStoreName': 'dmf-v1',
+                    'originOp': 's3:ObjectRestore:Post',
+                };
+                // the version entry carries the same update, and is processed on its own
+                const entry = {
+                    type: 'put',
+                    bucket: 'lc-queue-populator-test-bucket',
+                    key: 'object',
+                    value: JSON.stringify(objMd),
+                };
+
+                handleRestoreOp(entry);
+
+                assert(!kafkaAdjustSendStub.called);
+                assert(!kafkaSendStub.called);
+
+                handleRestoreOp(Object.assign({}, entry, { key: `object\x00${versionId}` }));
+
+                assert(kafkaAdjustSendStub.calledOnce);
+                assert(!kafkaSendStub.called);
+            });
         });
     });
 
