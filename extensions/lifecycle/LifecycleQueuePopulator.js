@@ -20,6 +20,7 @@ const {
     coldStorageRestoreAdjustTopicPrefix,
     coldStorageRestoreTopicPrefix,
     coldStorageGCTopicPrefix,
+    coldStorageArchiveTopicPrefix,
 } = config.extensions.lifecycle;
 const BackbeatProducer = require('../../lib/BackbeatProducer');
 const locations = require('../../conf/locationConfig.json') || {};
@@ -100,6 +101,7 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
                     next => this._setupProducer(`${coldStorageRestoreAdjustTopicPrefix}${location}`, next),
                     next => this._setupProducer(`${coldStorageRestoreTopicPrefix}${location}`, next),
                     next => this._setupProducer(`${coldStorageGCTopicPrefix}${location}`, next),
+                    next => this._setupProducer(`${coldStorageArchiveTopicPrefix}${location}`, next),
                 ], done);
             }, cb);
         } else {
@@ -239,23 +241,142 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
         return new Date(date.$date || date);
     }
 
-    _handleRestoreOp(entry) {
+    _isColdLocation(locationName) {
+        return !!this.locationConfigs[locationName]?.isCold;
+    }
+
+    /**
+     * Whether a put entry designates an object we may act upon: bucket entries carry no object
+     * key, mpu shadow bucket entries are internal, and the master entry of a versioned object
+     * duplicates the version entry, which is processed on its own.
+     *
+     * @param {Object} entry - The record log entry from metadata.
+     * @param {Object} value - The object metadata, already decoded by the caller.
+     * @return {boolean} true if the entry may be dispatched to an object handler.
+     */
+    _isDistinctObjectEntry(entry, value) {
+        if (!entry.key || entry.key.startsWith(mpuBucketPrefix)) {
+            return false;
+        }
+
+        if (this._isVersionedObject(value) && isMasterKey(entry.key)) {
+            this.log.trace('skip processing of object master entry');
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Check if object transition was initiated by direct-to-cold request instead of lifecycle rule.
+     *
+     * @param {Object} md - The object metadata.
+     * @return {boolean} true if a direct transition is pending for this object.
+     */
+    _isDirectToCold(md) {
+        return md['x-amz-scal-transition-in-progress']
+            && this._isColdLocation(md['x-amz-storage-class'])
+            && !this._isColdLocation(md.dataStoreName)
+            && !md.archive?.archiveInfo;
+    }
+
+    /**
+     * Handle a "direct-to-cold" transition: cloudserver has written the object data to a hot
+     * location, but the user requested a cold storage class in the PUT request. Cloudserver
+     * flags the object as "transition in progress", and it is up to the queue populator to
+     * trigger the archival, as there is no lifecycle rule (nor lifecycle scan) involved.
+     *
+     * The message published here is strictly the same as the one the lifecycle bucket processor
+     * publishes (c.f. ReplicationAPI.sendDataMoverAction), so that the whole downstream pipeline
+     * (Sorbet, cold status processor, garbage collector) is reused unchanged.
+     *
+     * @param {Object} entry - The record log entry from metadata.
+     * @param {Object} [value] - The object metadata, already decoded by the caller.
+     * @return {undefined}
+     */
+    _handleTransitionOp(entry, value) {
         if (!this.vaultClientWrapper) {
             return;
         }
 
-        if (entry.type !== 'put' ||
-            entry.key.startsWith(mpuBucketPrefix)) {
+        if (!this._isDistinctObjectEntry(entry, value)) {
             return;
         }
 
-        const value = JSON.parse(entry.value);
+        if (!this._isDirectToCold(value)) {
+            return;
+        }
 
-        const operation = value.originOp;
-        // supporting both 's3:ObjectRestore' and 's3:ObjectRestore:Post' to keep
-        // compatibility with older cloudserver versions, the switch to 's3:ObjectRestore:Post'
-        // was made to have the correct event type for bucket notifications
-        if (!['s3:ObjectRestore', 's3:ObjectRestore:Post', 's3:ObjectRestore:Retry'].includes(operation)) {
+        const coldLocation = value['x-amz-storage-class'];
+        const attemptHeader = value['x-amz-meta-scal-s3-transition-attempt'];
+        const attempt = attemptHeader ? Number.parseInt(attemptHeader, 10) : undefined;
+        const ownerId = value['owner-id'];
+        this.vaultClientWrapper.getAccountId(ownerId, (err, accountId) => {
+            if (err) {
+                this.log.error('unable to get account', {
+                    method: 'LifecycleQueuePopulator._handleTransitionOp',
+                    ownerId,
+                    err,
+                });
+                return;
+            }
+
+            this.log.trace(
+                'publishing object transition entry',
+                { bucket: entry.bucket, key: entry.key, version: value.versionId, coldLocation },
+            );
+
+            const topic = `${coldStorageArchiveTopicPrefix}${coldLocation}`;
+            const key = `${entry.bucket}/${value.key}`;
+
+            let version;
+            if (value.versionId) {
+                version = encode(value.versionId);
+            }
+
+            const transitionTime = this._parseDate(
+                value['x-amz-scal-transition-time'] || value['last-modified']);
+            const message = JSON.stringify({
+                accountId,
+                bucketName: entry.bucket,
+                objectKey: value.key,
+                objectVersion: version,
+                requestId: uuid(),
+                size: value['content-length'],
+                eTag: `"${value['content-md5']}"`,
+                try: attempt,
+                transitionTime: transitionTime.toISOString(),
+            });
+
+            const producer = this._producers[topic];
+            if (producer) {
+                LifecycleMetrics.onLifecycleTriggered(this.log, 'queuePopulator', 'archive',
+                    coldLocation, Date.now() - transitionTime.getTime());
+
+                const kafkaEntry = { key, message };
+                producer.send([kafkaEntry], err => {
+                    LifecycleMetrics.onKafkaPublish(this.log, 'ColdStorageArchiveTopic', 'queuePopulator', err, 1);
+                    if (err) {
+                        this.log.error('error publishing object transition request entry', {
+                            error: err,
+                            method: 'LifecycleQueuePopulator._handleTransitionOp',
+                        });
+                    }
+                });
+            } else {
+                this.log.error(`producer not available for location ${coldLocation}`, {
+                    method: 'LifecycleQueuePopulator._handleTransitionOp',
+                });
+            }
+        });
+    }
+
+    _handleRestoreOp(entry, value) {
+        if (!this.vaultClientWrapper) {
+            return;
+        }
+
+        if (!this._isDistinctObjectEntry(entry, value)) {
             return;
         }
 
@@ -280,13 +401,6 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
 
         if (!value.archive || !value.archive.restoreRequestedAt ||
             !value.archive.restoreRequestedDays) {
-            return;
-        }
-
-        // if entry is a versioned object and is the master entry, skip task as
-        // the non-master entry will be processed
-        if (this._isVersionedObject(value) && isMasterKey(entry.key)) {
-            this.log.trace('skip processing of object master entry');
             return;
         }
 
@@ -504,7 +618,42 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
             return undefined;
         }
 
-        this._handleRestoreOp(entry);
+        // The entry is decoded once here, then dispatched to the single handler which may be
+        // interested in it: most entries are of no interest to any of them.
+        const { error, result: value } = safeJsonParse(entry.value);
+        if (error) {
+            this.log.error('could not parse log entry', {
+                method: 'LifecycleQueuePopulator.filter',
+                bucket: entry.bucket,
+                key: entry.key,
+                error,
+            });
+            return undefined;
+        }
+
+        switch (value.originOp) {
+        // supporting both 's3:ObjectRestore' and 's3:ObjectRestore:Post' to keep compatibility with
+        // older cloudserver versions, the switch to 's3:ObjectRestore:Post' was made to have the
+        // correct event type for bucket notifications
+        case 's3:ObjectRestore':
+        case 's3:ObjectRestore:Post':
+        case 's3:ObjectRestore:Retry':
+            this._handleRestoreOp(entry, value);
+            break;
+
+        // Object creation is the only operation which may declare a cold storage class, and a retry
+        // asks for a new attempt: any other originOp comes from backbeat itself, and must not
+        // re-trigger a transition.
+        case 's3:ObjectCreated:Put':
+        case 's3:ObjectCreated:CompleteMultipartUpload':
+        case 's3:ObjectCreated:Copy':
+        case 's3:LifecycleTransition:Retry':
+            this._handleTransitionOp(entry, value);
+            break;
+
+        default:
+            break;
+        }
 
         if (this.extConfig.conductor.bucketSource !== 'zookeeper') {
             this.log.debug('bucket source is not zookeeper, skipping entry', {
@@ -515,15 +664,7 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
 
         let bucketValue = {};
         if (this._isBucketEntryFromBucketd(entry)) {
-            const parsedEntry = safeJsonParse(entry.value);
-            if (parsedEntry.error) {
-                this.log.error('could not parse raft log entry', {
-                    value: entry.value,
-                    error: parsedEntry.error,
-                });
-                return undefined;
-            }
-            const parsedAttr = safeJsonParse(parsedEntry.result.attributes);
+            const parsedAttr = safeJsonParse(value.attributes);
             if (parsedAttr.error) {
                 this.log.error('could not parse raft log entry attribute', {
                     value: entry.value,
@@ -533,13 +674,7 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
             }
             bucketValue = parsedAttr.result;
         } else if (this._isBucketEntryFromFileMD(entry)) {
-            const { error, result } = safeJsonParse(entry.value);
-            if (error) {
-                this.log.error('could not parse file md log entry',
-                    { value: entry.value, error });
-                return undefined;
-            }
-            bucketValue = result;
+            bucketValue = value;
         } else {
             // not a bucket entry
             return undefined;

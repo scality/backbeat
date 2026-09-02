@@ -286,10 +286,14 @@ class GarbageCollectorTask extends BackbeatTask {
                     version,
                 });
 
+                // The object already exposes the location it is transitioned to, so this is a
+                // direct-to-cold transition.
+                const isDirectToCold = objMD.getAmzStorageClass() === newLocation;
+
                 objMD.setLocation()
                     .setDataStoreName(newLocation)
                     .setAmzStorageClass(newLocation)
-                    .setOriginOp('s3:LifecycleTransition')
+                    .setOriginOp(isDirectToCold ? 's3:LifecycleTransition:Direct' : 's3:LifecycleTransition')
                     .setTransitionInProgress(false)
                     .setUserMetadata({
                         'x-amz-meta-scal-s3-transition-attempt': undefined,

@@ -31,6 +31,8 @@ const errorTransitionInProgress = errors.InternalError.
     customizeDescription('transition is currently in progress');
 const errorTransitionColdObject = errors.InternalError.
     customizeDescription('transitioning a cold object is forbidden');
+const errorTransitionDeclaredColdObject = errors.InternalError.
+    customizeDescription('transitioning an object declared as cold is forbidden');
 const errorObjectTemporarilyRestored = errors.InternalError.
     customizeDescription('object temporarily restored');
 const errorReplicationInProgress = errors.InternalError.
@@ -1275,6 +1277,11 @@ class LifecycleTask extends BackbeatTask {
                 // We do not transition cold objects
                 if (isObjectCold) {
                     return next(errorTransitionColdObject);
+                }
+                // Skip direct-to-cold objects, whose transition is triggered by the queue
+                // populator and require the transition in progress flag to be set
+                if (locationsConfig[objectMD.getAmzStorageClass()]?.isCold) {
+                    return next(errorTransitionDeclaredColdObject);
                 }
                 // If transition is in progress, do not re-publish entry
                 // to data-mover or cold-archive topic.
