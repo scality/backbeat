@@ -246,9 +246,29 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
     }
 
     /**
-     * A transition is "direct" when the object declares a cold storage class while its data still
-     * sits in a hot location, it has not been archived yet, and cloudserver has flagged it as in
-     * progress.
+     * Whether a put entry designates an object we may act upon: bucket entries carry no object
+     * key, mpu shadow bucket entries are internal, and the master entry of a versioned object
+     * duplicates the version entry, which is processed on its own.
+     *
+     * @param {Object} entry - The record log entry from metadata.
+     * @param {Object} value - The object metadata, already decoded by the caller.
+     * @return {boolean} true if the entry may be dispatched to an object handler.
+     */
+    _isDistinctObjectEntry(entry, value) {
+        if (!entry.key || entry.key.startsWith(mpuBucketPrefix)) {
+            return false;
+        }
+
+        if (this._isVersionedObject(value) && isMasterKey(entry.key)) {
+            this.log.trace('skip processing of object master entry');
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Check if object transition was initiated by direct-to-cold request instead of lifecycle rule.
      *
      * @param {Object} md - The object metadata.
      * @return {boolean} true if a direct transition is pending for this object.
@@ -279,18 +299,11 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
             return;
         }
 
-        if (entry.key.startsWith(mpuBucketPrefix)) {
+        if (!this._isDistinctObjectEntry(entry, value)) {
             return;
         }
 
         if (!this._isDirectToCold(value)) {
-            return;
-        }
-
-        // if entry is a versioned object and is the master entry, skip task as
-        // the non-master entry will be processed
-        if (this._isVersionedObject(value) && isMasterKey(entry.key)) {
-            this.log.trace('skip processing of object master entry');
             return;
         }
 
@@ -363,7 +376,7 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
             return;
         }
 
-        if (entry.key.startsWith(mpuBucketPrefix)) {
+        if (!this._isDistinctObjectEntry(entry, value)) {
             return;
         }
 
@@ -388,13 +401,6 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
 
         if (!value.archive || !value.archive.restoreRequestedAt ||
             !value.archive.restoreRequestedDays) {
-            return;
-        }
-
-        // if entry is a versioned object and is the master entry, skip task as
-        // the non-master entry will be processed
-        if (this._isVersionedObject(value) && isMasterKey(entry.key)) {
-            this.log.trace('skip processing of object master entry');
             return;
         }
 
