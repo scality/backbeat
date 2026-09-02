@@ -2,9 +2,11 @@ const assert = require('assert');
 const sinon = require('sinon');
 
 const BackbeatConsumer = require('../../lib/BackbeatConsumer');
+const KafkaBacklogMetrics = require('../../lib/KafkaBacklogMetrics');
 const { CODES } = require('node-rdkafka');
 
 const { kafka } = require('../config.json');
+const { unassignStatus } = require('../../lib/constants');
 const { BreakerState } = require('breakbeat').CircuitBreaker;
 
 class BackbeatConsumerMock extends BackbeatConsumer {
@@ -395,6 +397,149 @@ describe('backbeatConsumer', () => {
                 const availableSlots = consumer._getAvailableSlotsInPipeline();
                 assert.strictEqual(availableSlots, params.expectedSlots);
             });
+        });
+    });
+
+    describe('_onRebalance deferred un-assign', () => {
+        const REVOKE = { code: CODES.ERRORS.ERR__REVOKE_PARTITIONS };
+        const ASSIGN = { code: CODES.ERRORS.ERR__ASSIGN_PARTITIONS };
+        const partitions = [
+            { topic: 'my-test-topic', partition: 0 },
+            { topic: 'my-test-topic', partition: 1 },
+        ];
+
+        let consumer;
+        let queueIdle;
+        let ledgerCount;
+        let unassigns;
+
+        beforeEach(() => {
+            consumer = new BackbeatConsumerMock({
+                kafka,
+                groupId: 'unittest-group',
+                topic: 'my-test-topic',
+            });
+
+            consumer._consumer = {
+                assign: sinon.stub(),
+                unassign: sinon.stub(),
+                disconnect: sinon.stub(),
+                commit: sinon.stub(),
+                pause: sinon.stub(),
+                resume: sinon.stub(),
+                isConnected: () => true,
+                assignments: () => [],
+                subscription: () => ['my-test-topic'],
+            };
+
+            queueIdle = false;
+            ledgerCount = 1;
+            consumer._processingQueue = {
+                length: () => 0,
+                running: () => (queueIdle ? 0 : 1),
+                idle: () => queueIdle,
+                setDrain: () => {},
+            };
+            consumer._offsetLedger.getProcessingCount = () => ledgerCount;
+
+            unassigns = [];
+            consumer.on('unassign', status => unassigns.push(status));
+
+            sinon.stub(KafkaBacklogMetrics, 'onRebalance');
+        });
+
+        afterEach(() => {
+            clearTimeout(consumer._drainProcessQueueTimeout);
+            sinon.restore();
+        });
+
+        // fire the drain through the live callback, which a superseding
+        // rebalance nulls out
+        const completeDrain = () => {
+            queueIdle = true;
+            ledgerCount = 0;
+            if (consumer._drainCallback) {
+                consumer._drainCallback();
+            }
+        };
+
+        it('should defer the un-assign until the drain completes', () => {
+            consumer._onRebalance(REVOKE, partitions);
+            assert(consumer._consumer.unassign.notCalled);
+
+            completeDrain();
+
+            assert(consumer._consumer.unassign.calledOnce);
+            assert.deepStrictEqual(unassigns, [unassignStatus.DRAINED]);
+        });
+
+        it('should un-assign immediately when nothing is in flight', () => {
+            queueIdle = true;
+            ledgerCount = 0;
+
+            consumer._onRebalance(REVOKE, partitions);
+
+            assert(consumer._consumer.unassign.calledOnce);
+            assert.deepStrictEqual(unassigns, [unassignStatus.IDLE]);
+        });
+
+        it('should not un-assign when a new assignment arrived while ' +
+        'draining', () => {
+            consumer._onRebalance(REVOKE, partitions);
+
+            // the next generation grants the partitions back mid-drain
+            consumer._onRebalance(ASSIGN, partitions);
+            assert(consumer._consumer.assign.calledOnce);
+            assert.strictEqual(consumer._drainCallback, null);
+            assert.strictEqual(consumer._drainProcessQueueTimeout, null);
+
+            completeDrain();
+            // the ledger going empty must not fire anything either
+            consumer._offsetLedger.emit('empty', 'my-test-topic');
+
+            assert(consumer._consumer.unassign.notCalled);
+            assert.deepStrictEqual(unassigns, []);
+        });
+
+        it('should not un-assign when the partitions were granted back ' +
+        'while offsets were being published', () => {
+            let publishDone;
+            consumer._kafkaBacklogMetricsConfig =
+                { zkPath: '/test', intervalS: 5 };
+            consumer._publishOffsetsCron = cb => {
+                publishDone = cb;
+            };
+
+            consumer._onRebalance(REVOKE, partitions);
+            completeDrain();
+            assert.strictEqual(typeof publishDone, 'function');
+            assert(consumer._consumer.unassign.notCalled);
+
+            consumer._onRebalance(ASSIGN, partitions);
+            publishDone();
+
+            assert(consumer._consumer.unassign.notCalled);
+            assert.deepStrictEqual(unassigns, []);
+        });
+
+        it('should not leave a superseded revoke watchdog armed', () => {
+            const clock = sinon.useFakeTimers();
+            try {
+                consumer._onRebalance(REVOKE, partitions);
+                consumer._onRebalance(REVOKE, partitions);
+
+                completeDrain();
+                assert(consumer._consumer.unassign.calledOnce);
+                assert.deepStrictEqual(unassigns, [unassignStatus.DRAINED]);
+
+                // the first revoke's watchdog must not fire late and
+                // disconnect a consumer that already answered
+                clock.tick(consumer._maxPollIntervalMs + 1000);
+                assert(consumer._consumer.disconnect.notCalled);
+                assert(consumer._consumer.unassign.calledOnce);
+            } finally {
+                clock.restore();
+            }
         });
     });
 });
