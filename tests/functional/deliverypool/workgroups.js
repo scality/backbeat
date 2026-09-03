@@ -4895,6 +4895,7 @@ function gateReshard() {
         const tailers = new Map();
         const oldRuntimes = new Map();
         const newRuntimes = new Map();
+        const bothRuntimes = new Map();
         const restartedOld = new Set();
         const restartedNew = new Set();
         const oldCommitted = {};
@@ -5082,11 +5083,21 @@ function gateReshard() {
                     assert.ifError(overlapStream.error);
                     return next();
                 },
+                next => {
+                    // one map covering both generations, so a workgroup
+                    // restarted around a wedge in the wait below is still a
+                    // workgroup the after hook knows how to stop
+                    oldRuntimes.forEach((runtime, id) =>
+                        bothRuntimes.set(id, runtime));
+                    newRuntimes.forEach((runtime, id) =>
+                        bothRuntimes.set(id, runtime));
+                    return next();
+                },
                 next => waitOrRestart({
                     label: 'W-E3 both generations commit the whole topic',
                     workgroupIds: oldIds.concat(newIds),
-                    runtimes: new Map([...oldRuntimes, ...newRuntimes]),
-                    restarted: new Set([...restartedOld, ...restartedNew]),
+                    runtimes: bothRuntimes,
+                    restarted: restartedNew,
                     zkPath,
                     baseGroupId,
                     notifConfig,
@@ -5109,7 +5120,14 @@ function gateReshard() {
                     record('W-E3.overlap.windowMs', overlapWindowMs);
                     return next();
                 },
-                next => stopWorkgroups(oldRuntimes, next),
+                // by id rather than by map, so the old generation is stopped
+                // even if one of its workgroups was restarted above
+                next => async.eachSeries(oldIds, (workgroupId, step) =>
+                    stopWorkgroup(bothRuntimes.get(workgroupId), () => {
+                        bothRuntimes.delete(workgroupId);
+                        oldRuntimes.delete(workgroupId);
+                        return step();
+                    }), next),
                 next => async.eachSeries([...tailers.values()],
                     (tailer, quietDone) => waitUntilQuiet(tailer, 500,
                         quietDone), next),
@@ -5148,6 +5166,7 @@ function gateReshard() {
         after(done => async.series([
             next => (cutoverStream ? cutoverStream.close(next) : next()),
             next => (overlapStream ? overlapStream.close(next) : next()),
+            next => stopWorkgroups(bothRuntimes, next),
             next => stopWorkgroups(oldRuntimes, next),
             next => stopWorkgroups(newRuntimes, next),
             next => (verifier ? verifier.close(next) : next()),
@@ -5734,6 +5753,7 @@ function gateReshard() {
         const tailers = new Map();
         const oldRuntimes = new Map();
         const newRuntimes = new Map();
+        const bothRuntimes = new Map();
         const restartedOld = new Set();
         const restartedNew = new Set();
         const drainPolls = [];
@@ -5886,11 +5906,21 @@ function gateReshard() {
                 // every barrier, so each generation has to give each of them
                 // exactly one owner
                 next => produceRecords(deliveryTopic, specials, next),
+                next => {
+                    // one map covering both generations, so a workgroup
+                    // restarted around a wedge in the wait below is still a
+                    // workgroup the after hook knows how to stop
+                    oldRuntimes.forEach((runtime, id) =>
+                        bothRuntimes.set(id, runtime));
+                    newRuntimes.forEach((runtime, id) =>
+                        bothRuntimes.set(id, runtime));
+                    return next();
+                },
                 next => waitOrRestart({
                     label: 'W-E6 both generations commit the whole topic',
                     workgroupIds: oldIds.concat(newIds),
-                    runtimes: new Map([...oldRuntimes, ...newRuntimes]),
-                    restarted: new Set([...restartedOld, ...restartedNew]),
+                    runtimes: bothRuntimes,
+                    restarted: restartedNew,
                     zkPath,
                     baseGroupId,
                     notifConfig,
@@ -5908,7 +5938,12 @@ function gateReshard() {
                             totalOnDeliveryTopic, E_COMMIT_TIMEOUT_MS, step),
                         cb),
                 }, next),
-                next => stopWorkgroups(oldRuntimes, next),
+                next => async.eachSeries(oldIds, (workgroupId, step) =>
+                    stopWorkgroup(bothRuntimes.get(workgroupId), () => {
+                        bothRuntimes.delete(workgroupId);
+                        oldRuntimes.delete(workgroupId);
+                        return step();
+                    }), next),
                 next => async.eachSeries([...tailers.values()],
                     (tailer, quietDone) => waitUntilQuiet(tailer, 500,
                         quietDone), next),
@@ -5934,6 +5969,7 @@ function gateReshard() {
 
         after(done => async.series([
             next => (stream ? stream.close(next) : next()),
+            next => stopWorkgroups(bothRuntimes, next),
             next => stopWorkgroups(oldRuntimes, next),
             next => stopWorkgroups(newRuntimes, next),
             next => (verifier ? verifier.close(next) : next()),
