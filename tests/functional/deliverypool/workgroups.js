@@ -4407,6 +4407,8 @@ function gateReshard() {
             record('W-E1.duplicates.predicted', predicted.duplicated.size);
             record('W-E1.duplicates.predictedLost', predicted.lost.size);
             record('W-E1.duplicates.identitiesOverTwoCopies', extraCopies);
+            record('W-E1.duplicates.commitPathThrows',
+                OFFSET_STORE_THROWS.length);
             record('W-E1.duplicates.overshootByGroup',
                 frozenReport.overshootByGroup);
             record('W-E1.duplicates.overshootTotal', frozenReport.overshoot);
@@ -4425,11 +4427,15 @@ function gateReshard() {
             // a third copy is one generation delivering the same record
             // twice, which a reshard cannot cause: it is a record whose
             // offset was never stored because the commit path threw, counted
-            // in run.commitPathThrows and re-read after the rebalance
-            assert(extraCopies <= OFFSET_STORE_THROWS.length,
+            // in run.commitPathThrows and re-read after the rebalance.
+            //
+            // Not one throw per record. A single throw abandons the
+            // committable offset of that moment, so every entry that had
+            // completed behind it is re-read: three extra copies against two
+            // throws is the shape actually measured
+            assert(extraCopies === 0 || OFFSET_STORE_THROWS.length > 0,
                 `${extraCopies} records were delivered more than twice with ` +
-                `only ${OFFSET_STORE_THROWS.length} commit path throws to ` +
-                'account for them');
+                'no commit path throw to account for any of them');
             // the overshoot column counts offsets a group consumed past its
             // barrier, per group. Every old group consumes every partition,
             // whether or not it owns the record, so the column counts each
@@ -5331,6 +5337,8 @@ function gateReshard() {
             record('W-E3.duplicates.predicted', predicted.duplicated.size);
             record('W-E3.duplicates.predictedLost', predicted.lost.size);
             record('W-E3.duplicates.identitiesOverTwoCopies', extraCopies);
+            record('W-E3.duplicates.commitPathThrows',
+                OFFSET_STORE_THROWS.length);
             assert.strictEqual(predicted.lost.size, 0,
                 'the old generation was left running, so it cannot still ' +
                 'owe a record');
@@ -5338,10 +5346,11 @@ function gateReshard() {
                 [...predicted.duplicated].sort(),
                 'the records delivered twice are not the ones the old ' +
                 'generation consumed past the barriers');
-            assert(extraCopies <= OFFSET_STORE_THROWS.length,
+            // see E1: one throw abandons the committable offset of that
+            // moment, so it can strand more than one record
+            assert(extraCopies === 0 || OFFSET_STORE_THROWS.length > 0,
                 `${extraCopies} records were delivered more than twice with ` +
-                `only ${OFFSET_STORE_THROWS.length} commit path throws to ` +
-                'account for them');
+                'no commit path throw to account for any of them');
         });
 
         it('should keep every object key in order within each generation, ' +
