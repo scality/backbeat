@@ -2995,18 +2995,22 @@ const EXIT_NOT_DRAINED = 2;
 // pre-existing consumer wedge lives in
 const E_WORKER_SETTLE_MS = 1200;
 const E_DRAIN_POLL_MS = 1000;
-const E_DRAIN_TIMEOUT_MS = 120000;
-// wide enough to outlast a wedged consumer being evicted from its group.
-// BackbeatConsumer.close() waits for a revoke callback a wedged consumer
-// never delivers, so stopWorker gives up on its own timeout while that
-// client is still a live member of the group. The replacement joining the
-// same group makes it two members, one of which never rejoins, and the group
-// sits in PreparingRebalance consuming nothing until the broker evicts the
-// wedged member on its poll interval. That was measured taking about five
-// minutes, and it does recover: a wait that gives up sooner turns a wedge
-// the suite recovered from into a failed gate
-const E_COMMIT_TIMEOUT_MS = 420000;
-const E_BARRIER_TIMEOUT_MS = 120000;
+// A wait that has not been through a restart yet gives up quickly, so a
+// wedged workgroup is found and replaced promptly.
+//
+// The wait after the restart is far longer, because the replacement cannot
+// take over its group at once. BackbeatConsumer.close() waits for a revoke
+// callback a wedged consumer never delivers, so stopWorker gives up on its
+// own timeout while that client is still a live member of the group. The
+// replacement joining the same group makes it two members, one of which
+// never rejoins, and the group sits in PreparingRebalance consuming nothing
+// until the broker evicts the wedged member on its poll interval. Measured
+// at about five minutes, after which the group went Stable with one member
+// and drained to zero lag. It does recover, so a retry that gives up sooner
+// turns a wedge the suite handles into a failed gate, which is what two
+// earlier runs of this gate did.
+const E_WAIT_MS = 90000;
+const E_RETRY_WAIT_MS = 480000;
 
 /**
  * Identity of one produced notification: the customer topic it is addressed
@@ -3540,7 +3544,7 @@ function restartShortWorkgroups(params, done) {
  * @return {undefined}
  */
 function waitOrRestart(params, done) {
-    return params.wait(err => {
+    return params.wait(params.waitMs || E_WAIT_MS, err => {
         if (!err) {
             return done();
         }
@@ -3553,7 +3557,10 @@ function waitOrRestart(params, done) {
             if (restartErr) {
                 return done(restartErr);
             }
-            return params.wait(done);
+            // the replacement cannot take over its group until the broker
+            // has evicted the wedged member, so this wait is far longer than
+            // the one that just failed
+            return params.wait(E_RETRY_WAIT_MS, done);
         });
     });
 }
@@ -3743,8 +3750,8 @@ function gateReshard() {
                 .reduce((total, tailer) => total + tailer.records.length, 0);
         }
 
-        function waitForDrain(startedAt, done) {
-            const deadline = Date.now() + E_DRAIN_TIMEOUT_MS;
+        function waitForDrain(startedAt, timeoutMs, done) {
+            const deadline = Date.now() + timeoutMs;
             const attempt = () => runVerify(verifier, (err, result) => {
                 if (err) {
                     return done(err);
@@ -3815,9 +3822,9 @@ function gateReshard() {
                     need: 1,
                     read: (workgroupId, cb) => readCounter(DELIVERED_METRIC,
                         { workgroup: workgroupId }, cb),
-                    wait: cb => async.eachSeries(oldIds, (workgroupId, step) =>
+                    wait: (waitMs, cb) => async.eachSeries(oldIds, (workgroupId, step) =>
                         waitForCounter(DELIVERED_METRIC,
-                            { workgroup: workgroupId }, 1, 90000, 500, step),
+                            { workgroup: workgroupId }, 1, waitMs, 500, step),
                         cb),
                 }, next),
                 next => {
@@ -3880,7 +3887,7 @@ function gateReshard() {
                     read: (workgroupId, cb) => committedTotal(
                         oldGroupId(workgroupId), deliveryTopic,
                         deliveryPartitions, cb),
-                    wait: cb => waitForDrain(Date.now(), (err, report) => {
+                    wait: (waitMs, cb) => waitForDrain(Date.now(), waitMs, (err, report) => {
                         drainedReport = report;
                         return cb(err);
                     }),
@@ -3902,10 +3909,10 @@ function gateReshard() {
                     read: (workgroupId, cb) => committedTotal(
                         oldGroupId(workgroupId), deliveryTopic,
                         deliveryPartitions, cb),
-                    wait: cb => async.eachSeries(oldIds, (workgroupId, step) =>
+                    wait: (waitMs, cb) => async.eachSeries(oldIds, (workgroupId, step) =>
                         waitForCommittedTotal(oldGroupId(workgroupId),
                             deliveryTopic, deliveryPartitions,
-                            totalOnDeliveryTopic, E_COMMIT_TIMEOUT_MS, step),
+                            totalOnDeliveryTopic, waitMs, step),
                         cb),
                 }, next),
                 // only now may the previous generation be stopped
@@ -4004,16 +4011,16 @@ function gateReshard() {
                     need: deliveryPartitions,
                     read: (workgroupId, cb) => readCounter(BARRIER_METRIC,
                         { workgroup: workgroupId, match: 'current' }, cb),
-                    wait: cb => async.series([
+                    wait: (waitMs, cb) => async.series([
                         step => async.eachSeries(newIds, (workgroupId, each) =>
                             waitForCounter(BARRIER_METRIC, {
                                 workgroup: workgroupId, match: 'current',
-                            }, deliveryPartitions, E_BARRIER_TIMEOUT_MS, 500,
+                            }, deliveryPartitions, waitMs, 500,
                             each), step),
                         step => waitFor(() => 'generation 2 to redeliver ' +
                             'what follows its barriers ' +
                             `(${deliveredCount() - oldDelivered} so far)`,
-                            () => deliveredCount() > oldDelivered, 90000,
+                            () => deliveredCount() > oldDelivered, waitMs,
                             step),
                     ], err => cb(err)),
                 }, next),
@@ -4030,10 +4037,10 @@ function gateReshard() {
                     read: (workgroupId, cb) => committedTotal(
                         newGroupId(workgroupId), deliveryTopic,
                         deliveryPartitions, cb),
-                    wait: cb => async.eachSeries(newIds, (workgroupId, step) =>
+                    wait: (waitMs, cb) => async.eachSeries(newIds, (workgroupId, step) =>
                         waitForCommittedTotal(newGroupId(workgroupId),
                             deliveryTopic, deliveryPartitions,
-                            totalOnDeliveryTopic, E_COMMIT_TIMEOUT_MS, step),
+                            totalOnDeliveryTopic, waitMs, step),
                         cb),
                 }, next),
                 next => async.eachSeries([...tailers.values()],
@@ -4606,9 +4613,9 @@ function gateReshard() {
                     need: 1,
                     read: (workgroupId, cb) => readCounter(DELIVERED_METRIC,
                         { workgroup: workgroupId }, cb),
-                    wait: cb => async.eachSeries(oldIds, (workgroupId, step) =>
+                    wait: (waitMs, cb) => async.eachSeries(oldIds, (workgroupId, step) =>
                         waitForCounter(DELIVERED_METRIC,
-                            { workgroup: workgroupId }, 1, 90000, 500, step),
+                            { workgroup: workgroupId }, 1, waitMs, 500, step),
                         cb),
                 }, next),
                 next => {
@@ -4724,10 +4731,10 @@ function gateReshard() {
                     read: (workgroupId, cb) => committedTotal(
                         newGroupId(workgroupId), deliveryTopic,
                         deliveryPartitions, cb),
-                    wait: cb => async.eachSeries(newIds, (workgroupId, step) =>
+                    wait: (waitMs, cb) => async.eachSeries(newIds, (workgroupId, step) =>
                         waitForCommittedTotal(newGroupId(workgroupId),
                             deliveryTopic, deliveryPartitions,
-                            totalOnDeliveryTopic, E_COMMIT_TIMEOUT_MS, step),
+                            totalOnDeliveryTopic, waitMs, step),
                         cb),
                 }, next),
                 next => async.eachSeries([...tailers.values()],
@@ -4986,8 +4993,8 @@ function gateReshard() {
                 .reduce((total, tailer) => total + tailer.records.length, 0);
         }
 
-        function waitForDrain(startedAt, done) {
-            const deadline = Date.now() + E_DRAIN_TIMEOUT_MS;
+        function waitForDrain(startedAt, timeoutMs, done) {
+            const deadline = Date.now() + timeoutMs;
             const attempt = () => runVerify(verifier, (err, result) => {
                 if (err) {
                     return done(err);
@@ -5048,9 +5055,9 @@ function gateReshard() {
                     need: 1,
                     read: (workgroupId, cb) => readCounter(DELIVERED_METRIC,
                         { workgroup: workgroupId }, cb),
-                    wait: cb => async.eachSeries(oldIds, (workgroupId, step) =>
+                    wait: (waitMs, cb) => async.eachSeries(oldIds, (workgroupId, step) =>
                         waitForCounter(DELIVERED_METRIC,
-                            { workgroup: workgroupId }, 1, 90000, 500, step),
+                            { workgroup: workgroupId }, 1, waitMs, 500, step),
                         cb),
                 }, next),
                 next => {
@@ -5110,7 +5117,7 @@ function gateReshard() {
                     read: (workgroupId, cb) => committedTotal(
                         oldGroupId(workgroupId), deliveryTopic,
                         deliveryPartitions, cb),
-                    wait: cb => waitForDrain(Date.now(), (err, report) => {
+                    wait: (waitMs, cb) => waitForDrain(Date.now(), waitMs, (err, report) => {
                         drainedReport = report;
                         return cb(err);
                     }),
@@ -5176,13 +5183,13 @@ function gateReshard() {
                         oldIds.includes(workgroupId) ?
                             oldGroupId(workgroupId) : newGroupId(workgroupId),
                         deliveryTopic, deliveryPartitions, cb),
-                    wait: cb => async.eachSeries(oldIds.concat(newIds),
+                    wait: (waitMs, cb) => async.eachSeries(oldIds.concat(newIds),
                         (workgroupId, step) => waitForCommittedTotal(
                             oldIds.includes(workgroupId) ?
                                 oldGroupId(workgroupId) :
                                 newGroupId(workgroupId),
                             deliveryTopic, deliveryPartitions,
-                            totalOnDeliveryTopic, E_COMMIT_TIMEOUT_MS, step),
+                            totalOnDeliveryTopic, waitMs, step),
                         cb),
                 }, next),
                 next => {
@@ -5461,9 +5468,9 @@ function gateReshard() {
                     need: 1,
                     read: (workgroupId, cb) => readCounter(DELIVERED_METRIC,
                         { workgroup: workgroupId }, cb),
-                    wait: cb => async.eachSeries(oldIds, (workgroupId, step) =>
+                    wait: (waitMs, cb) => async.eachSeries(oldIds, (workgroupId, step) =>
                         waitForCounter(DELIVERED_METRIC,
-                            { workgroup: workgroupId }, 1, 90000, 500, step),
+                            { workgroup: workgroupId }, 1, waitMs, 500, step),
                         cb),
                 }, next),
                 next => {
@@ -5860,8 +5867,8 @@ function gateReshard() {
             return found ? found.topic : null;
         };
 
-        function waitForDrain(done) {
-            const deadline = Date.now() + E_DRAIN_TIMEOUT_MS;
+        function waitForDrain(timeoutMs, done) {
+            const deadline = Date.now() + timeoutMs;
             const attempt = () => runVerify(verifier, (err, result) => {
                 if (err) {
                     return done(err);
@@ -5920,9 +5927,9 @@ function gateReshard() {
                     need: 1,
                     read: (workgroupId, cb) => readCounter(DELIVERED_METRIC,
                         { workgroup: workgroupId }, cb),
-                    wait: cb => async.eachSeries(oldIds, (workgroupId, step) =>
+                    wait: (waitMs, cb) => async.eachSeries(oldIds, (workgroupId, step) =>
                         waitForCounter(DELIVERED_METRIC,
-                            { workgroup: workgroupId }, 1, 90000, 500, step),
+                            { workgroup: workgroupId }, 1, waitMs, 500, step),
                         cb),
                 }, next),
                 next => {
@@ -5977,7 +5984,7 @@ function gateReshard() {
                     read: (workgroupId, cb) => committedTotal(
                         oldGroupId(workgroupId), deliveryTopic,
                         deliveryPartitions, cb),
-                    wait: cb => waitForDrain(cb),
+                    wait: (waitMs, cb) => waitForDrain(waitMs, cb),
                 }, next),
                 next => async.eachSeries(cutoverResult.groupIds,
                     (groupId, cb) => assertSeededOffsets({
@@ -6024,13 +6031,13 @@ function gateReshard() {
                         oldIds.includes(workgroupId) ?
                             oldGroupId(workgroupId) : newGroupId(workgroupId),
                         deliveryTopic, deliveryPartitions, cb),
-                    wait: cb => async.eachSeries(oldIds.concat(newIds),
+                    wait: (waitMs, cb) => async.eachSeries(oldIds.concat(newIds),
                         (workgroupId, step) => waitForCommittedTotal(
                             oldIds.includes(workgroupId) ?
                                 oldGroupId(workgroupId) :
                                 newGroupId(workgroupId),
                             deliveryTopic, deliveryPartitions,
-                            totalOnDeliveryTopic, E_COMMIT_TIMEOUT_MS, step),
+                            totalOnDeliveryTopic, waitMs, step),
                         cb),
                 }, next),
                 next => async.eachSeries(oldIds, (workgroupId, step) =>
