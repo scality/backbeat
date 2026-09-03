@@ -5363,13 +5363,16 @@ function gateReshard() {
         const newPlan = buildHashmodDocument({
             topic: deliveryTopic, generation: 2, modulo: 3, ids: newIds });
 
+        // one destination per generation 1 workgroup. Both of them belonging
+        // to the probed workgroup would leave the other one owning nothing,
+        // delivering nothing, and never satisfying the liveness wait below
         const resources = selectReshardDestinations({
             oldDoc: oldPlan,
             newDoc: newPlan,
             prefix: 'poc-wg-e4-dest',
             wanted: [
-                { from: oldIds[0], to: newIds[0] },
                 { from: oldIds[0], to: newIds[2] },
+                { from: oldIds[1], to: newIds[1] },
             ],
         });
         const destinations = resources.map((resource, index) =>
@@ -5409,6 +5412,7 @@ function gateReshard() {
         }
 
         const oldRuntimes = new Map();
+        const restartedOld = new Set();
         let verifier = null;
         let cutoverResult = null;
         let afterCrash = null;
@@ -5445,10 +5449,23 @@ function gateReshard() {
                     topic: deliverySpec,
                     runtimes: oldRuntimes,
                 }, next),
-                next => async.eachSeries(oldIds, (workgroupId, step) =>
-                    waitForCounter(DELIVERED_METRIC,
-                        { workgroup: workgroupId }, 1, 90000, 500, step),
-                    next),
+                next => waitOrRestart({
+                    label: 'W-E4 generation 1 first delivery',
+                    workgroupIds: oldIds,
+                    runtimes: oldRuntimes,
+                    restarted: restartedOld,
+                    zkPath,
+                    baseGroupId,
+                    notifConfig,
+                    topic: deliverySpec,
+                    need: 1,
+                    read: (workgroupId, cb) => readCounter(DELIVERED_METRIC,
+                        { workgroup: workgroupId }, cb),
+                    wait: cb => async.eachSeries(oldIds, (workgroupId, step) =>
+                        waitForCounter(DELIVERED_METRIC,
+                            { workgroup: workgroupId }, 1, 90000, 500, step),
+                        cb),
+                }, next),
                 next => {
                     const cutover = buildCutoverTool({
                         name: 'e4',
