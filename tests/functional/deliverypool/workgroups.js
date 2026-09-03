@@ -5599,6 +5599,13 @@ function gateReshard() {
                     { workgroup: probed, match: 'current' },
                     barriersBeforeDefection + deliveryPartitions, E_WAIT_MS,
                     500, next),
+                // and waited for, not read once: the counter above rises as
+                // the record is handled, while the offset behind it is only
+                // committed on the consumer's auto-commit interval, so a
+                // single read here would usually still see the seed
+                next => waitForCommittedTotal(newGroupId(probed),
+                    deliveryTopic, deliveryPartitions,
+                    barrierTotal + deliveryPartitions, E_WAIT_MS, next),
                 next => committedTotal(newGroupId(probed), deliveryTopic,
                     deliveryPartitions, (err, total) => {
                         if (err) {
