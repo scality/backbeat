@@ -21,7 +21,11 @@ const { buildDeliveryKey } =
     require('../../../extensions/notification/utils/deliveryKey');
 const {
     buildGroupId,
+    buildOwnershipIndex,
     createSliceFilter,
+    destinationTokenFromKey,
+    isBarrierKey,
+    ownerOfToken,
     validateWorkgroupsDoc,
     workgroupIdForDestination,
     CONFIG_VERSION,
@@ -133,6 +137,29 @@ for (let i = 0; i < A_CUSTOMER_COUNT; i++) {
         partitions: 1,
     };
 }
+
+// Every partition of a delivery topic carries a barrier of its own, so the
+// reshard gate holds its delivery topics at the partition count gate W-C
+// used: a cutover has to be shown crossing more than one or two of them
+const E_DELIVERY_PARTITIONS = 4;
+
+// GATE W-E gives each of its scenarios a delivery topic and a customer topic
+// per destination of its own. Sharing them would make one scenario's records
+// readable by the next one's assertions, and these scenarios deliberately
+// leave records undelivered
+const E_CUSTOMER_COUNTS = { e1: 7, e2: 4, e3: 4, e4: 2, e5: 0, e6: 4 };
+Object.keys(E_CUSTOMER_COUNTS).forEach(scenario => {
+    TOPICS[`${scenario}Delivery`] = {
+        name: `poc-wg-${scenario}-delivery-${RUN_ID}`,
+        partitions: E_DELIVERY_PARTITIONS,
+    };
+    for (let i = 0; i < E_CUSTOMER_COUNTS[scenario]; i++) {
+        TOPICS[`${scenario}Customer${i}`] = {
+            name: `poc-wg-${scenario}-customer-${i}-${RUN_ID}`,
+            partitions: 1,
+        };
+    }
+});
 
 /**
  * The topics of one gate. Every key of TOPICS starts with the letter of the
@@ -2934,6 +2961,1400 @@ function gateObservability() {
                         'exercised against a barrier');
                     return done();
                 });
+        });
+    });
+});
+
+// ---------------------------------------------------------------------------
+// GATE W-E: resharding two auto workgroups into three
+// ---------------------------------------------------------------------------
+
+// the exit codes bin/notificationWorkgroupCutover.js resolves a drain report
+// to. The gate drives WorkgroupCutover directly rather than the bin, because
+// the bin takes its topic and group names from lib/Config while every name
+// here is scoped to the run, so the code an operator would see is resolved
+// from the same report field the bin keys off
+const EXIT_DRAINED = 0;
+const EXIT_NOT_DRAINED = 2;
+
+// a deployment does not start every worker of a generation in the same
+// millisecond, and simultaneous joins widen the metadata churn window the
+// pre-existing consumer wedge lives in
+const E_WORKER_SETTLE_MS = 1200;
+const E_DRAIN_POLL_MS = 1000;
+const E_DRAIN_TIMEOUT_MS = 120000;
+const E_COMMIT_TIMEOUT_MS = 180000;
+const E_BARRIER_TIMEOUT_MS = 120000;
+
+/**
+ * Identity of one produced notification: the customer topic it is addressed
+ * to, the object it is about and the round it belongs to.
+ *
+ * Two generations delivering the same record produce two copies of one
+ * identity, which is what makes a duplicate countable and a gap nameable.
+ *
+ * @param {String} topic - customer topic of the destination
+ * @param {String} objectKey - S3 object key
+ * @param {String} dateTime - event time, one per round
+ * @return {String} identity
+ */
+function identityOf(topic, objectKey, dateTime) {
+    return `${topic}|${objectKey}|${dateTime}`;
+}
+
+function objectKeysFor(prefix, count) {
+    const keys = [];
+    for (let i = 0; i < count; i++) {
+        keys.push(`${prefix}-obj-${`${i}`.padStart(3, '0')}`);
+    }
+    return keys;
+}
+
+/**
+ * Builds and validates a workgroups document whose hashmod workgroups cover
+ * one modulo exactly, one remainder each, in the order they are given
+ *
+ * @param {Object} params - topic, generation, modulo and ids
+ * @return {Object} validated document
+ */
+function buildHashmodDocument(params) {
+    const { error, value } = validateWorkgroupsDoc({
+        configVersion: CONFIG_VERSION,
+        generation: params.generation,
+        topic: params.topic,
+        updatedAt: new Date().toISOString(),
+        workgroups: params.ids.map((id, remainder) => ({
+            id,
+            rule: {
+                type: 'hashmod',
+                modulo: params.modulo,
+                remainders: [remainder],
+            },
+        })),
+    });
+    assert.ifError(error);
+    return value;
+}
+
+/**
+ * Picks destination names whose owner under the old document and under the
+ * new one are exactly the pair a scenario asked for.
+ *
+ * A reshard has to be shown on named movers and named stayers rather than on
+ * whatever one run's names happen to hash to, and the pair is proposed by the
+ * document's own ownership function, so nothing here is a second
+ * implementation of the routing rules.
+ *
+ * @param {Object} params - oldDoc, newDoc, prefix and wanted pairs
+ * @return {String[]} one resource name per wanted pair, in order
+ */
+function selectReshardDestinations(params) {
+    const { oldDoc, newDoc, prefix, wanted } = params;
+    const remaining = wanted.map(pair => ({ ...pair, resource: null }));
+    for (let i = 0; i < 2000 && remaining.some(e => !e.resource); i++) {
+        const resource = `${prefix}-${i}-${RUN_ID}`;
+        const from = workgroupIdForDestination(oldDoc, resource);
+        const to = workgroupIdForDestination(newDoc, resource);
+        const slot = remaining.find(e =>
+            !e.resource && e.from === from && e.to === to);
+        if (slot) {
+            slot.resource = resource;
+        }
+    }
+    const unfilled = remaining.filter(e => !e.resource)
+        .map(e => `${e.from} to ${e.to}`);
+    assert.deepStrictEqual(unfilled, [],
+        `could not find ${prefix} names for every wanted move`);
+    return remaining.map(e => e.resource);
+}
+
+/**
+ * Commits offsets into a consumer group the way the cutover tool pre-seeds
+ * one: assign, then a synchronous commit, on a client that never subscribes
+ *
+ * @param {String} groupId - consumer group id
+ * @param {Object[]} toppars - toppars carrying an offset
+ * @param {Function} done - callback
+ * @return {undefined}
+ */
+function commitOffsets(groupId, toppars, done) {
+    return withConsumer(groupId, (consumer, cb) => {
+        try {
+            consumer.assign(toppars.map(tp =>
+                ({ topic: tp.topic, partition: tp.partition })));
+            consumer.commitSync(toppars);
+        } catch (err) {
+            return cb(err);
+        }
+        return cb();
+    }, done);
+}
+
+/**
+ * The committed offset of every partition of a topic, for one group. A
+ * partition the group never committed reads as -1.
+ *
+ * @param {String} groupId - consumer group id
+ * @param {String} topic - topic name
+ * @param {Number} partitionCount - number of partitions
+ * @param {Function} done - callback: done(err, offsetsByPartition)
+ * @return {undefined}
+ */
+function readCommitted(groupId, topic, partitionCount, done) {
+    const toppars = [];
+    for (let i = 0; i < partitionCount; i++) {
+        toppars.push({ topic, partition: i });
+    }
+    return withConsumer(groupId, (consumer, cb) => callOrFail(cb, () =>
+        consumer.committed(toppars, METADATA_TIMEOUT, (err, committed) => {
+            if (err) {
+                return cb(err);
+            }
+            const offsets = {};
+            for (let i = 0; i < partitionCount; i++) {
+                offsets[i] = -1;
+            }
+            (committed || []).forEach(tp => {
+                offsets[tp.partition] = tp.offset;
+            });
+            return cb(null, offsets);
+        })), done);
+}
+
+/**
+ * How many records a group has consumed, counted from where it started.
+ *
+ * A committed offset is the next offset to fetch, and these topics start
+ * empty, so on a group that started at the beginning it is the number of
+ * records of that partition the group is done with. A generation seeded at
+ * its barriers started there instead.
+ *
+ * @param {Object} committed - committed offsets by partition
+ * @param {Object} startOffsets - starting offsets by partition, or null
+ * @param {Number} partitionCount - number of partitions
+ * @return {Number} records consumed
+ */
+function consumedFrom(committed, startOffsets, partitionCount) {
+    let total = 0;
+    for (let p = 0; p < partitionCount; p++) {
+        const start = startOffsets ? Number(startOffsets[p]) : 0;
+        const seen = committed[p] >= 0 ? committed[p] : start;
+        total += Math.max(0, seen - start);
+    }
+    return total;
+}
+
+/**
+ * Indexes the delivery topic as the broker actually laid it out: which
+ * produced record sits at which offset of which partition, and which
+ * workgroup owns it under the old rules and under the new ones.
+ *
+ * Every union, gap and duplicate this gate quotes is computed against this
+ * index, so each number is a statement about the topic that existed rather
+ * than about the stream the gate meant to produce.
+ *
+ * @param {Object} params - written, topicOf, oldDoc and newDoc
+ * @return {Object} { records, barriers }
+ */
+function indexDeliveryTopic(params) {
+    const { written, topicOf, oldDoc, newDoc } = params;
+    const oldIndex = buildOwnershipIndex(oldDoc);
+    const newIndex = buildOwnershipIndex(newDoc);
+    const records = [];
+    const barriers = [];
+    written.forEach(raw => {
+        if (isBarrierKey(raw.key)) {
+            barriers.push({ partition: raw.partition, offset: raw.offset });
+            return;
+        }
+        const parsed = JSON.parse(raw.value);
+        const token = destinationTokenFromKey(raw.key);
+        const topic = topicOf(parsed.destinationId);
+        records.push({
+            partition: raw.partition,
+            offset: raw.offset,
+            destinationId: parsed.destinationId,
+            // the whole record key, so a spread destination's lanes can be
+            // told apart: the routing token is only the part before the sub
+            // key separator, which is the same for all of them
+            key: raw.key,
+            token,
+            identity: topic ?
+                identityOf(topic, parsed.key, parsed.dateTime) : null,
+            oldOwner: ownerOfToken(oldIndex, token),
+            newOwner: ownerOfToken(newIndex, token),
+        });
+    });
+    return { records, barriers };
+}
+
+/**
+ * What the previous generation's own committed offsets say about a cutover,
+ * read against the delivery topic index: which records it still owed when
+ * those offsets froze, and which ones it consumed a second time past the
+ * barriers.
+ *
+ * A record below its barrier is the previous generation's responsibility and
+ * nobody else's, so it is lost when the workgroup that owns it under the old
+ * rules had not committed past it. A record at or after its barrier is
+ * delivered by the new generation whatever happens, so the old generation
+ * having consumed it too makes it a duplicate.
+ *
+ * @param {Object} params - index, barriers, committedByGroup, groupIdOf
+ * @return {Object} { lost, duplicated }, both sets of identities
+ */
+function predictFromCommittedOffsets(params) {
+    const { index, barriers, committedByGroup, groupIdOf } = params;
+    const lost = new Set();
+    const duplicated = new Set();
+    index.records.forEach(rec => {
+        if (rec.identity === null) {
+            return;
+        }
+        const barrier = Number(barriers[rec.partition]);
+        const committed = committedByGroup[groupIdOf(rec.oldOwner)] || {};
+        const raw = committed[rec.partition];
+        const seen = typeof raw === 'number' && raw >= 0 ? raw : 0;
+        if (rec.offset < barrier) {
+            if (seen <= rec.offset) {
+                lost.add(rec.identity);
+            }
+            return;
+        }
+        if (seen > rec.offset) {
+            duplicated.add(rec.identity);
+        }
+    });
+    return { lost, duplicated };
+}
+
+/**
+ * The highest offset each customer topic partition held at a moment, so that
+ * records delivered before it can be told from records delivered after it
+ *
+ * @param {Map} tailers - customer topic to tailer
+ * @return {Map} topic to a map of partition to offset
+ */
+function snapshotTailerBoundary(tailers) {
+    const snapshot = new Map();
+    tailers.forEach((tailer, topic) => {
+        const byPartition = new Map();
+        tailer.records.forEach(raw => {
+            const seen = byPartition.get(raw.partition);
+            if (seen === undefined || raw.offset > seen) {
+                byPartition.set(raw.partition, raw.offset);
+            }
+        });
+        snapshot.set(topic, byPartition);
+    });
+    return snapshot;
+}
+
+/**
+ * Every delivered record, carrying the identity of the produced record it
+ * holds and, where a boundary was taken, the generation that delivered it.
+ *
+ * The boundary only separates generations that never ran at the same time.
+ * A scenario that overlaps them passes no boundary and attributes by the
+ * delivery topic index instead.
+ *
+ * @param {Map} tailers - customer topic to tailer
+ * @param {Map} [boundary] - snapshot from snapshotTailerBoundary
+ * @return {Object[]} delivered records
+ */
+function deliveredRecordsOf(tailers, boundary) {
+    const all = [];
+    tailers.forEach((tailer, topic) => {
+        const marks = (boundary && boundary.get(topic)) || new Map();
+        tailer.records.forEach(raw => {
+            const event = deliveredEvent(raw);
+            const mark = marks.get(raw.partition);
+            all.push({
+                topic,
+                partition: raw.partition,
+                offset: raw.offset,
+                key: event.key,
+                eventTime: event.eventTime,
+                identity: identityOf(topic, event.key, event.eventTime),
+                generation: boundary && mark !== undefined &&
+                    raw.offset <= mark ? 'old' : 'new',
+            });
+        });
+    });
+    return all;
+}
+
+/**
+ * How many copies of each identity were delivered
+ *
+ * @param {Object[]} delivered - records from deliveredRecordsOf
+ * @return {Map} identity to copy count
+ */
+function copiesByIdentity(delivered) {
+    const copies = new Map();
+    delivered.forEach(rec =>
+        copies.set(rec.identity, (copies.get(rec.identity) || 0) + 1));
+    return copies;
+}
+
+/**
+ * Runs the drain report an operator would run, and resolves the exit code
+ * bin/notificationWorkgroupCutover.js gives it
+ *
+ * @param {Object} verifier - WorkgroupCutover instance
+ * @param {Function} done - callback: done(err, { report, exitCode, remaining })
+ * @return {undefined}
+ */
+function runVerify(verifier, done) {
+    return verifier.verify((err, report) => {
+        if (err) {
+            return done(err);
+        }
+        return done(null, {
+            report,
+            exitCode: report.drained ? EXIT_DRAINED : EXIT_NOT_DRAINED,
+            remaining: report.rows
+                .reduce((total, row) => total + row.remaining, 0),
+        });
+    });
+}
+
+/**
+ * Builds a WorkgroupCutover against the real zookeeper and the real broker
+ *
+ * @param {Object} params - notifConfig, options and name
+ * @return {Object} WorkgroupCutover
+ */
+function buildCutoverTool(params) {
+    return new WorkgroupCutover({
+        kafkaConfig,
+        zkConfig: {
+            connectionString: ZOOKEEPER_HOSTS,
+            autoCreateNamespace: false,
+        },
+        notifConfig: params.notifConfig,
+        options: params.options || { timeout: 10000 },
+        logger: new werelogs.Logger(`WorkgroupCutover:${params.name}`),
+    });
+}
+
+/**
+ * Starts one workgroup per id, each through the real loader, with a gap
+ * between the joins
+ *
+ * @param {Object} params - zkPath, workgroupIds, baseGroupId, notifConfig
+ *   and runtimes, the map runtimes are recorded in
+ * @param {Function} done - callback
+ * @return {undefined}
+ */
+function startWorkgroups(params, done) {
+    return async.eachSeries(params.workgroupIds, (workgroupId, next) =>
+        startWorkgroup({
+            zkPath: params.zkPath,
+            workgroupId,
+            baseGroupId: params.baseGroupId,
+            notifConfig: params.notifConfig,
+        }, (err, runtime) => {
+            if (runtime) {
+                params.runtimes.set(workgroupId, runtime);
+            }
+            if (err) {
+                return next(err);
+            }
+            return setTimeout(next, E_WORKER_SETTLE_MS);
+        }), done);
+}
+
+function stopWorkgroups(runtimes, done) {
+    const entries = [...runtimes.entries()];
+    return async.eachSeries(entries, (entry, next) =>
+        stopWorkgroup(entry[1], () => {
+            runtimes.delete(entry[0]);
+            return next();
+        }), () => done());
+}
+
+/**
+ * Restarts, on the consumer group it already has, every workgroup whose own
+ * counter fell short of what a phase needs.
+ *
+ * The consumer wedge is a property of one consumer, so it is looked for one
+ * workgroup at a time: anything measured over a generation hides a wedge of
+ * one member behind the health of the others. A fresh worker on the same
+ * group resumes from that group's committed offset, so a workgroup that had
+ * already delivered does not deliver anything twice.
+ *
+ * See design/06-backbeatconsumer-wedge.md.
+ *
+ * @param {Object} params - label, workgroupIds, runtimes, read, need,
+ *   restarted, zkPath, baseGroupId and notifConfig
+ * @param {Function} done - callback
+ * @return {undefined}
+ */
+function restartShortWorkgroups(params, done) {
+    return async.eachSeries(params.workgroupIds, (workgroupId, next) =>
+        params.read(workgroupId, (err, value) => {
+            if (err) {
+                return next(err);
+            }
+            if (value >= params.need) {
+                return next();
+            }
+            WEDGES.push({
+                phase: `${params.label} ${workgroupId}`,
+                attempt: 1,
+                error: `reached ${value} of ${params.need}`,
+            });
+            params.restarted.add(workgroupId);
+            suiteLog.warn('a workgroup fell short of what its phase needs, ' +
+                'restarting it on its own group and recording the occurrence ' +
+                'as the pre-existing consumer wedge', {
+                phase: params.label,
+                workgroup: workgroupId,
+                reached: value,
+                need: params.need,
+            });
+            return stopWorkgroup(params.runtimes.get(workgroupId), () =>
+                startWorkgroup({
+                    zkPath: params.zkPath,
+                    workgroupId,
+                    baseGroupId: params.baseGroupId,
+                    notifConfig: params.notifConfig,
+                }, (startErr, runtime) => {
+                    if (runtime) {
+                        params.runtimes.set(workgroupId, runtime);
+                    }
+                    return next(startErr);
+                }));
+        }), done);
+}
+
+/**
+ * Waits for a phase, and when the wait fails, restarts the workgroups that
+ * fell short and waits once more
+ *
+ * @param {Object} params - the restartShortWorkgroups params plus wait
+ * @param {Function} done - callback
+ * @return {undefined}
+ */
+function waitOrRestart(params, done) {
+    return params.wait(err => {
+        if (!err) {
+            return done();
+        }
+        suiteLog.warn('a phase did not complete, looking for a wedged ' +
+            'workgroup before failing it', {
+            phase: params.label,
+            error: err.message,
+        });
+        return restartShortWorkgroups(params, restartErr => {
+            if (restartErr) {
+                return done(restartErr);
+            }
+            return params.wait(done);
+        });
+    });
+}
+
+/**
+ * The number of records a group is done with, summed over every partition
+ *
+ * @param {String} groupId - consumer group id
+ * @param {String} topic - topic name
+ * @param {Number} partitionCount - number of partitions
+ * @param {Function} done - callback: done(err, total)
+ * @return {undefined}
+ */
+function committedTotal(groupId, topic, partitionCount, done) {
+    return readCommitted(groupId, topic, partitionCount, (err, offsets) => {
+        if (err) {
+            return done(err);
+        }
+        return done(null, consumedFrom(offsets, null, partitionCount));
+    });
+}
+
+describe('GATE W-E :: resharding two auto workgroups into three',
+function gateReshard() {
+    this.timeout(3600000);
+
+    before(done => createGateTopics('e', done));
+
+    describe('E1 :: the happy reshard', function reshardHappyPath() {
+        this.timeout(1200000);
+
+        const deliveryTopic = TOPICS.e1Delivery.name;
+        const deliveryPartitions = TOPICS.e1Delivery.partitions;
+        const baseGroupId = `poc-wg-e1-group-${RUN_ID}`;
+        const zkPath = `${ZK_BASE}/gate-e1`;
+        const cachePath = cachePathFor('gate-e1-cutover');
+        const objectsPerDestination = 5;
+        const spreadKeysPerSubKey = 2;
+        const BATCH_SIZE = 3;
+        const BATCH_GAP_MS = 300;
+        const CUTOVER_DELAY_MS = 1500;
+
+        const oldIds = ['e1-g1a', 'e1-g1b'];
+        const newIds = ['e1-g2a', 'e1-g2b', 'e1-g2c'];
+
+        // neither of these is ever written: they only propose destination
+        // names, so that the cutover the tool actually runs moves the
+        // destinations this gate wants moved and leaves the others where
+        // they are
+        const oldPlan = buildHashmodDocument({
+            topic: deliveryTopic, generation: 1, modulo: 2, ids: oldIds });
+        const newPlan = buildHashmodDocument({
+            topic: deliveryTopic, generation: 2, modulo: 3, ids: newIds });
+
+        // one destination of every class the remap has: modulo 2 to modulo 3
+        // leaves two of six where they are and moves the other four
+        const moves = [
+            { from: oldIds[0], to: newIds[0] },
+            { from: oldIds[1], to: newIds[1] },
+            { from: oldIds[0], to: newIds[1] },
+            { from: oldIds[0], to: newIds[2] },
+            { from: oldIds[1], to: newIds[0] },
+            { from: oldIds[1], to: newIds[2] },
+        ];
+        const plainResources = selectReshardDestinations({
+            oldDoc: oldPlan,
+            newDoc: newPlan,
+            prefix: 'poc-wg-e1-dest',
+            wanted: moves,
+        });
+        const [spreadResource] = selectReshardDestinations({
+            oldDoc: oldPlan,
+            newDoc: newPlan,
+            prefix: 'poc-wg-e1-spread',
+            // a spread destination that changes owner: every lane of it has
+            // to move together, because the routing token is cut at the sub
+            // key separator and is therefore the same for all of them
+            wanted: [{ from: oldIds[1], to: newIds[2] }],
+        });
+
+        const plainDestinations = plainResources.map((resource, index) =>
+            destinationConfig({
+                resource,
+                topic: TOPICS[`e1Customer${index}`].name,
+            }));
+        const spread = destinationConfig({
+            resource: spreadResource,
+            topic: TOPICS.e1Customer6.name,
+            spreadFactor: 3,
+        });
+        const destinations = plainDestinations.concat([spread]);
+
+        const notifConfig = {
+            destinations,
+            deliveryPool: {
+                ...deliveryPoolConfig({
+                    topic: deliveryTopic,
+                    groupId: baseGroupId,
+                    concurrency: 10,
+                }),
+                workgroups: { zookeeperPath: zkPath, cachePath },
+            },
+        };
+
+        const eventTypes = ['s3:ObjectCreated:Put', 's3:ObjectCreated:Put',
+            's3:ObjectRemoved:Delete'];
+        const roundTimes = eventTypes.map((_, index) => eventTime(index));
+        const keysOf = new Map();
+        plainDestinations.forEach((destination, index) => keysOf.set(
+            destination.topic, objectKeysFor(`e1-${index}`,
+                objectsPerDestination)));
+        keysOf.set(spread.topic,
+            keysCoveringEverySubKey(spread, 'e1-spread', spreadKeysPerSubKey));
+
+        const produced = new Set();
+        const primingRecords = [];
+        const streamBatches = [];
+        const maxKeys = Math.max(...destinations
+            .map(destination => keysOf.get(destination.topic).length));
+        eventTypes.forEach((eventType, round) => {
+            const roundRecords = [];
+            // destinations are interleaved, so no worker ever sees one
+            // destination's records as one uninterrupted run
+            for (let k = 0; k < maxKeys; k++) {
+                destinations.forEach(destination => {
+                    const keys = keysOf.get(destination.topic);
+                    if (k >= keys.length) {
+                        return;
+                    }
+                    produced.add(identityOf(destination.topic, keys[k],
+                        roundTimes[round]));
+                    roundRecords.push(addressedRecord({
+                        destination,
+                        key: keys[k],
+                        eventType,
+                        dateTime: roundTimes[round],
+                    }));
+                });
+            }
+            if (round === 0) {
+                // the topic is not empty when generation 1 joins, which is
+                // what a running deployment looks like
+                primingRecords.push(...roundRecords);
+                return;
+            }
+            for (let i = 0; i < roundRecords.length; i += BATCH_SIZE) {
+                streamBatches.push(roundRecords.slice(i, i + BATCH_SIZE));
+            }
+        });
+        const totalProduced = produced.size;
+        const totalOnDeliveryTopic = totalProduced + deliveryPartitions;
+
+        const tailers = new Map();
+        const oldRuntimes = new Map();
+        const newRuntimes = new Map();
+        const restartedOld = new Set();
+        const restartedNew = new Set();
+        const drainPolls = [];
+        const oldCommitted = {};
+        const newCommitted = {};
+        const seededErrors = [];
+        let stream = null;
+        let verifier = null;
+        let cutoverResult = null;
+        let drainedReport = null;
+        let frozenReport = null;
+        let boundary = null;
+        let deliveryIndex = null;
+        let oldDelivered = 0;
+
+        const oldGroupId = id => buildGroupId(baseGroupId, id, 1);
+        const newGroupId = id => buildGroupId(baseGroupId, id, 2);
+        const topicOf = destinationId => {
+            const found = destinations
+                .find(destination => destination.resource === destinationId);
+            return found ? found.topic : null;
+        };
+
+        function deliveredCount() {
+            return [...tailers.values()]
+                .reduce((total, tailer) => total + tailer.records.length, 0);
+        }
+
+        function waitForDrain(startedAt, done) {
+            const deadline = Date.now() + E_DRAIN_TIMEOUT_MS;
+            const attempt = () => runVerify(verifier, (err, result) => {
+                if (err) {
+                    return done(err);
+                }
+                drainPolls.push({
+                    atMs: Date.now() - startedAt,
+                    remaining: result.remaining,
+                    exitCode: result.exitCode,
+                });
+                if (result.report.drained) {
+                    return done(null, result.report);
+                }
+                if (Date.now() >= deadline) {
+                    return done(new Error('generation 1 never committed past ' +
+                        'every barrier, so the reshard could not proceed'));
+                }
+                return setTimeout(attempt, E_DRAIN_POLL_MS);
+            });
+            return attempt();
+        }
+
+        before(done => {
+            const finish = settleOnce(done);
+            record('W-E1.destinations.plain', plainResources);
+            record('W-E1.destinations.spread', spreadResource);
+            record('W-E1.destinations.moves', moves.map((move, i) =>
+                `${plainResources[i]}: ${move.from} to ${move.to}`));
+            record('W-E1.records.produced', totalProduced);
+            record('W-E1.stream.batches', streamBatches.length);
+            return async.series([
+                next => async.eachSeries(destinations,
+                    (destination, tailDone) => {
+                        const tailer = new TopicTailer(destination.topic);
+                        tailers.set(destination.topic, tailer);
+                        return tailer.start(tailDone);
+                    }, next),
+                next => produceRecords(deliveryTopic, primingRecords, next),
+                // the delivery topic was created and confirmed stable in the
+                // gate's before hook, minutes of wall clock before these
+                // workers join. The broker intermittently answers "unknown
+                // topic or partition" for it anyway, which drops it out of
+                // the effective subscription and starts the rebalance loop of
+                // design/06-backbeatconsumer-wedge.md
+                next => waitForTopics([TOPICS.e1Delivery], err => next(err)),
+                next => writeWorkgroupsDocument(zkPath, buildHashmodDocument({
+                    topic: deliveryTopic,
+                    generation: 1,
+                    modulo: 2,
+                    ids: oldIds,
+                }), next),
+                next => startWorkgroups({
+                    zkPath,
+                    workgroupIds: oldIds,
+                    baseGroupId,
+                    notifConfig,
+                    runtimes: oldRuntimes,
+                }, next),
+                next => waitOrRestart({
+                    label: 'W-E1 generation 1 first delivery',
+                    workgroupIds: oldIds,
+                    runtimes: oldRuntimes,
+                    restarted: restartedOld,
+                    zkPath,
+                    baseGroupId,
+                    notifConfig,
+                    need: 1,
+                    read: (workgroupId, cb) => readCounter(DELIVERED_METRIC,
+                        { workgroup: workgroupId }, cb),
+                    wait: cb => async.eachSeries(oldIds, (workgroupId, step) =>
+                        waitForCounter(DELIVERED_METRIC,
+                            { workgroup: workgroupId }, 1, 90000, 500, step),
+                        cb),
+                }, next),
+                next => {
+                    stream = new RecordStream({
+                        topic: deliveryTopic,
+                        batches: streamBatches,
+                        gapMs: BATCH_GAP_MS,
+                    });
+                    return stream.start(next);
+                },
+                next => setTimeout(next, CUTOVER_DELAY_MS),
+                next => {
+                    const startedAt = Date.now();
+                    const cutover = buildCutoverTool({
+                        name: 'e1',
+                        notifConfig,
+                        options: {
+                            modulo: 3,
+                            workgroup: newIds.map((id, r) => `${id}:${r}`),
+                            timeout: 10000,
+                        },
+                    });
+                    return cutover.cutover((err, result) => {
+                        cutoverResult = result;
+                        record('W-E1.cutover.ms', Date.now() - startedAt);
+                        record('W-E1.cutover.recordsStreamedSoFar',
+                            stream.sent);
+                        return cutover.close(() => next(err));
+                    });
+                },
+                next => waitFor(() => 'the record stream to finish ' +
+                    `(${stream.sent} of ${streamBatches.length * BATCH_SIZE})`,
+                    () => stream.finished, 120000, next),
+                next => stream.close(next),
+                next => {
+                    assert.ifError(stream.error);
+                    verifier = buildCutoverTool({
+                        name: 'e1-verify',
+                        notifConfig,
+                        options: { timeout: 10000 },
+                    });
+                    return next();
+                },
+                next => waitOrRestart({
+                    label: 'W-E1 generation 1 drain',
+                    workgroupIds: oldIds,
+                    runtimes: oldRuntimes,
+                    restarted: restartedOld,
+                    zkPath,
+                    baseGroupId,
+                    notifConfig,
+                    // draining is committing past every barrier, so a
+                    // workgroup that fell short of the barrier total is the
+                    // one holding the drain up
+                    need: WorkgroupCutover
+                        .partitionsOf(cutoverResult.doc.barriers)
+                        .reduce((total, partition) =>
+                            total + cutoverResult.doc.barriers[partition], 0),
+                    read: (workgroupId, cb) => committedTotal(
+                        oldGroupId(workgroupId), deliveryTopic,
+                        deliveryPartitions, cb),
+                    wait: cb => waitForDrain(Date.now(), (err, report) => {
+                        drainedReport = report;
+                        return cb(err);
+                    }),
+                }, next),
+                // generation 1 is left running until it is done with the
+                // whole topic, so its overshoot past the barriers, and the
+                // duplicates that follow from it, are an exact number rather
+                // than whatever it happened to reach when it was stopped
+                next => waitOrRestart({
+                    label: 'W-E1 generation 1 commits the whole topic',
+                    workgroupIds: oldIds,
+                    runtimes: oldRuntimes,
+                    restarted: restartedOld,
+                    zkPath,
+                    baseGroupId,
+                    notifConfig,
+                    need: totalOnDeliveryTopic,
+                    read: (workgroupId, cb) => committedTotal(
+                        oldGroupId(workgroupId), deliveryTopic,
+                        deliveryPartitions, cb),
+                    wait: cb => async.eachSeries(oldIds, (workgroupId, step) =>
+                        waitForCommittedTotal(oldGroupId(workgroupId),
+                            deliveryTopic, deliveryPartitions,
+                            totalOnDeliveryTopic, E_COMMIT_TIMEOUT_MS, step),
+                        cb),
+                }, next),
+                // only now may the previous generation be stopped
+                next => stopWorkgroups(oldRuntimes, next),
+                next => async.eachSeries([...tailers.values()],
+                    (tailer, quietDone) => waitUntilQuiet(tailer, 500,
+                        quietDone), next),
+                next => {
+                    boundary = snapshotTailerBoundary(tailers);
+                    oldDelivered = deliveredCount();
+                    record('W-E1.generation1.delivered', oldDelivered);
+                    return next();
+                },
+                // the offsets generation 1 froze at, which is what the drain
+                // report is reading and what every prediction is made from
+                next => async.eachSeries(oldIds, (workgroupId, step) =>
+                    readCommitted(oldGroupId(workgroupId), deliveryTopic,
+                        deliveryPartitions, (err, offsets) => {
+                            if (err) {
+                                return step(err);
+                            }
+                            oldCommitted[oldGroupId(workgroupId)] = offsets;
+                            return step();
+                        }), next),
+                next => runVerify(verifier, (err, result) => {
+                    if (err) {
+                        return next(err);
+                    }
+                    frozenReport = result.report;
+                    record('W-E1.verify.afterStop.exitCode', result.exitCode);
+                    record('W-E1.verify.afterStop.remaining',
+                        result.remaining);
+                    record('W-E1.verify.afterStop.overshoot',
+                        result.report.overshoot);
+                    record('W-E1.verify.afterStop.overshootByGroup',
+                        result.report.overshootByGroup);
+                    return next();
+                }),
+                // the delivery topic as the broker laid it out, read once
+                // everything that will ever be produced has been
+                next => readTopic(deliveryTopic, totalOnDeliveryTopic, 120000,
+                    (err, written) => {
+                        if (err) {
+                            return next(err);
+                        }
+                        deliveryIndex = indexDeliveryTopic({
+                            written,
+                            topicOf,
+                            oldDoc: oldPlan,
+                            newDoc: cutoverResult.doc,
+                        });
+                        record('W-E1.deliveryTopic.records',
+                            deliveryIndex.records.length);
+                        record('W-E1.deliveryTopic.barriers',
+                            deliveryIndex.barriers.length);
+                        return next();
+                    }),
+                // the guard rail, on the groups the cutover really seeded
+                next => async.eachSeries(cutoverResult.groupIds,
+                    (groupId, cb) => assertSeededOffsets({
+                        kafkaConfig,
+                        topic: deliveryTopic,
+                        groupId,
+                        barriers: cutoverResult.doc.barriers,
+                        logger: new werelogs.Logger('seededOffsets:ft'),
+                    }, err => {
+                        if (err) {
+                            seededErrors.push(
+                                err.description || err.message);
+                        }
+                        return cb(err);
+                    }), next),
+                next => waitForTopics([TOPICS.e1Delivery], err => next(err)),
+                next => startWorkgroups({
+                    zkPath,
+                    workgroupIds: newIds,
+                    baseGroupId,
+                    notifConfig,
+                    runtimes: newRuntimes,
+                }, next),
+                // generation 1 had already delivered every produced record
+                // before it was stopped, so covering the produced set says
+                // nothing about generation 2. Its own barriers, one per
+                // partition, and the records that follow them are what say
+                // it ran
+                next => waitOrRestart({
+                    label: 'W-E1 generation 2 barriers',
+                    workgroupIds: newIds,
+                    runtimes: newRuntimes,
+                    restarted: restartedNew,
+                    zkPath,
+                    baseGroupId,
+                    notifConfig,
+                    need: deliveryPartitions,
+                    read: (workgroupId, cb) => readCounter(BARRIER_METRIC,
+                        { workgroup: workgroupId, match: 'current' }, cb),
+                    wait: cb => async.series([
+                        step => async.eachSeries(newIds, (workgroupId, each) =>
+                            waitForCounter(BARRIER_METRIC, {
+                                workgroup: workgroupId, match: 'current',
+                            }, deliveryPartitions, E_BARRIER_TIMEOUT_MS, 500,
+                            each), step),
+                        step => waitFor(() => 'generation 2 to redeliver ' +
+                            'what follows its barriers ' +
+                            `(${deliveredCount() - oldDelivered} so far)`,
+                            () => deliveredCount() > oldDelivered, 90000,
+                            step),
+                    ], err => cb(err)),
+                }, next),
+                next => waitOrRestart({
+                    label: 'W-E1 generation 2 commits the whole topic',
+                    workgroupIds: newIds,
+                    runtimes: newRuntimes,
+                    restarted: restartedNew,
+                    zkPath,
+                    baseGroupId,
+                    notifConfig,
+                    need: totalOnDeliveryTopic,
+                    read: (workgroupId, cb) => committedTotal(
+                        newGroupId(workgroupId), deliveryTopic,
+                        deliveryPartitions, cb),
+                    wait: cb => async.eachSeries(newIds, (workgroupId, step) =>
+                        waitForCommittedTotal(newGroupId(workgroupId),
+                            deliveryTopic, deliveryPartitions,
+                            totalOnDeliveryTopic, E_COMMIT_TIMEOUT_MS, step),
+                        cb),
+                }, next),
+                next => async.eachSeries([...tailers.values()],
+                    (tailer, quietDone) => waitUntilQuiet(tailer, 500,
+                        quietDone), next),
+                next => async.eachSeries(newIds, (workgroupId, step) =>
+                    readCommitted(newGroupId(workgroupId), deliveryTopic,
+                        deliveryPartitions, (err, offsets) => {
+                            if (err) {
+                                return step(err);
+                            }
+                            newCommitted[newGroupId(workgroupId)] = offsets;
+                            return step();
+                        }), next),
+                next => {
+                    [...oldRuntimes.values(), ...newRuntimes.values()]
+                        .forEach(registerWorkgroup);
+                    return next();
+                },
+            ], finish);
+        });
+
+        after(done => async.series([
+            next => (stream ? stream.close(next) : next()),
+            next => stopWorkgroups(oldRuntimes, next),
+            next => stopWorkgroups(newRuntimes, next),
+            next => (verifier ? verifier.close(next) : next()),
+            next => async.eachSeries([...tailers.values()],
+                (tailer, tailDone) => tailer.stop(tailDone), next),
+        ], done));
+
+        it('should write generation 2 with a barrier on every partition and ' +
+        'exactly the two generation 1 groups it replaces', done => {
+            const doc = cutoverResult.doc;
+            record('W-E1.doc.generation', doc.generation);
+            record('W-E1.doc.previousGroups', doc.previousGroups);
+            record('W-E1.doc.barriers', doc.barriers);
+            record('W-E1.doc.groupIds', cutoverResult.groupIds);
+            assert.strictEqual(doc.generation, 2);
+            assert.strictEqual(doc.topic, deliveryTopic);
+            assert.deepStrictEqual(doc.previousGroups.slice().sort(),
+                oldIds.map(oldGroupId).sort(),
+                'the document has to record the two generation 1 groups as ' +
+                'the ones it replaces, so a later verify drains those and ' +
+                'not a set derived from the workgroups it lists');
+            assert.strictEqual(Object.keys(doc.barriers).length,
+                deliveryPartitions,
+                'every partition needs a barrier or the new generation has ' +
+                'a partition nobody seeded');
+            assert.deepStrictEqual(cutoverResult.groupIds.slice().sort(),
+                newIds.map(newGroupId).sort());
+            assert.deepStrictEqual(seededErrors, [],
+                'the startup assertion refused a group the cutover seeded');
+            return done();
+        });
+
+        it('should hold the reshard until generation 1 has committed past ' +
+        'every barrier', done => {
+            const last = drainPolls[drainPolls.length - 1];
+            assert(drainedReport, 'the drain report never came back');
+            record('W-E1.drain.polls', drainPolls);
+            record('W-E1.drain.pollCount', drainPolls.length);
+            record('W-E1.drain.firstRemaining', drainPolls[0].remaining);
+            record('W-E1.drain.elapsedMs', last.atMs);
+            assert(drainedReport.drained,
+                'the drain report never reported generation 1 drained');
+            assert.strictEqual(last.remaining, 0);
+            assert.strictEqual(last.exitCode, EXIT_DRAINED);
+            assert.deepStrictEqual(
+                Object.keys(drainedReport.overshootByGroup).sort(),
+                oldIds.map(oldGroupId).sort(),
+                'the drain report has to read exactly the two generation 1 ' +
+                'groups the document records');
+            return done();
+        });
+
+        it('should deliver the union of both generations with no gap',
+        done => {
+            const delivered = deliveredRecordsOf(tailers, boundary);
+            const seen = new Set(delivered.map(rec => rec.identity));
+            const missing = [...produced].filter(id => !seen.has(id));
+            const byGeneration = { old: 0, new: 0 };
+            delivered.forEach(rec => { byGeneration[rec.generation] += 1; });
+            record('W-E1.union.produced', totalProduced);
+            record('W-E1.union.deliveredRecords', delivered.length);
+            record('W-E1.union.distinctDelivered', seen.size);
+            record('W-E1.union.duplicates', delivered.length - seen.size);
+            record('W-E1.union.byGeneration', byGeneration);
+            assert.deepStrictEqual(missing, [],
+                'a produced record was delivered by neither generation, ' +
+                'which is the gap this design exists to prevent');
+            assert.strictEqual(seen.size, totalProduced);
+            assert(byGeneration.old > 0,
+                'generation 1 delivered nothing, so no seam was crossed');
+            assert(byGeneration.new > 0,
+                'generation 2 delivered nothing, so no seam was crossed');
+            return done();
+        });
+
+        it('should have each generation account for every record it consumed ' +
+        'as delivered or skipped, and no destination served twice in one ' +
+        'generation', done => {
+            const barriers = cutoverResult.doc.barriers;
+            const generations = [
+                { ids: oldIds, groupIdOf: oldGroupId, doc: oldPlan,
+                    committed: oldCommitted, start: null, label: 'generation 1',
+                    restarted: restartedOld },
+                { ids: newIds, groupIdOf: newGroupId, doc: cutoverResult.doc,
+                    committed: newCommitted, start: barriers,
+                    label: 'generation 2', restarted: restartedNew },
+            ];
+            return async.eachSeries(generations, (generation, next) =>
+                async.eachSeries(generation.ids, (workgroupId, step) =>
+                    async.parallel({
+                        delivered: cb => readCounter(DELIVERED_METRIC,
+                            { workgroup: workgroupId }, cb),
+                        notInSlice: cb => readCounter(SKIPPED_METRIC,
+                            { workgroup: workgroupId, reason: 'not_in_slice' },
+                            cb),
+                        barrier: cb => readCounter(SKIPPED_METRIC,
+                            { workgroup: workgroupId, reason: 'barrier' }, cb),
+                        dropped: cb => readCounter(DROPPED_METRIC,
+                            { workgroup: workgroupId }, cb),
+                        targets: cb => readSeries(DELIVERED_METRIC,
+                            { workgroup: workgroupId }, cb),
+                    }, (err, counters) => {
+                        if (err) {
+                            return step(err);
+                        }
+                        const consumed = consumedFrom(
+                            generation.committed[
+                                generation.groupIdOf(workgroupId)],
+                            generation.start, deliveryPartitions);
+                        const handled = counters.delivered +
+                            counters.notInSlice + counters.barrier +
+                            counters.dropped;
+                        record(`W-E1.totality.${workgroupId}`, {
+                            consumed,
+                            delivered: counters.delivered,
+                            notInSlice: counters.notInSlice,
+                            barrier: counters.barrier,
+                            dropped: counters.dropped,
+                        });
+                        assert.strictEqual(counters.dropped, 0,
+                            `${workgroupId} dropped a record it owned`);
+                        if (generation.restarted.has(workgroupId)) {
+                            // a restarted workgroup re-reads everything it
+                            // had not committed past, so its counters are no
+                            // longer the exact partition of what it consumed.
+                            // The restart is in run.wedgeOccurrences
+                            assert(handled >= consumed,
+                                `${workgroupId} was restarted and still ` +
+                                `handled ${handled} of ${consumed}`);
+                            assert(counters.barrier >= deliveryPartitions,
+                                `${workgroupId} was restarted and still saw ` +
+                                `only ${counters.barrier} barriers`);
+                        } else {
+                            assert.strictEqual(handled, consumed,
+                                `${workgroupId} consumed ${consumed} records ` +
+                                `and accounted for ${handled} of them`);
+                            assert.strictEqual(counters.barrier,
+                                deliveryPartitions,
+                                `${workgroupId} skipped ${counters.barrier} ` +
+                                'barriers, one per partition would be ' +
+                                `${deliveryPartitions}`);
+                        }
+                        counters.targets.forEach(sample => assert.strictEqual(
+                            workgroupIdForDestination(generation.doc,
+                                sample.labels.target), workgroupId,
+                            `${workgroupId} delivered to ` +
+                            `${sample.labels.target}, which it does not own ` +
+                            `in ${generation.label}`));
+                        return step();
+                    }), next), done);
+        });
+
+        it('should hand every moved destination from its generation 1 owner ' +
+        'below the barrier to its generation 2 owner from the barrier on',
+        done => {
+            const delivered = deliveredRecordsOf(tailers, boundary);
+            const byGeneration = { old: new Set(), new: new Set() };
+            delivered.forEach(rec =>
+                byGeneration[rec.generation].add(rec.identity));
+            const barriers = cutoverResult.doc.barriers;
+            const below = [];
+            const from = [];
+            deliveryIndex.records.forEach(rec => {
+                if (rec.offset < Number(barriers[rec.partition])) {
+                    below.push(rec);
+                    return;
+                }
+                from.push(rec);
+            });
+            const belowMissed = below
+                .filter(rec => !byGeneration.old.has(rec.identity))
+                .map(rec => rec.identity);
+            const fromMissed = from
+                .filter(rec => !byGeneration.new.has(rec.identity))
+                .map(rec => rec.identity);
+            record('W-E1.barrier.recordsBelow', below.length);
+            record('W-E1.barrier.recordsFrom', from.length);
+            assert.deepStrictEqual(belowMissed, [],
+                'a record below its barrier was not delivered by ' +
+                'generation 1, which owns everything below the barrier');
+            assert.deepStrictEqual(fromMissed, [],
+                'a record at or after its barrier was not delivered by ' +
+                'generation 2, which is seeded at the barrier');
+            return async.eachSeries(
+                moves.map((move, i) => ({ ...move,
+                    resource: plainResources[i] })),
+                (move, next) => async.parallel({
+                    oldOwner: cb => readCounter(DELIVERED_METRIC,
+                        { workgroup: move.from, target: move.resource }, cb),
+                    newOwner: cb => readCounter(DELIVERED_METRIC,
+                        { workgroup: move.to, target: move.resource }, cb),
+                    others: cb => readSeries(DELIVERED_METRIC,
+                        { target: move.resource }, cb),
+                }, (err, counters) => {
+                    if (err) {
+                        return next(err);
+                    }
+                    record(`W-E1.handover.${move.resource}`, {
+                        from: move.from,
+                        to: move.to,
+                        deliveredByOldOwner: counters.oldOwner,
+                        deliveredByNewOwner: counters.newOwner,
+                    });
+                    assert(counters.oldOwner > 0,
+                        `${move.resource} was not delivered by its ` +
+                        `generation 1 owner ${move.from}`);
+                    assert(counters.newOwner > 0,
+                        `${move.resource} was not delivered by its ` +
+                        `generation 2 owner ${move.to}`);
+                    const strangers = counters.others
+                        .map(sample => sample.labels.workgroup)
+                        .filter(workgroup => workgroup !== move.from &&
+                            workgroup !== move.to);
+                    assert.deepStrictEqual(strangers, [],
+                        `${move.resource} was delivered by a workgroup that ` +
+                        'owns it in neither generation');
+                    return next();
+                }), done);
+        });
+
+        it('should keep every lane of the spread destination in one ' +
+        'generation 2 workgroup', done => {
+            const spreadRecords = deliveryIndex.records
+                .filter(rec => rec.destinationId === spreadResource);
+            const lanes = new Set(spreadRecords.map(rec => rec.key));
+            const partitions = new Set(
+                spreadRecords.map(rec => rec.partition));
+            const oldOwner = workgroupIdForDestination(oldPlan,
+                spreadResource);
+            const newOwner = workgroupIdForDestination(cutoverResult.doc,
+                spreadResource);
+            record('W-E1.spread.lanes', lanes.size);
+            record('W-E1.spread.deliveryPartitions',
+                [...partitions].sort((a, b) => a - b));
+            record('W-E1.spread.oldOwner', oldOwner);
+            record('W-E1.spread.newOwner', newOwner);
+            assert.strictEqual(lanes.size, spread.spreadFactor,
+                'the spread destination did not use every lane it has');
+            // a workgroup id says nothing about the remainder it serves, so
+            // moving is a change of position in the ownership rules
+            assert.notStrictEqual(oldIds.indexOf(oldOwner),
+                newIds.indexOf(newOwner),
+                'the spread destination has to change owner, otherwise it ' +
+                'says nothing about a reshard');
+            return readSeries(DELIVERED_METRIC, { target: spreadResource },
+                (err, values) => {
+                    assert.ifError(err);
+                    const newOwners = new Set(values
+                        .map(sample => sample.labels.workgroup)
+                        .filter(workgroup => newIds.includes(workgroup)));
+                    record('W-E1.spread.generation2Workgroups',
+                        [...newOwners]);
+                    assert.strictEqual(newOwners.size, 1,
+                        'the lanes of one spread destination were split ' +
+                        `across ${newOwners.size} generation 2 workgroups, ` +
+                        'so a sub key is owned by nobody or by two owners');
+                    assert.strictEqual([...newOwners][0], newOwner);
+                    return done();
+                });
+        });
+
+        it('should have delivered exactly the duplicates generation 1 ran up ' +
+        'past its barriers', done => {
+            const delivered = deliveredRecordsOf(tailers, boundary);
+            const copies = copiesByIdentity(delivered);
+            const observed = new Set([...copies.entries()]
+                .filter(entry => entry[1] > 1).map(entry => entry[0]));
+            const predicted = predictFromCommittedOffsets({
+                index: deliveryIndex,
+                barriers: cutoverResult.doc.barriers,
+                committedByGroup: oldCommitted,
+                groupIdOf: oldGroupId,
+            });
+            const extraCopies = [...copies.values()]
+                .filter(count => count > 2).length;
+            record('W-E1.duplicates.observed', observed.size);
+            record('W-E1.duplicates.predicted', predicted.duplicated.size);
+            record('W-E1.duplicates.predictedLost', predicted.lost.size);
+            record('W-E1.duplicates.identitiesOverTwoCopies', extraCopies);
+            record('W-E1.duplicates.overshootByGroup',
+                frozenReport.overshootByGroup);
+            record('W-E1.duplicates.overshootTotal', frozenReport.overshoot);
+            assert.strictEqual(predicted.lost.size, 0,
+                'the drain report exited 0, so it cannot be predicting a ' +
+                'record generation 1 still owed');
+            assert.deepStrictEqual([...observed].sort(),
+                [...predicted.duplicated].sort(),
+                'the records delivered twice are not the ones generation ' +
+                "1's own committed offsets say it consumed past the barriers");
+            assert.strictEqual(extraCopies, 0,
+                'a record was delivered more than twice, which two ' +
+                'generations cannot do on their own');
+            // the overshoot column counts offsets a group consumed past its
+            // barrier, per group. Every old group consumes every partition,
+            // whether or not it owns the record, so the column counts each
+            // record once per old group and counts the barrier record itself
+            oldIds.map(oldGroupId).forEach(groupId => assert.strictEqual(
+                frozenReport.overshootByGroup[groupId],
+                observed.size + deliveryPartitions,
+                `the overshoot of ${groupId} is not the duplicate count ` +
+                'plus its own barriers'));
+            assert.strictEqual(frozenReport.overshoot,
+                oldIds.length * (observed.size + deliveryPartitions));
+            return done();
+        });
+
+        it('should show each generation 2 workgroup one barrier of its own ' +
+        'generation per partition', done => async.eachSeries(newIds,
+            (workgroupId, next) => readCounter(BARRIER_METRIC,
+                { workgroup: workgroupId, match: 'current' }, (err, value) => {
+                    assert.ifError(err);
+                    record(`W-E1.barriers.${workgroupId}.current`, value);
+                    if (restartedNew.has(workgroupId)) {
+                        // a restart re-reads every barrier the workgroup had
+                        // not already committed past, so the exact count is
+                        // no longer the invariant. The restart is recorded in
+                        // run.wedgeOccurrences
+                        assert(value >= deliveryPartitions,
+                            `${workgroupId} was restarted and still saw ` +
+                            `only ${value} barriers of its own generation`);
+                        return next();
+                    }
+                    assert.strictEqual(value, deliveryPartitions,
+                        `${workgroupId} saw ${value} barriers of its own ` +
+                        'generation, one per partition would be ' +
+                        `${deliveryPartitions}`);
+                    return next();
+                }), err => {
+            assert.ifError(err);
+            return async.eachSeries(oldIds, (workgroupId, next) =>
+                readCounter(BARRIER_METRIC,
+                    { workgroup: workgroupId, match: 'other' },
+                    (err2, value) => {
+                        assert.ifError(err2);
+                        // generation 1 consumed the same barriers while it
+                        // was still running, and they belong to the
+                        // generation that replaces it
+                        record(`W-E1.barriers.${workgroupId}.other`, value);
+                        assert.strictEqual(value, deliveryPartitions);
+                        return next();
+                    }), done);
+        }));
+    });
+
+    describe('E5 :: a generation seeded on only some of its partitions',
+    function partialPreseed() {
+        this.timeout(300000);
+
+        const deliveryTopic = TOPICS.e5Delivery.name;
+        const deliveryPartitions = TOPICS.e5Delivery.partitions;
+        const groupId = `poc-wg-e5-partial-${RUN_ID}`;
+        // one partition is left out of the pre-seed, which is the failure a
+        // pre-seed interrupted part way through leaves behind. Nothing in
+        // this scenario builds a worker: the point is that the guard rail
+        // refuses before one is ever started
+        const missingPartition = deliveryPartitions - 1;
+        const seeded = [];
+        for (let partition = 0; partition < deliveryPartitions; partition++) {
+            if (partition !== missingPartition) {
+                seeded.push(partition);
+            }
+        }
+        let refusal = null;
+        let elapsedMs = 0;
+
+        before(done => async.series([
+            next => commitOffsets(groupId, seeded.map(partition => ({
+                topic: deliveryTopic,
+                partition,
+                offset: 0,
+            })), next),
+            next => {
+                const startedAt = Date.now();
+                return assertSeededOffsets({
+                    kafkaConfig,
+                    topic: deliveryTopic,
+                    groupId,
+                    logger: new werelogs.Logger('seededOffsets:ft'),
+                }, err => {
+                    refusal = err;
+                    elapsedMs = Date.now() - startedAt;
+                    return next();
+                });
+            },
+        ], done));
+
+        it('should refuse a partially pre-seeded group, naming the partition ' +
+        'nobody seeded and what to run', () => {
+            assert(refusal,
+                'the startup assertion accepted a group that is seeded on ' +
+                `${seeded.length} of ${deliveryPartitions} partitions`);
+            const message = refusal.description || refusal.message;
+            record('W-E5.seededPartitions', seeded);
+            record('W-E5.missingPartition', missingPartition);
+            record('W-E5.refusal.message', message);
+            record('W-E5.refusal.ms', elapsedMs);
+            assert(message.includes(
+                `has no committed offset on partitions ${missingPartition}`),
+                `the refusal has to name the partition, got: ${message}`);
+            assert(message.includes(groupId),
+                `the refusal has to name the group, got: ${message}`);
+            assert(message.includes(deliveryTopic),
+                `the refusal has to name the topic, got: ${message}`);
+            assert(message.includes('notificationWorkgroupCutover preseed'),
+                `the refusal has to say what to run, got: ${message}`);
+            // a refusal that named every partition would be the W-C negative
+            // case again, and would not tell an operator where to look
+            assert(!message.includes(`partitions ${seeded.join(', ')}`),
+                'the refusal named the partitions that are seeded as well, ' +
+                `so it does not point at the gap: ${message}`);
+            assert(elapsedMs < 30000,
+                `the refusal took ${elapsedMs} ms, which is not fast`);
         });
     });
 });
