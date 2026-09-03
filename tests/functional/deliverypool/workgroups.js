@@ -1,5 +1,6 @@
 const assert = require('assert');
 const async = require('async');
+const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { AdminClient, KafkaConsumer } = require('node-rdkafka');
@@ -515,9 +516,18 @@ function readSeries(name, labels, done) {
     }
     // deliberately not returned: a promise handed back to mocha from an it()
     // is reported as "resolution method is overspecified"
-    metric.get().then(({ values }) => done(null, values
-        .filter(v => Object.entries(labels)
-            .every(([label, value]) => v.labels[label] === value))), done);
+    //
+    // the callback is handed on through nextTick rather than called from
+    // inside the promise reaction. Almost every assertion in this suite is
+    // made in a callback that starts here, and an assertion thrown inside a
+    // then() rejects a promise nobody is holding: mocha never sees it, the
+    // case simply times out, and the message that says what was wrong is
+    // gone. One gate spent its whole twenty minute timeout that way
+    metric.get().then(({ values }) => {
+        const matched = values.filter(v => Object.entries(labels)
+            .every(([label, value]) => v.labels[label] === value));
+        process.nextTick(() => done(null, matched));
+    }, err => process.nextTick(() => done(err)));
     return undefined;
 }
 
@@ -899,9 +909,12 @@ function waitForCounter(name, labels, expected, timeoutMs, pollMs, done) {
  *
  * pollIntervalMs is not part of the destination schema, but the pool hands
  * it to the producer: without it every delivery report waits for the two
- * second default poll interval, which the tests cannot afford.
+ * second default poll interval, which the tests cannot afford. A gate that
+ * needs a generation to fall behind on purpose raises it instead, which
+ * slows delivery without making any destination unreachable.
  *
- * @param {Object} params - resource, topic, host, port and spreadFactor
+ * @param {Object} params - resource, topic, host, port, spreadFactor and
+ *   pollIntervalMs
  * @return {Object} destination configuration
  */
 function destinationConfig(params) {
@@ -913,7 +926,7 @@ function destinationConfig(params) {
         topic: params.topic,
         auth: {},
         spreadFactor: params.spreadFactor || 1,
-        pollIntervalMs: 100,
+        pollIntervalMs: params.pollIntervalMs || 100,
     };
 }
 
@@ -3298,6 +3311,65 @@ function copiesByIdentity(delivered) {
 }
 
 /**
+ * The smallest number of non-decreasing runs a sequence can be split into.
+ *
+ * Two generations delivering one object key, each in order, produce a
+ * merged sequence that splits into two however they interleave. A sequence
+ * needing three means one of the two delivered its own copies out of order,
+ * which is the guarantee that has to hold inside a generation whatever the
+ * overlap does across them.
+ *
+ * The greedy that extends the run with the highest tail that still accepts
+ * the value is the patience sorting greedy, and it is optimal here.
+ *
+ * @param {Number[]} rounds - the rounds delivered, in delivery order
+ * @return {Number} number of non-decreasing runs
+ */
+function orderedRunsNeeded(rounds) {
+    const tails = [];
+    rounds.forEach(round => {
+        let best = -1;
+        tails.forEach((tail, i) => {
+            if (tail <= round && (best === -1 || tail > tails[best])) {
+                best = i;
+            }
+        });
+        if (best === -1) {
+            tails.push(round);
+            return;
+        }
+        tails[best] = round;
+    });
+    return tails.length;
+}
+
+/**
+ * Groups delivered records into one series per object key of one customer
+ * topic, in the order the customer topic holds them
+ *
+ * @param {Object[]} delivered - records from deliveredRecordsOf
+ * @param {String[]} roundTimes - event time of each round, in order
+ * @return {Map} series key to the rounds delivered, in delivery order
+ */
+function roundsByObjectKey(delivered, roundTimes) {
+    const series = new Map();
+    delivered.slice()
+        .sort((a, b) => (a.topic === b.topic ?
+            a.offset - b.offset : a.topic.localeCompare(b.topic)))
+        .forEach(rec => {
+            const seriesKey = `${rec.topic}|${rec.key}`;
+            if (!series.has(seriesKey)) {
+                series.set(seriesKey, []);
+            }
+            series.get(seriesKey).push({
+                round: roundTimes.indexOf(rec.eventTime),
+                identity: rec.identity,
+            });
+        });
+    return series;
+}
+
+/**
  * Runs the drain report an operator would run, and resolves the exit code
  * bin/notificationWorkgroupCutover.js gives it
  *
@@ -3491,8 +3563,13 @@ function gateReshard() {
         const objectsPerDestination = 5;
         const spreadKeysPerSubKey = 2;
         const BATCH_SIZE = 3;
-        const BATCH_GAP_MS = 300;
-        const CUTOVER_DELAY_MS = 1500;
+        // the cutover takes several seconds to reach the step that produces
+        // the barriers, and everything the stream sends in that time lands
+        // below them. The gap is wide enough that a useful share of the
+        // stream is still to come when the barriers land, which is what
+        // gives generation 2 something of its own to deliver
+        const BATCH_GAP_MS = 500;
+        const CUTOVER_DELAY_MS = 1000;
 
         const oldIds = ['e1-g1a', 'e1-g1b'];
         const newIds = ['e1-g2a', 'e1-g2b', 'e1-g2c'];
@@ -4018,20 +4095,46 @@ function gateReshard() {
             return done();
         });
 
-        it('should have each generation account for every record it consumed ' +
-        'as delivered or skipped, and no destination served twice in one ' +
-        'generation', done => {
+        it('should have each generation deliver exactly the records it ' +
+        'consumed, one workgroup per destination', done => {
             const barriers = cutoverResult.doc.barriers;
+            const delivered = deliveredRecordsOf(tailers, boundary);
             const generations = [
                 { ids: oldIds, groupIdOf: oldGroupId, doc: oldPlan,
-                    committed: oldCommitted, start: null, label: 'generation 1',
-                    restarted: restartedOld },
+                    committed: oldCommitted, start: null, side: 'old',
+                    label: 'generation 1' },
                 { ids: newIds, groupIdOf: newGroupId, doc: cutoverResult.doc,
-                    committed: newCommitted, start: barriers,
-                    label: 'generation 2', restarted: restartedNew },
+                    committed: newCommitted, start: barriers, side: 'new',
+                    label: 'generation 2' },
             ];
-            return async.eachSeries(generations, (generation, next) =>
-                async.eachSeries(generation.ids, (workgroupId, step) =>
+            // stated as sets of identities rather than as counters: a
+            // consumer that re-read records it had already handled, which is
+            // what a rebalance under the pre-existing commit path throw
+            // does, inflates a counter but cannot add an identity
+            generations.forEach(generation => {
+                const start = partition => (generation.start ?
+                    Number(generation.start[partition]) : 0);
+                const expected = new Set(deliveryIndex.records
+                    .filter(rec => rec.offset >= start(rec.partition))
+                    .map(rec => rec.identity));
+                const seen = new Set(delivered
+                    .filter(rec => rec.generation === generation.side)
+                    .map(rec => rec.identity));
+                const missing = [...expected].filter(id => !seen.has(id));
+                const extra = [...seen].filter(id => !expected.has(id));
+                record(`W-E1.coverage.${generation.side}`, {
+                    consumed: expected.size,
+                    delivered: seen.size,
+                });
+                assert.deepStrictEqual(missing, [],
+                    `${generation.label} consumed a record and delivered it ` +
+                    'to nobody');
+                assert.deepStrictEqual(extra, [],
+                    `${generation.label} delivered a record it never ` +
+                    'consumed');
+            });
+            return async.mapSeries(generations, (generation, next) =>
+                async.mapSeries(generation.ids, (workgroupId, step) =>
                     async.parallel({
                         delivered: cb => readCounter(DELIVERED_METRIC,
                             { workgroup: workgroupId }, cb),
@@ -4044,10 +4147,13 @@ function gateReshard() {
                             { workgroup: workgroupId }, cb),
                         targets: cb => readSeries(DELIVERED_METRIC,
                             { workgroup: workgroupId }, cb),
-                    }, (err, counters) => {
-                        if (err) {
-                            return step(err);
-                        }
+                    }, (err, counters) => step(err, { workgroupId, counters,
+                        generation })),
+                    next),
+                (err, byGeneration) => {
+                    assert.ifError(err);
+                    [].concat(...byGeneration).forEach(row => {
+                        const { workgroupId, counters, generation } = row;
                         const consumed = consumedFrom(
                             generation.committed[
                                 generation.groupIdOf(workgroupId)],
@@ -4061,38 +4167,30 @@ function gateReshard() {
                             notInSlice: counters.notInSlice,
                             barrier: counters.barrier,
                             dropped: counters.dropped,
+                            // records handled a second time because their
+                            // offsets were never stored, which is the
+                            // pre-existing commit path throw counted in
+                            // run.commitPathThrows, not a reshard property
+                            reHandled: handled - consumed,
                         });
                         assert.strictEqual(counters.dropped, 0,
                             `${workgroupId} dropped a record it owned`);
-                        if (generation.restarted.has(workgroupId)) {
-                            // a restarted workgroup re-reads everything it
-                            // had not committed past, so its counters are no
-                            // longer the exact partition of what it consumed.
-                            // The restart is in run.wedgeOccurrences
-                            assert(handled >= consumed,
-                                `${workgroupId} was restarted and still ` +
-                                `handled ${handled} of ${consumed}`);
-                            assert(counters.barrier >= deliveryPartitions,
-                                `${workgroupId} was restarted and still saw ` +
-                                `only ${counters.barrier} barriers`);
-                        } else {
-                            assert.strictEqual(handled, consumed,
-                                `${workgroupId} consumed ${consumed} records ` +
-                                `and accounted for ${handled} of them`);
-                            assert.strictEqual(counters.barrier,
-                                deliveryPartitions,
-                                `${workgroupId} skipped ${counters.barrier} ` +
-                                'barriers, one per partition would be ' +
-                                `${deliveryPartitions}`);
-                        }
+                        assert(handled >= consumed,
+                            `${workgroupId} consumed ${consumed} records and ` +
+                            `accounted for only ${handled} of them`);
+                        assert(counters.barrier >= deliveryPartitions,
+                            `${workgroupId} saw ${counters.barrier} ` +
+                            'barriers, one per partition would be ' +
+                            `${deliveryPartitions}`);
                         counters.targets.forEach(sample => assert.strictEqual(
                             workgroupIdForDestination(generation.doc,
                                 sample.labels.target), workgroupId,
                             `${workgroupId} delivered to ` +
                             `${sample.labels.target}, which it does not own ` +
                             `in ${generation.label}`));
-                        return step();
-                    }), next), done);
+                    });
+                    return done();
+                });
         });
 
         it('should hand every moved destination from its generation 1 owner ' +
@@ -4232,9 +4330,14 @@ function gateReshard() {
                 [...predicted.duplicated].sort(),
                 'the records delivered twice are not the ones generation ' +
                 "1's own committed offsets say it consumed past the barriers");
-            assert.strictEqual(extraCopies, 0,
-                'a record was delivered more than twice, which two ' +
-                'generations cannot do on their own');
+            // a third copy is one generation delivering the same record
+            // twice, which a reshard cannot cause: it is a record whose
+            // offset was never stored because the commit path threw, counted
+            // in run.commitPathThrows and re-read after the rebalance
+            assert(extraCopies <= OFFSET_STORE_THROWS.length,
+                `${extraCopies} records were delivered more than twice with ` +
+                `only ${OFFSET_STORE_THROWS.length} commit path throws to ` +
+                'account for them');
             // the overshoot column counts offsets a group consumed past its
             // barrier, per group. Every old group consumes every partition,
             // whether or not it owns the record, so the column counts each
@@ -4285,6 +4388,1145 @@ function gateReshard() {
                         return next();
                     }), done);
         }));
+    });
+
+    describe('E2 :: stopping the old generation before it drained',
+    function earlyStopGap() {
+        this.timeout(1200000);
+
+        const deliveryTopic = TOPICS.e2Delivery.name;
+        const deliveryPartitions = TOPICS.e2Delivery.partitions;
+        const baseGroupId = `poc-wg-e2-group-${RUN_ID}`;
+        const zkPath = `${ZK_BASE}/gate-e2`;
+        const cachePath = cachePathFor('gate-e2-cutover');
+        const objectsPerDestination = 50;
+        const primingRounds = 2;
+        const BATCH_SIZE = 5;
+        const BATCH_GAP_MS = 250;
+        const CUTOVER_DELAY_MS = 500;
+
+        const oldIds = ['e2-g1a', 'e2-g1b'];
+        const newIds = ['e2-g2a', 'e2-g2b', 'e2-g2c'];
+
+        const oldPlan = buildHashmodDocument({
+            topic: deliveryTopic, generation: 1, modulo: 2, ids: oldIds });
+        const newPlan = buildHashmodDocument({
+            topic: deliveryTopic, generation: 2, modulo: 3, ids: newIds });
+
+        const moves = [
+            { from: oldIds[0], to: newIds[0] },
+            { from: oldIds[0], to: newIds[2] },
+            { from: oldIds[1], to: newIds[1] },
+            { from: oldIds[1], to: newIds[0] },
+        ];
+        const resources = selectReshardDestinations({
+            oldDoc: oldPlan,
+            newDoc: newPlan,
+            prefix: 'poc-wg-e2-dest',
+            wanted: moves,
+        });
+        const destinations = resources.map((resource, index) =>
+            destinationConfig({
+                resource,
+                topic: TOPICS[`e2Customer${index}`].name,
+                // a delivery report arrives on the producer's poll interval,
+                // so a wide interval and a narrow pool hold generation 1 to
+                // a few records a second. It has to still be well below the
+                // barriers when the operator stops it, which is the state
+                // this scenario is about, and slowing it is the only way to
+                // arrange that without making a destination unreachable and
+                // leaving an entry stuck in the queue at close
+                pollIntervalMs: 500,
+            }));
+
+        const notifConfig = {
+            destinations,
+            deliveryPool: {
+                ...deliveryPoolConfig({
+                    topic: deliveryTopic,
+                    groupId: baseGroupId,
+                    concurrency: 2,
+                }),
+                workgroups: { zookeeperPath: zkPath, cachePath },
+            },
+        };
+        // the new generation is not the one being held back
+        const newNotifConfig = {
+            destinations,
+            deliveryPool: {
+                ...notifConfig.deliveryPool,
+                concurrency: 10,
+            },
+        };
+
+        const eventTypes = ['s3:ObjectCreated:Put', 's3:ObjectCreated:Put',
+            's3:ObjectRemoved:Delete'];
+        const roundTimes = eventTypes.map((_, index) => eventTime(index));
+        const keysOf = new Map();
+        destinations.forEach((destination, index) => keysOf.set(
+            destination.topic,
+            objectKeysFor(`e2-${index}`, objectsPerDestination)));
+
+        const produced = new Set();
+        const primingRecords = [];
+        const streamBatches = [];
+        eventTypes.forEach((eventType, round) => {
+            const roundRecords = [];
+            for (let k = 0; k < objectsPerDestination; k++) {
+                destinations.forEach(destination => {
+                    const key = keysOf.get(destination.topic)[k];
+                    produced.add(identityOf(destination.topic, key,
+                        roundTimes[round]));
+                    roundRecords.push(addressedRecord({
+                        destination,
+                        key,
+                        eventType,
+                        dateTime: roundTimes[round],
+                    }));
+                });
+            }
+            // a backlog is on the topic before generation 1 ever joins, so
+            // that it is still working through records the barriers will
+            // land far above
+            if (round < primingRounds) {
+                primingRecords.push(...roundRecords);
+                return;
+            }
+            for (let i = 0; i < roundRecords.length; i += BATCH_SIZE) {
+                streamBatches.push(roundRecords.slice(i, i + BATCH_SIZE));
+            }
+        });
+        const totalProduced = produced.size;
+        const totalOnDeliveryTopic = totalProduced + deliveryPartitions;
+
+        const tailers = new Map();
+        const oldRuntimes = new Map();
+        const newRuntimes = new Map();
+        const restartedOld = new Set();
+        const restartedNew = new Set();
+        const oldCommitted = {};
+        let stream = null;
+        let verifier = null;
+        let cutoverResult = null;
+        let runningReport = null;
+        let frozenReport = null;
+        let boundary = null;
+        let deliveryIndex = null;
+
+        const oldGroupId = id => buildGroupId(baseGroupId, id, 1);
+        const newGroupId = id => buildGroupId(baseGroupId, id, 2);
+        const topicOf = destinationId => {
+            const found = destinations
+                .find(destination => destination.resource === destinationId);
+            return found ? found.topic : null;
+        };
+
+        function deliveredCount() {
+            return [...tailers.values()]
+                .reduce((total, tailer) => total + tailer.records.length, 0);
+        }
+
+        before(done => {
+            const finish = settleOnce(done);
+            record('W-E2.destinations', resources);
+            record('W-E2.records.produced', totalProduced);
+            record('W-E2.records.priming', primingRecords.length);
+            record('W-E2.stream.batches', streamBatches.length);
+            return async.series([
+                next => async.eachSeries(destinations,
+                    (destination, tailDone) => {
+                        const tailer = new TopicTailer(destination.topic);
+                        tailers.set(destination.topic, tailer);
+                        return tailer.start(tailDone);
+                    }, next),
+                next => produceRecords(deliveryTopic, primingRecords, next),
+                next => waitForTopics([TOPICS.e2Delivery], err => next(err)),
+                next => writeWorkgroupsDocument(zkPath, buildHashmodDocument({
+                    topic: deliveryTopic,
+                    generation: 1,
+                    modulo: 2,
+                    ids: oldIds,
+                }), next),
+                next => startWorkgroups({
+                    zkPath,
+                    workgroupIds: oldIds,
+                    baseGroupId,
+                    notifConfig,
+                    runtimes: oldRuntimes,
+                }, next),
+                next => waitOrRestart({
+                    label: 'W-E2 generation 1 first delivery',
+                    workgroupIds: oldIds,
+                    runtimes: oldRuntimes,
+                    restarted: restartedOld,
+                    zkPath,
+                    baseGroupId,
+                    notifConfig,
+                    need: 1,
+                    read: (workgroupId, cb) => readCounter(DELIVERED_METRIC,
+                        { workgroup: workgroupId }, cb),
+                    wait: cb => async.eachSeries(oldIds, (workgroupId, step) =>
+                        waitForCounter(DELIVERED_METRIC,
+                            { workgroup: workgroupId }, 1, 90000, 500, step),
+                        cb),
+                }, next),
+                next => {
+                    stream = new RecordStream({
+                        topic: deliveryTopic,
+                        batches: streamBatches,
+                        gapMs: BATCH_GAP_MS,
+                    });
+                    return stream.start(next);
+                },
+                next => setTimeout(next, CUTOVER_DELAY_MS),
+                next => {
+                    const startedAt = Date.now();
+                    const cutover = buildCutoverTool({
+                        name: 'e2',
+                        notifConfig,
+                        options: {
+                            modulo: 3,
+                            workgroup: newIds.map((id, r) => `${id}:${r}`),
+                            timeout: 10000,
+                        },
+                    });
+                    return cutover.cutover((err, result) => {
+                        cutoverResult = result;
+                        record('W-E2.cutover.ms', Date.now() - startedAt);
+                        record('W-E2.cutover.recordsStreamedSoFar',
+                            stream.sent);
+                        return cutover.close(() => next(err));
+                    });
+                },
+                next => {
+                    verifier = buildCutoverTool({
+                        name: 'e2-verify',
+                        notifConfig,
+                        options: { timeout: 10000 },
+                    });
+                    return next();
+                },
+                // the guard, consulted while generation 1 is still running
+                // and still behind, which is the moment the operator ignores
+                next => runVerify(verifier, (err, result) => {
+                    if (err) {
+                        return next(err);
+                    }
+                    runningReport = result;
+                    record('W-E2.verify.running.exitCode', result.exitCode);
+                    record('W-E2.verify.running.remaining', result.remaining);
+                    return next();
+                }),
+                // and stopped anyway, which is what this scenario is for
+                next => stopWorkgroups(oldRuntimes, next),
+                next => async.eachSeries([...tailers.values()],
+                    (tailer, quietDone) => waitUntilQuiet(tailer, 500,
+                        quietDone), next),
+                next => {
+                    boundary = snapshotTailerBoundary(tailers);
+                    record('W-E2.generation1.delivered', deliveredCount());
+                    return next();
+                },
+                next => runVerify(verifier, (err, result) => {
+                    if (err) {
+                        return next(err);
+                    }
+                    frozenReport = result;
+                    record('W-E2.verify.stopped.exitCode', result.exitCode);
+                    record('W-E2.verify.stopped.remaining', result.remaining);
+                    return next();
+                }),
+                next => async.eachSeries(oldIds, (workgroupId, step) =>
+                    readCommitted(oldGroupId(workgroupId), deliveryTopic,
+                        deliveryPartitions, (err, offsets) => {
+                            if (err) {
+                                return step(err);
+                            }
+                            oldCommitted[oldGroupId(workgroupId)] = offsets;
+                            return step();
+                        }), next),
+                next => async.eachSeries(cutoverResult.groupIds,
+                    (groupId, cb) => assertSeededOffsets({
+                        kafkaConfig,
+                        topic: deliveryTopic,
+                        groupId,
+                        barriers: cutoverResult.doc.barriers,
+                        logger: new werelogs.Logger('seededOffsets:ft'),
+                    }, cb), next),
+                next => waitForTopics([TOPICS.e2Delivery], err => next(err)),
+                next => startWorkgroups({
+                    zkPath,
+                    workgroupIds: newIds,
+                    baseGroupId,
+                    notifConfig: newNotifConfig,
+                    runtimes: newRuntimes,
+                }, next),
+                next => waitFor(() => 'the record stream to finish ' +
+                    `(${stream.sent} of ${streamBatches.length * BATCH_SIZE})`,
+                    () => stream.finished, 180000, next),
+                next => stream.close(next),
+                next => {
+                    assert.ifError(stream.error);
+                    return next();
+                },
+                next => waitOrRestart({
+                    label: 'W-E2 generation 2 commits the whole topic',
+                    workgroupIds: newIds,
+                    runtimes: newRuntimes,
+                    restarted: restartedNew,
+                    zkPath,
+                    baseGroupId,
+                    notifConfig: newNotifConfig,
+                    need: totalOnDeliveryTopic,
+                    read: (workgroupId, cb) => committedTotal(
+                        newGroupId(workgroupId), deliveryTopic,
+                        deliveryPartitions, cb),
+                    wait: cb => async.eachSeries(newIds, (workgroupId, step) =>
+                        waitForCommittedTotal(newGroupId(workgroupId),
+                            deliveryTopic, deliveryPartitions,
+                            totalOnDeliveryTopic, E_COMMIT_TIMEOUT_MS, step),
+                        cb),
+                }, next),
+                next => async.eachSeries([...tailers.values()],
+                    (tailer, quietDone) => waitUntilQuiet(tailer, 500,
+                        quietDone), next),
+                next => readTopic(deliveryTopic, totalOnDeliveryTopic, 180000,
+                    (err, written) => {
+                        if (err) {
+                            return next(err);
+                        }
+                        deliveryIndex = indexDeliveryTopic({
+                            written,
+                            topicOf,
+                            oldDoc: oldPlan,
+                            newDoc: cutoverResult.doc,
+                        });
+                        record('W-E2.deliveryTopic.records',
+                            deliveryIndex.records.length);
+                        return next();
+                    }),
+                next => {
+                    [...newRuntimes.values()].forEach(registerWorkgroup);
+                    return next();
+                },
+            ], finish);
+        });
+
+        after(done => async.series([
+            next => (stream ? stream.close(next) : next()),
+            next => stopWorkgroups(oldRuntimes, next),
+            next => stopWorkgroups(newRuntimes, next),
+            next => (verifier ? verifier.close(next) : next()),
+            next => async.eachSeries([...tailers.values()],
+                (tailer, tailDone) => tailer.stop(tailDone), next),
+        ], done));
+
+        it('should have refused to call the old generation drained, both ' +
+        'while it ran and once it had stopped', () => {
+            assert.strictEqual(runningReport.exitCode, EXIT_NOT_DRAINED,
+                'the drain report cleared a generation that was still ' +
+                'behind its barriers, so there was nothing to ignore');
+            assert(runningReport.remaining > 0);
+            assert.strictEqual(frozenReport.exitCode, EXIT_NOT_DRAINED);
+            assert(frozenReport.remaining > 0,
+                'the offsets froze past every barrier, so stopping the old ' +
+                'generation cost nothing and this scenario shows nothing');
+            record('W-E2.verify.rows', frozenReport.report.rows);
+        });
+
+        it('should lose exactly the records the drain report said the old ' +
+        'generation still owed', () => {
+            const delivered = deliveredRecordsOf(tailers, boundary);
+            const seen = new Set(delivered.map(rec => rec.identity));
+            const missing = new Set(
+                [...produced].filter(id => !seen.has(id)));
+            const predicted = predictFromCommittedOffsets({
+                index: deliveryIndex,
+                barriers: cutoverResult.doc.barriers,
+                committedByGroup: oldCommitted,
+                groupIdOf: oldGroupId,
+            });
+            const lostByDestination = {};
+            const lostByPartition = {};
+            deliveryIndex.records
+                .filter(rec => missing.has(rec.identity))
+                .forEach(rec => {
+                    lostByDestination[rec.destinationId] =
+                        (lostByDestination[rec.destinationId] || 0) + 1;
+                    lostByPartition[rec.partition] =
+                        (lostByPartition[rec.partition] || 0) + 1;
+                });
+            record('W-E2.gap.produced', totalProduced);
+            record('W-E2.gap.delivered', seen.size);
+            record('W-E2.gap.lost', missing.size);
+            record('W-E2.gap.predictedLost', predicted.lost.size);
+            record('W-E2.gap.lostByDestination', lostByDestination);
+            record('W-E2.gap.lostByPartition', lostByPartition);
+            record('W-E2.gap.remainingAtStop', frozenReport.remaining);
+            assert(missing.size > 0,
+                'nothing was lost, so stopping a generation that the guard ' +
+                'refused to clear cost nothing');
+            assert.deepStrictEqual([...missing].sort(),
+                [...predicted.lost].sort(),
+                'the records nobody delivered are not the ones the old ' +
+                "generation's own committed offsets said it still owed");
+            // remaining counts offsets below the barrier for every old
+            // group, whether or not that group owns the record sitting
+            // there, so it is an upper bound on the loss and never an
+            // under-warning
+            assert(missing.size <= frozenReport.remaining,
+                `${missing.size} records were lost while the drain report ` +
+                `only warned about ${frozenReport.remaining}`);
+        });
+
+        it('should have lost nothing at or after a barrier, because the new ' +
+        'generation was seeded there', () => {
+            const delivered = deliveredRecordsOf(tailers, boundary);
+            const seen = new Set(delivered.map(rec => rec.identity));
+            const barriers = cutoverResult.doc.barriers;
+            const lostAbove = deliveryIndex.records
+                .filter(rec => rec.identity !== null &&
+                    rec.offset >= Number(barriers[rec.partition]) &&
+                    !seen.has(rec.identity))
+                .map(rec => rec.identity);
+            const above = deliveryIndex.records
+                .filter(rec => rec.offset >= Number(barriers[rec.partition]));
+            record('W-E2.barrier.recordsFrom', above.length);
+            assert.deepStrictEqual(lostAbove, [],
+                'a record at or after its barrier was not delivered, which ' +
+                'the new generation being seeded at the barrier rules out');
+        });
+    });
+
+    describe('E3 :: both generations delivering at once',
+    function overlappingGenerations() {
+        this.timeout(1200000);
+
+        const deliveryTopic = TOPICS.e3Delivery.name;
+        const deliveryPartitions = TOPICS.e3Delivery.partitions;
+        const baseGroupId = `poc-wg-e3-group-${RUN_ID}`;
+        const zkPath = `${ZK_BASE}/gate-e3`;
+        const cachePath = cachePathFor('gate-e3-cutover');
+        const objectsPerDestination = 8;
+        const BATCH_SIZE = 3;
+        const BATCH_GAP_MS = 500;
+        const CUTOVER_DELAY_MS = 1000;
+
+        const oldIds = ['e3-g1a', 'e3-g1b'];
+        const newIds = ['e3-g2a', 'e3-g2b', 'e3-g2c'];
+
+        const oldPlan = buildHashmodDocument({
+            topic: deliveryTopic, generation: 1, modulo: 2, ids: oldIds });
+        const newPlan = buildHashmodDocument({
+            topic: deliveryTopic, generation: 2, modulo: 3, ids: newIds });
+
+        const moves = [
+            { from: oldIds[0], to: newIds[0] },
+            { from: oldIds[0], to: newIds[2] },
+            { from: oldIds[1], to: newIds[1] },
+            { from: oldIds[1], to: newIds[0] },
+        ];
+        const resources = selectReshardDestinations({
+            oldDoc: oldPlan,
+            newDoc: newPlan,
+            prefix: 'poc-wg-e3-dest',
+            wanted: moves,
+        });
+        const destinations = resources.map((resource, index) =>
+            destinationConfig({
+                resource,
+                topic: TOPICS[`e3Customer${index}`].name,
+            }));
+
+        const notifConfig = {
+            destinations,
+            deliveryPool: {
+                ...deliveryPoolConfig({
+                    topic: deliveryTopic,
+                    groupId: baseGroupId,
+                    concurrency: 10,
+                }),
+                workgroups: { zookeeperPath: zkPath, cachePath },
+            },
+        };
+
+        const eventTypes = ['s3:ObjectCreated:Put', 's3:ObjectCreated:Put',
+            's3:ObjectRemoved:Delete'];
+        const roundTimes = eventTypes.map((_, index) => eventTime(index));
+        const keysOf = new Map();
+        destinations.forEach((destination, index) => keysOf.set(
+            destination.topic,
+            objectKeysFor(`e3-${index}`, objectsPerDestination)));
+
+        const produced = new Set();
+        const primingRecords = [];
+        const cutoverBatches = [];
+        const overlapBatches = [];
+        eventTypes.forEach((eventType, round) => {
+            const roundRecords = [];
+            for (let k = 0; k < objectsPerDestination; k++) {
+                destinations.forEach(destination => {
+                    const key = keysOf.get(destination.topic)[k];
+                    produced.add(identityOf(destination.topic, key,
+                        roundTimes[round]));
+                    roundRecords.push(addressedRecord({
+                        destination,
+                        key,
+                        eventType,
+                        dateTime: roundTimes[round],
+                    }));
+                });
+            }
+            if (round === 0) {
+                primingRecords.push(...roundRecords);
+                return;
+            }
+            // the last round is held back and produced only once both
+            // generations are running, so they are delivering the same
+            // records at the same time rather than taking turns
+            const batches = round === 1 ? cutoverBatches : overlapBatches;
+            for (let i = 0; i < roundRecords.length; i += BATCH_SIZE) {
+                batches.push(roundRecords.slice(i, i + BATCH_SIZE));
+            }
+        });
+        const totalProduced = produced.size;
+        const totalOnDeliveryTopic = totalProduced + deliveryPartitions;
+
+        const tailers = new Map();
+        const oldRuntimes = new Map();
+        const newRuntimes = new Map();
+        const restartedOld = new Set();
+        const restartedNew = new Set();
+        const oldCommitted = {};
+        const drainPolls = [];
+        let cutoverStream = null;
+        let overlapStream = null;
+        let verifier = null;
+        let cutoverResult = null;
+        let drainedReport = null;
+        let deliveryIndex = null;
+        let overlapWindowMs = 0;
+
+        const oldGroupId = id => buildGroupId(baseGroupId, id, 1);
+        const newGroupId = id => buildGroupId(baseGroupId, id, 2);
+        const topicOf = destinationId => {
+            const found = destinations
+                .find(destination => destination.resource === destinationId);
+            return found ? found.topic : null;
+        };
+
+        function deliveredCount() {
+            return [...tailers.values()]
+                .reduce((total, tailer) => total + tailer.records.length, 0);
+        }
+
+        function waitForDrain(startedAt, done) {
+            const deadline = Date.now() + E_DRAIN_TIMEOUT_MS;
+            const attempt = () => runVerify(verifier, (err, result) => {
+                if (err) {
+                    return done(err);
+                }
+                drainPolls.push({
+                    atMs: Date.now() - startedAt,
+                    remaining: result.remaining,
+                    exitCode: result.exitCode,
+                });
+                if (result.report.drained) {
+                    return done(null, result.report);
+                }
+                if (Date.now() >= deadline) {
+                    return done(new Error('generation 1 never committed past ' +
+                        'every barrier'));
+                }
+                return setTimeout(attempt, E_DRAIN_POLL_MS);
+            });
+            return attempt();
+        }
+
+        before(done => {
+            const finish = settleOnce(done);
+            record('W-E3.destinations', resources);
+            record('W-E3.records.produced', totalProduced);
+            return async.series([
+                next => async.eachSeries(destinations,
+                    (destination, tailDone) => {
+                        const tailer = new TopicTailer(destination.topic);
+                        tailers.set(destination.topic, tailer);
+                        return tailer.start(tailDone);
+                    }, next),
+                next => produceRecords(deliveryTopic, primingRecords, next),
+                next => waitForTopics([TOPICS.e3Delivery], err => next(err)),
+                next => writeWorkgroupsDocument(zkPath, buildHashmodDocument({
+                    topic: deliveryTopic,
+                    generation: 1,
+                    modulo: 2,
+                    ids: oldIds,
+                }), next),
+                next => startWorkgroups({
+                    zkPath,
+                    workgroupIds: oldIds,
+                    baseGroupId,
+                    notifConfig,
+                    runtimes: oldRuntimes,
+                }, next),
+                next => waitOrRestart({
+                    label: 'W-E3 generation 1 first delivery',
+                    workgroupIds: oldIds,
+                    runtimes: oldRuntimes,
+                    restarted: restartedOld,
+                    zkPath,
+                    baseGroupId,
+                    notifConfig,
+                    need: 1,
+                    read: (workgroupId, cb) => readCounter(DELIVERED_METRIC,
+                        { workgroup: workgroupId }, cb),
+                    wait: cb => async.eachSeries(oldIds, (workgroupId, step) =>
+                        waitForCounter(DELIVERED_METRIC,
+                            { workgroup: workgroupId }, 1, 90000, 500, step),
+                        cb),
+                }, next),
+                next => {
+                    cutoverStream = new RecordStream({
+                        topic: deliveryTopic,
+                        batches: cutoverBatches,
+                        gapMs: BATCH_GAP_MS,
+                    });
+                    return cutoverStream.start(next);
+                },
+                next => setTimeout(next, CUTOVER_DELAY_MS),
+                next => {
+                    const startedAt = Date.now();
+                    const cutover = buildCutoverTool({
+                        name: 'e3',
+                        notifConfig,
+                        options: {
+                            modulo: 3,
+                            workgroup: newIds.map((id, r) => `${id}:${r}`),
+                            timeout: 10000,
+                        },
+                    });
+                    return cutover.cutover((err, result) => {
+                        cutoverResult = result;
+                        record('W-E3.cutover.ms', Date.now() - startedAt);
+                        return cutover.close(() => next(err));
+                    });
+                },
+                next => waitFor(() => 'the cutover stream to finish ' +
+                    `(${cutoverStream.sent})`,
+                    () => cutoverStream.finished, 120000, next),
+                next => cutoverStream.close(next),
+                next => {
+                    verifier = buildCutoverTool({
+                        name: 'e3-verify',
+                        notifConfig,
+                        options: { timeout: 10000 },
+                    });
+                    return next();
+                },
+                // the procedure is followed to the letter: the new
+                // generation is only started once verify exits 0. What this
+                // scenario does not do is stop the old one afterwards
+                next => waitOrRestart({
+                    label: 'W-E3 generation 1 drain',
+                    workgroupIds: oldIds,
+                    runtimes: oldRuntimes,
+                    restarted: restartedOld,
+                    zkPath,
+                    baseGroupId,
+                    notifConfig,
+                    need: WorkgroupCutover
+                        .partitionsOf(cutoverResult.doc.barriers)
+                        .reduce((total, partition) =>
+                            total + cutoverResult.doc.barriers[partition], 0),
+                    read: (workgroupId, cb) => committedTotal(
+                        oldGroupId(workgroupId), deliveryTopic,
+                        deliveryPartitions, cb),
+                    wait: cb => waitForDrain(Date.now(), (err, report) => {
+                        drainedReport = report;
+                        return cb(err);
+                    }),
+                }, next),
+                next => async.eachSeries(cutoverResult.groupIds,
+                    (groupId, cb) => assertSeededOffsets({
+                        kafkaConfig,
+                        topic: deliveryTopic,
+                        groupId,
+                        barriers: cutoverResult.doc.barriers,
+                        logger: new werelogs.Logger('seededOffsets:ft'),
+                    }, cb), next),
+                next => waitForTopics([TOPICS.e3Delivery], err => next(err)),
+                next => startWorkgroups({
+                    zkPath,
+                    workgroupIds: newIds,
+                    baseGroupId,
+                    notifConfig,
+                    runtimes: newRuntimes,
+                }, next),
+                // both generations are now consuming, and this is the round
+                // they consume together
+                next => {
+                    overlapWindowMs = Date.now();
+                    overlapStream = new RecordStream({
+                        topic: deliveryTopic,
+                        batches: overlapBatches,
+                        gapMs: BATCH_GAP_MS,
+                    });
+                    return overlapStream.start(next);
+                },
+                next => waitFor(() => 'the overlap stream to finish ' +
+                    `(${overlapStream.sent})`,
+                    () => overlapStream.finished, 120000, next),
+                next => overlapStream.close(next),
+                next => {
+                    assert.ifError(cutoverStream.error);
+                    assert.ifError(overlapStream.error);
+                    return next();
+                },
+                next => waitOrRestart({
+                    label: 'W-E3 both generations commit the whole topic',
+                    workgroupIds: oldIds.concat(newIds),
+                    runtimes: new Map([...oldRuntimes, ...newRuntimes]),
+                    restarted: new Set([...restartedOld, ...restartedNew]),
+                    zkPath,
+                    baseGroupId,
+                    notifConfig,
+                    need: totalOnDeliveryTopic,
+                    read: (workgroupId, cb) => committedTotal(
+                        oldIds.includes(workgroupId) ?
+                            oldGroupId(workgroupId) : newGroupId(workgroupId),
+                        deliveryTopic, deliveryPartitions, cb),
+                    wait: cb => async.eachSeries(oldIds.concat(newIds),
+                        (workgroupId, step) => waitForCommittedTotal(
+                            oldIds.includes(workgroupId) ?
+                                oldGroupId(workgroupId) :
+                                newGroupId(workgroupId),
+                            deliveryTopic, deliveryPartitions,
+                            totalOnDeliveryTopic, E_COMMIT_TIMEOUT_MS, step),
+                        cb),
+                }, next),
+                next => {
+                    overlapWindowMs = Date.now() - overlapWindowMs;
+                    record('W-E3.overlap.windowMs', overlapWindowMs);
+                    return next();
+                },
+                next => stopWorkgroups(oldRuntimes, next),
+                next => async.eachSeries([...tailers.values()],
+                    (tailer, quietDone) => waitUntilQuiet(tailer, 500,
+                        quietDone), next),
+                next => async.eachSeries(oldIds, (workgroupId, step) =>
+                    readCommitted(oldGroupId(workgroupId), deliveryTopic,
+                        deliveryPartitions, (err, offsets) => {
+                            if (err) {
+                                return step(err);
+                            }
+                            oldCommitted[oldGroupId(workgroupId)] = offsets;
+                            return step();
+                        }), next),
+                next => readTopic(deliveryTopic, totalOnDeliveryTopic, 120000,
+                    (err, written) => {
+                        if (err) {
+                            return next(err);
+                        }
+                        deliveryIndex = indexDeliveryTopic({
+                            written,
+                            topicOf,
+                            oldDoc: oldPlan,
+                            newDoc: cutoverResult.doc,
+                        });
+                        record('W-E3.deliveryTopic.records',
+                            deliveryIndex.records.length);
+                        record('W-E3.delivered.total', deliveredCount());
+                        return next();
+                    }),
+                next => {
+                    [...newRuntimes.values()].forEach(registerWorkgroup);
+                    return next();
+                },
+            ], finish);
+        });
+
+        after(done => async.series([
+            next => (cutoverStream ? cutoverStream.close(next) : next()),
+            next => (overlapStream ? overlapStream.close(next) : next()),
+            next => stopWorkgroups(oldRuntimes, next),
+            next => stopWorkgroups(newRuntimes, next),
+            next => (verifier ? verifier.close(next) : next()),
+            next => async.eachSeries([...tailers.values()],
+                (tailer, tailDone) => tailer.stop(tailDone), next),
+        ], done));
+
+        it('should deliver every produced record with no gap while both ' +
+        'generations ran', () => {
+            const delivered = deliveredRecordsOf(tailers, null);
+            const seen = new Set(delivered.map(rec => rec.identity));
+            const missing = [...produced].filter(id => !seen.has(id));
+            record('W-E3.union.produced', totalProduced);
+            record('W-E3.union.deliveredRecords', delivered.length);
+            record('W-E3.union.distinctDelivered', seen.size);
+            record('W-E3.union.duplicates', delivered.length - seen.size);
+            assert(drainedReport.drained,
+                'the drain report never cleared generation 1');
+            assert.deepStrictEqual(missing, [],
+                'a produced record was delivered by neither generation');
+        });
+
+        it('should have delivered twice exactly what the old generation ' +
+        'consumed past its barriers', () => {
+            const delivered = deliveredRecordsOf(tailers, null);
+            const copies = copiesByIdentity(delivered);
+            const observed = new Set([...copies.entries()]
+                .filter(entry => entry[1] > 1).map(entry => entry[0]));
+            const predicted = predictFromCommittedOffsets({
+                index: deliveryIndex,
+                barriers: cutoverResult.doc.barriers,
+                committedByGroup: oldCommitted,
+                groupIdOf: oldGroupId,
+            });
+            const extraCopies = [...copies.values()]
+                .filter(count => count > 2).length;
+            record('W-E3.duplicates.observed', observed.size);
+            record('W-E3.duplicates.predicted', predicted.duplicated.size);
+            record('W-E3.duplicates.predictedLost', predicted.lost.size);
+            record('W-E3.duplicates.identitiesOverTwoCopies', extraCopies);
+            assert.strictEqual(predicted.lost.size, 0,
+                'the old generation was left running, so it cannot still ' +
+                'owe a record');
+            assert.deepStrictEqual([...observed].sort(),
+                [...predicted.duplicated].sort(),
+                'the records delivered twice are not the ones the old ' +
+                'generation consumed past the barriers');
+            assert(extraCopies <= OFFSET_STORE_THROWS.length,
+                `${extraCopies} records were delivered more than twice with ` +
+                `only ${OFFSET_STORE_THROWS.length} commit path throws to ` +
+                'account for them');
+        });
+
+        it('should keep every object key in order within each generation, ' +
+        'and record how often the merged stream is not', () => {
+            const delivered = deliveredRecordsOf(tailers, null);
+            const copies = copiesByIdentity(delivered);
+            const series = roundsByObjectKey(delivered, roundTimes);
+            let inversions = 0;
+            let seriesWithInversions = 0;
+            let checked = 0;
+            series.forEach((events, seriesKey) => {
+                const rounds = events.map(event => event.round);
+                assert(orderedRunsNeeded(rounds) <= 2,
+                    `${seriesKey} needs more than two ordered runs, so one ` +
+                    `generation delivered it out of order: ${rounds.join(', ')}`);
+                // the copies only one generation delivered are unambiguous,
+                // and their order in the customer topic is that generation's
+                // delivery order
+                const single = events
+                    .filter(event => copies.get(event.identity) === 1)
+                    .map(event => event.round);
+                for (let i = 1; i < single.length; i++) {
+                    assert(single[i] >= single[i - 1],
+                        `${seriesKey} was delivered out of order by the one ` +
+                        `generation that delivered it: ${single.join(', ')}`);
+                }
+                let seriesInversions = 0;
+                for (let i = 1; i < rounds.length; i++) {
+                    if (rounds[i] < rounds[i - 1]) {
+                        seriesInversions += 1;
+                    }
+                }
+                inversions += seriesInversions;
+                if (seriesInversions > 0) {
+                    seriesWithInversions += 1;
+                }
+                checked += 1;
+            });
+            // measured, not asserted: an old generation copy of an earlier
+            // record landing after a new generation copy of a later one is
+            // what the overlap window costs a consumer reading the customer
+            // topic, and v1 does not claim to prevent it
+            record('W-E3.order.seriesChecked', checked);
+            record('W-E3.order.crossGenerationInversions', inversions);
+            record('W-E3.order.seriesWithInversions', seriesWithInversions);
+            assert(checked > 0);
+        });
+    });
+
+    describe('E4 :: restarting an old worker after the document moved on',
+    function recoveryHole() {
+        this.timeout(1200000);
+
+        const deliveryTopic = TOPICS.e4Delivery.name;
+        const deliveryPartitions = TOPICS.e4Delivery.partitions;
+        const baseGroupId = `poc-wg-e4-group-${RUN_ID}`;
+        const zkPath = `${ZK_BASE}/gate-e4`;
+        const cachePath = cachePathFor('gate-e4-cutover');
+        const objectsPerDestination = 60;
+        const rounds = 3;
+
+        // the operator keeps the workgroup names and only changes the
+        // modulo, so the workgroup a crashed worker was deployed as still
+        // exists in the new document. That is what makes the restart look
+        // legitimate and is what this scenario is about
+        const oldIds = ['e4-a', 'e4-b'];
+        const newIds = ['e4-a', 'e4-b', 'e4-c'];
+        const probed = oldIds[0];
+
+        const oldPlan = buildHashmodDocument({
+            topic: deliveryTopic, generation: 1, modulo: 2, ids: oldIds });
+        const newPlan = buildHashmodDocument({
+            topic: deliveryTopic, generation: 2, modulo: 3, ids: newIds });
+
+        const resources = selectReshardDestinations({
+            oldDoc: oldPlan,
+            newDoc: newPlan,
+            prefix: 'poc-wg-e4-dest',
+            wanted: [
+                { from: oldIds[0], to: newIds[0] },
+                { from: oldIds[0], to: newIds[2] },
+            ],
+        });
+        const destinations = resources.map((resource, index) =>
+            destinationConfig({
+                resource,
+                topic: TOPICS[`e4Customer${index}`].name,
+                // the old generation has to still be short of the barriers
+                // when it crashes, which is the state a recovery starts from
+                pollIntervalMs: 500,
+            }));
+
+        const notifConfig = {
+            destinations,
+            deliveryPool: {
+                ...deliveryPoolConfig({
+                    topic: deliveryTopic,
+                    groupId: baseGroupId,
+                    concurrency: 1,
+                }),
+                workgroups: { zookeeperPath: zkPath, cachePath },
+            },
+        };
+
+        const eventTypes = ['s3:ObjectCreated:Put', 's3:ObjectCreated:Put',
+            's3:ObjectRemoved:Delete'];
+        const records = [];
+        for (let round = 0; round < rounds; round++) {
+            for (let k = 0; k < objectsPerDestination; k++) {
+                destinations.forEach((destination, index) =>
+                    records.push(addressedRecord({
+                        destination,
+                        key: `e4-${index}-obj-${`${k}`.padStart(3, '0')}`,
+                        eventType: eventTypes[round],
+                        dateTime: eventTime(round),
+                    })));
+            }
+        }
+
+        const oldRuntimes = new Map();
+        let verifier = null;
+        let cutoverResult = null;
+        let afterCrash = null;
+        let pinnedError = null;
+        let cachedGeneration = null;
+        let defector = null;
+        let defectorGroupId = null;
+        let defectorGeneration = null;
+        let committedBefore = null;
+        let committedAfter = null;
+        let afterDefection = null;
+
+        const oldGroupId = id => buildGroupId(baseGroupId, id, 1);
+        const newGroupId = id => buildGroupId(baseGroupId, id, 2);
+
+        before(done => {
+            const finish = settleOnce(done);
+            record('W-E4.destinations', resources);
+            record('W-E4.records.produced', records.length);
+            return async.series([
+                next => produceRecords(deliveryTopic, records, next),
+                next => waitForTopics([TOPICS.e4Delivery], err => next(err)),
+                next => writeWorkgroupsDocument(zkPath, buildHashmodDocument({
+                    topic: deliveryTopic,
+                    generation: 1,
+                    modulo: 2,
+                    ids: oldIds,
+                }), next),
+                next => startWorkgroups({
+                    zkPath,
+                    workgroupIds: oldIds,
+                    baseGroupId,
+                    notifConfig,
+                    runtimes: oldRuntimes,
+                }, next),
+                next => async.eachSeries(oldIds, (workgroupId, step) =>
+                    waitForCounter(DELIVERED_METRIC,
+                        { workgroup: workgroupId }, 1, 90000, 500, step),
+                    next),
+                next => {
+                    const cutover = buildCutoverTool({
+                        name: 'e4',
+                        notifConfig,
+                        options: {
+                            modulo: 3,
+                            workgroup: newIds.map((id, r) => `${id}:${r}`),
+                            timeout: 10000,
+                        },
+                    });
+                    return cutover.cutover((err, result) => {
+                        cutoverResult = result;
+                        return cutover.close(() => next(err));
+                    });
+                },
+                // the crash: the old generation stops with the new document
+                // already in zookeeper and its own drain unfinished
+                next => stopWorkgroups(oldRuntimes, next),
+                next => {
+                    verifier = buildCutoverTool({
+                        name: 'e4-verify',
+                        notifConfig,
+                        options: { timeout: 10000 },
+                    });
+                    return next();
+                },
+                next => runVerify(verifier, (err, result) => {
+                    if (err) {
+                        return next(err);
+                    }
+                    afterCrash = result;
+                    record('W-E4.verify.afterCrash.exitCode', result.exitCode);
+                    record('W-E4.verify.afterCrash.remaining',
+                        result.remaining);
+                    return next();
+                }),
+                next => readCommitted(oldGroupId(probed), deliveryTopic,
+                    deliveryPartitions, (err, offsets) => {
+                        committedBefore = offsets;
+                        return next(err);
+                    }),
+                // (a) the operator restarts the crashed worker exactly as it
+                // was deployed, pinned to the generation it was running
+                next => {
+                    const loader = new WorkgroupConfigLoader({
+                        zkConfig: {
+                            connectionString: ZOOKEEPER_HOSTS,
+                            autoCreateNamespace: false,
+                        },
+                        workgroupsConfig: {
+                            zookeeperPath: zkPath,
+                            cachePath: cachePathFor(probed),
+                            generation: 1,
+                        },
+                        topic: deliveryTopic,
+                        workgroupId: probed,
+                        logger: new werelogs.Logger(
+                            'WorkgroupConfigLoader:e4-pinned'),
+                    });
+                    return loader.load(err => {
+                        pinnedError = err;
+                        return loader.stop(() => next());
+                    });
+                },
+                // the cache the crashed worker left behind still holds the
+                // rules it was running, which is what makes the refusal
+                // worth a design amendment rather than only a warning
+                next => fs.readFile(cachePathFor(probed), (err, data) => {
+                    if (err) {
+                        return next(err);
+                    }
+                    cachedGeneration = JSON.parse(data).generation;
+                    return next();
+                }),
+                // (b) the same restart with no generation pinned
+                next => startWorkgroup({
+                    zkPath,
+                    workgroupId: probed,
+                    baseGroupId,
+                    notifConfig,
+                }, (err, runtime) => {
+                    defector = runtime;
+                    if (runtime) {
+                        defectorGroupId = runtime.workgroup.groupId;
+                        defectorGeneration = runtime.doc.generation;
+                    }
+                    return next(err);
+                }),
+                next => readCommitted(oldGroupId(probed), deliveryTopic,
+                    deliveryPartitions, (err, offsets) => {
+                        committedAfter = offsets;
+                        return next(err);
+                    }),
+                next => runVerify(verifier, (err, result) => {
+                    if (err) {
+                        return next(err);
+                    }
+                    afterDefection = result;
+                    record('W-E4.verify.afterDefection.exitCode',
+                        result.exitCode);
+                    record('W-E4.verify.afterDefection.remaining',
+                        result.remaining);
+                    return next();
+                }),
+                next => stopWorkgroup(defector, () => {
+                    defector = null;
+                    return next();
+                }),
+            ], finish);
+        });
+
+        after(done => async.series([
+            next => stopWorkgroups(oldRuntimes, next),
+            next => stopWorkgroup(defector, next),
+            next => (verifier ? verifier.close(next) : next()),
+        ], done));
+
+        it('should leave the old generation permanently short of its ' +
+        'barriers once it has crashed', () => {
+            record('W-E4.doc.generation', cutoverResult.doc.generation);
+            record('W-E4.doc.previousGroups',
+                cutoverResult.doc.previousGroups);
+            assert.strictEqual(afterCrash.exitCode, EXIT_NOT_DRAINED,
+                'the old generation drained before it crashed, so there is ' +
+                'no recovery to attempt');
+            assert(afterCrash.remaining > 0);
+        });
+
+        it('should refuse to start a worker pinned to the generation it was ' +
+        'deployed as, even though its own cache still holds those rules',
+        () => {
+            assert(pinnedError,
+                'a worker pinned to generation 1 loaded a generation 2 ' +
+                'document');
+            const message = pinnedError.description || pinnedError.message;
+            record('W-E4.pinned.message', message);
+            record('W-E4.pinned.cachedGeneration', cachedGeneration);
+            assert(message.includes('at generation 2'),
+                `the refusal has to name the document generation: ${message}`);
+            assert(message.includes('pinned to generation 1'),
+                `the refusal has to name the pin: ${message}`);
+            assert.strictEqual(cachedGeneration, 1,
+                'the on-disk cache no longer holds generation 1, so the ' +
+                'refusal is not the only thing standing between this worker ' +
+                'and its own rules');
+        });
+
+        it('should make an unpinned restart join the new generation instead ' +
+        'and leave the old drain stalled', () => {
+            record('W-E4.defector.derivedGroupId', defectorGroupId);
+            record('W-E4.defector.generation', defectorGeneration);
+            record('W-E4.defector.abandonedGroupId', oldGroupId(probed));
+            assert.strictEqual(defectorGeneration, 2,
+                'the restarted worker loaded a document at generation ' +
+                `${defectorGeneration}`);
+            assert.strictEqual(defectorGroupId, newGroupId(probed),
+                'the restarted worker did not derive the new generation ' +
+                'group id');
+            assert.notStrictEqual(defectorGroupId, oldGroupId(probed),
+                'the restarted worker rejoined the group it crashed out of');
+            assert.strictEqual(afterDefection.exitCode, EXIT_NOT_DRAINED,
+                'the drain finished, so the restarted worker did not defect');
+            assert.strictEqual(afterDefection.remaining, afterCrash.remaining,
+                'the old generation made progress after the restart, so the ' +
+                'restarted worker rejoined its own group');
+            assert.deepStrictEqual(committedAfter, committedBefore,
+                'the old group committed something after the restart, so it ' +
+                'is not frozen');
+        });
     });
 
     describe('E5 :: a generation seeded on only some of its partitions',
@@ -4355,6 +5597,461 @@ function gateReshard() {
                 `so it does not point at the gap: ${message}`);
             assert(elapsedMs < 30000,
                 `the refusal took ${elapsedMs} ms, which is not fast`);
+        });
+    });
+
+    describe('E6 :: the records nobody configured, under two moduli at once',
+    function totalityUnderMixedModuli() {
+        this.timeout(1200000);
+
+        const deliveryTopic = TOPICS.e6Delivery.name;
+        const deliveryPartitions = TOPICS.e6Delivery.partitions;
+        const baseGroupId = `poc-wg-e6-group-${RUN_ID}`;
+        const zkPath = `${ZK_BASE}/gate-e6`;
+        const cachePath = cachePathFor('gate-e6-cutover');
+        const objectsPerDestination = 6;
+        const BATCH_SIZE = 3;
+        const BATCH_GAP_MS = 500;
+        const CUTOVER_DELAY_MS = 1000;
+
+        const oldIds = ['e6-g1a', 'e6-g1b'];
+        const newIds = ['e6-g2a', 'e6-g2b', 'e6-g2c'];
+
+        const oldPlan = buildHashmodDocument({
+            topic: deliveryTopic, generation: 1, modulo: 2, ids: oldIds });
+        const newPlan = buildHashmodDocument({
+            topic: deliveryTopic, generation: 2, modulo: 3, ids: newIds });
+
+        const resources = selectReshardDestinations({
+            oldDoc: oldPlan,
+            newDoc: newPlan,
+            prefix: 'poc-wg-e6-dest',
+            wanted: [
+                { from: oldIds[0], to: newIds[0] },
+                { from: oldIds[1], to: newIds[1] },
+                { from: oldIds[1], to: newIds[2] },
+            ],
+        });
+        // a destination the record names and the configuration does not
+        // know, chosen so it changes owner between the two moduli: an
+        // unknown id is still routed, and under three workgroups it is
+        // routed somewhere else than under two
+        const [unknownResource] = selectReshardDestinations({
+            oldDoc: oldPlan,
+            newDoc: newPlan,
+            prefix: 'poc-wg-e6-unknown',
+            wanted: [{ from: oldIds[0], to: newIds[2] }],
+        });
+        const sinkResource = `poc-wg-e6-sink-${RUN_ID}`;
+
+        const plain = resources.map((resource, index) =>
+            destinationConfig({
+                resource,
+                topic: TOPICS[`e6Customer${index}`].name,
+            }));
+        // nothing is ever addressed to the sink by key: it exists so the one
+        // record with an empty key has somewhere to be delivered, which
+        // makes its customer topic and its delivered_total series carry that
+        // record and nothing else
+        const sink = destinationConfig({
+            resource: sinkResource,
+            topic: TOPICS.e6Customer3.name,
+        });
+        const destinations = plain.concat([sink]);
+
+        const notifConfig = {
+            destinations,
+            deliveryPool: {
+                ...deliveryPoolConfig({
+                    topic: deliveryTopic,
+                    groupId: baseGroupId,
+                    concurrency: 10,
+                }),
+                workgroups: { zookeeperPath: zkPath, cachePath },
+            },
+        };
+
+        const eventTypes = ['s3:ObjectCreated:Put', 's3:ObjectCreated:Put'];
+        const roundTimes = eventTypes.map((_, index) => eventTime(index));
+        const emptyKeyObject = 'e6-empty-key-obj';
+        const unknownObject = 'e6-unknown-dest-obj';
+        const keysOf = new Map();
+        plain.forEach((destination, index) => keysOf.set(destination.topic,
+            objectKeysFor(`e6-${index}`, objectsPerDestination)));
+
+        const produced = new Set();
+        const primingRecords = [];
+        const streamBatches = [];
+        eventTypes.forEach((eventType, round) => {
+            const roundRecords = [];
+            for (let k = 0; k < objectsPerDestination; k++) {
+                plain.forEach(destination => {
+                    const key = keysOf.get(destination.topic)[k];
+                    produced.add(identityOf(destination.topic, key,
+                        roundTimes[round]));
+                    roundRecords.push(addressedRecord({
+                        destination,
+                        key,
+                        eventType,
+                        dateTime: roundTimes[round],
+                    }));
+                });
+            }
+            if (round === 0) {
+                primingRecords.push(...roundRecords);
+                return;
+            }
+            for (let i = 0; i < roundRecords.length; i += BATCH_SIZE) {
+                streamBatches.push(roundRecords.slice(i, i + BATCH_SIZE));
+            }
+        });
+
+        // the record for a destination the configuration does not carry,
+        // addressed over the same wire contract as every other record
+        const unknownRecord = addressedRecord({
+            destination: { resource: unknownResource },
+            key: unknownObject,
+            eventType: 's3:ObjectCreated:Put',
+            dateTime: eventTime(0),
+        });
+        // and the record with no routing key at all, which the ownership
+        // rules have to give exactly one owner all the same
+        const emptyKeyRecord = {
+            ...addressedRecord({
+                destination: sink,
+                key: emptyKeyObject,
+                eventType: 's3:ObjectCreated:Put',
+                dateTime: eventTime(0),
+            }),
+            key: '',
+        };
+        const specials = [unknownRecord, emptyKeyRecord];
+
+        const totalProduced = produced.size;
+        const totalOnDeliveryTopic =
+            totalProduced + specials.length + deliveryPartitions;
+
+        const tailers = new Map();
+        const oldRuntimes = new Map();
+        const newRuntimes = new Map();
+        const restartedOld = new Set();
+        const restartedNew = new Set();
+        const drainPolls = [];
+        let stream = null;
+        let verifier = null;
+        let cutoverResult = null;
+        let deliveryIndex = null;
+
+        const oldGroupId = id => buildGroupId(baseGroupId, id, 1);
+        const newGroupId = id => buildGroupId(baseGroupId, id, 2);
+        const topicOf = destinationId => {
+            const found = destinations
+                .find(destination => destination.resource === destinationId);
+            return found ? found.topic : null;
+        };
+
+        function waitForDrain(done) {
+            const deadline = Date.now() + E_DRAIN_TIMEOUT_MS;
+            const attempt = () => runVerify(verifier, (err, result) => {
+                if (err) {
+                    return done(err);
+                }
+                drainPolls.push(result.remaining);
+                if (result.report.drained) {
+                    return done();
+                }
+                if (Date.now() >= deadline) {
+                    return done(new Error('generation 1 never committed past ' +
+                        'every barrier'));
+                }
+                return setTimeout(attempt, E_DRAIN_POLL_MS);
+            });
+            return attempt();
+        }
+
+        before(done => {
+            const finish = settleOnce(done);
+            record('W-E6.destinations', resources);
+            record('W-E6.destinations.unknown', unknownResource);
+            record('W-E6.destinations.sink', sinkResource);
+            record('W-E6.records.produced', totalProduced);
+            return async.series([
+                next => async.eachSeries(destinations,
+                    (destination, tailDone) => {
+                        const tailer = new TopicTailer(destination.topic);
+                        tailers.set(destination.topic, tailer);
+                        return tailer.start(tailDone);
+                    }, next),
+                next => produceRecords(deliveryTopic, primingRecords, next),
+                next => waitForTopics([TOPICS.e6Delivery], err => next(err)),
+                next => writeWorkgroupsDocument(zkPath, buildHashmodDocument({
+                    topic: deliveryTopic,
+                    generation: 1,
+                    modulo: 2,
+                    ids: oldIds,
+                }), next),
+                next => startWorkgroups({
+                    zkPath,
+                    workgroupIds: oldIds,
+                    baseGroupId,
+                    notifConfig,
+                    runtimes: oldRuntimes,
+                }, next),
+                next => waitOrRestart({
+                    label: 'W-E6 generation 1 first delivery',
+                    workgroupIds: oldIds,
+                    runtimes: oldRuntimes,
+                    restarted: restartedOld,
+                    zkPath,
+                    baseGroupId,
+                    notifConfig,
+                    need: 1,
+                    read: (workgroupId, cb) => readCounter(DELIVERED_METRIC,
+                        { workgroup: workgroupId }, cb),
+                    wait: cb => async.eachSeries(oldIds, (workgroupId, step) =>
+                        waitForCounter(DELIVERED_METRIC,
+                            { workgroup: workgroupId }, 1, 90000, 500, step),
+                        cb),
+                }, next),
+                next => {
+                    stream = new RecordStream({
+                        topic: deliveryTopic,
+                        batches: streamBatches,
+                        gapMs: BATCH_GAP_MS,
+                    });
+                    return stream.start(next);
+                },
+                next => setTimeout(next, CUTOVER_DELAY_MS),
+                next => {
+                    const cutover = buildCutoverTool({
+                        name: 'e6',
+                        notifConfig,
+                        options: {
+                            modulo: 3,
+                            workgroup: newIds.map((id, r) => `${id}:${r}`),
+                            timeout: 10000,
+                        },
+                    });
+                    return cutover.cutover((err, result) => {
+                        cutoverResult = result;
+                        return cutover.close(() => next(err));
+                    });
+                },
+                next => waitFor(() => 'the record stream to finish ' +
+                    `(${stream.sent})`, () => stream.finished, 120000, next),
+                next => stream.close(next),
+                next => {
+                    assert.ifError(stream.error);
+                    verifier = buildCutoverTool({
+                        name: 'e6-verify',
+                        notifConfig,
+                        options: { timeout: 10000 },
+                    });
+                    return next();
+                },
+                next => waitOrRestart({
+                    label: 'W-E6 generation 1 drain',
+                    workgroupIds: oldIds,
+                    runtimes: oldRuntimes,
+                    restarted: restartedOld,
+                    zkPath,
+                    baseGroupId,
+                    notifConfig,
+                    need: WorkgroupCutover
+                        .partitionsOf(cutoverResult.doc.barriers)
+                        .reduce((total, partition) =>
+                            total + cutoverResult.doc.barriers[partition], 0),
+                    read: (workgroupId, cb) => committedTotal(
+                        oldGroupId(workgroupId), deliveryTopic,
+                        deliveryPartitions, cb),
+                    wait: cb => waitForDrain(cb),
+                }, next),
+                next => async.eachSeries(cutoverResult.groupIds,
+                    (groupId, cb) => assertSeededOffsets({
+                        kafkaConfig,
+                        topic: deliveryTopic,
+                        groupId,
+                        barriers: cutoverResult.doc.barriers,
+                        logger: new werelogs.Logger('seededOffsets:ft'),
+                    }, cb), next),
+                next => waitForTopics([TOPICS.e6Delivery], err => next(err)),
+                next => startWorkgroups({
+                    zkPath,
+                    workgroupIds: newIds,
+                    baseGroupId,
+                    notifConfig,
+                    runtimes: newRuntimes,
+                }, next),
+                // injected while both generations are running, and above
+                // every barrier, so each generation has to give each of them
+                // exactly one owner
+                next => produceRecords(deliveryTopic, specials, next),
+                next => waitOrRestart({
+                    label: 'W-E6 both generations commit the whole topic',
+                    workgroupIds: oldIds.concat(newIds),
+                    runtimes: new Map([...oldRuntimes, ...newRuntimes]),
+                    restarted: new Set([...restartedOld, ...restartedNew]),
+                    zkPath,
+                    baseGroupId,
+                    notifConfig,
+                    need: totalOnDeliveryTopic,
+                    read: (workgroupId, cb) => committedTotal(
+                        oldIds.includes(workgroupId) ?
+                            oldGroupId(workgroupId) : newGroupId(workgroupId),
+                        deliveryTopic, deliveryPartitions, cb),
+                    wait: cb => async.eachSeries(oldIds.concat(newIds),
+                        (workgroupId, step) => waitForCommittedTotal(
+                            oldIds.includes(workgroupId) ?
+                                oldGroupId(workgroupId) :
+                                newGroupId(workgroupId),
+                            deliveryTopic, deliveryPartitions,
+                            totalOnDeliveryTopic, E_COMMIT_TIMEOUT_MS, step),
+                        cb),
+                }, next),
+                next => stopWorkgroups(oldRuntimes, next),
+                next => async.eachSeries([...tailers.values()],
+                    (tailer, quietDone) => waitUntilQuiet(tailer, 500,
+                        quietDone), next),
+                next => readTopic(deliveryTopic, totalOnDeliveryTopic, 120000,
+                    (err, written) => {
+                        if (err) {
+                            return next(err);
+                        }
+                        deliveryIndex = indexDeliveryTopic({
+                            written,
+                            topicOf,
+                            oldDoc: oldPlan,
+                            newDoc: cutoverResult.doc,
+                        });
+                        return next();
+                    }),
+                next => {
+                    [...newRuntimes.values()].forEach(registerWorkgroup);
+                    return next();
+                },
+            ], finish);
+        });
+
+        after(done => async.series([
+            next => (stream ? stream.close(next) : next()),
+            next => stopWorkgroups(oldRuntimes, next),
+            next => stopWorkgroups(newRuntimes, next),
+            next => (verifier ? verifier.close(next) : next()),
+            next => async.eachSeries([...tailers.values()],
+                (tailer, tailDone) => tailer.stop(tailDone), next),
+        ], done));
+
+        it('should have put both odd records on the topic with the keys ' +
+        'they were meant to have', () => {
+            const unknown = deliveryIndex.records
+                .filter(rec => rec.destinationId === unknownResource);
+            const empty = deliveryIndex.records
+                .filter(rec => rec.token === '');
+            record('W-E6.unknown.onTopic', unknown.length);
+            record('W-E6.emptyKey.onTopic', empty.length);
+            record('W-E6.emptyKey.owners', {
+                generation1: empty.length ? empty[0].oldOwner : null,
+                generation2: empty.length ? empty[0].newOwner : null,
+            });
+            record('W-E6.unknown.owners', {
+                generation1: unknown.length ? unknown[0].oldOwner : null,
+                generation2: unknown.length ? unknown[0].newOwner : null,
+            });
+            assert.strictEqual(unknown.length, 1);
+            assert.strictEqual(empty.length, 1,
+                'the record produced with an empty key did not arrive with ' +
+                'an empty routing token');
+        });
+
+        it('should drop the unknown destination in exactly one workgroup of ' +
+        'each generation, and deliver it nowhere', done => {
+            const generations = [
+                { ids: oldIds, doc: oldPlan, label: 'generation 1' },
+                { ids: newIds, doc: cutoverResult.doc, label: 'generation 2' },
+            ];
+            return async.mapSeries(generations, (generation, next) =>
+                async.mapSeries(generation.ids, (workgroupId, step) =>
+                    readCounter(DROPPED_METRIC, {
+                        workgroup: workgroupId,
+                        target: unknownResource,
+                        reason: 'unknown_destination',
+                    }, (err, value) => step(err, { workgroupId, value })),
+                    (err, rows) => next(err, { generation, rows })),
+                (err, results) => {
+                    assert.ifError(err);
+                    results.forEach(({ generation, rows }) => {
+                        const owner = workgroupIdForDestination(
+                            generation.doc, unknownResource);
+                        const total = rows
+                            .reduce((sum, row) => sum + row.value, 0);
+                        record(`W-E6.unknown.drops.${generation.label}`,
+                            Object.fromEntries(rows
+                                .map(row => [row.workgroupId, row.value])));
+                        assert.strictEqual(total, 1,
+                            `${generation.label} dropped the unknown ` +
+                            `destination ${total} times, exactly one ` +
+                            'workgroup owns it');
+                        const dropper = rows.find(row => row.value > 0);
+                        assert.strictEqual(dropper.workgroupId, owner,
+                            `${generation.label} dropped it in ` +
+                            `${dropper.workgroupId}, which does not own it`);
+                    });
+                    return readCounter(DELIVERED_METRIC,
+                        { target: unknownResource }, (err2, delivered) => {
+                            assert.ifError(err2);
+                            record('W-E6.unknown.delivered', delivered);
+                            assert.strictEqual(delivered, 0,
+                                'a destination the configuration does not ' +
+                                'carry cannot have been delivered to');
+                            return done();
+                        });
+                });
+        });
+
+        it('should give the record with no key exactly one owner in each ' +
+        'generation, and have that owner deliver it once', done => {
+            const sinkTailer = tailers.get(sink.topic);
+            const copies = sinkTailer.records
+                .map(deliveredEvent)
+                .filter(event => event.key === emptyKeyObject);
+            record('W-E6.emptyKey.copiesDelivered', copies.length);
+            assert.strictEqual(sinkTailer.records.length, copies.length,
+                'the sink received a record that is not the keyless one');
+            const generations = [
+                { ids: oldIds, doc: oldPlan, label: 'generation 1' },
+                { ids: newIds, doc: cutoverResult.doc, label: 'generation 2' },
+            ];
+            return async.mapSeries(generations, (generation, next) =>
+                async.mapSeries(generation.ids, (workgroupId, step) =>
+                    readCounter(DELIVERED_METRIC,
+                        { workgroup: workgroupId, target: sinkResource },
+                        (err, value) => step(err, { workgroupId, value })),
+                    (err, rows) => next(err, { generation, rows })),
+                (err, results) => {
+                    assert.ifError(err);
+                    results.forEach(({ generation, rows }) => {
+                        const owner = ownerOfToken(
+                            buildOwnershipIndex(generation.doc), '');
+                        const total = rows
+                            .reduce((sum, row) => sum + row.value, 0);
+                        record(`W-E6.emptyKey.delivered.${generation.label}`,
+                            Object.fromEntries(rows
+                                .map(row => [row.workgroupId, row.value])));
+                        assert.strictEqual(total, 1,
+                            `${generation.label} delivered the keyless ` +
+                            `record ${total} times, one owner processing it ` +
+                            'once would be 1');
+                        const deliverer = rows.find(row => row.value > 0);
+                        assert.strictEqual(deliverer.workgroupId, owner,
+                            `${generation.label} delivered it from ` +
+                            `${deliverer.workgroupId}, and the empty token ` +
+                            `is owned by ${owner}`);
+                    });
+                    assert.strictEqual(copies.length, generations.length,
+                        'the keyless record was not delivered exactly once ' +
+                        'per generation');
+                    return done();
+                });
         });
     });
 });
