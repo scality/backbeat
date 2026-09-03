@@ -3011,6 +3011,11 @@ const E_DRAIN_POLL_MS = 1000;
 // earlier runs of this gate did.
 const E_WAIT_MS = 90000;
 const E_RETRY_WAIT_MS = 480000;
+// how long a single restarted worker is given to be seen consuming. It is
+// not competing with a wedged member for its group, so it only has to
+// survive its own rebalance churn on the way in, which has been measured
+// taking well over a minute
+const E_DEFECTOR_WAIT_MS = 300000;
 
 /**
  * Identity of one produced notification: the customer topic it is addressed
@@ -3563,6 +3568,43 @@ function waitOrRestart(params, done) {
             return params.wait(E_RETRY_WAIT_MS, done);
         });
     });
+}
+
+/**
+ * Waits until a group has committed anything at all past a floor.
+ *
+ * waitForCommittedTotal wants an exact total, which is the right question
+ * for a generation that has to finish a topic. This is the question to ask
+ * of a worker that only has to be seen working: has this group moved past
+ * where it was put.
+ *
+ * @param {String} groupId - consumer group id
+ * @param {String} topic - topic name
+ * @param {Number} partitionCount - number of partitions
+ * @param {Number} floor - offset total the group has to get past
+ * @param {Number} timeoutMs - how long to wait for
+ * @param {Function} done - callback
+ * @return {undefined}
+ */
+function waitForCommittedAbove(groupId, topic, partitionCount, floor,
+    timeoutMs, done) {
+    const deadline = Date.now() + timeoutMs;
+    let lastSeen = null;
+    const check = () => committedTotal(groupId, topic, partitionCount,
+        (err, total) => {
+            if (!err) {
+                lastSeen = total;
+                if (total > floor) {
+                    return done();
+                }
+            }
+            if (Date.now() >= deadline) {
+                return done(new Error(`timed out waiting for group ${groupId}` +
+                    ` to commit past ${floor}, last seen ${lastSeen}`));
+            }
+            return setTimeout(check, 1000);
+        });
+    return check();
 }
 
 /**
@@ -5435,6 +5477,7 @@ function gateReshard() {
         let defectorGeneration = null;
         let defectorStartedAt = 0;
         let defectorCommitted = null;
+        let defectorBarriers = 0;
         let barriersBeforeDefection = 0;
         let barrierTotal = null;
         let committedBefore = null;
@@ -5591,33 +5634,49 @@ function gateReshard() {
                 //
                 // Everything this scenario produced sits below the barriers,
                 // so the barriers are the last records on the topic and the
-                // new generation's group was seeded exactly at them. One
-                // barrier per partition, counted against the generation this
-                // worker runs, is therefore the defector consuming from
-                // where the cutover put it and nowhere else.
+                // new generation's group was seeded exactly at them. A
+                // barrier consumed and counted against the generation this
+                // worker runs is therefore the defector reading from where
+                // the cutover put it and nowhere else.
+                //
+                // One is enough, and asking for one per partition is asking
+                // for something else. A worker that spends its first minutes
+                // in an assign and revoke churn holds a different subset of
+                // the partitions each time round, so the whole set is a
+                // question about the rebalance loop rather than about which
+                // group this worker joined. That is what failed here: 47
+                // assign and revoke cycles, no barrier inside the first
+                // ninety seconds, two of them shortly after.
                 next => waitForCounter(BARRIER_METRIC,
                     { workgroup: probed, match: 'current' },
-                    barriersBeforeDefection + deliveryPartitions, E_WAIT_MS,
-                    500, next),
+                    barriersBeforeDefection + 1, E_DEFECTOR_WAIT_MS, 500,
+                    next),
                 // and waited for, not read once: the counter above rises as
                 // the record is handled, while the offset behind it is only
                 // committed on the consumer's auto-commit interval, so a
                 // single read here would usually still see the seed
-                next => waitForCommittedTotal(newGroupId(probed),
-                    deliveryTopic, deliveryPartitions,
-                    barrierTotal + deliveryPartitions, E_WAIT_MS, next),
-                next => committedTotal(newGroupId(probed), deliveryTopic,
-                    deliveryPartitions, (err, total) => {
-                        if (err) {
-                            return next(err);
-                        }
-                        defectorCommitted = total;
-                        record('W-E4.defector.workingAfterMs',
-                            Date.now() - defectorStartedAt);
-                        record('W-E4.defector.committedTotal', total);
-                        record('W-E4.defector.seededAt', barrierTotal);
-                        return next();
-                    }),
+                next => waitForCommittedAbove(newGroupId(probed),
+                    deliveryTopic, deliveryPartitions, barrierTotal,
+                    E_DEFECTOR_WAIT_MS, next),
+                next => async.parallel({
+                    committed: cb => committedTotal(newGroupId(probed),
+                        deliveryTopic, deliveryPartitions, cb),
+                    barriers: cb => readCounter(BARRIER_METRIC,
+                        { workgroup: probed, match: 'current' }, cb),
+                }, (err, seen) => {
+                    if (err) {
+                        return next(err);
+                    }
+                    defectorCommitted = seen.committed;
+                    defectorBarriers = seen.barriers - barriersBeforeDefection;
+                    record('W-E4.defector.workingAfterMs',
+                        Date.now() - defectorStartedAt);
+                    record('W-E4.defector.committedTotal', seen.committed);
+                    record('W-E4.defector.seededAt', barrierTotal);
+                    record('W-E4.defector.barriersOfItsOwnGeneration',
+                        defectorBarriers);
+                    return next();
+                }),
                 // only now is reading the old group's offsets a statement
                 // about anything
                 next => readCommitted(oldGroupId(probed), deliveryTopic,
@@ -5695,6 +5754,11 @@ function gateReshard() {
             // the defector was working when the old group was read, so the
             // two readings below are a statement about a stalled drain and
             // not about a worker that had not started yet
+            record('W-E4.defector.barriersSeen', defectorBarriers);
+            assert(defectorBarriers > 0,
+                'the restarted worker consumed no barrier of its own ' +
+                'generation, so nothing says it was reading from where the ' +
+                'cutover seeded the new generation');
             assert(defectorCommitted > barrierTotal,
                 'the restarted worker had committed nothing past the ' +
                 `offsets the cutover seeded (${defectorCommitted} against ` +
