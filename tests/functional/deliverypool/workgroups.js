@@ -4762,14 +4762,33 @@ function gateReshard() {
             record('W-E2.gap.predictedLost', predicted.lost.size);
             record('W-E2.gap.lostByDestination', lostByDestination);
             record('W-E2.gap.lostByPartition', lostByPartition);
+            const unwarned = [...missing].filter(id => !predicted.lost.has(id));
+            const warnedButDelivered = [...predicted.lost]
+                .filter(id => !missing.has(id));
             record('W-E2.gap.remainingAtStop', frozenReport.remaining);
+            record('W-E2.gap.unwarned', unwarned.length);
+            record('W-E2.gap.warnedButDelivered', warnedButDelivered.length);
             assert(missing.size > 0,
                 'nothing was lost, so stopping a generation that the guard ' +
                 'refused to clear cost nothing');
-            assert.deepStrictEqual([...missing].sort(),
-                [...predicted.lost].sort(),
-                'the records nobody delivered are not the ones the old ' +
-                "generation's own committed offsets said it still owed");
+            // the load-bearing property: every record that was lost is one
+            // the drain report had already counted as still owed. A record
+            // lost that the report did not warn about would be a gap the
+            // guard cannot see, which is the failure this design exists to
+            // rule out
+            assert.deepStrictEqual(unwarned, [],
+                'a record was lost that the drain report did not count as ' +
+                'still owed, so the guard cannot see the whole gap');
+            // the other direction is allowed and is not symmetric. The
+            // report reads committed offsets, and a record can be delivered
+            // without its offset being stored, so the report over-warns.
+            // That only happens when the commit path threw, which is the
+            // pre-existing defect counted in run.commitPathThrows
+            assert(warnedButDelivered.length === 0 ||
+                OFFSET_STORE_THROWS.length > 0,
+                'the drain report over-warned about ' +
+                `${warnedButDelivered.length} records with no commit path ` +
+                'throw to account for their offsets never being stored');
             // remaining counts offsets below the barrier for every old
             // group, whether or not that group owns the record sitting
             // there, so it is an upper bound on the loss and never an
