@@ -4371,6 +4371,11 @@ function gateReshard() {
             assert.strictEqual(predicted.lost.size, 0,
                 'the drain report exited 0, so it cannot be predicting a ' +
                 'record generation 1 still owed');
+            // an empty set matching an empty set would pass the comparison
+            // below while saying nothing at all about a cutover
+            assert(observed.size > 0,
+                'no record was delivered twice, so generation 1 never ran ' +
+                'past its barriers and there is no overlap to measure');
             assert.deepStrictEqual([...observed].sort(),
                 [...predicted.duplicated].sort(),
                 'the records delivered twice are not the ones generation ' +
@@ -5428,6 +5433,10 @@ function gateReshard() {
         let defector = null;
         let defectorGroupId = null;
         let defectorGeneration = null;
+        let defectorStartedAt = 0;
+        let defectorCommitted = null;
+        let barriersBeforeDefection = 0;
+        let barrierTotal = null;
         let committedBefore = null;
         let committedAfter = null;
         let afterDefection = null;
@@ -5492,6 +5501,12 @@ function gateReshard() {
                 // already in zookeeper and its own drain unfinished
                 next => stopWorkgroups(oldRuntimes, next),
                 next => {
+                    // where the cutover seeded the new generation, which is
+                    // the offset the defector has to be seen moving past
+                    barrierTotal = WorkgroupCutover
+                        .partitionsOf(cutoverResult.doc.barriers)
+                        .reduce((total, partition) =>
+                            total + cutoverResult.doc.barriers[partition], 0);
                     verifier = buildCutoverTool({
                         name: 'e4-verify',
                         notifConfig,
@@ -5548,6 +5563,11 @@ function gateReshard() {
                     return next();
                 }),
                 // (b) the same restart with no generation pinned
+                next => readCounter(BARRIER_METRIC,
+                    { workgroup: probed, match: 'current' }, (err, value) => {
+                        barriersBeforeDefection = value;
+                        return next(err);
+                    }),
                 next => startWorkgroup({
                     zkPath,
                     workgroupId: probed,
@@ -5555,12 +5575,44 @@ function gateReshard() {
                     notifConfig,
                 }, (err, runtime) => {
                     defector = runtime;
+                    defectorStartedAt = Date.now();
                     if (runtime) {
                         defectorGroupId = runtime.workgroup.groupId;
                         defectorGeneration = runtime.doc.generation;
                     }
                     return next(err);
                 }),
+                // the old group cannot be called frozen until the defector
+                // is demonstrably working somewhere else. Reading the old
+                // offsets while the replacement has not even been assigned
+                // yet proves nothing: they would read exactly the same if it
+                // had rejoined the old group and simply not started
+                // consuming.
+                //
+                // Everything this scenario produced sits below the barriers,
+                // so the barriers are the last records on the topic and the
+                // new generation's group was seeded exactly at them. One
+                // barrier per partition, counted against the generation this
+                // worker runs, is therefore the defector consuming from
+                // where the cutover put it and nowhere else.
+                next => waitForCounter(BARRIER_METRIC,
+                    { workgroup: probed, match: 'current' },
+                    barriersBeforeDefection + deliveryPartitions, E_WAIT_MS,
+                    500, next),
+                next => committedTotal(newGroupId(probed), deliveryTopic,
+                    deliveryPartitions, (err, total) => {
+                        if (err) {
+                            return next(err);
+                        }
+                        defectorCommitted = total;
+                        record('W-E4.defector.workingAfterMs',
+                            Date.now() - defectorStartedAt);
+                        record('W-E4.defector.committedTotal', total);
+                        record('W-E4.defector.seededAt', barrierTotal);
+                        return next();
+                    }),
+                // only now is reading the old group's offsets a statement
+                // about anything
                 next => readCommitted(oldGroupId(probed), deliveryTopic,
                     deliveryPartitions, (err, offsets) => {
                         committedAfter = offsets;
@@ -5633,14 +5685,22 @@ function gateReshard() {
                 'group id');
             assert.notStrictEqual(defectorGroupId, oldGroupId(probed),
                 'the restarted worker rejoined the group it crashed out of');
+            // the defector was working when the old group was read, so the
+            // two readings below are a statement about a stalled drain and
+            // not about a worker that had not started yet
+            assert(defectorCommitted > barrierTotal,
+                'the restarted worker had committed nothing past the ' +
+                `offsets the cutover seeded (${defectorCommitted} against ` +
+                `${barrierTotal}), so it was not yet consuming when the old ` +
+                'group was read and the readings below say nothing');
             assert.strictEqual(afterDefection.exitCode, EXIT_NOT_DRAINED,
                 'the drain finished, so the restarted worker did not defect');
             assert.strictEqual(afterDefection.remaining, afterCrash.remaining,
-                'the old generation made progress after the restart, so the ' +
-                'restarted worker rejoined its own group');
+                'the old generation made progress while the defector was ' +
+                'working, so it did not abandon its own group');
             assert.deepStrictEqual(committedAfter, committedBefore,
-                'the old group committed something after the restart, so it ' +
-                'is not frozen');
+                'the old group committed something while the defector was ' +
+                'working, so it is not frozen');
         });
     });
 
