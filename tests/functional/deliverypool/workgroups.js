@@ -3015,7 +3015,7 @@ const E_RETRY_WAIT_MS = 480000;
 // not competing with a wedged member for its group, so it only has to
 // survive its own rebalance churn on the way in, which has been measured
 // taking well over a minute
-const E_DEFECTOR_WAIT_MS = 300000;
+const E_DEFECTOR_WAIT_MS = 180000;
 
 /**
  * Identity of one produced notification: the customer topic it is addressed
@@ -5481,7 +5481,8 @@ function gateReshard() {
         let afterCrash = null;
         let pinnedError = null;
         let cachedGeneration = null;
-        let defector = null;
+        const defectorRuntimes = new Map();
+        const restartedDefector = new Set();
         let defectorGroupId = null;
         let defectorGeneration = null;
         let defectorStartedAt = 0;
@@ -5620,14 +5621,16 @@ function gateReshard() {
                         barriersBeforeDefection = value;
                         return next(err);
                     }),
-                next => startWorkgroup({
+                next => startWorkgroups({
                     zkPath,
-                    workgroupId: probed,
+                    workgroupIds: [probed],
                     baseGroupId,
                     notifConfig,
-                }, (err, runtime) => {
-                    defector = runtime;
+                    topic: deliverySpec,
+                    runtimes: defectorRuntimes,
+                }, err => {
                     defectorStartedAt = Date.now();
+                    const runtime = defectorRuntimes.get(probed);
                     if (runtime) {
                         defectorGroupId = runtime.workgroup.groupId;
                         defectorGeneration = runtime.doc.generation;
@@ -5656,10 +5659,28 @@ function gateReshard() {
                 // group this worker joined. That is what failed here: 47
                 // assign and revoke cycles, no barrier inside the first
                 // ninety seconds, two of them shortly after.
-                next => waitForCounter(BARRIER_METRIC,
-                    { workgroup: probed, match: 'current' },
-                    barriersBeforeDefection + 1, E_DEFECTOR_WAIT_MS, 500,
-                    next),
+                //
+                // and it gets the wedge handling every other join in this
+                // gate has. It is one consumer joining an empty group, and
+                // it churns on the way in like any other: 22 assign and
+                // revoke cycles with nothing consumed was measured here
+                next => waitOrRestart({
+                    label: 'W-E4 the restarted worker',
+                    workgroupIds: [probed],
+                    runtimes: defectorRuntimes,
+                    restarted: restartedDefector,
+                    zkPath,
+                    baseGroupId,
+                    notifConfig,
+                    topic: deliverySpec,
+                    waitMs: E_DEFECTOR_WAIT_MS,
+                    need: barriersBeforeDefection + 1,
+                    read: (workgroupId, cb) => readCounter(BARRIER_METRIC,
+                        { workgroup: workgroupId, match: 'current' }, cb),
+                    wait: (waitMs, cb) => waitForCounter(BARRIER_METRIC,
+                        { workgroup: probed, match: 'current' },
+                        barriersBeforeDefection + 1, waitMs, 500, cb),
+                }, next),
                 // and waited for, not read once: the counter above rises as
                 // the record is handled, while the offset behind it is only
                 // committed on the consumer's auto-commit interval, so a
@@ -5704,16 +5725,13 @@ function gateReshard() {
                         result.remaining);
                     return next();
                 }),
-                next => stopWorkgroup(defector, () => {
-                    defector = null;
-                    return next();
-                }),
+                next => stopWorkgroups(defectorRuntimes, next),
             ], finish);
         });
 
         after(done => async.series([
             next => stopWorkgroups(oldRuntimes, next),
-            next => stopWorkgroup(defector, next),
+            next => stopWorkgroups(defectorRuntimes, next),
             next => (verifier ? verifier.close(next) : next()),
         ], done));
 
