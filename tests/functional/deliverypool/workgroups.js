@@ -2996,7 +2996,16 @@ const EXIT_NOT_DRAINED = 2;
 const E_WORKER_SETTLE_MS = 1200;
 const E_DRAIN_POLL_MS = 1000;
 const E_DRAIN_TIMEOUT_MS = 120000;
-const E_COMMIT_TIMEOUT_MS = 180000;
+// wide enough to outlast a wedged consumer being evicted from its group.
+// BackbeatConsumer.close() waits for a revoke callback a wedged consumer
+// never delivers, so stopWorker gives up on its own timeout while that
+// client is still a live member of the group. The replacement joining the
+// same group makes it two members, one of which never rejoins, and the group
+// sits in PreparingRebalance consuming nothing until the broker evicts the
+// wedged member on its poll interval. That was measured taking about five
+// minutes, and it does recover: a wait that gives up sooner turns a wedge
+// the suite recovered from into a failed gate
+const E_COMMIT_TIMEOUT_MS = 420000;
 const E_BARRIER_TIMEOUT_MS = 120000;
 
 /**
@@ -3411,29 +3420,44 @@ function buildCutoverTool(params) {
 }
 
 /**
- * Starts one workgroup per id, each through the real loader, with a gap
- * between the joins
+ * Starts one workgroup per id, each through the real loader, confirming the
+ * delivery topic's metadata is stable immediately before every join and
+ * leaving a gap between them.
  *
- * @param {Object} params - zkPath, workgroupIds, baseGroupId, notifConfig
- *   and runtimes, the map runtimes are recorded in
+ * The reconfirm is per join, not per generation. A topic created and
+ * verified minutes earlier is not verified at join time: the broker
+ * intermittently answers "unknown topic or partition" for it, which drops it
+ * out of the effective subscription and starts the rebalance loop of
+ * design/06-backbeatconsumer-wedge.md. That is the mitigation
+ * design/09-workgroups-observations.md found to work, and it only works if
+ * it is done immediately before each join.
+ *
+ * @param {Object} params - zkPath, workgroupIds, baseGroupId, notifConfig,
+ *   topic and runtimes, the map runtimes are recorded in
  * @param {Function} done - callback
  * @return {undefined}
  */
 function startWorkgroups(params, done) {
     return async.eachSeries(params.workgroupIds, (workgroupId, next) =>
-        startWorkgroup({
-            zkPath: params.zkPath,
-            workgroupId,
-            baseGroupId: params.baseGroupId,
-            notifConfig: params.notifConfig,
-        }, (err, runtime) => {
-            if (runtime) {
-                params.runtimes.set(workgroupId, runtime);
+        waitForTopics([params.topic], topicErr => {
+            if (topicErr) {
+                return next(topicErr);
             }
-            if (err) {
-                return next(err);
-            }
-            return setTimeout(next, E_WORKER_SETTLE_MS);
+            return startWorkgroup({
+                zkPath: params.zkPath,
+                workgroupId,
+                baseGroupId: params.groupBaseOf ?
+                    params.groupBaseOf(workgroupId) : params.baseGroupId,
+                notifConfig: params.notifConfig,
+            }, (err, runtime) => {
+                if (runtime) {
+                    params.runtimes.set(workgroupId, runtime);
+                }
+                if (err) {
+                    return next(err);
+                }
+                return setTimeout(next, E_WORKER_SETTLE_MS);
+            });
         }), done);
 }
 
@@ -3456,10 +3480,19 @@ function stopWorkgroups(runtimes, done) {
  * group resumes from that group's committed offset, so a workgroup that had
  * already delivered does not deliver anything twice.
  *
+ * The replacement is slow to take over, and that is not a bug here. A wedged
+ * consumer never delivers the revoke callback close() waits for, so
+ * stopWorker gives up on its own timeout while that client is still a live
+ * member of the group. The replacement makes it two members, one of which
+ * never rejoins, and the group sits in PreparingRebalance consuming nothing
+ * until the broker evicts the wedged member on its poll interval. Measured
+ * at about five minutes, after which the group went Stable with one member
+ * and drained to zero lag. E_COMMIT_TIMEOUT_MS is sized to outlast it.
+ *
  * See design/06-backbeatconsumer-wedge.md.
  *
  * @param {Object} params - label, workgroupIds, runtimes, read, need,
- *   restarted, zkPath, baseGroupId and notifConfig
+ *   restarted, zkPath, baseGroupId, notifConfig and topic
  * @param {Function} done - callback
  * @return {undefined}
  */
@@ -3487,17 +3520,14 @@ function restartShortWorkgroups(params, done) {
                 need: params.need,
             });
             return stopWorkgroup(params.runtimes.get(workgroupId), () =>
-                startWorkgroup({
+                startWorkgroups({
                     zkPath: params.zkPath,
-                    workgroupId,
+                    workgroupIds: [workgroupId],
                     baseGroupId: params.baseGroupId,
                     notifConfig: params.notifConfig,
-                }, (startErr, runtime) => {
-                    if (runtime) {
-                        params.runtimes.set(workgroupId, runtime);
-                    }
-                    return next(startErr);
-                }));
+                    topic: params.topic,
+                    runtimes: params.runtimes,
+                }, next));
         }), done);
 }
 
@@ -3555,8 +3585,9 @@ function gateReshard() {
     describe('E1 :: the happy reshard', function reshardHappyPath() {
         this.timeout(1200000);
 
-        const deliveryTopic = TOPICS.e1Delivery.name;
-        const deliveryPartitions = TOPICS.e1Delivery.partitions;
+        const deliverySpec = TOPICS.e1Delivery;
+        const deliveryTopic = deliverySpec.name;
+        const deliveryPartitions = deliverySpec.partitions;
         const baseGroupId = `poc-wg-e1-group-${RUN_ID}`;
         const zkPath = `${ZK_BASE}/gate-e1`;
         const cachePath = cachePathFor('gate-e1-cutover');
@@ -3757,7 +3788,7 @@ function gateReshard() {
                 // topic or partition" for it anyway, which drops it out of
                 // the effective subscription and starts the rebalance loop of
                 // design/06-backbeatconsumer-wedge.md
-                next => waitForTopics([TOPICS.e1Delivery], err => next(err)),
+                next => waitForTopics([deliverySpec], err => next(err)),
                 next => writeWorkgroupsDocument(zkPath, buildHashmodDocument({
                     topic: deliveryTopic,
                     generation: 1,
@@ -3769,6 +3800,7 @@ function gateReshard() {
                     workgroupIds: oldIds,
                     baseGroupId,
                     notifConfig,
+                    topic: deliverySpec,
                     runtimes: oldRuntimes,
                 }, next),
                 next => waitOrRestart({
@@ -3779,6 +3811,7 @@ function gateReshard() {
                     zkPath,
                     baseGroupId,
                     notifConfig,
+                    topic: deliverySpec,
                     need: 1,
                     read: (workgroupId, cb) => readCounter(DELIVERED_METRIC,
                         { workgroup: workgroupId }, cb),
@@ -3839,6 +3872,7 @@ function gateReshard() {
                     // draining is committing past every barrier, so a
                     // workgroup that fell short of the barrier total is the
                     // one holding the drain up
+                    topic: deliverySpec,
                     need: WorkgroupCutover
                         .partitionsOf(cutoverResult.doc.barriers)
                         .reduce((total, partition) =>
@@ -3863,6 +3897,7 @@ function gateReshard() {
                     zkPath,
                     baseGroupId,
                     notifConfig,
+                    topic: deliverySpec,
                     need: totalOnDeliveryTopic,
                     read: (workgroupId, cb) => committedTotal(
                         oldGroupId(workgroupId), deliveryTopic,
@@ -3943,12 +3978,13 @@ function gateReshard() {
                         }
                         return cb(err);
                     }), next),
-                next => waitForTopics([TOPICS.e1Delivery], err => next(err)),
+                next => waitForTopics([deliverySpec], err => next(err)),
                 next => startWorkgroups({
                     zkPath,
                     workgroupIds: newIds,
                     baseGroupId,
                     notifConfig,
+                    topic: deliverySpec,
                     runtimes: newRuntimes,
                 }, next),
                 // generation 1 had already delivered every produced record
@@ -3964,6 +4000,7 @@ function gateReshard() {
                     zkPath,
                     baseGroupId,
                     notifConfig,
+                    topic: deliverySpec,
                     need: deliveryPartitions,
                     read: (workgroupId, cb) => readCounter(BARRIER_METRIC,
                         { workgroup: workgroupId, match: 'current' }, cb),
@@ -3988,6 +4025,7 @@ function gateReshard() {
                     zkPath,
                     baseGroupId,
                     notifConfig,
+                    topic: deliverySpec,
                     need: totalOnDeliveryTopic,
                     read: (workgroupId, cb) => committedTotal(
                         newGroupId(workgroupId), deliveryTopic,
@@ -4394,8 +4432,9 @@ function gateReshard() {
     function earlyStopGap() {
         this.timeout(1200000);
 
-        const deliveryTopic = TOPICS.e2Delivery.name;
-        const deliveryPartitions = TOPICS.e2Delivery.partitions;
+        const deliverySpec = TOPICS.e2Delivery;
+        const deliveryTopic = deliverySpec.name;
+        const deliveryPartitions = deliverySpec.partitions;
         const baseGroupId = `poc-wg-e2-group-${RUN_ID}`;
         const zkPath = `${ZK_BASE}/gate-e2`;
         const cachePath = cachePathFor('gate-e2-cutover');
@@ -4540,7 +4579,7 @@ function gateReshard() {
                         return tailer.start(tailDone);
                     }, next),
                 next => produceRecords(deliveryTopic, primingRecords, next),
-                next => waitForTopics([TOPICS.e2Delivery], err => next(err)),
+                next => waitForTopics([deliverySpec], err => next(err)),
                 next => writeWorkgroupsDocument(zkPath, buildHashmodDocument({
                     topic: deliveryTopic,
                     generation: 1,
@@ -4552,6 +4591,7 @@ function gateReshard() {
                     workgroupIds: oldIds,
                     baseGroupId,
                     notifConfig,
+                    topic: deliverySpec,
                     runtimes: oldRuntimes,
                 }, next),
                 next => waitOrRestart({
@@ -4562,6 +4602,7 @@ function gateReshard() {
                     zkPath,
                     baseGroupId,
                     notifConfig,
+                    topic: deliverySpec,
                     need: 1,
                     read: (workgroupId, cb) => readCounter(DELIVERED_METRIC,
                         { workgroup: workgroupId }, cb),
@@ -4653,12 +4694,13 @@ function gateReshard() {
                         barriers: cutoverResult.doc.barriers,
                         logger: new werelogs.Logger('seededOffsets:ft'),
                     }, cb), next),
-                next => waitForTopics([TOPICS.e2Delivery], err => next(err)),
+                next => waitForTopics([deliverySpec], err => next(err)),
                 next => startWorkgroups({
                     zkPath,
                     workgroupIds: newIds,
                     baseGroupId,
                     notifConfig: newNotifConfig,
+                    topic: deliverySpec,
                     runtimes: newRuntimes,
                 }, next),
                 next => waitFor(() => 'the record stream to finish ' +
@@ -4677,6 +4719,7 @@ function gateReshard() {
                     zkPath,
                     baseGroupId,
                     notifConfig: newNotifConfig,
+                    topic: deliverySpec,
                     need: totalOnDeliveryTopic,
                     read: (workgroupId, cb) => committedTotal(
                         newGroupId(workgroupId), deliveryTopic,
@@ -4819,10 +4862,13 @@ function gateReshard() {
 
     describe('E3 :: both generations delivering at once',
     function overlappingGenerations() {
-        this.timeout(1200000);
+        // two commit waits, either of which may have to sit out a wedged
+        // consumer being evicted from its group
+        this.timeout(2400000);
 
-        const deliveryTopic = TOPICS.e3Delivery.name;
-        const deliveryPartitions = TOPICS.e3Delivery.partitions;
+        const deliverySpec = TOPICS.e3Delivery;
+        const deliveryTopic = deliverySpec.name;
+        const deliveryPartitions = deliverySpec.partitions;
         const baseGroupId = `poc-wg-e3-group-${RUN_ID}`;
         const zkPath = `${ZK_BASE}/gate-e3`;
         const cachePath = cachePathFor('gate-e3-cutover');
@@ -4975,7 +5021,7 @@ function gateReshard() {
                         return tailer.start(tailDone);
                     }, next),
                 next => produceRecords(deliveryTopic, primingRecords, next),
-                next => waitForTopics([TOPICS.e3Delivery], err => next(err)),
+                next => waitForTopics([deliverySpec], err => next(err)),
                 next => writeWorkgroupsDocument(zkPath, buildHashmodDocument({
                     topic: deliveryTopic,
                     generation: 1,
@@ -4987,6 +5033,7 @@ function gateReshard() {
                     workgroupIds: oldIds,
                     baseGroupId,
                     notifConfig,
+                    topic: deliverySpec,
                     runtimes: oldRuntimes,
                 }, next),
                 next => waitOrRestart({
@@ -4997,6 +5044,7 @@ function gateReshard() {
                     zkPath,
                     baseGroupId,
                     notifConfig,
+                    topic: deliverySpec,
                     need: 1,
                     read: (workgroupId, cb) => readCounter(DELIVERED_METRIC,
                         { workgroup: workgroupId }, cb),
@@ -5054,6 +5102,7 @@ function gateReshard() {
                     zkPath,
                     baseGroupId,
                     notifConfig,
+                    topic: deliverySpec,
                     need: WorkgroupCutover
                         .partitionsOf(cutoverResult.doc.barriers)
                         .reduce((total, partition) =>
@@ -5074,12 +5123,13 @@ function gateReshard() {
                         barriers: cutoverResult.doc.barriers,
                         logger: new werelogs.Logger('seededOffsets:ft'),
                     }, cb), next),
-                next => waitForTopics([TOPICS.e3Delivery], err => next(err)),
+                next => waitForTopics([deliverySpec], err => next(err)),
                 next => startWorkgroups({
                     zkPath,
                     workgroupIds: newIds,
                     baseGroupId,
                     notifConfig,
+                    topic: deliverySpec,
                     runtimes: newRuntimes,
                 }, next),
                 // both generations are now consuming, and this is the round
@@ -5120,6 +5170,7 @@ function gateReshard() {
                     zkPath,
                     baseGroupId,
                     notifConfig,
+                    topic: deliverySpec,
                     need: totalOnDeliveryTopic,
                     read: (workgroupId, cb) => committedTotal(
                         oldIds.includes(workgroupId) ?
@@ -5290,8 +5341,9 @@ function gateReshard() {
     function recoveryHole() {
         this.timeout(1200000);
 
-        const deliveryTopic = TOPICS.e4Delivery.name;
-        const deliveryPartitions = TOPICS.e4Delivery.partitions;
+        const deliverySpec = TOPICS.e4Delivery;
+        const deliveryTopic = deliverySpec.name;
+        const deliveryPartitions = deliverySpec.partitions;
         const baseGroupId = `poc-wg-e4-group-${RUN_ID}`;
         const zkPath = `${ZK_BASE}/gate-e4`;
         const cachePath = cachePathFor('gate-e4-cutover');
@@ -5378,7 +5430,7 @@ function gateReshard() {
             record('W-E4.records.produced', records.length);
             return async.series([
                 next => produceRecords(deliveryTopic, records, next),
-                next => waitForTopics([TOPICS.e4Delivery], err => next(err)),
+                next => waitForTopics([deliverySpec], err => next(err)),
                 next => writeWorkgroupsDocument(zkPath, buildHashmodDocument({
                     topic: deliveryTopic,
                     generation: 1,
@@ -5390,6 +5442,7 @@ function gateReshard() {
                     workgroupIds: oldIds,
                     baseGroupId,
                     notifConfig,
+                    topic: deliverySpec,
                     runtimes: oldRuntimes,
                 }, next),
                 next => async.eachSeries(oldIds, (workgroupId, step) =>
@@ -5640,10 +5693,11 @@ function gateReshard() {
 
     describe('E6 :: the records nobody configured, under two moduli at once',
     function totalityUnderMixedModuli() {
-        this.timeout(1200000);
+        this.timeout(2400000);
 
-        const deliveryTopic = TOPICS.e6Delivery.name;
-        const deliveryPartitions = TOPICS.e6Delivery.partitions;
+        const deliverySpec = TOPICS.e6Delivery;
+        const deliveryTopic = deliverySpec.name;
+        const deliveryPartitions = deliverySpec.partitions;
         const baseGroupId = `poc-wg-e6-group-${RUN_ID}`;
         const zkPath = `${ZK_BASE}/gate-e6`;
         const cachePath = cachePathFor('gate-e6-cutover');
@@ -5822,7 +5876,7 @@ function gateReshard() {
                         return tailer.start(tailDone);
                     }, next),
                 next => produceRecords(deliveryTopic, primingRecords, next),
-                next => waitForTopics([TOPICS.e6Delivery], err => next(err)),
+                next => waitForTopics([deliverySpec], err => next(err)),
                 next => writeWorkgroupsDocument(zkPath, buildHashmodDocument({
                     topic: deliveryTopic,
                     generation: 1,
@@ -5834,6 +5888,7 @@ function gateReshard() {
                     workgroupIds: oldIds,
                     baseGroupId,
                     notifConfig,
+                    topic: deliverySpec,
                     runtimes: oldRuntimes,
                 }, next),
                 next => waitOrRestart({
@@ -5844,6 +5899,7 @@ function gateReshard() {
                     zkPath,
                     baseGroupId,
                     notifConfig,
+                    topic: deliverySpec,
                     need: 1,
                     read: (workgroupId, cb) => readCounter(DELIVERED_METRIC,
                         { workgroup: workgroupId }, cb),
@@ -5896,6 +5952,7 @@ function gateReshard() {
                     zkPath,
                     baseGroupId,
                     notifConfig,
+                    topic: deliverySpec,
                     need: WorkgroupCutover
                         .partitionsOf(cutoverResult.doc.barriers)
                         .reduce((total, partition) =>
@@ -5913,12 +5970,13 @@ function gateReshard() {
                         barriers: cutoverResult.doc.barriers,
                         logger: new werelogs.Logger('seededOffsets:ft'),
                     }, cb), next),
-                next => waitForTopics([TOPICS.e6Delivery], err => next(err)),
+                next => waitForTopics([deliverySpec], err => next(err)),
                 next => startWorkgroups({
                     zkPath,
                     workgroupIds: newIds,
                     baseGroupId,
                     notifConfig,
+                    topic: deliverySpec,
                     runtimes: newRuntimes,
                 }, next),
                 // injected while both generations are running, and above
@@ -5943,6 +6001,7 @@ function gateReshard() {
                     zkPath,
                     baseGroupId,
                     notifConfig,
+                    topic: deliverySpec,
                     need: totalOnDeliveryTopic,
                     read: (workgroupId, cb) => committedTotal(
                         oldIds.includes(workgroupId) ?
