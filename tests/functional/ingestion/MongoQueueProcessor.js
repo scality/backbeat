@@ -1305,4 +1305,165 @@ describe('MongoQueueProcessor in dr mode', function drMode() {
             done();
         });
     });
+
+    // an object with no version of its own is rewritten in place, so the whole
+    // document the entry carries replaced the stored one on the source
+    function storeRewritten() {
+        sinon.stub(mongoClient, 'getObject').callsFake((b, k, p, l, cb) =>
+            cb(null, new ObjectMD()
+                .setKey(KEY)
+                .setContentMd5('7d793037a0760186574b0282f2f435e7')
+                .setContentType('text/plain')
+                .setUserMetadata({ 'x-amz-meta-colour': 'red' })
+                .setDataStoreName(LOCATION)
+                .setAmzRestore({ 'ongoing-request': false })
+                ._data));
+    }
+
+    it('should take every field of an object rewritten in place', done => {
+        storeRewritten();
+        const objmd = new ObjectMD()
+            .setKey(KEY)
+            .setContentMd5('9e107d9d372bb6826bd81d3542a419d6')
+            .setContentType('application/json')
+            .setUserMetadata({ 'x-amz-meta-colour': 'blue' })
+            .setDataStoreName(LOCATION);
+        const entry = new ObjectQueueEntry(BUCKET, KEY, objmd);
+
+        processEntry(entry, err => {
+            assert.ifError(err);
+
+            const added = mqp.getAdded();
+            assert.strictEqual(added.length, 1);
+            // written in place, under the object key alone
+            assert.strictEqual(added[0].key, KEY);
+            const { objVal } = added[0];
+            assert.strictEqual(objVal['content-md5'],
+                '9e107d9d372bb6826bd81d3542a419d6');
+            assert.strictEqual(objVal['content-type'], 'application/json');
+            assert.strictEqual(objVal['x-amz-meta-colour'], 'blue');
+            // a restore this site holds describes bytes that are gone
+            assert.strictEqual(objVal['x-amz-restore'], undefined);
+            assert.deepStrictEqual(objVal.acl, new ObjectMD().getAcl());
+            done();
+        });
+    });
+
+    it('should take a rewrite that kept the same bytes', done => {
+        storeRewritten();
+        // a PUT replaces the whole metadata whatever the content does, so the
+        // content md5 alone cannot tell a rewrite from an untouched object
+        const objmd = new ObjectMD()
+            .setKey(KEY)
+            .setContentMd5('7d793037a0760186574b0282f2f435e7')
+            .setContentType('application/json')
+            .setUserMetadata({ 'x-amz-meta-colour': 'red' })
+            .setDataStoreName(LOCATION);
+        const entry = new ObjectQueueEntry(BUCKET, KEY, objmd);
+
+        processEntry(entry, err => {
+            assert.ifError(err);
+
+            const added = mqp.getAdded();
+            assert.strictEqual(added.length, 1);
+            assert.strictEqual(added[0].objVal['content-type'],
+                'application/json');
+            done();
+        });
+    });
+
+    it('should take a rewrite that only moved user metadata', done => {
+        storeRewritten();
+        const objmd = new ObjectMD()
+            .setKey(KEY)
+            .setContentMd5('7d793037a0760186574b0282f2f435e7')
+            .setContentType('text/plain')
+            .setUserMetadata({ 'x-amz-meta-colour': 'green' })
+            .setDataStoreName(LOCATION);
+        const entry = new ObjectQueueEntry(BUCKET, KEY, objmd);
+
+        processEntry(entry, err => {
+            assert.ifError(err);
+
+            const added = mqp.getAdded();
+            assert.strictEqual(added.length, 1);
+            assert.strictEqual(added[0].objVal['x-amz-meta-colour'], 'green');
+            done();
+        });
+    });
+
+    it('should take the null version a suspended bucket rewrites', done => {
+        storeRewritten();
+        // versioning suspended: the master carries a version id and is marked
+        // null, and it is still the document that gets rewritten in place
+        const objmd = new ObjectMD()
+            .setKey(KEY)
+            .setVersionId(VERSION_ID)
+            .setIsNull(true)
+            .setContentMd5('9e107d9d372bb6826bd81d3542a419d6')
+            .setDataStoreName(LOCATION);
+        const entry = new ObjectQueueEntry(BUCKET, KEY, objmd);
+
+        processEntry(entry, err => {
+            assert.ifError(err);
+
+            const added = mqp.getAdded();
+            assert.strictEqual(added.length, 1);
+            assert.strictEqual(added[0].key, KEY);
+            assert.strictEqual(added[0].objVal['content-md5'],
+                '9e107d9d372bb6826bd81d3542a419d6');
+            done();
+        });
+    });
+
+    it('should keep merging an update to a version of its own', done => {
+        // a version is immutable, so an entry for one carries an update and not
+        // a rewrite: the stored document still decides what it keeps
+        const versionKey = `${KEY}${VID_SEP}${VERSION_ID}`;
+        sinon.stub(mongoClient, 'getObject').callsFake((b, k, p, l, cb) =>
+            cb(null, new ObjectMD()
+                .setKey(KEY)
+                .setVersionId(VERSION_ID)
+                .setUserMetadata({ 'x-amz-meta-colour': 'red' })
+                .setDataStoreName(LOCATION)
+                ._data));
+        const objmd = new ObjectMD()
+            .setKey(KEY)
+            .setVersionId(VERSION_ID)
+            .setTags({ mytag: 'mytags-value' })
+            .setUserMetadata({ 'x-amz-meta-colour': 'blue' })
+            .setDataStoreName(LOCATION);
+        const entry = new ObjectQueueEntry(BUCKET, versionKey, objmd);
+
+        processEntry(entry, err => {
+            assert.ifError(err);
+
+            const added = mqp.getAdded();
+            assert.strictEqual(added.length, 1);
+            const { objVal } = added[0];
+            assert.deepStrictEqual(objVal.tags, { mytag: 'mytags-value' });
+            // not a field an update brings
+            assert.strictEqual(objVal['x-amz-meta-colour'], 'red');
+            done();
+        });
+    });
+
+    it('should skip a replayed rewrite', done => {
+        const objmd = new ObjectMD()
+            .setKey(KEY)
+            .setContentMd5('9e107d9d372bb6826bd81d3542a419d6')
+            .setUserMetadata({ 'x-amz-meta-colour': 'blue' })
+            .setDataStoreName(LOCATION);
+        const entry = new ObjectQueueEntry(BUCKET, KEY, objmd);
+        // what the first delivery of this very entry left behind
+        const stored = { ...entry.getValue(), acl: new ObjectMD().getAcl() };
+        sinon.stub(mongoClient, 'getObject').callsFake((b, k, p, l, cb) =>
+            cb(null, stored));
+
+        processEntry(entry, err => {
+            assert.ifError(err);
+            assert.strictEqual(mqp.getAdded().length, 0);
+            done();
+        });
+    });
 });

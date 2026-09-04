@@ -1,5 +1,7 @@
 'use strict';
 
+const { isDeepStrictEqual } = require('util');
+
 const { ObjectMD } = require('arsenal').models;
 
 const locations = require('../../../lib/util/locations');
@@ -22,7 +24,38 @@ class DRMode extends ProcessorMode {
             return content;
         }
 
+        // a version is immutable, so the same version id over different
+        // content is an object overwritten in place -- in a bucket that is not
+        // versioned, or whose versioning is suspended
+        if (this.replacesExistingMetadata(entry, zenkoObjMd)) {
+            return this._replacesStoredDocument(entry, zenkoObjMd) ? ['METADATA'] : [];
+        }
+
         return this._hasMutableChange(entry, zenkoObjMd) ? ['METADATA'] : [];
+    }
+
+    /**
+     * Whether writing the entry would leave a different document behind. The
+     * fields compared are the ones the write carries, so a replayed entry is
+     * told from one that changes anything at all, down to a header the older
+     * diff never looked at.
+     *
+     * replicationInfo is left out: the processor resolves it against this
+     * site's own bucket configuration once the entry has been applied, so it is
+     * not a difference the entry answers for.
+     *
+     * @param {ObjectQueueEntry} entry - object queue entry object
+     * @param {Object} zenkoObjMd - metadata fetched from mongo
+     * @return {boolean} true if the stored document would change
+     */
+    _replacesStoredDocument(entry, zenkoObjMd) {
+        const written = { ...entry.getValue(), acl: new ObjectMD().getAcl() };
+        const stored = { ...zenkoObjMd };
+
+        delete written.replicationInfo;
+        delete stored.replicationInfo;
+
+        return !isDeepStrictEqual(written, stored);
     }
 
     /**
@@ -46,6 +79,20 @@ class DRMode extends ProcessorMode {
      */
     _isNotLocalized(zenkoObjMd) {
         return locations.isCRRLocation(zenkoObjMd.dataStoreName);
+    }
+
+    replacesExistingMetadata(entry, zenkoObjMd) { // eslint-disable-line no-unused-vars
+        // an object with no version of its own is rewritten in place, so the
+        // entry describes a document that replaced the stored one wholesale,
+        // as it did when the Kafka Connect sink applied it. A suspended bucket
+        // carries a version id on the master it writes in place, marked null.
+        //
+        // Nothing of the stored document is kept. Placement is the one field
+        // this site could own, and cannot here: a cold object holds what the
+        // source pipeline derives from its storage class, and clean room --
+        // which localizes placement -- replicates versioned buckets only. A
+        // guard would go here if that changed.
+        return !entry.getVersionId() || entry.getIsNull();
     }
 
     applyNewObjectMetadata(entry, location, bucketInfo) { // eslint-disable-line no-unused-vars

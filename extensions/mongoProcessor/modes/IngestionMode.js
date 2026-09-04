@@ -101,6 +101,12 @@ class IngestionMode extends ProcessorMode {
         entry.setAcl(objectMDModel.getAcl());
     }
 
+    replacesExistingMetadata(entry, zenkoObjMd) { // eslint-disable-line no-unused-vars
+        // an ingested object is always merged into the one stored: out-of-band
+        // writes are not told apart here, as they were not before modes existed
+        return false;
+    }
+
     mergeExistingMetadata(entry, zenkoObjMd) {
         // Keep existing metadata fields, only need to update the tags
         const tags = entry.getTags();
