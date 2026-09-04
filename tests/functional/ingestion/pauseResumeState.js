@@ -90,15 +90,15 @@ class IngestionPopulatorMock extends IngestionPopulator {
     /* Getters for testing purposes */
 
     getIngestionSourceNames() {
-        return Object.keys(this._ingestionSources);
+        return [...this._ingestionSources.keys()];
     }
 
     getPausedLocations() {
-        return this._pausedLocations;
+        return Object.fromEntries(this._pausedLocations);
     }
 
     getPausedLocationNames() {
-        return Object.keys(this._pausedLocations);
+        return [...this._pausedLocations.keys()];
     }
 
     getZkClient() {
