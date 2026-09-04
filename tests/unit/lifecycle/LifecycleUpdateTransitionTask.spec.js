@@ -148,6 +148,48 @@ describe('LifecycleUpdateTransitionTask', () => {
         });
     });
 
+    it('should update metadata but not GC the from-location when it is a CRR ' +
+    'location', done => {
+        const crrLocation = [Object.assign({}, oldLocation[0],
+            { dataStoreName: 'location-crr-source' })];
+        mdObj.setLocation(crrLocation);
+        task.processActionEntry(actionEntry, err => {
+            assert.ifError(err);
+            const receivedMd = backbeatMetadataProxyClient.getReceivedMd();
+            assert.deepStrictEqual(receivedMd.location, newLocation);
+            assert.strictEqual(gcProducer.getReceivedEntry(), null);
+            done();
+        });
+    });
+
+    it('should not GC anything for a multipart object on a CRR location', done => {
+        const crrPart = Object.assign({}, oldLocation[0],
+            { key: 'crrKey', dataStoreName: 'location-crr-source' });
+        const secondCrrPart = Object.assign({}, crrPart, { key: 'crrKey2', start: 10 });
+        mdObj.setLocation([crrPart, secondCrrPart]);
+        task.processActionEntry(actionEntry, err => {
+            assert.ifError(err);
+            assert.strictEqual(gcProducer.getReceivedEntry(), null);
+            done();
+        });
+    });
+
+    it('should still GC the new location on rollback even if the ' +
+    'from-location is a CRR location', done => {
+        mdObj.setLocation([Object.assign({}, oldLocation[0],
+            { dataStoreName: 'location-crr-source' })]);
+        actionEntry.setAttribute('target.eTag',
+                                 '"6713e7cf89b6b16d5abf11d1fabac587"');
+        task.processActionEntry(actionEntry, err => {
+            assert.ifError(err);
+            assert.strictEqual(backbeatMetadataProxyClient.getReceivedMd(), null);
+            const receivedGcEntry = gcProducer.getReceivedEntry();
+            assert.deepStrictEqual(
+                receivedGcEntry.getAttribute('target.locations'), newLocation);
+            done();
+        });
+    });
+
     it('should reset transition-in-progress flag when transition fails', done => {
         actionEntry.setError(errors.InternalError);
         task.processActionEntry(actionEntry, err => {
