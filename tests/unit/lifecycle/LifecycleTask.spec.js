@@ -11,6 +11,7 @@ const LifecycleTask = require(
 const LifecycleTaskV2 = require(
     '../../../extensions/lifecycle/tasks/LifecycleTaskV2');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
+const ReplicationAPI = require('../../../extensions/replication/ReplicationAPI');
 const { LifecycleMetrics } = require('../../../extensions/lifecycle/LifecycleMetrics');
 const fakeLogger = require('../../utils/fakeLogger');
 const { withActiveSpan } = require('../../utils/withActiveSpan');
@@ -2468,6 +2469,90 @@ describe('lifecycle task helper methods', () => {
             lifecycleTask._getTransitionActionEntry(testParams, mockObjectMD, fakeLogger, (err, entry) => {
                 assert.deepStrictEqual(err, expectedError);
                 assert.strictEqual(entry, undefined);
+                done();
+            });
+        });
+    });
+
+    describe('_applyTransitionRule', () => {
+        const CRR_LOCATION = 'location-crr-source';
+        const testParams = {
+            bucket: 'test-bucket',
+            owner: 'test-owner',
+            objectKey: 'test-key',
+            versionId: 'test-version-id',
+            eTag: '"test-etag"',
+            lastModified: '2023-01-01T00:00:00.000Z',
+            site: 'test-site',
+            accountId: 'test-account-id',
+            transitionTime: Date.now(),
+            bucketData: {
+                target: {
+                    bucket: 'test-bucket',
+                    owner: 'test-owner',
+                    accountId: 'test-account-id',
+                },
+            },
+        };
+
+        let lifecycleTask;
+        let objectMD;
+        let sendDataMoverAction;
+        let putObjectMD;
+
+        function setupObjectMD(dataStoreName) {
+            objectMD = {
+                getReplicationStatus: () => 'COMPLETED',
+                getDataStoreName: () => dataStoreName,
+                getDataStoreVersionId: () => 'version-123',
+                getTransitionInProgress: () => false,
+                getArchive: () => undefined,
+                getContentLength: () => 1024,
+                getUserMetadata: () => null,
+                getValue: () => ({}),
+                setTransitionInProgress: sinon.spy(),
+                setOriginOp: sinon.spy(),
+                getSerialized: () => '{}',
+            };
+            sinon.stub(lifecycleTask, '_getObjectMD')
+                .callsFake((params, log, cb) => cb(null, objectMD));
+        }
+
+        beforeEach(() => {
+            lifecycleTask = new LifecycleTask(lp);
+            lifecycleTask.pausedLocations = new Set();
+            lifecycleTask.circuitBreakers = { tripped: () => false };
+            lifecycleTask.producer = {};
+            lifecycleTask.transitionTasksTopic = 'test-transition-topic';
+            sendDataMoverAction = sinon.stub(
+                ReplicationAPI, 'sendDataMoverAction')
+                .callsFake((producer, entry, log, cb) => cb());
+            putObjectMD = sinon.stub(lifecycleTask, '_putObjectMD')
+                .callsFake((params, log, cb) => cb());
+        });
+
+        it('should not transition an object still on the source location',
+        done => {
+            setupObjectMD(CRR_LOCATION);
+
+            lifecycleTask._applyTransitionRule(testParams, fakeLogger, err => {
+                assert.strictEqual(err.description,
+                    'transitioning an object still on the source location is forbidden');
+                sinon.assert.notCalled(sendDataMoverAction);
+                sinon.assert.notCalled(objectMD.setTransitionInProgress);
+                sinon.assert.notCalled(putObjectMD);
+                done();
+            });
+        });
+
+        it('should transition an object on a regular location', done => {
+            setupObjectMD('us-east-1');
+
+            lifecycleTask._applyTransitionRule(testParams, fakeLogger, err => {
+                assert.ifError(err);
+                sinon.assert.calledOnce(sendDataMoverAction);
+                sinon.assert.calledOnce(objectMD.setTransitionInProgress);
+                sinon.assert.calledOnce(putObjectMD);
                 done();
             });
         });
