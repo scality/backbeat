@@ -10,6 +10,7 @@ const {
     TRANSITION_ATTEMPT_MD,
     getTransitionAttempt,
 } = require('../../../lib/util/transitionAttempt');
+const locationsConfig = require('../../../conf/locationConfig.json') || {};
 /** @typedef { import('../objectProcessor/LifecycleObjectProcessor.js') } LifecycleObjectProcessor */
 
 class LifecycleUpdateTransitionTask extends BackbeatTask {
@@ -114,6 +115,19 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
 
     _garbageCollectLocation(entry, locations, log, done) {
         const { bucket, key, version, eTag, accountId, owner } = this.getTargetAttribute(entry);
+        // Data on a CRR location means this was pull replication, not a
+        // transition: the source is the remote site, and must not be removed.
+        const { dataStoreName } = locations[0] || {};
+        if (locationsConfig[dataStoreName]?.isCRR) {
+            log.info('skipping garbage collection of data on a CRR location', {
+                method: 'LifecycleUpdateTransitionTask._garbageCollectLocation',
+                bucket,
+                objectKey: key,
+                versionId: version,
+                dataStoreName,
+            });
+            return process.nextTick(done);
+        }
         const gcEntry = ActionQueueEntry.create('deleteData')
               .addContext({
                   origin: 'lifecycle',
