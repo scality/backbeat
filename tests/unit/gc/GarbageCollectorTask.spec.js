@@ -387,4 +387,111 @@ describe('GarbageCollectorTask', () => {
         });
     });
 
+    describe('with CRR locations', () => {
+        let log;
+
+        function createDeleteDataEntry(locations) {
+            return ActionQueueEntry.create('deleteData')
+                .addContext({
+                    origin: 'lifecycle',
+                    ruleType: 'transition',
+                    bucketName: bucket,
+                    objectKey: key,
+                    versionId: version,
+                })
+                .setAttribute('serviceName', 'lifecycle-transition')
+                .setAttribute('source', {
+                    bucket,
+                    objectKey: key,
+                    storageClass: 'sourceStorageClass',
+                })
+                .setAttribute('target', {
+                    bucket,
+                    key: version,
+                    version: key,
+                    accountId,
+                    owner,
+                    locations,
+                });
+        }
+
+        const crrLocation = {
+            key: 'crrKey',
+            dataStoreName: 'location-crr-source',
+            size: 10,
+            dataStoreVersionId: 'crrVersionId',
+        };
+        const regularLocation = {
+            key: 'locationKey',
+            dataStoreName: 'us-east-1',
+            size: 20,
+            dataStoreVersionId: 'dataStoreVersionId',
+        };
+
+        beforeEach(() => {
+            log = {
+                info: sinon.spy(),
+                warn: sinon.spy(),
+                debug: sinon.spy(),
+                error: sinon.spy(),
+                getSerializedUids: () => 'uids',
+            };
+            log.end = () => log;
+            gcTask.logger = { newRequestLogger: () => log };
+            backbeatClient.batchDeleteResponse = { error: null, res: null };
+        });
+
+        it('should not delete anything and warn when all locations are on a ' +
+        'CRR location', done => {
+            const entry = createDeleteDataEntry([crrLocation]);
+            const batchDeleteDataSpy = sinon.spy(gcTask, '_batchDeleteData');
+            const onGcCompletedSpy = sinon.spy(GarbageCollectorMetrics, 'onGcCompleted');
+
+            gcTask.processActionEntry(entry, err => {
+                assert.ifError(err);
+                assert.strictEqual(batchDeleteDataSpy.callCount, 0);
+                assert.strictEqual(backbeatClient.times.batchDeleteResponse, 0);
+                assert.strictEqual(onGcCompletedSpy.callCount, 0);
+                assert.strictEqual(log.warn.callCount, 1);
+                assert.strictEqual(
+                    log.warn.firstCall.args[1].dataStoreName,
+                    'location-crr-source');
+                batchDeleteDataSpy.restore();
+                onGcCompletedSpy.restore();
+                done();
+            });
+        });
+
+        it('should not delete anything for a multipart object on a CRR ' +
+        'location', done => {
+            const secondCrrLocation = Object.assign({}, crrLocation, { key: 'crrKey2' });
+            const entry = createDeleteDataEntry([crrLocation, secondCrrLocation]);
+            const batchDeleteDataSpy = sinon.spy(gcTask, '_batchDeleteData');
+
+            gcTask.processActionEntry(entry, err => {
+                assert.ifError(err);
+                assert.strictEqual(batchDeleteDataSpy.callCount, 0);
+                assert.strictEqual(log.warn.callCount, 1);
+                batchDeleteDataSpy.restore();
+                done();
+            });
+        });
+
+        it('should delete all locations and not warn when none is on a CRR ' +
+        'location', done => {
+            const entry = createDeleteDataEntry([regularLocation]);
+            const batchDeleteDataSpy = sinon.spy(gcTask, '_batchDeleteData');
+
+            gcTask.processActionEntry(entry, err => {
+                assert.ifError(err);
+                assert.strictEqual(batchDeleteDataSpy.callCount, 1);
+                assert.deepStrictEqual(
+                    batchDeleteDataSpy.firstCall.args[0].Locations,
+                    [regularLocation]);
+                assert.strictEqual(log.warn.callCount, 0);
+                batchDeleteDataSpy.restore();
+                done();
+            });
+        });
+    });
 });

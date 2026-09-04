@@ -6,6 +6,7 @@ const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const { BatchDeleteCommand } = require('@scality/cloudserverclient');
 const { GarbageCollectorMetrics } = require('../GarbageCollectorMetrics');
 const { TRANSITION_ATTEMPT_MD } = require('../../../lib/util/transitionAttempt');
+const locationsConfig = require('../../../conf/locationConfig.json') || {};
 /** @typedef { import('../GarbageCollector.js') } GarbageCollector */
 
 class GarbageCollectorTask extends BackbeatTask {
@@ -143,6 +144,18 @@ class GarbageCollectorTask extends BackbeatTask {
     _executeDeleteDataOnce(entry, log, done) {
         const { locations } = entry.getAttribute('target');
         const ruleType = entry.getContextAttribute('ruleType');
+        // Last line of defense: whoever published this entry, data on a CRR
+        // location belongs to the remote site and must never be deleted.
+        const { dataStoreName } = locations[0] || {};
+        if (locationsConfig[dataStoreName]?.isCRR) {
+            log.warn('refusing to delete data on a CRR location', {
+                method: 'GarbageCollectorTask._executeDeleteDataOnce',
+                dataStoreName,
+                ruleType,
+                ...entry.getLogInfo(),
+            });
+            return process.nextTick(done);
+        }
         const params = {
             Locations: locations.map(location => ({
                 key: location.key,
@@ -160,7 +173,7 @@ class GarbageCollectorTask extends BackbeatTask {
             }),
         };
 
-        this._batchDeleteData(params, entry, log, err => {
+        return this._batchDeleteData(params, entry, log, err => {
             // ruleType can be either `transition` or `restore` (for restore-expiration)
             GarbageCollectorMetrics.onS3Request(log, 'batchdelete', ruleType, err);
             entry.setEnd(err);
