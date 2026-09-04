@@ -120,6 +120,18 @@ class IngestionMode extends ProcessorMode {
     }
 
     /**
+     * An ingested object is always merged into the one stored: out-of-band
+     * writes are not told apart here, as they were not before modes existed.
+     *
+     * @param {ObjectQueueEntry} entry - object queue entry object
+     * @param {Object} zenkoObjMd - metadata fetched from mongo
+     * @return {boolean} false
+     */
+    replacesExistingMetadata(entry, zenkoObjMd) { // eslint-disable-line no-unused-vars
+        return false;
+    }
+
+    /**
      * @param {ObjectQueueEntry} entry - object queue entry object
      * @param {Object} zenkoObjMd - metadata fetched from mongo
      * @return {undefined}

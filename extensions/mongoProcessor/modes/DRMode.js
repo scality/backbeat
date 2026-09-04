@@ -1,5 +1,7 @@
 'use strict';
 
+const { isDeepStrictEqual } = require('util');
+
 const { ObjectMD } = require('arsenal').models;
 
 const locations = require('../../../lib/util/locations');
@@ -21,7 +23,10 @@ class DRMode extends ProcessorMode {
 
     /**
      * The ingestion diff only covers tags; a replicated object can also change
-     * its object-lock state and, until localized, its placement.
+     * its object-lock state and, until localized, its placement. Content is
+     * compared too: a version is immutable, so the same version id over
+     * different content is an object overwritten in place, in a bucket that is
+     * not versioned or whose versioning is suspended.
      *
      * @param {ObjectQueueEntry} entry - object queue entry object
      * @param {Object|undefined} zenkoObjMd - metadata fetched from mongo
@@ -33,7 +38,35 @@ class DRMode extends ProcessorMode {
             return content;
         }
 
+        if (this.replacesExistingMetadata(entry, zenkoObjMd)) {
+            return this._replacesStoredDocument(entry, zenkoObjMd) ? ['METADATA'] : [];
+        }
+
         return this._hasMutableChange(entry, zenkoObjMd) ? ['METADATA'] : [];
+    }
+
+    /**
+     * Whether writing the entry would leave a different document behind. The
+     * fields compared are the ones the write carries, so a replayed entry is
+     * told from one that changes anything at all, down to a header the older
+     * diff never looked at.
+     *
+     * replicationInfo is left out: the processor resolves it against this
+     * site's own bucket configuration once the entry has been applied, so it is
+     * not a difference the entry answers for.
+     *
+     * @param {ObjectQueueEntry} entry - object queue entry object
+     * @param {Object} zenkoObjMd - metadata fetched from mongo
+     * @return {boolean} true if the stored document would change
+     */
+    _replacesStoredDocument(entry, zenkoObjMd) {
+        const written = { ...entry.getValue(), acl: new ObjectMD().getAcl() };
+        const stored = { ...zenkoObjMd };
+
+        delete written.replicationInfo;
+        delete stored.replicationInfo;
+
+        return !isDeepStrictEqual(written, stored);
     }
 
     /**
@@ -42,7 +75,8 @@ class DRMode extends ProcessorMode {
      * @return {boolean} true if the entry changes mutable metadata
      */
     _hasMutableChange(entry, zenkoObjMd) {
-        return entry.getRetentionMode() !== zenkoObjMd.retentionMode ||
+        return entry.getContentMd5() !== zenkoObjMd['content-md5'] ||
+            entry.getRetentionMode() !== zenkoObjMd.retentionMode ||
             entry.getRetentionDate() !== zenkoObjMd.retentionDate ||
             entry.getLegalHold() !== !!zenkoObjMd.legalHold ||
             (this._isNotLocalized(zenkoObjMd) &&
@@ -57,6 +91,29 @@ class DRMode extends ProcessorMode {
      */
     _isNotLocalized(zenkoObjMd) {
         return locations.isCRRLocation(zenkoObjMd.dataStoreName);
+    }
+
+    /**
+     * An object with no version of its own is rewritten in place, so the entry
+     * describes a document that replaced the stored one wholesale: every field
+     * of it comes from the source, as it did when the Kafka Connect sink
+     * replaced the document.
+     *
+     * A versioning suspended bucket carries a version id on the master it
+     * writes in place, and marks it null.
+     *
+     * Nothing of the stored document is kept. Placement is the one field this
+     * site could own, and it cannot here: a cold object holds the placement the
+     * source pipeline derives from its storage class, and clean room, which
+     * localizes placement, replicates versioned buckets only. This is where a
+     * guard would go if that changed.
+     *
+     * @param {ObjectQueueEntry} entry - object queue entry object
+     * @param {Object} zenkoObjMd - metadata fetched from mongo
+     * @return {boolean} true if the entry replaces the stored object
+     */
+    replacesExistingMetadata(entry, zenkoObjMd) { // eslint-disable-line no-unused-vars
+        return !entry.getVersionId() || entry.getIsNull();
     }
 
     /**

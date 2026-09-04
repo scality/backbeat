@@ -417,7 +417,8 @@ class MongoQueueProcessor {
                 return done();
             }
 
-            if (zenkoObjMd) {
+            if (zenkoObjMd &&
+                !this._mode.replacesExistingMetadata(sourceEntry, zenkoObjMd)) {
                 this._mode.mergeExistingMetadata(sourceEntry, zenkoObjMd);
             } else {
                 this._mode.applyNewObjectMetadata(sourceEntry, location,

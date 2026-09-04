@@ -58,6 +58,21 @@ class ProcessorMode {
     }
 
     /**
+     * Whether the entry replaces the object already stored rather than
+     * updating it, in which case it is applied as a first write.
+     *
+     * This method must be implemented by subclasses of ProcessorMode
+     * @param {ObjectQueueEntry} entry - object queue entry object
+     * @param {Object} zenkoObjMd - metadata fetched from mongo
+     * @return {boolean} true if the entry replaces the stored object
+     */
+    replacesExistingMetadata(entry, zenkoObjMd) { // eslint-disable-line no-unused-vars
+        assert(false,
+            'sub-classes of ProcessorMode must implement ' +
+            'the replacesExistingMetadata() method');
+    }
+
+    /**
      * Merge the entry into the object already stored, deciding which fields the
      * entry brings and which the stored document keeps.
      *
