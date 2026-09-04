@@ -32,6 +32,8 @@ const errorTransitionInProgress = errors.InternalError.
     customizeDescription('transition is currently in progress');
 const errorTransitionColdObject = errors.InternalError.
     customizeDescription('transitioning a cold object is forbidden');
+const errorTransitionObjectOnSource = errors.InternalError.
+    customizeDescription('transitioning an object still on the source location is forbidden');
 const errorObjectTemporarilyRestored = errors.InternalError.
     customizeDescription('object temporarily restored');
 const errorReplicationInProgress = errors.InternalError.
@@ -1263,11 +1265,15 @@ class LifecycleTask extends BackbeatTask {
                     return next(errorReplicationInProgress);
                 }
                 const dataStoreName = objectMD.getDataStoreName();
-                const isObjectCold = dataStoreName && locationsConfig[dataStoreName]
-                    && locationsConfig[dataStoreName].isCold;
+                const locationConfig = (dataStoreName && locationsConfig[dataStoreName]) || {};
                 // We do not transition cold objects
-                if (isObjectCold) {
+                if (locationConfig.isCold) {
                     return next(errorTransitionColdObject);
+                }
+                // Data still on the source location: data has not been pulled yet, so cannot
+                // transition at this point.
+                if (locationConfig.isCRR) {
+                    return next(errorTransitionObjectOnSource);
                 }
                 // If transition is in progress, do not re-publish entry
                 // to data-mover or cold-archive topic.
