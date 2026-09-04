@@ -6,6 +6,7 @@ const { encode } = require('arsenal').versioning.VersionID;
 const ReplicationQueuePopulator =
     require('../../../extensions/replication/ReplicationQueuePopulator');
 const ReplicationAPI = require('../../../extensions/replication/ReplicationAPI');
+const ReplicationMetrics = require('../../../extensions/replication/ReplicationMetrics');
 const { LifecycleMetrics } =
     require('../../../extensions/lifecycle/LifecycleMetrics');
 const config = require('../../../lib/Config');
@@ -240,14 +241,15 @@ describe('replication queue populator', () => {
 
         rqp._filterKeyOp(entry);
 
+        const expectedLabels = { ...labels, direction: 'push' };
         sinon.assert.calledOnceWithExactly(
             params.metricsHandler.bytes,
-            labels,
+            expectedLabels,
             128
         );
         sinon.assert.calledOnceWithExactly(
             params.metricsHandler.objects,
-            labels
+            expectedLabels
         );
     });
 
@@ -419,6 +421,7 @@ describe('replication queue populator: pull replication', () => {
     let params;
     let rqp;
     let triggeredMetric;
+    let queuedMetric;
 
     function makeValue(overrides = {}) {
         return JSON.stringify({
@@ -462,6 +465,7 @@ describe('replication queue populator: pull replication', () => {
         };
         rqp = new RecordingQueuePopulatorMock(params);
         triggeredMetric = sinon.stub(LifecycleMetrics, 'onLifecycleTriggered');
+        queuedMetric = sinon.stub(ReplicationMetrics, 'onReplicationQueued');
     });
 
     afterEach(() => {
@@ -510,7 +514,29 @@ describe('replication queue populator: pull replication', () => {
         sinon.assert.calledOnceWithExactly(triggeredMetric, rqp.log,
             'queuePopulator', 'pullReplication', TARGET_LOCATION,
             sinon.match.number);
-        sinon.assert.notCalled(params.metricsHandler.objects);
+    });
+
+    it('should count the object on the populator metrics as pulled', () => {
+        rqp._filterKeyOp(makeEntry(makeValue()));
+
+        const expectedLabels = { ...labels, direction: 'pull' };
+        sinon.assert.calledOnceWithExactly(params.metricsHandler.objects,
+            expectedLabels);
+        sinon.assert.calledOnceWithExactly(params.metricsHandler.bytes,
+            expectedLabels, 128);
+    });
+
+    it('should report the object as queued for pull replication', () => {
+        rqp._filterKeyOp(makeEntry(makeValue()));
+
+        sinon.assert.calledOnceWithExactly(queuedMetric, 'pullReplication',
+            CRR_LOCATION, TARGET_LOCATION, 128);
+    });
+
+    it('should not report an object it skipped as queued', () => {
+        rqp._filterKeyOp(makeEntry(makeValue({ isDeleteMarker: true })));
+
+        sinon.assert.notCalled(queuedMetric);
     });
 
     // pull replication is about where the data lives, forward replication is
