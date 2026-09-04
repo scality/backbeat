@@ -6,12 +6,14 @@ const QueuePopulatorExtension =
           require('../../lib/queuePopulator/QueuePopulatorExtension');
 const ObjectQueueEntry = require('../../lib/models/ObjectQueueEntry');
 const ReplicationAPI = require('./ReplicationAPI');
+const ReplicationMetrics = require('./ReplicationMetrics');
 const { LifecycleMetrics, PULL_REPLICATION_TYPE } = require('../lifecycle/LifecycleMetrics');
 const config = require('../../lib/Config');
 const locationsConfig = require('../../conf/locationConfig.json') || {};
 const safeJsonParse = require('../../lib/util/safeJsonParse');
 const { getTransitionAttempt } = require('../../lib/util/transitionAttempt');
 const { traceHeadersFromEntry } = require('arsenal/build/lib/tracing').kafka;
+const { replicationDirections } = require('./constants');
 
 class ReplicationQueuePopulator extends QueuePopulatorExtension {
     constructor(params) {
@@ -117,14 +119,12 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
                 this._incrementMetrics(backend.site, bytes);
             });
 
-        // TODO: replication specific metrics go here
-        this.metricsHandler.bytes(
-            entry.logReader.getMetricLabels(),
-            bytes
-        );
-        this.metricsHandler.objects(
-            entry.logReader.getMetricLabels()
-        );
+        const metricLabels = {
+            ...entry.logReader.getMetricLabels(),
+            direction: replicationDirections.push,
+        };
+        this.metricsHandler.bytes(metricLabels, bytes);
+        this.metricsHandler.objects(metricLabels);
 
         const publishedEntry = Object.assign({}, entry);
         delete publishedEntry.logReader;
@@ -224,6 +224,18 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
                      action.toKafkaMessage(),
                      undefined,
                      traceHeadersFromEntry(value));
+
+        // Counterpart of the bytes the data mover reports once the copy
+        // completed, to measure the pull replication backlog.
+        ReplicationMetrics.onReplicationQueued(PULL_REPLICATION_TYPE,
+            queueEntry.getDataStoreName(), targetLocation, contentLength);
+
+        const metricLabels = {
+            ...entry.logReader.getMetricLabels(),
+            direction: replicationDirections.pull,
+        };
+        this.metricsHandler.bytes(metricLabels, contentLength);
+        this.metricsHandler.objects(metricLabels);
     }
 
     /**
