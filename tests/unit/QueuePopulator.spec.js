@@ -361,4 +361,35 @@ describe('QueuePopulator', () => {
             });
         });
     });
+
+    describe('configured extensions', () => {
+        const extConfigs = { replication: {}, lifecycle: {}, notification: {} };
+
+        function buildPopulator() {
+            return new QueuePopulator({}, {}, { logSource: 'bucketd' },
+                null, null, null, null, extConfigs);
+        }
+
+        afterEach(() => {
+            delete process.env.BACKBEAT_QUEUEPOPULATOR_EXTENSIONS;
+        });
+
+        it('should run every extension by default', () => {
+            assert.deepStrictEqual(Object.keys(buildPopulator().extConfigs),
+                ['replication', 'lifecycle', 'notification']);
+        });
+
+        it('should only run the extensions it is configured with', () => {
+            process.env.BACKBEAT_QUEUEPOPULATOR_EXTENSIONS = 'replication';
+            assert.deepStrictEqual(Object.keys(buildPopulator().extConfigs),
+                ['replication']);
+        });
+
+        it('should leave the configuration of the other extensions alone', () => {
+            process.env.BACKBEAT_QUEUEPOPULATOR_EXTENSIONS = 'replication';
+            buildPopulator();
+            assert.deepStrictEqual(Object.keys(extConfigs),
+                ['replication', 'lifecycle', 'notification']);
+        });
+    });
 });
