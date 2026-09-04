@@ -12,6 +12,7 @@ describe('ProcessorMode', () => {
         'needsExistingMetadata',
         'getChangedContent',
         'applyNewObjectMetadata',
+        'replacesExistingMetadata',
         'mergeExistingMetadata',
         'resolveVersionId',
         'shouldProcessDelete',
