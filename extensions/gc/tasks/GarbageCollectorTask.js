@@ -5,6 +5,7 @@ const { ObjectMD } = require('arsenal').models;
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const { BatchDeleteCommand } = require('@scality/cloudserverclient');
 const { GarbageCollectorMetrics } = require('../GarbageCollectorMetrics');
+const { TRANSITION_ATTEMPT_MD } = require('../../../lib/util/transitionAttempt');
 /** @typedef { import('../GarbageCollector.js') } GarbageCollector */
 
 class GarbageCollectorTask extends BackbeatTask {
@@ -291,9 +292,7 @@ class GarbageCollectorTask extends BackbeatTask {
                     .setAmzStorageClass(newLocation)
                     .setOriginOp('s3:LifecycleTransition')
                     .setTransitionInProgress(false)
-                    .setUserMetadata({
-                        'x-amz-meta-scal-s3-transition-attempt': undefined,
-                    });
+                    .setUserMetadata({ [TRANSITION_ATTEMPT_MD]: undefined });
                 this._putMetadata(entry, objMD, log, err => {
                     GarbageCollectorMetrics.onS3Request(log, 'putMetadata', 'archive', err);
                     if (!err) {

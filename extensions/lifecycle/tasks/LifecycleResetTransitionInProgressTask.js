@@ -1,6 +1,7 @@
 'use strict';
 
 const { LifecycleRequeueTask } = require('./LifecycleRequeueTask');
+const { TRANSITION_ATTEMPT_MD } = require('../../../lib/util/transitionAttempt');
 
 class LifecycleResetTransitionInProgressTask extends LifecycleRequeueTask {
     /**
@@ -19,9 +20,7 @@ class LifecycleResetTransitionInProgressTask extends LifecycleRequeueTask {
         }
         md.setOriginOp('s3:LifecycleTransition:Retry');
         md.setTransitionInProgress(false);
-        md.setUserMetadata({
-            'x-amz-meta-scal-s3-transition-attempt': try_,
-        });
+        md.setUserMetadata({ [TRANSITION_ATTEMPT_MD]: try_ });
         return true;
     }
 

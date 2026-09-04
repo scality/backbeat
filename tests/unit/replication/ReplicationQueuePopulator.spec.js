@@ -1,8 +1,15 @@
 const assert = require('assert');
 const sinon = require('sinon');
 
+const { encode } = require('arsenal').versioning.VersionID;
+
 const ReplicationQueuePopulator =
     require('../../../extensions/replication/ReplicationQueuePopulator');
+const ReplicationAPI = require('../../../extensions/replication/ReplicationAPI');
+const ReplicationMetrics = require('../../../extensions/replication/ReplicationMetrics');
+const { LifecycleMetrics } =
+    require('../../../extensions/lifecycle/LifecycleMetrics');
+const config = require('../../../lib/Config');
 
 const fakeLogger = require('../../utils/fakeLogger');
 
@@ -234,14 +241,15 @@ describe('replication queue populator', () => {
 
         rqp._filterKeyOp(entry);
 
+        const expectedLabels = { ...labels, direction: 'push' };
         sinon.assert.calledOnceWithExactly(
             params.metricsHandler.bytes,
-            labels,
+            expectedLabels,
             128
         );
         sinon.assert.calledOnceWithExactly(
             params.metricsHandler.objects,
-            labels
+            expectedLabels
         );
     });
 
@@ -380,5 +388,299 @@ describe('replication queue populator', () => {
 
         assert.doesNotThrow(() => rqp._filterKeyOp(entry));
         assert.deepStrictEqual(rqp.getState(), {});
+    });
+});
+
+/**
+ * Records every published message, whatever the topic, so pull replication
+ * entries (data mover topic) can be inspected.
+ * @class
+ */
+class RecordingQueuePopulatorMock extends ReplicationQueuePopulator {
+    constructor(params) {
+        super(params);
+
+        this.published = [];
+    }
+
+    publish(topic, key, message) {
+        this.published.push({ topic, key, message });
+    }
+}
+
+describe('replication queue populator: pull replication', () => {
+    const CRR_LOCATION = 'location-crr-source';
+    // location named in the object metadata by the rewrite pipeline
+    const TARGET_LOCATION = 'us-east-2';
+    // first non-cold, non-CRR location: used when the target is unusable
+    const LOCAL_LOCATION = 'us-east-1';
+    const RESULTS_TOPIC = config.extensions.lifecycle.transitionTasksTopic;
+    const VERSION_ID = '98477724999464999999RG001  1.30.12';
+    const VERSIONED_KEY = `a-test-key\u0000${VERSION_ID}`;
+
+    let params;
+    let rqp;
+    let triggeredMetric;
+    let queuedMetric;
+
+    function makeValue(overrides = {}) {
+        return JSON.stringify({
+            ...kafkaValue,
+            dataStoreName: CRR_LOCATION,
+            location: [{
+                key: 'some-data-key',
+                size: 128,
+                start: 0,
+                dataStoreName: CRR_LOCATION,
+                dataStoreETag: '1:d41d8cd98f00b204e9800118ecf8427e',
+                bucket: 'test-bucket-source',
+                role: 'arn:aws:iam::123456789012:role/source-read',
+                targetLocation: TARGET_LOCATION,
+            }],
+            ...overrides,
+        });
+    }
+
+    function makeEntry(value, key = VERSIONED_KEY) {
+        return {
+            type: 'put',
+            bucket: 'test-bucket-source',
+            key,
+            value,
+            overheadFields: { commitTimestamp: '2024-05-06T10:11:12.000Z' },
+            logReader: { getMetricLabels: stubMetricLabels() },
+        };
+    }
+
+    beforeEach(() => {
+        params = {
+            config: {
+                topic: TOPIC,
+            },
+            logger: fakeLogger,
+            metricsHandler: {
+                bytes: sinon.spy(),
+                objects: sinon.spy(),
+            },
+        };
+        rqp = new RecordingQueuePopulatorMock(params);
+        triggeredMetric = sinon.stub(LifecycleMetrics, 'onLifecycleTriggered');
+        queuedMetric = sinon.stub(ReplicationMetrics, 'onReplicationQueued');
+    });
+
+    afterEach(() => {
+        sinon.restore();
+    });
+
+    it('should publish a copyLocation action for an object still on the source', () => {
+        rqp._filterKeyOp(makeEntry(makeValue()));
+
+        assert.strictEqual(rqp.published.length, 1);
+        const [{ topic, key, message }] = rqp.published;
+        assert.strictEqual(topic, ReplicationAPI.getDataMoverTopic());
+        assert.strictEqual(key, 'test-bucket-source/a-test-key');
+
+        const action = JSON.parse(message);
+        assert.strictEqual(action.action, 'copyLocation');
+        assert.strictEqual(action.toLocation, TARGET_LOCATION);
+        assert.strictEqual(action.resultsTopic, RESULTS_TOPIC);
+        assert.strictEqual(action.contextInfo.ruleType, 'transition');
+        assert.strictEqual(action.contextInfo.origin, 'pullReplication');
+        assert.strictEqual(action.metrics.origin, 'pullReplication');
+        assert.deepStrictEqual(action.target, {
+            owner: kafkaValue['owner-id'],
+            bucket: 'test-bucket-source',
+            key: 'a-test-key',
+            version: encode(VERSION_ID),
+            eTag: `"${kafkaValue['content-md5']}"`,
+            lastModified: kafkaValue['last-modified'],
+        });
+        // resolved by the transition processor, not by the populator
+        assert.strictEqual(action.target.accountId, undefined);
+        assert.deepStrictEqual(action.source, {
+            bucket: 'test-bucket-source',
+            objectKey: 'a-test-key',
+            storageClass: CRR_LOCATION,
+        });
+        assert.strictEqual(action.metrics.fromLocation, CRR_LOCATION);
+        assert.strictEqual(action.metrics.contentLength, 128);
+        assert.strictEqual(action.metrics.transitionTime,
+            '2024-05-06T10:11:12.000Z');
+    });
+
+    it('should report the transition as triggered', () => {
+        rqp._filterKeyOp(makeEntry(makeValue()));
+
+        sinon.assert.calledOnceWithExactly(triggeredMetric, rqp.log,
+            'queuePopulator', 'pullReplication', TARGET_LOCATION,
+            sinon.match.number);
+    });
+
+    it('should count the object on the populator metrics as pulled', () => {
+        rqp._filterKeyOp(makeEntry(makeValue()));
+
+        const expectedLabels = { ...labels, direction: 'pull' };
+        sinon.assert.calledOnceWithExactly(params.metricsHandler.objects,
+            expectedLabels);
+        sinon.assert.calledOnceWithExactly(params.metricsHandler.bytes,
+            expectedLabels, 128);
+    });
+
+    it('should report the object as queued for pull replication', () => {
+        rqp._filterKeyOp(makeEntry(makeValue()));
+
+        sinon.assert.calledOnceWithExactly(queuedMetric, 'pullReplication',
+            CRR_LOCATION, TARGET_LOCATION, 128);
+    });
+
+    it('should not report an object it skipped as queued', () => {
+        rqp._filterKeyOp(makeEntry(makeValue({ isDeleteMarker: true })));
+
+        sinon.assert.notCalled(queuedMetric);
+    });
+
+    // pull replication is about where the data lives, forward replication is
+    // about where it has been copied to: the two are independent.
+    ['PENDING', 'COMPLETED', 'FAILED'].forEach(status => {
+        it(`should publish regardless of replication status ${status}`, () => {
+            const value = makeValue({
+                replicationInfo: { ...repInfo, status },
+            });
+            rqp._filterKeyOp(makeEntry(value));
+
+            assert.strictEqual(rqp.published.length, 1);
+        });
+    });
+
+    it('should publish when there is no replication configured', () => {
+        const value = makeValue({ replicationInfo: null });
+        rqp._filterKeyOp(makeEntry(value));
+
+        assert.strictEqual(rqp.published.length, 1);
+    });
+
+    it('should propagate the transition attempt count', () => {
+        const value = makeValue({
+            'x-amz-meta-scal-s3-transition-attempt': '3',
+        });
+        rqp._filterKeyOp(makeEntry(value));
+
+        assert.strictEqual(rqp.published.length, 1);
+        const action = JSON.parse(rqp.published[0].message);
+        assert.strictEqual(action.target.attempt, 3);
+    });
+
+    it('should not set an attempt count for a first copy', () => {
+        rqp._filterKeyOp(makeEntry(makeValue()));
+
+        const action = JSON.parse(rqp.published[0].message);
+        assert.strictEqual(action.target.attempt, undefined);
+    });
+
+    it('should skip master keys', () => {
+        rqp._filterKeyOp(makeEntry(makeValue(), 'a-test-key'));
+
+        assert.strictEqual(rqp.published.length, 0);
+    });
+
+    it('should skip delete markers', () => {
+        const value = makeValue({ isDeleteMarker: true });
+        rqp._filterKeyOp(makeEntry(value));
+
+        assert.strictEqual(rqp.published.length, 0);
+    });
+
+    it('should skip empty objects', () => {
+        const value = makeValue({
+            'location': null,
+            'content-length': 0,
+        });
+        rqp._filterKeyOp(makeEntry(value));
+
+        assert.strictEqual(rqp.published.length, 0);
+    });
+
+    it('should skip and report non-empty objects without location', () => {
+        const errorSpy = sinon.spy(rqp.log, 'error');
+        const value = makeValue({ location: null });
+        rqp._filterKeyOp(makeEntry(value));
+
+        assert.strictEqual(rqp.published.length, 0);
+        sinon.assert.calledOnce(errorSpy);
+        errorSpy.restore();
+    });
+
+    // partial oplog projections (change stream `update` events) may not carry
+    // the location: they cannot be pulled, and behave as before.
+    it('should not pull entries with no dataStoreName', () => {
+        const value = makeValue({ dataStoreName: undefined });
+        rqp._filterKeyOp(makeEntry(value));
+
+        sinon.assert.notCalled(triggeredMetric);
+        assert.strictEqual(
+            rqp.published.filter(
+                p => p.topic === ReplicationAPI.getDataMoverTopic()).length,
+            0);
+    });
+
+    it('should not pull objects on a regular location', () => {
+        const value = makeValue({ dataStoreName: LOCAL_LOCATION });
+        rqp._filterKeyOp(makeEntry(value));
+
+        assert.strictEqual(rqp.published.length, 1);
+        assert.strictEqual(rqp.published[0].topic, TOPIC);
+        sinon.assert.notCalled(triggeredMetric);
+    });
+
+    it('should not pull anything when lifecycle is not configured', () => {
+        sinon.replace(config, 'extensions', {
+            ...config.extensions,
+            lifecycle: undefined,
+        });
+        const populator = new RecordingQueuePopulatorMock(params);
+
+        populator._filterKeyOp(makeEntry(makeValue()));
+
+        assert.strictEqual(
+            populator.published.filter(
+                p => p.topic === ReplicationAPI.getDataMoverTopic()).length,
+            0);
+        sinon.assert.notCalled(triggeredMetric);
+    });
+
+    // the target may have been deleted since the metadata was written, and
+    // objects written before the pipeline named one carry no target at all
+    [
+        ['an unknown target', 'a-deleted-location'],
+        ['no target', undefined],
+    ].forEach(([desc, targetLocation]) => {
+        it(`should pull to the default location with ${desc}`, () => {
+            const errorSpy = sinon.spy(rqp.log, 'error');
+            const value = makeValue({
+                location: [{
+                    key: 'some-data-key',
+                    size: 128,
+                    start: 0,
+                    dataStoreName: CRR_LOCATION,
+                    dataStoreETag: '1:d41d8cd98f00b204e9800118ecf8427e',
+                    targetLocation,
+                }],
+            });
+            rqp._filterKeyOp(makeEntry(value));
+
+            assert.strictEqual(rqp.published.length, 1);
+            const action = JSON.parse(rqp.published[0].message);
+            assert.strictEqual(action.toLocation, LOCAL_LOCATION);
+            sinon.assert.calledOnce(errorSpy);
+            errorSpy.restore();
+        });
+    });
+
+    it('should skip pull replication when there is no local location', () => {
+        sinon.stub(rqp, '_getPullReplicationTarget').returns(undefined);
+        rqp._filterKeyOp(makeEntry(makeValue()));
+
+        assert.strictEqual(rqp.published.length, 0);
+        sinon.assert.notCalled(triggeredMetric);
     });
 });

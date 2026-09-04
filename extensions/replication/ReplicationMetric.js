@@ -46,11 +46,6 @@ class ReplicationMetric {
         return this;
     }
 
-    _isLifecycleAction() {
-        const { origin } = this._entry.getContext();
-        return origin !== undefined && origin === 'lifecycle';
-    }
-
     _createProducerMessage() {
         const { bucket, key, version } = this._entry.getAttribute('target');
         const metricsModel = new MetricsModel()
@@ -65,8 +60,9 @@ class ReplicationMetric {
     }
 
     publish() {
-        // Lifecycle metrics not yet implemented.
-        if (this._isLifecycleAction()) {
+        // Metrics API/routes only support CRR
+        const { origin } = this._entry.getContext();
+        if (['lifecycle', 'pullReplication'].includes(origin)) {
             return undefined;
         }
         const message = this._createProducerMessage();

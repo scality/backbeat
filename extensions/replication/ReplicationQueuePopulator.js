@@ -1,18 +1,31 @@
 const { isMasterKey } = require('arsenal').versioning;
+const { encode } = require('arsenal').versioning.VersionID;
 const { usersBucket, mpuBucketPrefix } = require('arsenal').constants;
 
 const QueuePopulatorExtension =
           require('../../lib/queuePopulator/QueuePopulatorExtension');
 const ObjectQueueEntry = require('../../lib/models/ObjectQueueEntry');
+const ReplicationAPI = require('./ReplicationAPI');
+const ReplicationMetrics = require('./ReplicationMetrics');
+const { LifecycleMetrics, PULL_REPLICATION_TYPE } = require('../lifecycle/LifecycleMetrics');
+const config = require('../../lib/Config');
 const locationsConfig = require('../../conf/locationConfig.json') || {};
 const safeJsonParse = require('../../lib/util/safeJsonParse');
+const { getTransitionAttempt } = require('../../lib/util/transitionAttempt');
 const { traceHeadersFromEntry } = require('arsenal/build/lib/tracing').kafka;
+const { replicationDirections } = require('./constants');
 
 class ReplicationQueuePopulator extends QueuePopulatorExtension {
     constructor(params) {
         super(params);
         this.repConfig = params.config;
         this.metricsHandler = params.metricsHandler;
+        this.transitionTasksTopic = config.extensions?.lifecycle?.transitionTasksTopic;
+
+        // Where the data is fetched to when the object metadata does not name a usable
+        // target: the first location that can actually hold a local copy.
+        this.defaultLocalLocation = Object.keys(locationsConfig).find(
+            name => !locationsConfig[name].isCold && !locationsConfig[name].isCRR);
     }
 
     filter(entry) {
@@ -73,6 +86,14 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
         if (sanityCheckRes) {
             return;
         }
+        const locationConfig = locationsConfig[queueEntry.getDataStoreName()] || {};
+        // Data still on the source location has to be fetched first. This is
+        // unrelated to replicationInfo, which tracks replication of a *local*
+        // object to remote sites, hence the check before any of its conditions.
+        if (locationConfig.isCRR && this.transitionTasksTopic) {
+            this._publishPullReplicationAction(entry, queueEntry, value);
+            return;
+        }
         // Allow a non-versioned object if being replicated from an NFS bucket.
         // Or if the master key is of a non versioned object
         if (!this._entryCanBeReplicated(queueEntry)) {
@@ -81,11 +102,8 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
         if (queueEntry.getReplicationStatus() !== 'PENDING') {
             return;
         }
-        const dataStoreName = queueEntry.getDataStoreName();
-        const isObjectCold = dataStoreName && locationsConfig[dataStoreName]
-            && locationsConfig[dataStoreName].isCold;
         // We do not replicate cold objects.
-        if (isObjectCold) {
+        if (locationConfig.isCold) {
             return;
         }
 
@@ -101,14 +119,12 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
                 this._incrementMetrics(backend.site, bytes);
             });
 
-        // TODO: replication specific metrics go here
-        this.metricsHandler.bytes(
-            entry.logReader.getMetricLabels(),
-            bytes
-        );
-        this.metricsHandler.objects(
-            entry.logReader.getMetricLabels()
-        );
+        const metricLabels = {
+            ...entry.logReader.getMetricLabels(),
+            direction: replicationDirections.push,
+        };
+        this.metricsHandler.bytes(metricLabels, bytes);
+        this.metricsHandler.objects(metricLabels);
 
         const publishedEntry = Object.assign({}, entry);
         delete publishedEntry.logReader;
@@ -122,6 +138,136 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
                      JSON.stringify(publishedEntry),
                      undefined,
                      traceHeaders);
+    }
+
+    /**
+     * Queue a copyLocation action for an object whose data still lives on the
+     * source location: the data mover copies it over, and the transition
+     * processor merges the new location into the object metadata.
+     *
+     * Duplicates are expected (and harmless): the same object may show up
+     * several times in the oplog, and the copy is idempotent.
+     *
+     * @param {Object} entry - raw metadata log entry
+     * @param {ObjectQueueEntry} queueEntry - parsed entry
+     * @param {Object} value - parsed entry metadata
+     * @return {undefined}
+     */
+    _publishPullReplicationAction(entry, queueEntry, value) {
+        // Those buckets are versioned, and the metadata layer will repair the
+        // master key once the version has been copied over.
+        if (isMasterKey(queueEntry.getObjectVersionedKey())) {
+            return;
+        }
+        if (queueEntry.getIsDeleteMarker()) {
+            return;
+        }
+        const locations = queueEntry.getLocation();
+        if (!locations || locations.length === 0) {
+            // Empty objects hold no data, there is nothing to fetch. Any other
+            // object without location information is inconsistent.
+            if (queueEntry.getContentLength() > 0) {
+                this.log.error('non-empty object without location, skipping pull replication', {
+                    method: 'ReplicationQueuePopulator._publishPullReplicationAction',
+                    ...queueEntry.getLogInfo(),
+                    dataStoreName: queueEntry.getDataStoreName(),
+                    contentLength: queueEntry.getContentLength(),
+                });
+            }
+            return;
+        }
+
+        const bucket = queueEntry.getBucket();
+        const objectKey = queueEntry.getObjectKey();
+        const contentLength = queueEntry.getContentLength();
+        const targetLocation = this._getPullReplicationTarget(queueEntry, locations);
+        if (!targetLocation) {
+            return;
+        }
+        const transitionTime = new Date(entry.overheadFields?.commitTimestamp ?? Date.now());
+        const action = ReplicationAPI.createCopyLocationAction({
+            bucketName: bucket,
+            objectKey,
+            owner: queueEntry.getOwnerId(),
+            versionId: value.versionId ? encode(value.versionId) : undefined,
+            eTag: `"${queueEntry.getContentMd5()}"`,
+            lastModified: queueEntry.getLastModified(),
+            toLocation: targetLocation,
+            originLabel: PULL_REPLICATION_TYPE,
+            fromLocation: queueEntry.getDataStoreName(),
+            contentLength,
+            resultsTopic: this.transitionTasksTopic,
+            transitionTime: transitionTime.toISOString(),
+            attempt: getTransitionAttempt(queueEntry),
+        });
+        // 'transition' is what the lifecycle transition processor dispatches
+        // on to pick up the copyLocation result.
+        action.addContext({
+            origin: PULL_REPLICATION_TYPE,
+            ruleType: 'transition',
+            bucketName: bucket,
+            objectKey,
+            versionId: value.versionId,
+        });
+        action.setAttribute('source', {
+            bucket,
+            objectKey,
+            storageClass: queueEntry.getDataStoreName(),
+        });
+
+        LifecycleMetrics.onLifecycleTriggered(this.log, 'queuePopulator',
+            PULL_REPLICATION_TYPE, targetLocation, Date.now() - transitionTime.getTime());
+
+        this.log.trace('publishing pull replication entry', { entry: queueEntry.getLogInfo() });
+        this.publish(ReplicationAPI.getDataMoverTopic(),
+                     `${bucket}/${objectKey}`,
+                     action.toKafkaMessage(),
+                     undefined,
+                     traceHeadersFromEntry(value));
+
+        // Counterpart of the bytes the data mover reports once the copy
+        // completed, to measure the pull replication backlog.
+        ReplicationMetrics.onReplicationQueued(PULL_REPLICATION_TYPE,
+            queueEntry.getDataStoreName(), targetLocation, contentLength);
+
+        const metricLabels = {
+            ...entry.logReader.getMetricLabels(),
+            direction: replicationDirections.pull,
+        };
+        this.metricsHandler.bytes(metricLabels, contentLength);
+        this.metricsHandler.objects(metricLabels);
+    }
+
+    /**
+     * Local location the object data must be copied to.
+     * @param {ObjectQueueEntry} queueEntry - parsed entry
+     * @param {Object[]} locations - object data locations
+     * @return {String|undefined} target location, undefined if there is none
+     */
+    _getPullReplicationTarget(queueEntry, locations) {
+        const { targetLocation } = locations[0];
+        if (locationsConfig[targetLocation]) {
+            return targetLocation;
+        }
+        // Either the object predates the rewrite pipeline naming a target, or
+        // the location was deleted since. Neither is recoverable here, and
+        // copying the data elsewhere beats leaving it on the source forever.
+        if (!this.defaultLocalLocation) {
+            this.log.error('invalid target location and no local location ' +
+                'to fall back to, skipping pull replication', {
+                method: 'ReplicationQueuePopulator._getPullReplicationTarget',
+                ...queueEntry.getLogInfo(),
+                targetLocation,
+            });
+            return undefined;
+        }
+        this.log.error('invalid target location in object metadata', {
+            method: 'ReplicationQueuePopulator._getPullReplicationTarget',
+            ...queueEntry.getLogInfo(),
+            targetLocation,
+            fallbackLocation: this.defaultLocalLocation,
+        });
+        return this.defaultLocalLocation;
     }
 
     /**

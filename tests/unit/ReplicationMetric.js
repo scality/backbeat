@@ -56,27 +56,13 @@ describe('ReplicationMetric', () => {
             .forEach(key => assert.strictEqual(data[key], mock[key]));
     });
 
-    it('::_isLifecycleAction should return false by default', () => {
-        metric.withEntry(entry);
-        assert.strictEqual(metric._isLifecycleAction(), false);
-    });
-
-    it('::_isLifecycleAction should return true when origin is lifecycle',
-        () => {
-            entry.setAttribute('contextInfo', {
-                origin: 'lifecycle',
-            });
+    ['lifecycle', 'pullReplication'].forEach(origin => {
+        it(`::publish should not send data to topic for a ${origin} action`, () => {
+            entry.setAttribute('contextInfo', { origin });
             metric.withEntry(entry);
-            assert.strictEqual(metric._isLifecycleAction(), true);
+            metric.publish();
+            assert.strictEqual(sentMessages.length, 0);
         });
-
-    it('::publish should not send data to topic if lifecycle task', () => {
-        entry.setAttribute('contextInfo', {
-            origin: 'lifecycle',
-        });
-        metric.withEntry(entry);
-        metric.publish();
-        assert.strictEqual(sentMessages.length, 0);
     });
 
     it('::publish should send data to topic', () => {

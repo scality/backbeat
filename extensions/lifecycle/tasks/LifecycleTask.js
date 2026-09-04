@@ -24,6 +24,7 @@ const ReplicationAPI = require('../../replication/ReplicationAPI');
 const { LifecycleMetrics, LIFECYCLE_MARKER_METRICS_LOCATION } = require('../LifecycleMetrics');
 const locationsConfig = require('../../../conf/locationConfig.json') || {};
 const { rulesSupportTransition } = require('../util/rules');
+const { getTransitionAttempt } = require('../../../lib/util/transitionAttempt');
 const { stampTraceHeaders } = require('arsenal/build/lib/tracing').kafka;
 const { decode } = versioning.VersionID;
 
@@ -1176,15 +1177,7 @@ class LifecycleTask extends BackbeatTask {
     }
 
     _getTransitionActionEntry(params, objectMD, log, cb) {
-        let attempt;
-        const umd = objectMD.getUserMetadata();
-        if (umd) {
-            const parsed = JSON.parse(umd);
-            const rawAttempt = parsed['x-amz-meta-scal-s3-transition-attempt'];
-            if (rawAttempt) {
-                attempt = Number.parseInt(rawAttempt, 10);
-            }
-        }
+        const attempt = getTransitionAttempt(objectMD);
 
         const entry = ReplicationAPI.createCopyLocationAction({
             bucketName: params.bucket,

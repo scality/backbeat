@@ -5,7 +5,11 @@ const errors = require('arsenal').errors;
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const ObjectMD = require('arsenal').models.ObjectMD;
-const { LifecycleMetrics } = require('../LifecycleMetrics');
+const { LifecycleMetrics, getCopyLocationMetricsType } = require('../LifecycleMetrics');
+const {
+    TRANSITION_ATTEMPT_MD,
+    getTransitionAttempt,
+} = require('../../../lib/util/transitionAttempt');
 /** @typedef { import('../objectProcessor/LifecycleObjectProcessor.js') } LifecycleObjectProcessor */
 
 class LifecycleUpdateTransitionTask extends BackbeatTask {
@@ -71,9 +75,7 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
             .setDataStoreName(newLocationName)
             .setAmzStorageClass(newLocationName)
             .setOriginOp('s3:LifecycleTransition')
-            .setUserMetadata({
-                'x-amz-meta-scal-s3-transition-attempt': undefined,
-            })
+            .setUserMetadata({ [TRANSITION_ATTEMPT_MD]: undefined })
             .setTransitionInProgress(false);
     }
 
@@ -200,7 +202,7 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
                     const transitionTime = entry.getAttribute('metrics.transitionTime') ||
                         objMD.getTransitionTime();
                     const locationName = entry.getAttribute('toLocation');
-                    LifecycleMetrics.onLifecycleCompleted(log, 'transition',
+                    LifecycleMetrics.onLifecycleCompleted(log, getCopyLocationMetricsType(entry),
                         locationName, Date.now() - Date.parse(transitionTime));
                     next(err);
                 });
@@ -232,24 +234,51 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
                 next(err, objMD);
             }),
             (objMD, next) => {
-                const userMDStr = objMD.getUserMetadata() || '{}';
-                const userMD = JSON.parse(userMDStr);
-
-                let tryCount = userMD['x-amz-meta-scal-s3-transition-attempt'];
-                if (tryCount === undefined) {
-                    tryCount = 1;
-                } else {
-                    tryCount = parseInt(tryCount, 10) + 1;
-                }
+                const tryCount = (getTransitionAttempt(objMD) || 0) + 1;
 
                 objMD.setTransitionInProgress(false)
-                    .setUserMetadata({
-                        'x-amz-meta-scal-s3-transition-attempt': tryCount,
-                    });
+                    .setUserMetadata({ [TRANSITION_ATTEMPT_MD]: tryCount });
 
                 return this._putMetadata(entry, objMD, log, next);
             },
         ], done);
+    }
+
+    /**
+     * Actions published by the lifecycle conductor carry the account id; those
+     * published by the queue populator (pull replication) only know the object
+     * owner's canonical id. Resolve it once, up-front, so the rest of the task
+     * -and the garbage collection entry it emits- can use `target.accountId`
+     * as usual.
+     * @param {ActionQueueEntry} entry - action entry to execute
+     * @param {Logger} log - logger instance
+     * @param {Function} cb - callback function
+     * @return {undefined}
+     */
+    _resolveAccountId(entry, log, cb) {
+        const { accountId, owner } = this.getTargetAttribute(entry);
+        if (accountId) {
+            return process.nextTick(cb);
+        }
+
+        if (!owner) {
+            // Every publisher sets one or the other, so this is a malformed
+            // entry: log it, and let the task fail on its own further down
+            // rather than retrying something that cannot be fixed.
+            log.error('cannot resolve account id: entry has no account id nor owner');
+            return process.nextTick(cb);
+        }
+
+        log.debug('no account id in entry, resolving from canonical id', { owner });
+        return this.getAccountId(owner, log, (err, resolvedAccountId) => {
+            if (err) {
+                return cb(err);
+            }
+            if (resolvedAccountId) {
+                entry.setAttribute('target.accountId', resolvedAccountId);
+            }
+            return cb();
+        });
     }
 
     /**
@@ -268,11 +297,18 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
             lastModified: 'target.lastModified',
         });
         log.addDefaultFields(entry.getLogInfo());
-        if (entry.getStatus() === 'success') {
-            return this.handleSuccessfullTransition(entry, log, done);
-        }
 
-        return this.handleFailedTransition(entry, log, done);
+        return this._resolveAccountId(entry, log, err => {
+            if (err) {
+                return done(err);
+            }
+
+            if (entry.getStatus() === 'success') {
+                return this.handleSuccessfullTransition(entry, log, done);
+            }
+
+            return this.handleFailedTransition(entry, log, done);
+        });
     }
 }
 

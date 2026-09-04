@@ -83,17 +83,18 @@ class ReplicationMetrics extends ZenkoMetrics {
         const fromLocationType = _getReplicationEndpointType(fromLocation);
         const toLocationType = _getReplicationEndpointType(toLocation);
 
-        replicationQueuedTotal.inc({
+        const labels = {
             origin: originLabel,
             fromLocation, fromLocationType,
-            toLocation, toLocationType, partition,
-        });
+            toLocation, toLocationType,
+            // Empty when queued by the populator, which batches its publishes
+            // and only learns their partition much later.
+            partition: partition ?? '',
+        };
 
-        replicationQueuedBytes.inc({
-            origin: originLabel,
-            fromLocation, fromLocationType,
-            toLocation, toLocationType, partition,
-        }, Number.parseInt(contentLength, 10));
+        replicationQueuedTotal.inc(labels);
+
+        replicationQueuedBytes.inc(labels, Number.parseInt(contentLength, 10));
     }
 
     static onReplicationProcessed(originLabel, fromLocation, toLocation,
