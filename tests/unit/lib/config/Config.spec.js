@@ -33,6 +33,12 @@ describe('Config', () => {
         assert.doesNotThrow(() => config._parseConfig(testConfig));
     });
 
+    it('should accept a config serving no API, as a D/R sink does', () => {
+        delete testConfig.server;
+        testConfig.extensions = { mongoProcessor: testConfig.extensions.mongoProcessor };
+        assert.doesNotThrow(() => config._parseConfig(testConfig));
+    });
+
     it('should throw an error when dataMoverTopic is not provided and transition is supported', () => {
         delete testConfig.extensions.replication.dataMoverTopic;
         testConfig.extensions.lifecycle.supportedLifecycleRules = [
