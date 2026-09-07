@@ -397,6 +397,158 @@ describe('LifecycleQueuePopulator', () => {
                 assert(!kafkaSendStub.called);
             });
         });
+
+        describe('deferred restore requests', () => {
+            const accountId = '79a59df900b949e55d96a1e698fbacedfd6e09d98eacf8f8d5218e7cd47ef2be';
+            const versionId = '98500086134471999999RG001  0';
+            const archiveInfo = {
+                archiveId: '04425717-a65c-4e8a-95e1-fa1d902d9d9f',
+                archiveVersion: 7504504064263669,
+            };
+
+            let kafkaSendStub;
+            let kafkaAdjustSendStub;
+            let hotKafkaSendStub;
+            let logErrorStub;
+            let clock;
+
+            // restore requested during the archive window: no archiveInfo, data still hot
+            function getDeferredRestoreEntry(archiveOverrides, overrides) {
+                const value = Object.assign({
+                    'md-model-version': 2,
+                    'owner-display-name': 'Bart',
+                    'owner-id': accountId,
+                    'content-length': 542,
+                    'content-type': 'text/plain',
+                    'last-modified': '2017-07-13T02:44:25.519Z',
+                    'content-md5': '01064f35c238bd2b785e34508c3d27f4',
+                    'x-amz-storage-class': 'dmf-v1',
+                    'key': 'hosts',
+                    'location': [],
+                    'isDeleteMarker': false,
+                    'isNull': false,
+                    versionId,
+                    'archive': archiveOverrides === undefined ? {
+                        restoreRequestedAt: '2017-07-11T02:44:25.515Z',
+                        restoreRequestedDays: 3,
+                    } : archiveOverrides,
+                    'dataStoreName': 'us-east-1',
+                    'originOp': 's3:ObjectRestore:Post',
+                }, overrides);
+                Object.keys(value).forEach(k => {
+                    if (value[k] === undefined) {
+                        delete value[k];
+                    }
+                });
+                return {
+                    type: 'put',
+                    bucket: 'lc-queue-populator-test-bucket',
+                    key: `hosts\x00${versionId}`,
+                    value: JSON.stringify(value),
+                };
+            }
+
+            // same object, once archived: archiveInfo set and data moved to the cold location
+            function getCompletedArchiveEntry(archiveOverrides) {
+                return getDeferredRestoreEntry(Object.assign({
+                    archiveInfo,
+                    restoreRequestedAt: '2017-07-11T02:44:25.515Z',
+                    restoreRequestedDays: 3,
+                }, archiveOverrides), {
+                    dataStoreName: 'dmf-v1',
+                    originOp: 's3:LifecycleTransition:Direct',
+                });
+            }
+
+            beforeEach(() => {
+                config.timeOptions.timeProgressionFactor = 1;
+                clock = sinon.useFakeTimers({ now: 1499913865515 });
+                getAccountIdStub.resetHistory();
+                kafkaSendStub = sinon.stub().yields();
+                kafkaAdjustSendStub = sinon.stub().yields();
+                hotKafkaSendStub = sinon.stub().yields();
+                lcqp._producers[`${coldStorageRestoreTopicPrefix}dmf-v1`] = {
+                    send: kafkaSendStub,
+                };
+                lcqp._producers[`${coldStorageRestoreAdjustTopicPrefix}dmf-v1`] = {
+                    send: kafkaAdjustSendStub,
+                };
+                // must never be used: no restore may be published to a hot location
+                lcqp._producers[`${coldStorageRestoreTopicPrefix}us-east-1`] = {
+                    send: hotKafkaSendStub,
+                };
+                logErrorStub = sinon.stub(lcqp.log, 'error').returns();
+            });
+
+            afterEach(() => {
+                clock.restore();
+            });
+
+            it('should skip a restore requested before the object is archived', () => {
+                handleRestoreOp(getDeferredRestoreEntry());
+
+                assert(!kafkaSendStub.called);
+                assert(!kafkaAdjustSendStub.called);
+                assert(!hotKafkaSendStub.called);
+                assert(!getAccountIdStub.called);
+                assert(!logErrorStub.called);
+            });
+
+            it('should skip an object which was never archived nor restored', () => {
+                handleRestoreOp(getDeferredRestoreEntry(undefined, { archive: undefined }));
+
+                assert(!kafkaSendStub.called);
+                assert(!hotKafkaSendStub.called);
+                assert(!logErrorStub.called);
+            });
+
+            it('should initiate the pending restore on archive completion', () => {
+                handleRestoreOp(getCompletedArchiveEntry());
+
+                assert(!kafkaAdjustSendStub.called);
+                assert(!hotKafkaSendStub.called);
+                assert(kafkaSendStub.calledOnce);
+
+                const kafkaEntry = kafkaSendStub.args[0][0][0];
+                assert.strictEqual(kafkaEntry.key,
+                    encodeURIComponent(`lc-queue-populator-test-bucket/hosts\x00${versionId}`));
+
+                const message = JSON.parse(kafkaEntry.message);
+                assert.deepStrictEqual(message, {
+                    accountId,
+                    bucketName: 'lc-queue-populator-test-bucket',
+                    objectKey: 'hosts',
+                    objectVersion: encode(versionId),
+                    archiveInfo,
+                    eTag: '01064f35c238bd2b785e34508c3d27f4',
+                    requestedDurationSecs: 3 * 24 * 3600,
+                    requestId: message.requestId,
+                    transitionTime: '2017-07-11T02:44:25.515Z',
+                });
+                assert(message.requestId);
+            });
+
+            it('should not publish on archive completion without a pending restore', () => {
+                handleRestoreOp(getCompletedArchiveEntry({
+                    restoreRequestedAt: undefined,
+                    restoreRequestedDays: undefined,
+                }));
+
+                assert(!kafkaSendStub.called);
+                assert(!kafkaAdjustSendStub.called);
+                assert(!hotKafkaSendStub.called);
+            });
+
+            it('should adjust the expiry when the object is already restored', () => {
+                handleRestoreOp(getCompletedArchiveEntry({
+                    restoreCompletedAt: '2017-07-13T02:44:25.519Z',
+                    restoreWillExpireAt: '2017-07-15T02:44:25.519Z',
+                }));
+
+                assert(kafkaAdjustSendStub.calledOnce);
+                assert(!kafkaSendStub.called);
+            });
+        });
     });
 
     describe(':_handleTransitionOp', () => {
@@ -549,6 +701,23 @@ describe('LifecycleQueuePopulator', () => {
             });
         });
 
+        it('should not re-trigger a transition on the direct-to-cold completion write', () => {
+            handleTransitionOp(getTransitionEntry({
+                'originOp': 's3:LifecycleTransition:Direct',
+                'x-amz-scal-transition-in-progress': undefined,
+                'dataStoreName': 'dmf-v1',
+                'archive': {
+                    archiveInfo: {
+                        archiveId: '04425717-a65c-4e8a-95e1-fa1d902d9d9f',
+                        archiveVersion: 7504504064263669,
+                    },
+                },
+            }));
+
+            assert(!getAccountIdStub.called);
+            assert(!kafkaSendStub.called);
+        });
+
         it('should skip the master key of a versioned object', () => {
             const entry = getTransitionEntry();
             entry.key = 'hosts';
@@ -626,7 +795,7 @@ describe('LifecycleQueuePopulator', () => {
             { originOp: 's3:LifecycleTransition:Retry', handler: '_handleTransitionOp' },
             { originOp: 's3:LifecycleTransition:Start', handler: null },
             { originOp: 's3:LifecycleTransition:SetArchive', handler: null },
-            { originOp: 's3:LifecycleTransition:Direct', handler: null },
+            { originOp: 's3:LifecycleTransition:Direct', handler: '_handleRestoreOp' },
             { originOp: 's3:LifecycleTransition', handler: null },
         ].forEach(({ originOp, handler }) => {
             it(`should dispatch ${originOp} to ${handler || 'no handler'}`, () => {
