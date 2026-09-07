@@ -221,6 +221,22 @@ describe('QueuePopulator', () => {
         });
     });
 
+    describe('_setupMetricsClients', () => {
+        afterEach(() => {
+            sinon.restore();
+        });
+
+        it('should set up no metrics client when no metrics are configured',
+            done => {
+                qp._setupMetricsClients(err => {
+                    assert.ifError(err);
+                    assert.strictEqual(qp._mConsumer, null);
+                    assert.strictEqual(qp._mProducer.getProducer(), null);
+                    return done();
+                });
+            });
+    });
+
     describe('close', () => {
         let mockLogReader1;
         let mockLogReader2;

@@ -311,3 +311,14 @@ A `BackbeatServer` (default port 8900) and `BackbeatAPI` expose these metrics
 stored in Redis by querying based on the prepended Redis keys. This data
 enables calculation of simple metrics like backlog, completion count,
 and throughput.
+
+## Disabling publication
+
+The whole chain above hangs off the `metrics` configuration section, which is
+optional: omit it, and no process publishes to the metrics topic, nor consumes
+it into Redis. The routes of this document then report nothing, and the
+Prometheus metrics served on the probe servers are unaffected.
+
+This is meant for a deployment holding no consumer for what it would publish,
+such as a metadata sink consuming a Kafka cluster it has no produce rights on.
+Anywhere the routes above are served, the section is required.

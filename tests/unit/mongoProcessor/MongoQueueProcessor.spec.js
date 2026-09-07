@@ -6,6 +6,7 @@ const MongoQueueProcessor =
 const ObjectQueueEntry =
     require('../../../lib/models/ObjectQueueEntry');
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
+const MetricsProducer = require('../../../lib/MetricsProducer');
 const Config = require('../../../lib/Config');
 
 function _makeProcessor(bootstrapList) {
@@ -283,6 +284,70 @@ describe('MongoQueueProcessor.start', () => {
             assert.deepStrictEqual(proc._consumer._consumerParams,
                 { 'security.protocol': 'ssl' });
             done();
+        });
+    });
+});
+
+describe('MongoQueueProcessor metrics', () => {
+    afterEach(() => {
+        sinon.restore();
+    });
+
+    function makeProcessor(mConfig) {
+        return new MongoQueueProcessor(
+            { hosts: 'localhost:9092' },
+            { topic: 'backbeat-ingestion' },
+            {},
+            mConfig);
+    }
+
+    it('reports periodically when a metrics topic is configured', done => {
+        sinon.stub(MetricsProducer.prototype, 'setupProducer').yields();
+        const clock = sinon.useFakeTimers({ toFake: ['setInterval'] });
+        const proc = makeProcessor({ topic: 'backbeat-metrics' });
+
+        proc._setupMetricsClients(err => {
+            assert.ifError(err);
+            assert.strictEqual(clock.countTimers(), 1);
+            return done();
+        });
+    });
+
+    it('does not report when no metrics topic is configured', done => {
+        const clock = sinon.useFakeTimers({ toFake: ['setInterval'] });
+        const proc = makeProcessor(undefined);
+
+        proc._setupMetricsClients(err => {
+            assert.ifError(err);
+            assert.strictEqual(clock.countTimers(), 0);
+            return done();
+        });
+    });
+
+    it('does not report when the producer fails to set up', done => {
+        const setupError = new Error('kafka is unreachable');
+        sinon.stub(MetricsProducer.prototype, 'setupProducer')
+            .yields(setupError);
+        const clock = sinon.useFakeTimers({ toFake: ['setInterval'] });
+        const proc = makeProcessor({ topic: 'backbeat-metrics' });
+
+        proc._setupMetricsClients(err => {
+            assert.strictEqual(err, setupError);
+            assert.strictEqual(clock.countTimers(), 0);
+            return done();
+        });
+    });
+
+    it('publishes nothing when no metrics topic is configured', done => {
+        const proc = makeProcessor(undefined);
+
+        proc._setupMetricsClients(err => {
+            assert.ifError(err);
+            proc._produceMetricCompletionEntry('us-east-1');
+            proc._sendMetrics();
+            proc._normalizePendingMetric('us-east-1');
+            assert.strictEqual(proc._mProducer.getProducer(), null);
+            return done();
         });
     });
 });

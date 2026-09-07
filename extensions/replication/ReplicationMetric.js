@@ -69,6 +69,9 @@ class ReplicationMetric {
         if (this._isLifecycleAction()) {
             return undefined;
         }
+        if (!this._producer) {
+            return undefined;
+        }
         const message = this._createProducerMessage();
         return this._producer.send([{ message }], err => {
             if (err) {

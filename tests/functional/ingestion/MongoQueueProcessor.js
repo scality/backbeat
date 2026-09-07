@@ -21,7 +21,7 @@ const { ObjectMDArchive, LifecycleConfiguration, NotificationConfiguration } = r
 const kafkaConfig = config.kafka;
 const mongoProcessorConfig = config.extensions.mongoProcessor;
 const mongoClientConfig = config.queuePopulator.mongo;
-const mConfig = {};
+const mConfig = { topic: 'backbeat-metrics' };
 
 const bootstrapList = config.extensions.replication.destination.bootstrapList;
 
@@ -171,6 +171,7 @@ class MongoQueueProcessorMock extends MongoQueueProcessor {
         };
         this._bootstrapList = bootstrapList;
         this._metricsStore = [];
+        this._startMetricsReporting();
     }
 
     sendMockEntry(entry, cb) {
