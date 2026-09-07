@@ -518,7 +518,7 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
         const value = JSON.parse(entry.value);
 
         // if object is not archived there is nothing to do here
-        if (!value.archive) {
+        if (!value.archive?.archiveInfo) {
             return;
         }
 
