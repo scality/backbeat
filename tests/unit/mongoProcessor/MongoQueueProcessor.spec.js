@@ -286,3 +286,44 @@ describe('MongoQueueProcessor.start', () => {
         });
     });
 });
+
+describe('MongoQueueProcessor metrics', () => {
+    afterEach(() => {
+        sinon.restore();
+    });
+
+    function makeProcessor(mConfig) {
+        return new MongoQueueProcessor(
+            { hosts: 'localhost:9092' },
+            { topic: 'backbeat-ingestion' },
+            {},
+            mConfig);
+    }
+
+    it('reports periodically when a metrics topic is configured', () => {
+        const clock = sinon.useFakeTimers({ toFake: ['setInterval'] });
+        makeProcessor({ topic: 'backbeat-metrics' });
+
+        assert.strictEqual(clock.countTimers(), 1);
+    });
+
+    it('does not report when no metrics topic is configured', () => {
+        const clock = sinon.useFakeTimers({ toFake: ['setInterval'] });
+        makeProcessor(undefined);
+
+        assert.strictEqual(clock.countTimers(), 0);
+    });
+
+    it('publishes nothing when no metrics topic is configured', done => {
+        const proc = makeProcessor(undefined);
+
+        proc._setupMetricsClients(err => {
+            assert.ifError(err);
+            proc._produceMetricCompletionEntry('us-east-1');
+            proc._sendMetrics();
+            proc._normalizePendingMetric('us-east-1');
+            assert.strictEqual(proc._mProducer.getProducer(), null);
+            return done();
+        });
+    });
+});

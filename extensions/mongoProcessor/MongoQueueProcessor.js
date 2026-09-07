@@ -62,7 +62,8 @@ class MongoQueueProcessor {
      *  backoff factor
      * @param {number} [mongoProcessorConfig.concurrency] - consumer concurrency
      * @param {Object} mongoClientConfig - config for connecting to mongo
-     * @param {Object} mConfig - metrics config
+     * @param {Object} [mConfig] - metrics config, no metrics are published
+     *   when omitted
      */
     constructor(kafkaConfig, mongoProcessorConfig, mongoClientConfig, mConfig) {
         this.kafkaConfig = kafkaConfig;
@@ -83,9 +84,11 @@ class MongoQueueProcessor {
         // this._accruedMetrics = { zenko-location: 10 }
         this._accruedMetrics = {};
 
-        setInterval(() => {
-            this._sendMetrics();
-        }, METRIC_REPORT_INTERVAL_MS);
+        if (mConfig) {
+            setInterval(() => {
+                this._sendMetrics();
+            }, METRIC_REPORT_INTERVAL_MS);
+        }
     }
 
     _setupMetricsClients(cb) {

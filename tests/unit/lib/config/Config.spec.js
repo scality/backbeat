@@ -37,6 +37,11 @@ describe('Config', () => {
         assert.doesNotThrow(() => config._parseConfig(testConfig));
     });
 
+    it('should accept a config publishing no metrics', () => {
+        delete testConfig.metrics;
+        assert.doesNotThrow(() => config._parseConfig(testConfig));
+    });
+
     it('should throw an error when dataMoverTopic is not provided and transition is supported', () => {
         delete testConfig.extensions.replication.dataMoverTopic;
         testConfig.extensions.lifecycle.supportedLifecycleRules = [

@@ -79,6 +79,13 @@ describe('ReplicationMetric', () => {
         assert.strictEqual(sentMessages.length, 0);
     });
 
+    it('::publish should not send data to topic if metrics are disabled',
+        () => {
+            metric.withProducer(null);
+            metric.publish();
+            assert.strictEqual(sentMessages.length, 0);
+        });
+
     it('::publish should send data to topic', () => {
         metric.publish();
         assert.strictEqual(sentMessages.length, 1);
