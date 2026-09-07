@@ -831,7 +831,6 @@ describe('LifecycleQueuePopulator', () => {
                 key: 'object',
                 md: {
                     ...objMd,
-                    'archive': {},
                     'x-amz-storage-class': 'STANDARD',
                     'dataStoreName': 'us-east-1',
                 },
@@ -878,9 +877,24 @@ describe('LifecycleQueuePopulator', () => {
                 key: 'object',
                 md: {
                     ...objMd,
-                    'archive': {},
                     'x-amz-storage-class': 'azure-archive',
                     'dataStoreName': 'azure-archive',
+                },
+                getAccountIdResponse: [null, '1234'],
+                called: false,
+            },
+            {
+                it: 'should skip objects still awaiting their first archive',
+                type: 'delete',
+                key: 'object\x0098500086134471999999RG001  0',
+                md: {
+                    ...objMd,
+                    versionId: '98500086134471999999RG001  0',
+                    archive: {
+                        restoreRequestedAt: '2017-07-11T02:44:25.515Z',
+                        restoreRequestedDays: 3,
+                    },
+                    dataStoreName: 'us-east-1',
                 },
                 getAccountIdResponse: [null, '1234'],
                 called: false,
