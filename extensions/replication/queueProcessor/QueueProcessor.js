@@ -229,6 +229,10 @@ class QueueProcessor extends EventEmitter {
         this.logger = new Logger(
             `Backbeat:Replication:QueueProcessor:${this.site}`);
 
+        // clients to read data straight from the sites we replicate to,
+        // keyed by endpoint and role, shared by all copy location tasks
+        this.sourceClientManagers = {};
+
         // global variables
         if (sourceConfig.transport === 'https') {
             this.sourceHTTPAgent = new HttpsAgent.Agent({
@@ -698,6 +702,7 @@ class QueueProcessor extends EventEmitter {
             destHTTPAgent: this.destHTTPAgent,
             vaultclientCache: this.vaultclientCache,
             accountCredsCache: this.accountCredsCache,
+            sourceClientManagers: this.sourceClientManagers,
             replicationStatusProducer: this.replicationStatusProducer,
             mProducer: this._mProducer,
             logger: this.logger,
