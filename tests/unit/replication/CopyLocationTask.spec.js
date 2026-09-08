@@ -481,6 +481,82 @@ describe('CopyLocationTask', () => {
         });
     });
 
+    describe('source version disappearing mid-copy', () => {
+        let task;
+
+        function noSuchVersion() {
+            const err = new Error('The version does not exist.');
+            err.name = 'NoSuchVersion';
+            err.$metadata = { httpStatusCode: 404 };
+            return err;
+        }
+
+        beforeEach(() => {
+            task = new CopyLocationTask({
+                getStateVars: () => ({
+                    site: 'test-site',
+                    mProducer: { getProducer: () => {} },
+                    sourceConfig: { transport: 'http', s3: {} },
+                }),
+            });
+        });
+
+        afterEach(() => {
+            sinon.restore();
+        });
+
+        it('should fail the copy, not skip it', done => {
+            sinon.stub(task, '_sendGetObject').rejects(noSuchVersion());
+            const put = sinon.stub(task, '_sendMultipleBackendPutObject');
+
+            const entry = new ActionQueueEntry({ target: {} });
+            const objMd = new ObjectMD();
+            objMd.setContentLength(200);
+
+            task._getAndPutObjectOnce(entry, objMd, fakeLogger, err => {
+                assert(err);
+                // an InvalidObjectState would be committed as a skip, leaving
+                // the object flagged in transition for good
+                assert(!err.InvalidObjectState);
+                assert(put.notCalled);
+                done();
+            });
+        });
+
+        it('should fail the copy, not skip it, while streaming an MPU part', done => {
+            sinon.stub(task, '_sendGetObject').rejects(noSuchVersion());
+            const putPart = sinon.stub(task, '_putMPUPart');
+
+            const entry = new ActionQueueEntry({ target: {} });
+            const objMd = new ObjectMD();
+
+            task._getRangeAndPutMPUPartOnce(entry, objMd, { start: 0, end: 99 }, 1,
+                'upload-id', fakeLogger, err => {
+                    assert(err);
+                    assert(!err.InvalidObjectState);
+                    assert(putPart.notCalled);
+                    done();
+                });
+        });
+
+        it('should report the failure so the transition can be reset', () => {
+            const entry = new ActionQueueEntry({ target: {} });
+            entry.setResultsTopic('backbeat-lifecycle-transition-tasks');
+            task.replicationStatusProducer = { sendToTopic: sinon.stub() };
+            task.dataMoverConsumer = { onEntryCommittable: sinon.stub() };
+
+            const res = task._publishCopyLocationStatus(
+                noSuchVersion(), entry, null, fakeLogger);
+
+            // committing here would drop the entry before the lifecycle side
+            // resets transitionInProgress and counts the attempt
+            assert.strictEqual(res.committable, false);
+            assert(task.replicationStatusProducer.sendToTopic.calledOnce);
+            assert.strictEqual(task.replicationStatusProducer.sendToTopic.firstCall.args[0],
+                'backbeat-lifecycle-transition-tasks');
+        });
+    });
+
     describe('_getAssumedRoleS3Client', () => {
         let task;
         const siteConfig = {

@@ -164,9 +164,9 @@ class CopyLocationTask extends BackbeatTask {
      * @param {Werelogs} log - the logger instance
      * @return {Object|null} the client and the location part to read, or
      * null if the data is reachable through Cloudserver
-     * @throws {ArsenalError} if the site cannot be read from: no replication
-     * config to reach it, no single part to read, no role to assume, or no
-     * credentials for that role
+     * @throws {ArsenalError} if the site cannot be read from: no endpoint to
+     * reach it, no single part to read, no role to assume, or no credentials
+     * for that role
      */
     _getSourceLocationClient(objMD, log) {
         const site = objMD.getDataStoreName();
@@ -436,14 +436,6 @@ class CopyLocationTask extends BackbeatTask {
                     actionEntry, objMD, size, incomingMsg, log, putDone);
             })
             .catch(err => {
-                if (err.name === 'NoSuchVersion') {
-                    log.info('source version no longer exists', Object.assign({
-                        method: 'CopyLocationTask._getAndPutObjectOnce',
-                        error: err.message,
-                    }, actionEntry.getLogInfo()));
-                    return doneOnce(errors.InvalidObjectState.customizeDescription(
-                        'source version no longer exists'));
-                }
                 if (err.$metadata?.httpStatusCode === 404) {
                     log.error('the source object was not found', Object.assign({
                         method: 'CopyLocationTask._getAndPutObjectOnce',
@@ -575,14 +567,6 @@ class CopyLocationTask extends BackbeatTask {
             .then(response => this._putMPUPart(actionEntry, objMD, response.Body, size,
                     uploadId, partNumber, log, abortController, done))
             .catch(err => {
-                if (err.name === 'NoSuchVersion') {
-                    log.info('source version no longer exists', Object.assign({
-                        method: 'CopyLocationTask._getRangeAndPutMPUPartOnce',
-                        error: err.message,
-                    }, actionEntry.getLogInfo()));
-                    return done(errors.InvalidObjectState.customizeDescription(
-                        'source version no longer exists'));
-                }
                 if (err.$metadata?.httpStatusCode === 404) {
                     return done(err);
                 }
