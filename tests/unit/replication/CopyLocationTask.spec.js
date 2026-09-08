@@ -2,9 +2,11 @@ const assert = require('assert');
 const sinon = require('sinon');
 
 const CopyLocationTask = require('../../../extensions/replication/tasks/CopyLocationTask');
+const ClientManager = require('../../../lib/clients/ClientManager');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const { errors } = require('arsenal');
 const { ObjectMD } = require('arsenal').models;
+const locationConfig = require('../../../conf/locationConfig.json');
 
 const fakeLogger = require('../../utils/fakeLogger');
 
@@ -302,10 +304,44 @@ describe('CopyLocationTask', () => {
 
     describe('_sendGetObject', () => {
         let task;
-        let config;
+
+        // what the operator writes for a location we replicate to over CRR:
+        // the servers to reach it, and an STS to assume roles on it
+        const remoteSiteDetails = {
+            transport: 'https',
+            servers: ['production.example.com:443'],
+            sts: {
+                host: 'sts.production.example.com',
+                port: '443',
+                accessKey: 'AK',
+                secretKey: 'SK',
+            },
+        };
+
+        const sourcePart = {
+            key: 'backups/vm001.vbk',
+            size: 1048576,
+            start: 0,
+            dataStoreName: 'source-site',
+            dataStoreType: 'aws_s3',
+            dataStoreETag: '1:9b2cf535f27731c974343645a3985328',
+            dataStoreVersionId: 'aJdO95zrzY5BKLXf9GHFItC0d1CkQ0Ei',
+            bucket: 'backup-repo-01',
+            role: 'arn:aws:iam::123456789012:role/clean-room-read',
+        };
+
+        function sourceObjectMD(location = [sourcePart]) {
+            const objMd = new ObjectMD();
+            objMd.setDataStoreName('source-site');
+            objMd.setKey('vm001.vbk');
+            objMd.setLocation(location);
+            return objMd;
+        }
 
         beforeEach(() => {
-            config = require('../../../lib/Config');
+            locationConfig['source-site'] =
+                { type: 'aws_s3', isCRR: true, details: remoteSiteDetails };
+            sinon.stub(fakeLogger, 'getSerializedUids').returns('req-uid-1');
             task = new CopyLocationTask({
                 getStateVars: () => ({
                     mProducer: { getProducer: () => {} },
@@ -315,11 +351,11 @@ describe('CopyLocationTask', () => {
         });
 
         afterEach(() => {
+            delete locationConfig['source-site'];
             sinon.restore();
         });
 
-        it('should read through Cloudserver when the location is not isCRR', () => {
-            sinon.stub(config, 'getLocationConstraint').returns({ locationType: 'location-aws-s3-v1', isCRR: false });
+        it('should read through Cloudserver when the location is not a CRR location', () => {
             task.backbeatClient = { send: sinon.stub().resolves({ Body: 'stream' }) };
 
             const entry = new ActionQueueEntry({
@@ -337,79 +373,102 @@ describe('CopyLocationTask', () => {
                     assert.strictEqual(command.input.Key, 'key');
                     assert.strictEqual(command.input.VersionId, 'v1');
                     assert.strictEqual(command.input.LocationConstraint, 'some-location');
+                    assert.strictEqual(command.input.RequestUids, 'req-uid-1');
                 });
         });
 
-        it('should read directly from the CRR source location when isCRR', () => {
-            sinon.stub(config, 'getLocationConstraint').returns({
-                locationType: 'location-scality-crr-v1',
-                isCRR: true,
-                details: {
-                    servers: ['production.example.com:443'],
-                    transport: 'https',
-                    sts: {
-                        host: 'sts.production.example.com',
-                        port: '443',
-                        accessKey: 'AK',
-                        secretKey: 'SK',
-                    },
-                },
-            });
-
-            const fakeS3Client = { send: sinon.stub().resolves({ Body: 'remote-stream' }) };
-            sinon.stub(task, '_getAssumedRoleS3Client').returns(fakeS3Client);
+        it('should read directly from the source location when it is a CRR location', () => {
+            const remoteClient = { send: sinon.stub().resolves({ Body: 'remote-stream' }) };
+            sinon.stub(task, '_getAssumedRoleS3Client').returns(remoteClient);
 
             const entry = new ActionQueueEntry({
                 target: { bucket: 'local-bucket', key: 'key', version: 'v1' },
             });
-            const objMd = new ObjectMD();
-            objMd.setDataStoreName('source-site');
-            objMd.setKey('vm001.vbk');
-            objMd.setLocation([{
-                key: 'backups/vm001.vbk',
-                size: 1048576,
-                start: 0,
-                dataStoreName: 'source-site',
-                dataStoreType: 'aws_s3',
-                dataStoreETag: '1:9b2cf535f27731c974343645a3985328',
-                dataStoreVersionId: 'aJdO95zrzY5BKLXf9GHFItC0d1CkQ0Ei',
-                bucket: 'backup-repo-01',
-                role: 'arn:aws:iam::123456789012:role/clean-room-read',
-            }]);
 
-            return task._sendGetObject(entry, objMd, undefined, fakeLogger, new AbortController())
+            return task._sendGetObject(entry, sourceObjectMD(), undefined, fakeLogger,
+                new AbortController())
                 .then(response => {
                     assert.deepStrictEqual(response, { Body: 'remote-stream' });
                     assert(task._getAssumedRoleS3Client.calledOnce);
-                    const [locationConfig, roleArn] = task._getAssumedRoleS3Client.firstCall.args;
-                    assert.strictEqual(locationConfig.isCRR, true);
+                    const [siteConfig, roleArn] = task._getAssumedRoleS3Client.firstCall.args;
+                    assert.deepStrictEqual(siteConfig, {
+                        transport: 'https',
+                        endpoint: 'production.example.com:443',
+                        sts: remoteSiteDetails.sts,
+                    });
                     assert.strictEqual(roleArn, 'arn:aws:iam::123456789012:role/clean-room-read');
-                    assert(fakeS3Client.send.calledOnce);
-                    const command = fakeS3Client.send.firstCall.args[0];
+                    assert(remoteClient.send.calledOnce);
+                    const command = remoteClient.send.firstCall.args[0];
+                    // bucket, key and version all describe the data on the
+                    // source site, not the object we are copying
                     assert.strictEqual(command.input.Bucket, 'backup-repo-01');
                     assert.strictEqual(command.input.Key, 'backups/vm001.vbk');
                     assert.strictEqual(command.input.VersionId, 'aJdO95zrzY5BKLXf9GHFItC0d1CkQ0Ei');
+                    // the source site is Scality too: same command, and the
+                    // request uids let us follow the read across both sites
+                    assert.strictEqual(command.input.RequestUids, 'req-uid-1');
+                    // the data is native there, it must not be redirected
+                    assert.strictEqual(command.input.LocationConstraint, undefined);
                 });
         });
 
-        it('should reject without calling Cloudserver or the remote site when the role is missing', () => {
-            sinon.stub(config, 'getLocationConstraint').returns({
-                locationType: 'location-scality-crr-v1',
-                isCRR: true,
-                details: {},
-            });
+        it('should pass the range on to the source location', () => {
+            const remoteClient = { send: sinon.stub().resolves({}) };
+            sinon.stub(task, '_getAssumedRoleS3Client').returns(remoteClient);
+
+            const entry = new ActionQueueEntry({ target: {} });
+
+            return task._sendGetObject(entry, sourceObjectMD(), { start: 0, end: 99 },
+                fakeLogger, new AbortController())
+                .then(() => {
+                    const command = remoteClient.send.firstCall.args[0];
+                    assert.strictEqual(command.input.Range, 'bytes=0-99');
+                });
+        });
+
+        it('should reject when the CRR location has no endpoint to reach it', () => {
+            // flagged isCRR, but carrying none of the details telling us
+            // where to read the data from
+            locationConfig['source-site'] = { type: 'aws_s3', isCRR: true, details: {} };
+            task.backbeatClient = { send: sinon.stub() };
+
+            const entry = new ActionQueueEntry({ target: {} });
+
+            return task._sendGetObject(entry, sourceObjectMD(), undefined, fakeLogger,
+                new AbortController())
+                .then(() => assert.fail('expected rejection'))
+                .catch(err => {
+                    assert(err.InternalError);
+                    assert.strictEqual(err.retryable, true);
+                    assert(task.backbeatClient.send.notCalled);
+                });
+        });
+
+        it('should reject when the source location holds more than one part', () => {
             task.backbeatClient = { send: sinon.stub() };
             sinon.stub(task, '_getAssumedRoleS3Client');
 
             const entry = new ActionQueueEntry({ target: {} });
-            const objMd = new ObjectMD();
-            objMd.setDataStoreName('source-site');
-            objMd.setLocation([{
-                key: 'k',
-                bucket: 'b',
-                dataStoreName: 'source-site',
-                // no role: owner absent from the ownerId->role map
-            }]);
+            const objMd = sourceObjectMD([sourcePart, { ...sourcePart, start: 1048576 }]);
+
+            return task._sendGetObject(entry, objMd, undefined, fakeLogger, new AbortController())
+                .then(() => assert.fail('expected rejection'))
+                .catch(err => {
+                    assert(err.InternalError);
+                    // the metadata will not change: retrying cannot help
+                    assert.notStrictEqual(err.retryable, true);
+                    assert(task.backbeatClient.send.notCalled);
+                    assert(task._getAssumedRoleS3Client.notCalled);
+                });
+        });
+
+        it('should reject without calling Cloudserver or the remote site when the role is missing', () => {
+            task.backbeatClient = { send: sinon.stub() };
+            sinon.stub(task, '_getAssumedRoleS3Client');
+
+            const entry = new ActionQueueEntry({ target: {} });
+            // no role: owner absent from the ownerId->role map
+            const objMd = sourceObjectMD([{ key: 'k', bucket: 'b', dataStoreName: 'source-site' }]);
 
             return task._sendGetObject(entry, objMd, undefined, fakeLogger, new AbortController())
                 .then(() => assert.fail('expected rejection'))
@@ -424,31 +483,31 @@ describe('CopyLocationTask', () => {
 
     describe('_getAssumedRoleS3Client', () => {
         let task;
-        const locationConfig = {
-            details: {
-                servers: ['production.example.com:443'],
-                transport: 'https',
-                sts: {
-                    host: 'sts.production.example.com',
-                    port: '443',
-                    accessKey: 'AK',
-                    secretKey: 'SK',
-                },
+        const siteConfig = {
+            transport: 'https',
+            endpoint: 'production.example.com:443',
+            sts: {
+                host: 'sts.production.example.com',
+                port: '443',
+                accessKey: 'AK',
+                secretKey: 'SK',
             },
         };
         const roleArn = 'arn:aws:iam::123456789012:role/clean-room-read';
 
+        let getBackbeatClient;
+
         beforeEach(() => {
+            sinon.stub(ClientManager.prototype, 'initSTSConfig');
+            sinon.stub(ClientManager.prototype, 'initCredentialsManager');
+            getBackbeatClient = sinon.stub(ClientManager.prototype, 'getBackbeatClient')
+                .returns({ send: () => {} });
             task = new CopyLocationTask({
                 getStateVars: () => ({
                     mProducer: { getProducer: () => {} },
                     sourceConfig: { transport: 'http' },
-                    assumedRoleCredentialsManager: {
-                        getCredentials: sinon.stub().returns({
-                            getCredentialsProvider: () => async () => ({}),
-                        }),
-                    },
-                    assumedRoleS3Clients: {},
+                    logger: fakeLogger,
+                    sourceClientManagers: {},
                 }),
             });
         });
@@ -457,19 +516,35 @@ describe('CopyLocationTask', () => {
             sinon.restore();
         });
 
-        it('should cache and reuse the S3 client for the same endpoint and role', () => {
-            const client1 = task._getAssumedRoleS3Client(locationConfig, roleArn, fakeLogger);
-            const client2 = task._getAssumedRoleS3Client(locationConfig, roleArn, fakeLogger);
+        it('should reuse the client manager for the same endpoint and role', () => {
+            const client1 = task._getAssumedRoleS3Client(siteConfig, roleArn, fakeLogger);
+            const client2 = task._getAssumedRoleS3Client(siteConfig, roleArn, fakeLogger);
+
             assert.strictEqual(client1, client2);
-            assert(task.assumedRoleCredentialsManager.getCredentials.calledOnce);
+            assert.strictEqual(Object.keys(task.sourceClientManagers).length, 1);
+            const clientManager = Object.values(task.sourceClientManagers)[0];
+            assert.strictEqual(clientManager._transport, 'https');
+            assert.deepStrictEqual(clientManager._s3Config,
+                { host: 'production.example.com', port: '443' });
+            assert.deepStrictEqual(clientManager._authConfig.sts, siteConfig.sts);
+            assert(getBackbeatClient.alwaysCalledWith('123456789012'));
+        });
+
+        it('should default the port when the location carries none', () => {
+            task._getAssumedRoleS3Client(
+                { ...siteConfig, endpoint: 'production.example.com' }, roleArn, fakeLogger);
+
+            const clientManager = Object.values(task.sourceClientManagers)[0];
+            assert.deepStrictEqual(clientManager._s3Config,
+                { host: 'production.example.com', port: 443 });
         });
 
         it('should log and throw a retryable AccessDenied when credentials cannot be obtained', () => {
-            task.assumedRoleCredentialsManager.getCredentials.returns(null);
+            getBackbeatClient.returns(null);
             const logSpy = sinon.spy(fakeLogger, 'error');
 
             assert.throws(
-                () => task._getAssumedRoleS3Client(locationConfig, roleArn, fakeLogger),
+                () => task._getAssumedRoleS3Client(siteConfig, roleArn, fakeLogger),
                 err => err.AccessDenied && err.retryable === true);
             assert(logSpy.calledOnce);
         });
@@ -477,10 +552,10 @@ describe('CopyLocationTask', () => {
         it('should keep the full role name, including any path, when the role ARN has one', () => {
             const pathedRoleArn = 'arn:aws:iam::123456789012:role/service-role/clean-room-read';
 
-            task._getAssumedRoleS3Client(locationConfig, pathedRoleArn, fakeLogger);
+            task._getAssumedRoleS3Client(siteConfig, pathedRoleArn, fakeLogger);
 
-            const params = task.assumedRoleCredentialsManager.getCredentials.firstCall.args[0];
-            assert.strictEqual(params.authConfig.roleName, 'service-role/clean-room-read');
+            const clientManager = Object.values(task.sourceClientManagers)[0];
+            assert.strictEqual(clientManager._authConfig.roleName, 'service-role/clean-room-read');
         });
     });
 });

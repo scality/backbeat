@@ -3,14 +3,12 @@ const { v4: uuid } = require('uuid');
 
 const { errors, jsutil, models } = require('arsenal');
 const { ObjectMD } = models;
-const { S3Client: AwsS3Client, GetObjectCommand: AwsGetObjectCommand } =
-    require('@aws-sdk/client-s3');
 
 const BackbeatMetadataProxy = require('../../../lib/BackbeatMetadataProxy');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const {
     BackbeatRoutesClient,
-    GetObjectCommand: BackbeatRoutesGetObjectCommand,
+    GetObjectCommand,
     MultipleBackendPutObjectCommand,
     MultipleBackendInitiateMPUCommand,
     MultipleBackendPutMPUPartCommand,
@@ -26,10 +24,11 @@ const { getAccountCredentials } =
           require('../../../lib/credentials/AccountCredentials');
 const RoleCredentials =
           require('../../../lib/credentials/RoleCredentials');
-const config = require('../../../lib/Config');
+const ClientManager = require('../../../lib/clients/ClientManager');
 const { authTypeAssumeRole } = require('../../../lib/constants');
 const { metricsExtension, metricsTypeQueued, metricsTypeCompleted } =
     require('../constants');
+const locations = require('../../../conf/locationConfig.json') || {};
 
 const MPU_GCP_MAX_PARTS = 1024;
 
@@ -106,76 +105,125 @@ class CopyLocationTask extends BackbeatTask {
     }
 
     /**
-     * Get a cached S3 client, authenticated with the assumed-role
-     * credentials for the role carried on a location part.
-     * @param {Object} locationConfig - the location's config
+     * Get a cached client on a remote site, authenticated with the
+     * assumed-role credentials for the role carried on a location part.
+     * @param {Object} siteConfig - transport, endpoint and STS of the source site
      * @param {String} roleArn - the role ARN carried by the location part
      * @param {Werelogs} log - the logger instance
-     * @return {AwsS3Client} the client
+     * @return {BackbeatRoutesClient} the client
      * @throws {ArsenalError} AccessDenied (retryable) if credentials
      * could not be obtained for the role
      */
-    _getAssumedRoleS3Client(locationConfig, roleArn, log) {
-        const { details } = locationConfig;
-        const s3Endpoint = `${details.transport}://${details.servers[0]}`;
-        const cacheKey = `${s3Endpoint}::${roleArn}`;
-        if (this.assumedRoleS3Clients[cacheKey]) {
-            return this.assumedRoleS3Clients[cacheKey];
-        }
+    _getAssumedRoleS3Client(siteConfig, roleArn, log) {
+        const { transport, endpoint, sts } = siteConfig;
+        // a location may carry its servers without an explicit port
+        const [host, port = transport === 'https' ? 443 : 80] = endpoint.split(':');
+        const s3Endpoint = `${transport}://${host}:${port}`;
         const accountId = roleArn.split(':')[4];
         const roleName = roleArn.split(':role/')[1];
-        const credentials = this.assumedRoleCredentialsManager.getCredentials({
-            id: roleArn,
-            accountId,
-            authConfig: {
-                type: authTypeAssumeRole,
-                roleName,
-            },
-            stsConfig: {
-                endpoint: `${details.transport}://${details.sts.host}:${details.sts.port}`,
-                credentials: {
-                    accessKeyId: details.sts.accessKey,
-                    secretAccessKey: details.sts.secretKey,
+        // one manager per endpoint and role: it holds the credentials and
+        // clients of every account we assume that role on, and expires them
+        const cacheKey = `${s3Endpoint}::${roleName}`;
+        let clientManager = this.sourceClientManagers[cacheKey];
+        if (!clientManager) {
+            clientManager = new ClientManager({
+                id: 'replication-copy-location',
+                authConfig: {
+                    type: authTypeAssumeRole,
+                    roleName,
+                    sts,
                 },
-            },
-        });
-        if (!credentials) {
+                s3Config: { host, port },
+                transport,
+            }, this.logger);
+            clientManager.initSTSConfig();
+            clientManager.initCredentialsManager();
+            this.sourceClientManagers[cacheKey] = clientManager;
+        }
+        const client = clientManager.getBackbeatClient(accountId);
+        if (!client) {
             log.error('unable to obtain assumed-role credentials for source location', {
                 method: 'CopyLocationTask._getAssumedRoleS3Client',
                 roleArn,
                 endpoint: s3Endpoint,
             });
             const err = errors.AccessDenied.customizeDescription(
-                `unable to assume role ${roleArn} for isCRR source location`);
+                `unable to assume role ${roleArn} on source location`);
             err.retryable = true;
             throw err;
         }
-        const isHttps = details.transport === 'https';
-        const client = new AwsS3Client({
-            endpoint: s3Endpoint,
-            credentials: credentials.getCredentialsProvider(),
-            region: 'us-east-1',
-            forcePathStyle: true,
-            requestHandler: {
-                [isHttps ? 'httpsAgent' : 'httpAgent']:
-                    isHttps ? this.assumedRoleHTTPSAgent : this.assumedRoleHTTPAgent,
-                requestTimeout: TIMEOUT_MS,
-            },
-            maxAttempts: 1,
-        });
-        client.middlewareStack.add(isRetryableMiddleware(), {
-            step: 'deserialize',
-            priority: 'high',
-        });
-        this.assumedRoleS3Clients[cacheKey] = client;
-        return this.assumedRoleS3Clients[cacheKey];
+        return client;
     }
 
     /**
-     * Send a GetObject request for the object's data,
-     * reading either through Cloudserver's multiple-backend routes,
-     * or directly from a CRR source location's own S3
-     * endpoint via an assumed role.
+     * Get a client to read the object data straight from the site holding
+     * it, for the locations Cloudserver has no data client for: the remote
+     * sites we replicate to over CRR, which are exactly the locations a
+     * clean room reads its source data from.
+     * @param {ObjectMD} objMD - metadata object
+     * @param {Werelogs} log - the logger instance
+     * @return {Object|null} the client and the location part to read, or
+     * null if the data is reachable through Cloudserver
+     * @throws {ArsenalError} if the site cannot be read from: no replication
+     * config to reach it, no single part to read, no role to assume, or no
+     * credentials for that role
+     */
+    _getSourceLocationClient(objMD, log) {
+        const site = objMD.getDataStoreName();
+        if (!locations[site]?.isCRR) {
+            return null;
+        }
+        // The location itself carries how to reach the site holding the data:
+        // the servers to read from, and the STS to assume roles on.
+        const { servers, transport, sts } = locations[site].details || {};
+        if (!servers?.length || !sts) {
+            log.error('no endpoint to reach source location', {
+                method: 'CopyLocationTask._getSourceLocationClient',
+                site,
+            });
+            // retryable: a config fix should be picked up without losing the action
+            const err = errors.InternalError.customizeDescription(
+                `no endpoint to reach source location ${site}`);
+            err.retryable = true;
+            throw err;
+        }
+        // A CRR location holds the whole object in a single part, written by
+        // the source site's own replication: it carries where the data landed
+        // there, and the role to assume to read it back. Ranged reads below
+        // assume that, and would read the wrong bytes if it did not hold.
+        const parts = objMD.getLocation();
+        if (parts?.length !== 1) {
+            log.error('unexpected number of location parts on source location', {
+                method: 'CopyLocationTask._getSourceLocationClient',
+                site,
+                parts: parts?.length ?? 0,
+            });
+            throw errors.InternalError.customizeDescription(
+                `expected a single location part for source location ${site}`);
+        }
+        const part = parts[0];
+        if (!part.role) {
+            log.error('missing role on location part for source location', {
+                method: 'CopyLocationTask._getSourceLocationClient',
+                site,
+            });
+            const err = errors.AccessDenied.customizeDescription(
+                `missing role on location part for source location ${site}`);
+            err.retryable = true;
+            throw err;
+        }
+        const client = this._getAssumedRoleS3Client(
+            { transport, endpoint: servers[0], sts }, part.role, log);
+        return { client, part };
+    }
+
+    /**
+     * Send a GetObject request for the object's data, either through the
+     * local Cloudserver, or straight to the remote site holding the data
+     * via an assumed role. A CRR location is Scality on both ends, so the
+     * same command is used either way: only the target differs, and the
+     * location constraint, which is meaningless on the site that owns the
+     * data.
      * @param {ActionQueueEntry} actionEntry - the action entry
      * @param {ObjectMD} objMD - metadata object
      * @param {Object} [range] - byte range to request, or undefined for the whole object
@@ -184,28 +232,15 @@ class CopyLocationTask extends BackbeatTask {
      * @return {Promise} resolves to the GetObject response
      */
     async _sendGetObject(actionEntry, objMD, range, log, abortController) {
-        const locationConfig = config.getLocationConstraint(objMD.getDataStoreName());
-        if (locationConfig?.isCRR === true) {
-            const locations = objMD.getLocation();
-            const part = locations && locations[0];
-            if (!part || !part.role) {
-                const err = errors.AccessDenied.customizeDescription(
-                    'missing role on location part for isCRR source location');
-                err.retryable = true;
-                throw err;
-            }
-            const s3Client = this._getAssumedRoleS3Client(locationConfig, part.role, log);
-            const command = new AwsGetObjectCommand({
-                Bucket: part.bucket,
-                Key: part.key,
-                VersionId: part.dataStoreVersionId,
-                Range: range && `bytes=${range.start}-${range.end}`,
-            });
-            return await s3Client.send(command, { abortSignal: abortController.signal });
-        }
-
+        const source = this._getSourceLocationClient(objMD, log);
         const { bucket, key, version } = actionEntry.getAttribute('target');
-        const command = new BackbeatRoutesGetObjectCommand({
+        const command = new GetObjectCommand(source ? {
+            Bucket: source.part.bucket,
+            Key: source.part.key,
+            VersionId: source.part.dataStoreVersionId,
+            Range: range && `bytes=${range.start}-${range.end}`,
+            RequestUids: log.getSerializedUids(),
+        } : {
             Bucket: bucket,
             Key: key,
             VersionId: version,
@@ -213,7 +248,8 @@ class CopyLocationTask extends BackbeatTask {
             LocationConstraint: objMD.getDataStoreName(),
             RequestUids: log.getSerializedUids(),
         });
-        return await this.backbeatClient.send(command, { abortSignal: abortController.signal });
+        const client = source ? source.client : this.backbeatClient;
+        return await client.send(command, { abortSignal: abortController.signal });
     }
 
     processQueueEntry(actionEntry, kafkaEntry, done) {
