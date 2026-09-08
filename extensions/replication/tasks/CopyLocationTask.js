@@ -214,7 +214,8 @@ class CopyLocationTask extends BackbeatTask {
         }
         const client = this._getAssumedRoleS3Client(
             { transport, endpoint: servers[0], sts }, part.role, log);
-        return { client, part };
+        const { bucket, key, dataStoreVersionId: version } = part;
+        return { client, target: { bucket, key, version }, dataStoreName: undefined };
     }
 
     /**
@@ -232,23 +233,22 @@ class CopyLocationTask extends BackbeatTask {
      * @return {Promise} resolves to the GetObject response
      */
     async _sendGetObject(actionEntry, objMD, range, log, abortController) {
-        const source = this._getSourceLocationClient(objMD, log);
-        const { bucket, key, version } = actionEntry.getAttribute('target');
-        const command = new GetObjectCommand(source ? {
-            Bucket: source.part.bucket,
-            Key: source.part.key,
-            VersionId: source.part.dataStoreVersionId,
-            Range: range && `bytes=${range.start}-${range.end}`,
-            RequestUids: log.getSerializedUids(),
-        } : {
+        // read from the site holding the data, where it is native and there
+        // is no location to redirect to, or locally through Cloudserver
+        const { client, target: { bucket, key, version }, dataStoreName } =
+            this._getSourceLocationClient(objMD, log) ?? {
+                client: this.backbeatClient,
+                target: actionEntry.getAttribute('target'),
+                dataStoreName: objMD.getDataStoreName(),
+            };
+        const command = new GetObjectCommand({
             Bucket: bucket,
             Key: key,
             VersionId: version,
+            LocationConstraint: dataStoreName,
             Range: range && `bytes=${range.start}-${range.end}`,
-            LocationConstraint: objMD.getDataStoreName(),
             RequestUids: log.getSerializedUids(),
         });
-        const client = source ? source.client : this.backbeatClient;
         return await client.send(command, { abortSignal: abortController.signal });
     }
 
