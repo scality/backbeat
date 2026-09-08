@@ -114,6 +114,15 @@ class IngestionReaderMock extends IngestionReader {
     _setupIngestionProducer() {
         this._updated = true;
     }
+
+    /**
+     * Mock to avoid connecting to the source to resolve the raft session
+     * @param {Function} done - callback
+     * @return {undefined}
+     */
+    setup(done) {
+        return process.nextTick(done);
+    }
 }
 
 class IngestionPopulatorMock extends IngestionPopulator {
@@ -185,6 +194,7 @@ describe('Ingestion Populator', () => {
 
     beforeEach(() => {
         ip = new IngestionPopulatorMock(
+            null,
             zkConfig,
             kafkaConfig,
             qpConfig,
@@ -485,6 +495,18 @@ describe('Ingestion Populator', () => {
             assert.deepStrictEqual(populator._ingestionSources, new Map());
             assert.strictEqual(removeReaderState.called, false);
         });
+
+        it('should stop tracking a location once its last source is gone', () => {
+            const logReader = createReaderMock(ACTIVE_BUCKET);
+            logReader.getLocationConstraint.returns('active-ring');
+            populator._ingestionSources.set(ACTIVE_BUCKET, logReader);
+            populator._addLocationBucket('active-ring', ACTIVE_BUCKET);
+
+            populator._closeLogState(ACTIVE_BUCKET);
+
+            assert.deepStrictEqual(populator._getLocationBuckets('active-ring'),
+                new Set());
+        });
     });
 
     describe('_processLogReaderEntries', () => {
@@ -561,6 +583,93 @@ describe('Ingestion Populator', () => {
             ip._processLogReaderEntries(undefined, {}, err => {
                 assert.ifError(err);
                 done();
+            });
+        });
+    });
+
+    describe('pause/resume', () => {
+        const location = existingBucket.locationConstraint;
+
+        beforeEach(done => {
+            // stub out zookeeper state persistence, tested separately
+            sinon.stub(ip, '_updateZkStateNode').callsArgWith(3, null);
+            ip._setupUpdatedReaders(done);
+        });
+
+        afterEach(() => sinon.restore());
+
+        it('should remove the readers of a location on pause', () => {
+            assert(ip.logReaders.has(EXISTING_BUCKET));
+
+            ip._pauseService(location);
+
+            assert(!ip.logReaders.has(EXISTING_BUCKET));
+            assert(ip._pausedLocations.has(location));
+            // the reader itself is kept, to be restored on resume
+            assert(ip._ingestionSources.has(EXISTING_BUCKET));
+        });
+
+        it('should not pause an already paused location', () => {
+            ip.setPausedLocationState(location);
+
+            ip._pauseService(location);
+
+            assert(ip._updateZkStateNode.notCalled);
+        });
+
+        it('should restore the readers of a location on resume', () => {
+            ip._pauseService(location);
+            assert(!ip.logReaders.has(EXISTING_BUCKET));
+
+            ip._resumeService(location);
+
+            assert(ip.logReaders.has(EXISTING_BUCKET));
+            assert(!ip._pausedLocations.has(location));
+        });
+
+        it('should not resume a location that is not paused', () => {
+            ip._resumeService(location);
+
+            assert(ip._updateZkStateNode.notCalled);
+        });
+
+        it('should schedule a resume when given a future date', () => {
+            const date = new Date();
+            date.setHours(date.getHours() + 1);
+            ip._pauseService(location);
+
+            ip._resumeService(location, date);
+
+            const scheduled = ip._pausedLocations.get(location);
+            assert(scheduled);
+            scheduled.cancel();
+        });
+
+        it('should remove the readers of paused locations before processing', () => {
+            // a location may be paused without going through _pauseService,
+            // i.e. when restoring the state saved in zookeeper on startup
+            ip.setPausedLocationState(location);
+
+            ip._removePausedReaders();
+
+            assert(!ip.logReaders.has(EXISTING_BUCKET));
+        });
+    });
+
+    describe('_processLogEntries', () => {
+        it('should process every active reader', done => {
+            ip._setupUpdatedReaders(() => {
+                ip.logReaders.forEach(reader => {
+                    // eslint-disable-next-line no-param-reassign
+                    reader.processLogEntries = sinon.stub().yields(null, false);
+                });
+
+                ip._processLogEntries({}, err => {
+                    assert.ifError(err);
+                    ip.logReaders.forEach(reader =>
+                        assert(reader.processLogEntries.calledOnce));
+                    done();
+                });
             });
         });
     });
