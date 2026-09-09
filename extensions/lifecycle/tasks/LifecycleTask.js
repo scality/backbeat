@@ -835,11 +835,10 @@ class LifecycleTask extends BackbeatTask {
 
         if (rule.Transitions && rule.Transitions.length > 0
             && this._supportedRules.includes('Transition')) {
-            // Same computation as the apply stage, so that
-            // transitionOneDayEarlier is honored.
+            // getCurrentDate() is shifted by expireOneDayEarlier: transitions use the real clock.
             return rule.Transitions.some(t => {
                 const transitionTime = this._lifecycleDateTime.getTransitionTimestamp(t, lastModified);
-                return transitionTime !== null && transitionTime <= this._lifecycleDateTime.getCurrentDate();
+                return transitionTime !== null && transitionTime <= Date.now();
             });
         }
 
@@ -857,7 +856,6 @@ class LifecycleTask extends BackbeatTask {
      * @return {boolean} true if eligible - false otherwise.
      */
     _isEntityEligible(rules, entity, versioningStatus) {
-        const currentDate = this._lifecycleDateTime.getCurrentDate();
         const { staleDate } = entity;
         const daysSinceStaled = staleDate ?
             this._lifecycleDateTime.findDaysSince(new Date(staleDate)) : null;
@@ -897,7 +895,7 @@ class LifecycleTask extends BackbeatTask {
                     return rule.NoncurrentVersionTransitions.some(t => {
                         const transitionTime = this._lifecycleDateTime
                             .getNCVTransitionTimestamp(t, staleDate);
-                        return transitionTime !== undefined && transitionTime <= currentDate;
+                        return transitionTime !== undefined && transitionTime <= Date.now();
                     });
                 }
 
@@ -1359,7 +1357,7 @@ class LifecycleTask extends BackbeatTask {
             this._lifecycleDateTime.getNCVTransitionTimestamp(rules[ncvt], staleDate) :
             undefined;
         const doesNCVTransitionRuleApply = ncvTransitionTime !== undefined &&
-            ncvTransitionTime <= this._lifecycleDateTime.getCurrentDate();
+            ncvTransitionTime <= Date.now();
 
         if (doesNCVTransitionRuleApply) {
             this._applyTransitionRule({

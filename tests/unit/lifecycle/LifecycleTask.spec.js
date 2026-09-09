@@ -1488,7 +1488,7 @@ describe('lifecycle task helper methods', () => {
         });
     });
 
-    describe('transitions with transitionOneDayEarlier', () => {
+    describe('transitions with one day earlier flags', () => {
         const bucketData = { target: { owner: 'o', accountId: 'a', bucket: 'b' } };
         const transitionRules = [{
             ID: 'id1',
@@ -1526,6 +1526,7 @@ describe('lifecycle task helper methods', () => {
         [
             { flags: {}, expected: false },
             { flags: { transitionOneDayEarlier: true }, expected: true },
+            { flags: { expireOneDayEarlier: true }, expected: false },
         ].forEach(({ flags, expected }) => {
             const desc = JSON.stringify(flags);
 
