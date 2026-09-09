@@ -836,11 +836,10 @@ class LifecycleTask extends BackbeatTask {
 
         if (rule.Transitions && rule.Transitions.length > 0
             && this._supportedRules.includes('Transition')) {
-            // Same computation as the apply stage, so that
-            // transitionOneDayEarlier is honored.
+            // getCurrentDate() is shifted by expireOneDayEarlier: transitions use the real clock.
             return rule.Transitions.some(t => {
                 const transitionTime = this._lifecycleDateTime.getTransitionTimestamp(t, lastModified);
-                return transitionTime !== null && transitionTime <= currentDate;
+                return transitionTime !== null && transitionTime <= Date.now();
             });
         }
 
@@ -900,7 +899,7 @@ class LifecycleTask extends BackbeatTask {
                     && this._supportedRules.includes('NoncurrentVersionTransition')) {
                     return rule.NoncurrentVersionTransitions.some(t => {
                         const transitionTime = this._lifecycleDateTime.getNCVTransitionTimestamp(t, staleDate);
-                        return transitionTime !== undefined && transitionTime <= currentDate;
+                        return transitionTime !== undefined && transitionTime <= Date.now();
                     });
                 }
 
@@ -1362,7 +1361,7 @@ class LifecycleTask extends BackbeatTask {
             this._lifecycleDateTime.getNCVTransitionTimestamp(rules[ncvt], staleDate) :
             undefined;
         const doesNCVTransitionRuleApply = ncvTransitionTime !== undefined &&
-            ncvTransitionTime <= this._lifecycleDateTime.getCurrentDate();
+            ncvTransitionTime <= Date.now();
 
         if (doesNCVTransitionRuleApply) {
             this._applyTransitionRule({
