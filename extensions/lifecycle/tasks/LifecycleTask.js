@@ -816,9 +816,10 @@ class LifecycleTask extends BackbeatTask {
      * @param {number} daysSinceInitiated - Days passed since entity (object or version) last modified
      * NOTE: entity is not an in-progress MPU or a delete marker.
      * @param {number} currentDate - current date
+     * @param {string} lastModified - entity last modified date
      * @return {boolean} true if rule applies - false otherwise.
      */
-    _isRuleApplying(rule, daysSinceInitiated, currentDate) {
+    _isRuleApplying(rule, daysSinceInitiated, currentDate, lastModified) {
         if (rule.Expiration && this._supportedRules.includes('Expiration')) {
             if (rule.Expiration.Days !== undefined && daysSinceInitiated >= rule.Expiration.Days) {
                 return true;
@@ -835,14 +836,11 @@ class LifecycleTask extends BackbeatTask {
 
         if (rule.Transitions && rule.Transitions.length > 0
             && this._supportedRules.includes('Transition')) {
+            // Same computation as the apply stage, so that
+            // transitionOneDayEarlier is honored.
             return rule.Transitions.some(t => {
-                if (t.Days !== undefined && daysSinceInitiated >= t.Days) {
-                    return true;
-                }
-                if (t.Date && t.Date < currentDate) {
-                    return true;
-                }
-                return false;
+                const transitionTime = this._lifecycleDateTime.getTransitionTimestamp(t, lastModified);
+                return transitionTime !== null && transitionTime <= currentDate;
             });
         }
 
@@ -881,7 +879,7 @@ class LifecycleTask extends BackbeatTask {
 
             if (versioningStatus === 'Enabled' || versioningStatus === 'Suspended') {
                 if (entity.IsLatest) {
-                    return this._isRuleApplying(rule, daysSinceInitiated, currentDate);
+                    return this._isRuleApplying(rule, daysSinceInitiated, currentDate, entity.LastModified);
                 }
 
                 if (!staleDate) {
@@ -900,14 +898,17 @@ class LifecycleTask extends BackbeatTask {
 
                 if (rule.NoncurrentVersionTransitions && rule.NoncurrentVersionTransitions.length > 0
                     && this._supportedRules.includes('NoncurrentVersionTransition')) {
-                    return rule.NoncurrentVersionTransitions.some(t =>
-                        (t.NoncurrentDays !== undefined && daysSinceInitiated >= t.NoncurrentDays));
+                    return rule.NoncurrentVersionTransitions.some(t => {
+                        const transitionTime = this._lifecycleDateTime
+                            .getNCVTransitionTimestamp(t, entity.LastModified);
+                        return transitionTime !== undefined && transitionTime <= currentDate;
+                    });
                 }
 
                 return false;
             }
 
-            return this._isRuleApplying(rule, daysSinceInitiated, currentDate);
+            return this._isRuleApplying(rule, daysSinceInitiated, currentDate, entity.LastModified);
         });
     }
 
@@ -1356,12 +1357,15 @@ class LifecycleTask extends BackbeatTask {
      */
     _checkAndApplyNCVTransitionRule(bucketData, version, rules, log, cb) {
         const staleDate = version.staleDate;
-        const daysSinceInitiated = this._lifecycleDateTime.findDaysSince(new Date(staleDate));
         const ncvt = 'NoncurrentVersionTransition';
         const ncd = 'NoncurrentDays';
-        const doesNCVTransitionRuleApply = (rules[ncvt] &&
-            rules[ncvt][ncd] !== undefined &&
-            daysSinceInitiated >= rules[ncvt][ncd]);
+        // Same computation as getApplicableNCVTransition, so that
+        // transitionOneDayEarlier is honored.
+        const ncvTransitionTime = rules[ncvt] && rules[ncvt][ncd] !== undefined ?
+            this._lifecycleDateTime.getNCVTransitionTimestamp(rules[ncvt], staleDate) :
+            undefined;
+        const doesNCVTransitionRuleApply = ncvTransitionTime !== undefined &&
+            ncvTransitionTime <= this._lifecycleDateTime.getCurrentDate();
 
         if (doesNCVTransitionRuleApply) {
             this._applyTransitionRule({

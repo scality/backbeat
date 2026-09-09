@@ -1,6 +1,7 @@
 'use strict';
 
 const assert = require('assert');
+const { promisify } = require('util');
 const async = require('async');
 const sinon = require('sinon');
 const { errors } = require('arsenal');
@@ -1485,6 +1486,79 @@ describe('lifecycle task helper methods', () => {
 
             const result = lct._isEntityEligible(rules, nonCurrentDeleteMarker, versioningStatus);
             assert.strictEqual(result, true);
+        });
+
+        describe('with transitionOneDayEarlier', () => {
+            let lctEarlier;
+
+            before(() => {
+                lctEarlier = new LifecycleTask({
+                    getStateVars: () => ({
+                        ncvHeap: new Map(),
+                        lcOptions: { ...timeOptions, transitionOneDayEarlier: true },
+                        log: fakeLogger,
+                        supportedRules: ValidLifecycleRules,
+                    }),
+                });
+            });
+
+            const transitionRules = [
+                {
+                    ID: 'id1',
+                    Prefix: '',
+                    Status: 'Enabled',
+                    Transitions: [{ Days: 1, StorageClass: 'cold' }],
+                    NoncurrentVersionTransitions: [],
+                },
+            ];
+
+            it('should return false if 1 day transition rule on 1 hour old object without the flag', () => {
+                object.LastModified = new Date(Date.now() - HOUR).toISOString();
+
+                const result = lct._isEntityEligible(transitionRules, object, 'Disabled');
+                assert.strictEqual(result, false);
+            });
+
+            it('should return true if 1 day transition rule on 1 hour old object with the flag', () => {
+                object.LastModified = new Date(Date.now() - HOUR).toISOString();
+
+                const result = lctEarlier._isEntityEligible(transitionRules, object, 'Disabled');
+                assert.strictEqual(result, true);
+            });
+
+            it('should return true if 1 day ncv transition rule on 1 hour old version with the flag', () => {
+                const rules = [
+                    {
+                        ID: 'id1',
+                        Prefix: '',
+                        Status: 'Enabled',
+                        Transitions: [],
+                        NoncurrentVersionTransitions: [{ NoncurrentDays: 1, StorageClass: 'cold' }],
+                    },
+                ];
+                nonCurrentVersion.LastModified = new Date(Date.now() - HOUR).toISOString();
+                nonCurrentVersion.staleDate = new Date(Date.now() - HOUR).toISOString();
+
+                const result = lctEarlier._isEntityEligible(rules, nonCurrentVersion, 'Enabled');
+                assert.strictEqual(result, true);
+            });
+
+            it('should apply 1 day ncv transition rule on 1 hour old version with the flag', async () => {
+                const bucketData = { target: { owner: 'o', accountId: 'a', bucket: 'b' } };
+                const applicableRules = {
+                    NoncurrentVersionTransition: { NoncurrentDays: 1, StorageClass: 'cold' },
+                };
+                nonCurrentVersion.staleDate = new Date(Date.now() - HOUR).toISOString();
+                const applyStub = sinon.stub(lctEarlier, '_applyTransitionRule')
+                    .callsFake((params, log, cb) => cb());
+                const checkAndApplyNCVTransitionRule =
+                    promisify(lctEarlier._checkAndApplyNCVTransitionRule.bind(lctEarlier));
+
+                await checkAndApplyNCVTransitionRule(
+                    bucketData, nonCurrentVersion, applicableRules, fakeLogger);
+
+                assert.strictEqual(applyStub.calledOnce, true);
+            });
         });
     });
 
