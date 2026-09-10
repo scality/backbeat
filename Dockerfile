@@ -5,7 +5,9 @@ FROM node:${NODE_VERSION} AS builder
 WORKDIR /usr/src/app
 
 # libsasl2-dev is required at build time for node-rdkafka to compile
-# librdkafka with SASL GSSAPI (Kerberos) support.
+# librdkafka with SASL GSSAPI (Kerberos) support, and libkrb5-dev for the
+# kerberos native module to build against libgssapi when no prebuilt binary
+# matches the platform.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates \
@@ -23,7 +25,8 @@ RUN apt-get update \
         libreadline-dev \
         libffi-dev \
         libzstd-dev \
-        libsasl2-dev
+        libsasl2-dev \
+        libkrb5-dev
 
 ENV DOCKERIZE_VERSION=v0.6.1
 
