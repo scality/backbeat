@@ -32,7 +32,7 @@ if command -v python3 >/dev/null 2>&1 \
     "$venv/bin/pip" install --quiet --upgrade pip setuptools >/dev/null 2>&1 \
         || warn "could not install setuptools into the venv; the install may be noisy"
     gyp_python="$venv/bin/python"
-    info "node-gyp will use $gyp_python"
+    say "node-gyp will use $gyp_python"
 fi
 
 say "yarn install --frozen-lockfile in $BACKBEAT_DIR"
