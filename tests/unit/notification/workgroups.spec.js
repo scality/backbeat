@@ -7,7 +7,9 @@ const {
     SKIP_NOT_IN_SLICE,
     CONFIG_VERSION,
     WORKGROUP_ID_PATTERN,
+    ASSUME_DESTINATION,
     validateWorkgroupsDoc,
+    assumedDestinationFor,
     buildOwnershipIndex,
     ownerOfToken,
     workgroupIdForDestination,
@@ -27,6 +29,16 @@ const OWNER_CACHE_MAX = 10000;
 
 const hashmod = (modulo, remainders) => ({ type: 'hashmod', modulo, remainders });
 const staticRule = destinationIds => ({ type: 'static', destinationIds });
+
+// the physical destination a legacy global target points at, in the shape
+// the extension configuration declares a destination in
+const assumedDestination = {
+    resource: 'target1',
+    type: 'kafka',
+    host: 'kafka1.example.com',
+    port: 9093,
+    topic: 's3-events',
+};
 
 /**
  * Build a workgroups document around a workgroups array
@@ -242,6 +254,48 @@ describe('notification workgroups membership ::', () => {
                     { previousGroups: [''] }),
             },
             {
+                description: 'an assumed destination without the submode',
+                doc: makeDoc([
+                    { id: 'wg-a', rule: hashmod(1, [0]), assumedDestination },
+                ]),
+            },
+            {
+                description: 'an assume-destination workgroup with no ' +
+                    'assumed destination',
+                doc: makeDoc([
+                    { id: 'wg-a', rule: hashmod(1, [0]) },
+                    { id: 'wg-legacy', submode: ASSUME_DESTINATION,
+                        rule: staticRule(['legacy-a']) },
+                ]),
+            },
+            {
+                description: 'an assume-destination workgroup routing by ' +
+                    'hashmod rather than by a destination list',
+                doc: makeDoc([
+                    { id: 'wg-a', submode: ASSUME_DESTINATION,
+                        rule: hashmod(1, [0]), assumedDestination },
+                ]),
+            },
+            {
+                description: 'an assumed destination with no topic',
+                doc: makeDoc([
+                    { id: 'wg-a', rule: hashmod(1, [0]) },
+                    { id: 'wg-legacy', submode: ASSUME_DESTINATION,
+                        rule: staticRule(['legacy-a']),
+                        assumedDestination: {
+                            ...assumedDestination, topic: undefined,
+                        } },
+                ]),
+            },
+            {
+                description: 'a submode nobody implements',
+                doc: makeDoc([
+                    { id: 'wg-a', rule: hashmod(1, [0]) },
+                    { id: 'wg-legacy', submode: 'assume-everything',
+                        rule: staticRule(['legacy-a']), assumedDestination },
+                ]),
+            },
+            {
                 description: 'an unknown rule type',
                 doc: makeDoc([{ id: 'wg-a', rule: { type: 'lottery' } }]),
             },
@@ -453,6 +507,92 @@ describe('notification workgroups membership ::', () => {
             assert.strictEqual(filter.classify('dest-not-mine-at-all'),
                 workgroupIdForDestination(sliceDoc, 'dest-not-mine-at-all') ===
                     'wg-whale' ? null : SKIP_NOT_IN_SLICE);
+        });
+    });
+
+    describe('the assume-destination submode', () => {
+        const legacyDoc = makeDoc([
+            { id: 'wg-auto', rule: hashmod(1, [0]) },
+            { id: 'wg-legacy', submode: ASSUME_DESTINATION,
+                rule: staticRule(['legacy-a', 'legacy-b']),
+                assumedDestination },
+        ]);
+
+        it('should accept a manual workgroup that assumes one destination', () => {
+            const { error, value } = validateWorkgroupsDoc(legacyDoc);
+            assert.ifError(error);
+            const legacy = value.workgroups.find(wg => wg.id === 'wg-legacy');
+            assert.strictEqual(legacy.submode, ASSUME_DESTINATION);
+            assert.strictEqual(legacy.assumedDestination.resource, 'target1');
+            assert.strictEqual(legacy.assumedDestination.topic, 's3-events');
+        });
+
+        it('should accept several destination arns collapsed onto one', () => {
+            const { error, value } = validateWorkgroupsDoc(legacyDoc);
+            assert.ifError(error);
+            ['legacy-a', 'legacy-b'].forEach(destinationId =>
+                assert.strictEqual(
+                    workgroupIdForDestination(value, destinationId),
+                    'wg-legacy'));
+        });
+
+        it('should hand the assumed destination to the workgroup that has one', () => {
+            const { value } = validateWorkgroupsDoc(legacyDoc);
+            assert.strictEqual(
+                assumedDestinationFor(value, 'wg-legacy').resource, 'target1');
+            assert.strictEqual(assumedDestinationFor(value, 'wg-auto'), null);
+            assert.strictEqual(assumedDestinationFor(value, 'wg-absent'), null);
+        });
+
+        it('should leave the slice filter exactly as it is', () => {
+            const { value } = validateWorkgroupsDoc(legacyDoc);
+            const plain = createSliceFilter({
+                doc: makeDoc([
+                    { id: 'wg-auto', rule: hashmod(1, [0]) },
+                    { id: 'wg-legacy',
+                        rule: staticRule(['legacy-a', 'legacy-b']) },
+                ]),
+                workgroupId: 'wg-legacy',
+            });
+            const assuming = createSliceFilter({
+                doc: value,
+                workgroupId: 'wg-legacy',
+            });
+            ['legacy-a', 'legacy-b', 'legacy-a%7C3', 'somewhere-else', '',
+                'poc-bucket%2Fobj-1'].forEach(key => assert.strictEqual(
+                assuming.classify(key), plain.classify(key),
+                `the submode changed the verdict on "${key}"`));
+        });
+
+        it('should own its own arns and nothing else', () => {
+            const { value } = validateWorkgroupsDoc(legacyDoc);
+            const filter = createSliceFilter({
+                doc: value,
+                workgroupId: 'wg-legacy',
+            });
+            assert.strictEqual(filter.classify('legacy-a'), null);
+            assert.strictEqual(filter.classify('legacy-b'), null);
+            // a spread sub key of an owned arn stays owned
+            assert.strictEqual(filter.classify('legacy-b%7C2'), null);
+            // the assumed destination is a physical target, never a routing
+            // token: a record addressed to it by name is not ours
+            assert.strictEqual(filter.classify('target1'), SKIP_NOT_IN_SLICE);
+            // a legacy shaped record carries no destination at all, so its
+            // key is bucket/object and the hashmod fallback owns it
+            assert.strictEqual(filter.classify('poc-bucket%2Fobj-1'),
+                SKIP_NOT_IN_SLICE);
+            assert.strictEqual(filter.classify(null), SKIP_NOT_IN_SLICE);
+        });
+
+        it('should refuse a document where every workgroup assumes', () => {
+            // rule 2 and the static-only rule together: the total coverage
+            // fallback can never be an assume-destination workgroup, which is
+            // what stops one from draining a topic of unaddressed records
+            const { error } = validateWorkgroupsDoc(makeDoc([
+                { id: 'wg-legacy', submode: ASSUME_DESTINATION,
+                    rule: staticRule(['legacy-a']), assumedDestination },
+            ]));
+            assert(error instanceof Error);
         });
     });
 

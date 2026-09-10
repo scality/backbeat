@@ -1,6 +1,8 @@
 const crypto = require('crypto');
 const joi = require('joi');
 
+const { destinationSchema } = require('./destinationSchema');
+
 // reserved key prefix of a cutover barrier record. encodeURIComponent emits a
 // literal '%' only as the first character of a percent escape and '%00' is the
 // escape for NUL, so no destination key can start with it
@@ -17,6 +19,13 @@ const SKIP_NOT_IN_SLICE = 'not_in_slice';
 const SKIP_BARRIER = 'barrier';
 
 const CONFIG_VERSION = 1;
+
+// a manual workgroup whose workers ignore the destination stamped on the
+// record and deliver everything they consume to the destination declared on
+// the workgroup itself. This is what the processor does today: one topic, one
+// target, deliver everything, which is why a legacy global destination is
+// modelled as one of these rather than as a second delivery code path
+const ASSUME_DESTINATION = 'assume-destination';
 
 // a workgroup id becomes part of a kafka consumer group id and of a prometheus
 // label value, so it is constrained at the edge rather than sanitised later
@@ -46,6 +55,10 @@ const workgroupsDocSchema = joi.object({
         id: joi.string().pattern(WORKGROUP_ID_PATTERN).required(),
         rule: joi.alternatives()
             .try(hashmodRuleSchema, staticRuleSchema).required(),
+        submode: joi.string().valid(ASSUME_DESTINATION),
+        // one destination, not a list: "exactly one assumedDestination" is
+        // the shape rather than a rule to check
+        assumedDestination: destinationSchema,
     })),
     // partition number as a JSON object key, barrier offset as its value
     barriers: joi.object().pattern(/^\d+$/, joi.number().integer().min(0)),
@@ -96,6 +109,37 @@ function isBarrierKey(key) {
 }
 
 /**
+ * Applies the two rules that keep an assumed destination and the routing
+ * override that reads it inseparable
+ *
+ * @param {Object} wg - workgroup entry
+ * @return {Error|null} the rule broken, or null when both hold
+ */
+function checkSubmode(wg) {
+    if (wg.submode !== ASSUME_DESTINATION) {
+        if (wg.assumedDestination !== undefined) {
+            return new Error(`workgroup "${wg.id}" declares an assumed ` +
+                `destination without the "${ASSUME_DESTINATION}" submode, ` +
+                'so nothing would ever deliver to it');
+        }
+        return null;
+    }
+    if (wg.rule.type !== 'static') {
+        return new Error(`workgroup "${wg.id}" is ${ASSUME_DESTINATION} ` +
+            'and has to route by a static destination list: a rule owning ' +
+            'part of the hashmod keyspace would redirect destinations ' +
+            'nobody named, including the unknown ones the fallback exists ' +
+            'to catch');
+    }
+    if (wg.assumedDestination === undefined) {
+        return new Error(`workgroup "${wg.id}" is ${ASSUME_DESTINATION} ` +
+            'and declares no assumed destination, so it has nowhere to ' +
+            'deliver');
+    }
+    return null;
+}
+
+/**
  * Applies the ownership rules that make "exactly one workgroup owns every
  * record" structurally true rather than a convention
  *
@@ -112,6 +156,10 @@ function checkOwnershipRules(doc) {
             return new Error(`workgroup id "${wg.id}" is declared twice`);
         }
         seenIds.add(wg.id);
+        const submodeError = checkSubmode(wg);
+        if (submodeError) {
+            return submodeError;
+        }
         if (wg.rule.type === 'hashmod') {
             if (modulo !== undefined && wg.rule.modulo !== modulo) {
                 return new Error('every hashmod workgroup must share one ' +
@@ -251,6 +299,23 @@ function workgroupIdForDestination(doc, destinationId) {
 }
 
 /**
+ * The destination a workgroup delivers every record it consumes to,
+ * whatever destination the record itself names
+ *
+ * @param {Object} doc - validated document
+ * @param {String} workgroupId - workgroup id
+ * @return {Object|null} the assumed destination, or null for a workgroup
+ *   that delivers each record to the destination stamped on it
+ */
+function assumedDestinationFor(doc, workgroupId) {
+    const wg = doc.workgroups.find(entry => entry.id === workgroupId);
+    if (!wg || wg.submode !== ASSUME_DESTINATION) {
+        return null;
+    }
+    return wg.assumedDestination;
+}
+
+/**
  * @param {Object} params - { generation, partition }
  * @return {String} serialised barrier record payload
  */
@@ -331,8 +396,10 @@ module.exports = {
     SKIP_BARRIER,
     CONFIG_VERSION,
     WORKGROUP_ID_PATTERN,
+    ASSUME_DESTINATION,
     // document
     validateWorkgroupsDoc,
+    assumedDestinationFor,
     buildOwnershipIndex,
     ownerOfToken,
     workgroupIdForDestination,
