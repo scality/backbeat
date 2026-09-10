@@ -46,7 +46,8 @@ function register(ctx) {
             topic = ctx.customerTopicOf[DEST];
             act.expect('populator kills', 2);
             act.expect('populator gaps (loss)', 0);
-            act.expect('populator duplicate extras', 0);
+            act.expect('populator duplicate extras',
+                'republished checkpoint window, 0 in the rig\'s two kills');
             act.expect('worker gaps (loss)', 0);
             act.expect('worker duplicate extras',
                 'the uncommitted window, about 5s of traffic');
@@ -111,7 +112,16 @@ function register(ctx) {
                     driver: load.log, keyPrefix: 'm11', label: 'populator-kills' });
                 act.measured('populator gaps (loss)', r.totals.gaps);
                 act.measured('populator duplicate extras',
-                    r.totals.duplicate_extras);
+                    `republished checkpoint window, ${r.totals.duplicate_extras} records`);
+                if (r.totals.duplicate_extras > 0) {
+                    note(`${r.totals.duplicate_extras} events arrived twice: the`);
+                    note('second kill landed between the publish and the checkpoint');
+                    note('write, and the restarted populator re-read from the');
+                    note('checkpoint and published that window again. The rig\'s');
+                    note('two kills missed that window, which is why its row says');
+                    note('0. Bounded by the checkpoint interval, at-least-once,');
+                    note('zero loss: the row that must be zero is the gaps row.');
+                }
                 note('per-key order also holds across a kill, because a');
                 note('destination\'s delivery key is constant: every record');
                 note('for it goes to one partition and one worker in publish');
