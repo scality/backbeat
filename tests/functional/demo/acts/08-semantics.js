@@ -252,10 +252,10 @@ function register(ctx) {
                 const from1 = kafka.head(t1, 0);
                 const from2 = kafka.head(t2, 0);
                  
-                await flow.runDriver(act, { bucket, prefix: `${label}-logs/x`,
+                await flow.runDriver(act, { bucket, prefix: `logs/${label}-x`,
                     rate: 2, count: 2 });
                  
-                await flow.runDriver(act, { bucket, prefix: `${label}-other/y`,
+                await flow.runDriver(act, { bucket, prefix: `other/${label}-y`,
                     rate: 2, count: 2 });
                  
                 await wait.frozen(pathName === 'legacy'
@@ -275,11 +275,11 @@ function register(ctx) {
                 kafka.dump(t1, from1, act.file(`events-${label}-d1.jsonl`), 0);
                 kafka.dump(t2, from2, act.file(`events-${label}-d2.jsonl`), 0);
                 const onD1 = countKey(act.file(`events-${label}-d1.jsonl`),
-                    `${label}-logs/x`);
+                    `logs/${label}-x`);
                 const onD2 = countKey(act.file(`events-${label}-d2.jsonl`),
-                    `${label}-logs/x`);
+                    `logs/${label}-x`);
                 const otherD2 = countKey(act.file(`events-${label}-d2.jsonl`),
-                    `${label}-other/y`);
+                    `other/${label}-y`);
                 say(`${label}: the logs/ object reached ${D1} ${onD1} times `
                     + `and ${D2} ${onD2} times; the other object reached `
                     + `${D2} ${otherD2} times`);
