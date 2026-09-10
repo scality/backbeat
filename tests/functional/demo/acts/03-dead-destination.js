@@ -28,6 +28,10 @@ const s3lib = require('../lib/s3');
 const { Act, say, note, watch, step } = require('../lib/narrate');
 
 const LEADERLESS = 'customer-topic-leaderless';
+// The fallback third class, for a cluster that will not create a leaderless
+// partition: a real topic on the real broker whose max.message.bytes is far
+// below one event, so the producer is ready and every produce is rejected.
+const UNWRITABLE = 'customer-topic-unwritable';
 // the three failure classes, on three destinations the platform already
 // validates: a refused connection, an unroutable address, and a reachable
 // broker whose topic has no leader
@@ -120,11 +124,10 @@ function register(ctx) {
                 const legacy = flow.legacyConfig(act, ctx, {
                     customerTopics: topics,
                     only: [HEALTHY].concat(DEAD),
-                    dead: Object.assign({ [REFUSED]: 'refused',
+                    dead: { [REFUSED]: 'refused',
                         [BLACKHOLE]: 'blackhole' },
-                    leaderlessBuilt ? {} : { [NO_LEADER]: 'notabroker' }),
-                    leaderless: leaderlessBuilt
-                        ? { [NO_LEADER]: LEADERLESS } : {},
+                    leaderless: { [NO_LEADER]: leaderlessBuilt
+                        ? LEADERLESS : UNWRITABLE },
                 });
                 await flow.startPopulator(act, legacy, 'legacy');
                 const p3 = await flow.startProcessor(act, legacy, REFUSED,
@@ -192,11 +195,10 @@ function register(ctx) {
                 const pool = flow.poolConfig(act, ctx, {
                     customerTopics: topics,
                     only: [HEALTHY].concat(DEAD),
-                    dead: Object.assign({ [REFUSED]: 'refused',
+                    dead: { [REFUSED]: 'refused',
                         [BLACKHOLE]: 'blackhole' },
-                    leaderlessBuilt ? {} : { [NO_LEADER]: 'notabroker' }),
-                    leaderless: leaderlessBuilt
-                        ? { [NO_LEADER]: LEADERLESS } : {},
+                    leaderless: { [NO_LEADER]: leaderlessBuilt
+                        ? LEADERLESS : UNWRITABLE },
                     tag: 'dead',
                 });
                 await flow.startPopulator(act, pool, 'pool');

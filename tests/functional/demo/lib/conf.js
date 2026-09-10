@@ -64,13 +64,6 @@ const KNOWN = ['poc-dest-1', 'poc-dest-2', 'poc-dest-3',
 const FAILURE = {
     refused: { host: 'localhost', port: 9999 + env.PORT_OFFSET },
     blackhole: { host: '10.255.255.1', port: 9092 },
-    // A reachable endpoint that accepts the connection and never completes a
-    // Kafka handshake. ZooKeeper's own port is always up in this stack, so
-    // this is the third failure class on a cluster where a leaderless topic
-    // cannot be created: the produce is retried until deliveryTimeoutMs and
-    // dropped with delivery_error, which is what the rig measured for its
-    // leaderless topic.
-    notabroker: { host: 'localhost', port: env.ZK_PORT },
 };
 
 /**
