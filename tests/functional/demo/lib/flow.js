@@ -359,6 +359,83 @@ async function progressOrCure(act, proc, what, condition, opts) {
 }
 
 /**
+ * The consumers a drain is waiting on, worked out from what the caller
+ * already passes. Worker indices name pool workers; a legacy group name
+ * carries its destination, and the processor for it is named after that.
+ *
+ * @param {Object} p - the drain parameters
+ * @return {Array} the processes, most recent first spawn last
+ */
+function consumersOf(p) {
+    const out = [];
+    (p.workers || []).forEach(n => {
+        const m = procs.ALL.filter(x => x.name === `worker${n}`
+            || x.name.startsWith(`worker${n}-`)).pop();
+        if (m) {
+            out.push(m);
+        }
+    });
+    const pre = `${env.LEGACY_GROUP_PREFIX}-`;
+    if (!out.length && p.group && p.group.startsWith(pre)) {
+        const m = procs.ALL.filter(
+            x => x.name === `processor-${p.group.slice(pre.length)}`).pop();
+        if (m) {
+            out.push(m);
+        }
+    }
+    return out;
+}
+
+/**
+ * Drain a consumer group, and if it stalls on the wedge, apply the cure the
+ * stall message names: restart exactly the consumers that stalled, and
+ * nothing else, then drain again.
+ *
+ * wait.drain recognises the wedge but only reports it, so without this the
+ * suite prints the cure and never applies it, and every act that asserts on
+ * a completed drain fails on a defect it already diagnosed correctly.
+ *
+ * @param {Object} p - as wait.drain takes it, plus `cure` to name the
+ *   processes explicitly and `retryTimeoutMs` for the second drain
+ * @return {Promise} resolves with the drain result
+ */
+async function drainOrCure(p) {
+    const first = await wait.drain(p);
+    if (first.drained || !first.stalled) {
+        return first;
+    }
+    const targets = p.cure || consumersOf(p);
+    if (!targets.length) {
+        note('there is no consumer of this drain that the suite started, so');
+        note('  there is nothing it can restart. The stall stands as measured.');
+        return first;
+    }
+    note(`applying that cure now to ${targets.map(t => t.name).join(', ')}.`);
+    for (const t of targets) {
+         
+        await restartInPlace(t.name, 90000);
+        const n = Number((/worker(\d+)/.exec(t.name) || [])[1]);
+        if (n) {
+             
+            await wait.until(`worker ${n}'s probe to answer`,
+                async () => (await wait.liveness(n)) === 200, 60000, 2000);
+        }
+    }
+    const again = await wait.drain(Object.assign({}, p,
+        { timeoutMs: p.retryTimeoutMs || p.timeoutMs || 300000 }));
+    if (again.drained) {
+        say(`${p.label || p.group}: drained after the restart, in `
+            + `${again.seconds}s. That is the operator cure working, and it is `
+            + 'the reliability ceiling this defect sets.');
+    } else {
+        note(`${p.label || p.group}: still not drained after the restart.`);
+    }
+    again.cured = true;
+    again.restarts = targets.map(t => t.name);
+    return again;
+}
+
+/**
  * Warm a legacy consumer group before measuring anything through it.
  *
  * The legacy processor builds its consumer with no fromOffset, so
@@ -511,6 +588,7 @@ function recordChecker(act, result) {
 
 module.exports = {
     restartInPlace,
+    drainOrCure,
     progressOrCure,
     warmLegacyGroup,
     legacyConfig,

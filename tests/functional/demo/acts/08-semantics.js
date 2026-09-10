@@ -104,7 +104,7 @@ function register(ctx) {
             await wait.until('the driver to stop', () => !load.proc.isRunning(),
                 60000, 1000);
             await wait.frozen(env.DELIVERY_TOPIC, env.pause(12000));
-            await wait.drain({ group: env.DELIVERY_GROUP, label: 'pool',
+            await flow.drainOrCure({ group: env.DELIVERY_GROUP, label: 'pool',
                 timeoutMs: 240000, workers: [1] });
             const r = flow.dumpAndCheck({ act, topic: t1, from,
                 driver: load.log, keyPrefix: 'm5', label: 'mixed-window' });
@@ -134,7 +134,7 @@ function register(ctx) {
                 await flow.runDriver(act, { bucket, prefix: 'warm', rate: 6,
                     count: 30 });
                 await wait.frozen(env.INTERNAL_TOPIC, env.pause(12000));
-                await wait.drain({ group: env.legacyGroup(D2),
+                await flow.drainOrCure({ group: env.legacyGroup(D2),
                     label: `legacy ${D2} warm-up`, timeoutMs: 240000 });
 
                 step(5, 'stop its processor, build a backlog, then detach it');
@@ -154,7 +154,7 @@ function register(ctx) {
 
                 step(6, 'restart its processor and see what it does');
                 await flow.startProcessor(act, legacy, D2);
-                await wait.drain({ group: env.legacyGroup(D2),
+                await flow.drainOrCure({ group: env.legacyGroup(D2),
                     label: `legacy ${D2} after the detach`, timeoutMs: 240000 });
                 kafka.dump(t2, from2, act.file('events-legacy-detached.jsonl'), 0);
                 kafka.dump(t1, from1, act.file('events-legacy-control.jsonl'), 0);
@@ -187,7 +187,7 @@ function register(ctx) {
                 await s3lib.putNotification(ctx.s3, bucket, [D1]);
                 say(`${D2} detached again, and only now is a worker started`);
                 const worker = await flow.startWorker(act, pool, 1);
-                await wait.drain({ group: env.DELIVERY_GROUP, label: 'pool',
+                await flow.drainOrCure({ group: env.DELIVERY_GROUP, label: 'pool',
                     timeoutMs: 240000, workers: [1] });
                 kafka.dump(t2, poolFrom2, act.file('events-pool-detached.jsonl'), 0);
                 const poolGone = countKey(
@@ -246,14 +246,14 @@ function register(ctx) {
                     ? env.INTERNAL_TOPIC : env.DELIVERY_TOPIC, env.pause(12000));
                 if (pathName === 'legacy') {
                      
-                    await wait.drain({ group: env.legacyGroup(D1),
+                    await flow.drainOrCure({ group: env.legacyGroup(D1),
                         label: `legacy ${D1}`, timeoutMs: 180000 });
                      
-                    await wait.drain({ group: env.legacyGroup(D2),
+                    await flow.drainOrCure({ group: env.legacyGroup(D2),
                         label: `legacy ${D2}`, timeoutMs: 180000 });
                 } else {
                      
-                    await wait.drain({ group: env.DELIVERY_GROUP, label: 'pool',
+                    await flow.drainOrCure({ group: env.DELIVERY_GROUP, label: 'pool',
                         timeoutMs: 180000, workers: [1] });
                 }
                 kafka.dump(t1, from1, act.file(`events-${label}-d1.jsonl`), 0);
@@ -325,7 +325,7 @@ function register(ctx) {
                 const drive = await flow.runDriver(act, { bucket,
                     prefix: 'collide', rate: 3, count: 12 });
                 await wait.frozen(env.INTERNAL_TOPIC, env.pause(12000));
-                await wait.drain({ group: env.legacyGroup(D1),
+                await flow.drainOrCure({ group: env.legacyGroup(D1),
                     label: `legacy ${D1}`, timeoutMs: 240000 });
                 const r = flow.dumpAndCheck({ act, topic: t1, from: from2,
                     driver: drive.log, keyPrefix: 'collide', label: 'collision' });

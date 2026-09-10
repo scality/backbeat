@@ -528,7 +528,7 @@ function register(ctx) {
             for (const id of ['wg-a', 'wg-b', 'wg-c', 'wg-pin']) {
                 const group = zk.groupIdFor(env.DELIVERY_GROUP, id, 3);
                  
-                await wait.drain({ group, topic: env.DELIVERY_TOPIC,
+                await flow.drainOrCure({ group, topic: env.DELIVERY_TOPIC,
                     label: `${id} gen3`, timeoutMs: 240000 });
             }
             let gaps = 0;

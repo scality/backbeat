@@ -108,7 +108,7 @@ function register(ctx) {
             note('topic\'s partition count');
 
             step(3, 'let the legacy processor drain, gating on progress');
-            const drain = await wait.drain({ group: env.legacyGroup(DEST),
+            const drain = await flow.drainOrCure({ group: env.legacyGroup(DEST),
                 label: `legacy ${DEST}`, timeoutMs: 300000,
                 topicAtLeast: { topic: env.INTERNAL_TOPIC, count: 1 } });
             if (drain.stalled) {
@@ -116,7 +116,7 @@ function register(ctx) {
                 processor.stop();
                 await procs.sleep(4000);
                 processor = await flow.startProcessor(act, legacy, DEST);
-                await wait.drain({ group: env.legacyGroup(DEST),
+                await flow.drainOrCure({ group: env.legacyGroup(DEST),
                     label: `legacy ${DEST} after the restart`, timeoutMs: 300000 });
             }
             const internalNow = kafka.headTotal(env.INTERNAL_TOPIC);
@@ -144,7 +144,7 @@ function register(ctx) {
             await wait.until('the driver to stop', () => !load.proc.isRunning(),
                 60000, 1000);
             await wait.frozen(env.DELIVERY_TOPIC, env.pause(12000));
-            await wait.drain({ group: env.DELIVERY_GROUP, label: 'pool',
+            await flow.drainOrCure({ group: env.DELIVERY_GROUP, label: 'pool',
                 timeoutMs: 300000, workers: [1] });
 
             step(6, 'check the whole cutover window');
@@ -173,7 +173,7 @@ function register(ctx) {
             say(`delivery topic at the switch: ${deliveryAtSwitch}`);
 
             step(8, 'let the pool drain the delivery topic to lag 0');
-            await wait.drain({ group: env.DELIVERY_GROUP, label: 'pool',
+            await flow.drainOrCure({ group: env.DELIVERY_GROUP, label: 'pool',
                 timeoutMs: 300000, workers: [1] });
             const deliveryNow = kafka.headTotal(env.DELIVERY_TOPIC);
             await procs.sleep(env.pause(8000));
@@ -199,7 +199,7 @@ function register(ctx) {
             await wait.until('the driver to stop', () => !rbLoad.proc.isRunning(),
                 60000, 1000);
             await wait.frozen(env.INTERNAL_TOPIC, env.pause(12000));
-            await wait.drain({ group: env.legacyGroup(DEST),
+            await flow.drainOrCure({ group: env.legacyGroup(DEST),
                 label: `legacy ${DEST}`, timeoutMs: 300000 });
 
             step(11, 'check the rollback window, and look for re-deliveries');

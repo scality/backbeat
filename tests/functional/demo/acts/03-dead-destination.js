@@ -145,8 +145,10 @@ function register(ctx) {
                     ? 'none, on any partition' : `moved ${before6} to ${after6}`);
                 act.measured('legacy dead-letter records',
                     kafka.headTotal(env.FAILED_TOPIC) - failedBefore);
-                act.measured('legacy counter for the failure',
-                    'none (the processor has no metrics route on this path)');
+                note('there is no counter to read: the legacy queue');
+                note('processor exposes no metrics route on this path at all,');
+                note('which is the point of the row below.');
+                act.measured('legacy counter for the failure', 'none');
                 const timedOut = /message timed out/.test(p6.logText());
                 const lostAssignment
                     = /Group partition assignment lost|-142/.test(p6.logText());
@@ -232,7 +234,7 @@ function register(ctx) {
                     { target: HEALTHY });
                 act.measured('healthy destination meanwhile',
                     `${delivered} of 5 delivered`);
-                const drain = await wait.drain({ group: env.DELIVERY_GROUP,
+                const drain = await flow.drainOrCure({ group: env.DELIVERY_GROUP,
                     label: 'pool', timeoutMs: 120000, workers: [1] });
                 act.measured('pool delivery group lag', drain.drained
                     ? '0, it commits past the drops' : `${drain.lag}`);

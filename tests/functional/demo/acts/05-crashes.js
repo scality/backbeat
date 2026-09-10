@@ -104,7 +104,7 @@ function register(ctx) {
                 await wait.until('the driver to finish',
                     () => !load.proc.isRunning(), 200000, 2000);
                 await wait.frozen(env.DELIVERY_TOPIC, env.pause(12000));
-                await wait.drain({ group: env.DELIVERY_GROUP, label: 'pool',
+                await flow.drainOrCure({ group: env.DELIVERY_GROUP, label: 'pool',
                     timeoutMs: 300000, workers: [1] });
                 const r = flow.dumpAndCheck({ act, topic, from,
                     driver: load.log, keyPrefix: 'm11', label: 'populator-kills' });
@@ -153,7 +153,7 @@ function register(ctx) {
             await wait.until('the driver to finish',
                 () => !load.proc.isRunning(), 200000, 2000);
             await wait.frozen(env.DELIVERY_TOPIC, env.pause(12000));
-            await wait.drain({ group: env.DELIVERY_GROUP, label: 'pool',
+            await flow.drainOrCure({ group: env.DELIVERY_GROUP, label: 'pool',
                 timeoutMs: 300000, workers: [1] });
             const r = flow.dumpAndCheck({ act, topic, from, driver: load.log,
                 keyPrefix: 'm12', label: 'worker-kill' });
