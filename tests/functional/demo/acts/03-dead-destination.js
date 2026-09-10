@@ -121,7 +121,10 @@ function register(ctx) {
                     const row = act.rows.find(
                         r => r.key === 'legacy offset advance');
                     if (row) {
-                        row.expected = 'advances past undelivered events';
+                        // matched against the phrase the measurement
+                        // below produces, so an agreeing row does not
+                        // print DIFFERS at a viewer.
+                        row.expected = 'moved, past undelivered events';
                     }
                     note('one consequence to state on camera: the rig\'s');
                     note('leaderless partition made the produce HANG, so the');
@@ -195,7 +198,8 @@ function register(ctx) {
                 }
                 const after6 = kafka.groupState(group6).committed;
                 act.measured('legacy offset advance', before6 === after6
-                    ? 'none, on any partition' : `moved ${before6} to ${after6}`);
+                    ? 'none, on any partition'
+                    : `moved, ${before6} to ${after6}`);
                 act.measured('legacy dead-letter records',
                     kafka.headTotal(env.FAILED_TOPIC) - failedBefore);
                 note('there is no counter to read: the legacy queue');
