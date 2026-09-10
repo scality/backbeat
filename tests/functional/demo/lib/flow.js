@@ -296,6 +296,33 @@ async function cureChurn(act, configFile, n, proc, opts) {
  * @param {Object} p - { dest, bucket, count, internalAtLeast }
  * @return {Promise} resolves with the group state
  */
+/**
+ * Restart one process in place, reusing its Proc so that every handle an act
+ * is holding stays valid and its log file keeps its history. This is the
+ * operator cure for the design/06 consumer wedge: restart that one consumer,
+ * and only that one. Up to 45 seconds of it is the wedged member's group
+ * session expiring.
+ *
+ * @param {String} name - the process name, e.g. 'processor-poc-dest-1'
+ * @param {Number} [timeoutMs] - how long to wait for it to be ready again
+ * @return {Promise} resolves with the process, or null if there is no such one
+ */
+async function restartInPlace(name, timeoutMs) {
+    const p = procs.ALL.filter(x => x.name === name).pop();
+    if (!p) {
+        note(`no process called ${name} to restart`);
+        return null;
+    }
+    p.stop();
+    await wait.sleep(env.pause(6000));
+    p.held = false;
+    p.restarts += 1;
+    p.spawnOnce();
+    await procs.waitReady(p, timeoutMs || 60000);
+    say(`${name} restarted as pid ${p.pid}, restart ${p.restarts}`);
+    return p;
+}
+
 async function warmLegacyGroup(act, p) {
     const count = p.count || 8;
     say(`warming ${env.legacyGroup(p.dest)} with ${count} operations, so the`);
@@ -304,11 +331,32 @@ async function warmLegacyGroup(act, p) {
         rate: 4, count });
     await wait.frozen(env.INTERNAL_TOPIC, env.pause(10000),
         { atLeast: p.internalAtLeast || 1 });
-    await wait.until('the group to hold committed offsets', () => {
-        const st = kafka.groupState(env.legacyGroup(p.dest));
-        return st.partitions > 0 && st.committed > 0 && st.unknown === 0;
-    }, 180000, 5000);
-    const st = kafka.groupState(env.legacyGroup(p.dest));
+    const group = env.legacyGroup(p.dest);
+    const hasCommitted = () => {
+        const g = kafka.groupState(group);
+        return g.partitions > 0 && g.committed > 0 && g.unknown === 0;
+    };
+    let ok = await wait.until('the group to hold committed offsets',
+        hasCommitted, 90000, 5000);
+    if (!ok) {
+        const g = kafka.groupState(group);
+        note(`WEDGE SUSPECTED: ${group} holds ${g.partitions} partitions with`);
+        note(`  ${g.unknown} of them showing NO committed offset while the`);
+        note('  topic has records. That is the design/06 consumer defect, and');
+        note('  it can fire well after the process passed its start-up check,');
+        note('  so the cure is applied here too: restart that one consumer.');
+        act.timeline(`processor ${p.dest} WEDGED during warm-up, restarting`);
+        await restartInPlace(`processor-${p.dest}`, 60000);
+        ok = await wait.until('the group to hold committed offsets after the '
+            + 'restart', hasCommitted, 150000, 5000);
+    }
+    const st = kafka.groupState(group);
+    if (!ok) {
+        throw new Error(`${group} never committed an offset: `
+            + `${st.unknown} of ${st.partitions} partitions uncommitted, lag `
+            + `${st.lag}. The consumer wedge did not clear after one restart, `
+            + 'so nothing measured past this point would be honest.');
+    }
     say(`warmed: committed ${st.committed} over ${st.partitions} partitions, `
         + `lag ${st.lag}`);
     return st;
@@ -413,6 +461,7 @@ function recordChecker(act, result) {
 }
 
 module.exports = {
+    restartInPlace,
     warmLegacyGroup,
     legacyConfig,
     poolConfig,
