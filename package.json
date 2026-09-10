@@ -19,7 +19,7 @@
     "garbage_collector": "node extensions/gc/service.js",
     "test": "mocha --recursive tests/unit --timeout 30000 --exit",
     "cover": "cross-env TEST_SUITE=${TEST_SUITE:-test} nyc --clean --silent yarn run $TEST_SUITE && nyc report --reporter=lcov --report-dir ./coverage/$TEST_SUITE",
-    "ft_test": "mocha --recursive $(find tests/functional -name '*.js') --timeout 30000 --exit",
+    "ft_test": "mocha --recursive $(find tests/functional -name '*.js' -not -path 'tests/functional/demo/*') --timeout 30000 --exit",
     "ft_test:notification": "mocha --recursive $(find tests/functional/notification -name '*.js') --timeout 30000 --exit",
     "ft_test:notification:deliverypool": "mocha tests/functional/deliverypool/deliveryPool.js --timeout 120000 --exit",
     "ft_test:notification:workgroups": "mocha tests/functional/deliverypool/workgroups.js --timeout 120000 --exit",
@@ -40,7 +40,14 @@
     "notification_processor": "node extensions/notification/queueProcessor/task.js",
     "notification_delivery_worker": "node extensions/notification/deliveryWorker/task.js",
     "notification_delivery_replay": "node bin/notificationDeliveryReplay.js",
-    "notification_workgroup_cutover": "node bin/notificationWorkgroupCutover.js"
+    "notification_workgroup_cutover": "node bin/notificationWorkgroupCutover.js",
+    "demo:up": "bash poc-demo/bin/stack-up.sh",
+    "demo:up:krb": "bash poc-demo/bin/stack-up.sh --krb",
+    "demo:down": "bash poc-demo/bin/stack-down.sh",
+    "demo:status": "bash poc-demo/bin/stack-status.sh",
+    "demo:wait": "bash poc-demo/bin/wait-ready.sh",
+    "ft_test:demo": "mocha tests/functional/demo/demo.js --timeout 2700000 --exit",
+    "ft_test:demo:act": "mocha tests/functional/demo/demo.js --timeout 2700000 --exit"
   },
   "repository": {
     "type": "git",
