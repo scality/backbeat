@@ -661,6 +661,7 @@ machine.
 | `tests/functional/demo/acts/01-code-and-tests.js` | the file map, the expected suite counts, and that the three gated functional suites need `PORT_OFFSET=0`. The branch names are read off the repository, not hardcoded. |
 | `tests/functional/demo/acts/07-kerberos.js` | the krb container names, the test image, the node_modules volume, and where the keytabs and krb5.conf are |
 | `poc-demo/bin/lib.sh` | the same ports and names again, for the operator scripts |
+| `poc-demo/conf/shims/*.js` | the three MongoDB/kafka compatibility preload shims every backbeat process is started with (oplog `h` alias for MongoDB 4.2+, `$v:2` diff translation for MongoDB 5, and the consumer topic-metadata refresh interval), plus the pidfile one. They resolve the module they patch from the process's own working directory, then `BACKBEAT_DIR`, then their own repository, so they patch the copy the process actually loads; an earlier version pinned one checkout's path and silently patched the wrong tree. |
 | `poc-demo/conf/templates/*.json` | the two configs everything is rendered from; their destination list is where the five names come from |
 | `poc-demo/grafana/dashboards/bnaas-delivery-pool.json` | its two textbox variables default to the canonical topic and group names, so a run with `DEMO_TOPIC_SUFFIX` needs them typed in |
 
