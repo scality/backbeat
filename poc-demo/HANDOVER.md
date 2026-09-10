@@ -667,6 +667,16 @@ machine.
 
 ## What has been run, and what has not
 
+**Update, 2026-09-11.** The authoritative record is now `PLAYBOOK.md`: one
+uninterrupted `yarn ft_test:demo` over all eight acts from a fresh clone
+(82 min 50 s; acts 01 to 04 green, the rest red for harness or host-pressure
+reasons, none of them loss), followed by fixes and a rehearsal of the recording
+cut `DEMO_ACTS=02,03,04,06` at 30 min 31 s with acts 02, 03 and 04 fully
+matching the rig and act 06 green on mapping, isolation, pin, verify and loss.
+The per-act tables, the wedge counts, the reruns and the open reshard-inversion
+finding are there. The text below is the state at the 2026-09-10 freeze and is
+kept for the history of what was verified when.
+
 The suite was built and run against the demo stack at `PORT_OFFSET=1000` on
 2026-09-10, with the containerised CloudServer. The command every run used, which is what `yarn ft_test:demo` runs:
 
