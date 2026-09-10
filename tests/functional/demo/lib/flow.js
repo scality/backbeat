@@ -252,7 +252,6 @@ async function cureChurn(act, configFile, n, proc, opts) {
     let p = proc;
     for (let attempt = 0; attempt < 2; attempt++) {
         const first = p.rebalances().revoke;
-        const headFirst = kafka.headTotal(env.DELIVERY_TOPIC);
          
         await wait.sleep(env.pause(20000));
         const bal = p.rebalances();
@@ -260,13 +259,15 @@ async function cureChurn(act, configFile, n, proc, opts) {
         const delivered = await wait.counter(n, 'delivered');
          
         const skipped = await wait.counter(n, 'skipped');
-        // An idle consumer with nothing to read cycles assign, revoke and
-        // "processing queue idle, un-assigning" too: that is the same log
-        // signature as the wedge and it is harmless. What separates them is
-        // whether there was anything to consume. So only call it a wedge
-        // when records arrived and nothing moved.
-        const arrived = kafka.headTotal(env.DELIVERY_TOPIC) - headFirst >= 5;
-        const churning = arrived && bal.revoke - first >= 3
+        // A healthy consumer holds its assignment, idle or not: the
+        // "processing queue idle, un-assigning" line only appears on a revoke
+        // callback, and revokes do not come once a second on their own. So
+        // three or more revokes in this window with nothing delivered or
+        // skipped is the wedge, whether or not records have arrived yet. In
+        // the timed reference run every worker that showed this at start went
+        // on to stall its first drain, and letting the drain gate notice it
+        // cost about a minute each time.
+        const churning = bal.revoke - first >= 3
             && delivered === 0 && skipped === 0;
         if (!churning) {
             if (bal.revoke > 0 || delivered > 0) {
