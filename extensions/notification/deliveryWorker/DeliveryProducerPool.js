@@ -2,7 +2,7 @@ const async = require('async');
 const { ZenkoMetrics } = require('arsenal').metrics;
 const errors = require('arsenal').errors;
 
-const DeliveryKafkaProducer = require('./DeliveryKafkaProducer');
+const { createDeliveryProducer } = require('../destination/deliveryProducerFactory');
 
 const lanesGauge = ZenkoMetrics.createGauge({
     name: 's3_notification_delivery_worker_lanes',
@@ -170,14 +170,19 @@ class DeliveryProducerPool {
      *   which an unused producer is closed
      * @param {number} params.deliveryPoolConfig.maxProducers - maximum number
      *   of producers kept open at once
+     * @param {string} [params.deliveryPoolConfig.kerberosProducer] - client
+     *   stack serving kerberos destinations, 'rdkafka' or 'kafkajs'
      * @param {Logger} params.logger - logger object
      */
     constructor(params) {
-        const { deliveryTimeoutMs, producerIdleMs, maxProducers } = params.deliveryPoolConfig;
+        const {
+            deliveryTimeoutMs, producerIdleMs, maxProducers, kerberosProducer,
+        } = params.deliveryPoolConfig;
         this._destinationsById = params.destinationsById;
         this._deliveryTimeoutMs = deliveryTimeoutMs;
         this._producerIdleMs = producerIdleMs;
         this._maxProducers = maxProducers;
+        this._kerberosProducer = kerberosProducer;
         this._log = params.logger;
         // destination id -> PooledProducer
         this._producers = new Map();
@@ -251,14 +256,18 @@ class DeliveryProducerPool {
 
     _connect(entry, destConfig) {
         const { topic, pollIntervalMs, auth, requiredAcks, compressionType } = destConfig;
-        const producer = new DeliveryKafkaProducer({
-            kafka: { hosts: entry.endpoint },
-            topic,
-            pollIntervalMs,
-            auth,
-            compressionType,
-            requiredAcks,
-            deliveryTimeoutMs: this._deliveryTimeoutMs,
+        const producer = createDeliveryProducer({
+            destConfig,
+            kerberosProducer: this._kerberosProducer,
+            producerConfig: {
+                kafka: { hosts: entry.endpoint },
+                topic,
+                pollIntervalMs,
+                auth,
+                compressionType,
+                requiredAcks,
+                deliveryTimeoutMs: this._deliveryTimeoutMs,
+            },
         });
         entry.attach(producer);
         producer.once('error', err => {

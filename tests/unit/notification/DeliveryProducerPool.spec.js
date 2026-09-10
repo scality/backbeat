@@ -1,4 +1,7 @@
 const assert = require('assert');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 const sinon = require('sinon');
 
 const FakeLogger = require('../../utils/fakeLogger');
@@ -7,6 +10,8 @@ const DeliveryProducerPool = require(
     '../../../extensions/notification/deliveryWorker/DeliveryProducerPool');
 const DeliveryKafkaProducer = require(
     '../../../extensions/notification/deliveryWorker/DeliveryKafkaProducer');
+const KerberosKafkaProducer = require(
+    '../../../extensions/notification/destination/KerberosKafkaProducer');
 
 const destinationsById = {
     destA: {
@@ -31,6 +36,21 @@ const destinationsById = {
         type: 'kafka',
         host: 'third-kafka-host',
         topic: 'topic-c',
+    },
+    destKerberos: {
+        resource: 'destKerberos',
+        type: 'kafka',
+        host: 'kerberised-kafka-host',
+        port: 9093,
+        topic: 'topic-kerberos',
+        auth: {
+            type: 'kerberos',
+            protocol: 'SASL_PLAINTEXT',
+            keytab: 'notifications.keytab',
+            principal: 'notifications@EXAMPLE.COM',
+            serviceName: 'kafka',
+            credentialSource: 'ccache',
+        },
     },
 };
 
@@ -362,6 +382,79 @@ describe('notification DeliveryProducerPool', () => {
                 setImmediate(() => {
                     assert.strictEqual(closeStub.callCount, 1);
                     assert.strictEqual(calls, 1);
+                    done();
+                });
+            });
+        });
+    });
+
+    describe('kerberos destinations', () => {
+        let kerberosConnectStub;
+        let confDir;
+
+        beforeEach(() => {
+            // the node-rdkafka path resolves the keytab through CONF_DIR, so
+            // the file has to exist for a kerberos destination to build at all
+            confDir = fs.mkdtempSync(path.join(os.tmpdir(), 'krbpool-'));
+            fs.mkdirSync(path.join(confDir, 'ssl'));
+            fs.writeFileSync(path.join(confDir, 'ssl', 'notifications.keytab'),
+                Buffer.from([5, 2]));
+            process.env.CONF_DIR = confDir;
+            kerberosConnectStub = sinon.stub(KerberosKafkaProducer.prototype, '_connect')
+                .callsFake(function connect() {
+                    this._ready = true;
+                    setTimeout(() => this.emit('ready'), 10);
+                });
+        });
+
+        afterEach(() => {
+            delete process.env.CONF_DIR;
+            fs.rmSync(confDir, { recursive: true, force: true });
+        });
+
+        it('should serve a kerberos destination with node-rdkafka by default', done => {
+            const pool = makePool();
+            pool.get('destKerberos', (err, producer) => {
+                assert.ifError(err);
+                assert.strictEqual(producer.producer instanceof DeliveryKafkaProducer, true);
+                assert.strictEqual(kerberosConnectStub.called, false);
+                done();
+            });
+        });
+
+        it('should serve a kerberos destination with the pure JS producer when configured',
+            done => {
+                const pool = makePool({ kerberosProducer: 'kafkajs' });
+                pool.get('destKerberos', (err, producer) => {
+                    assert.ifError(err);
+                    assert.strictEqual(producer.producer instanceof KerberosKafkaProducer,
+                        true);
+                    assert.strictEqual(producer.producer._auth.principal,
+                        'notifications@EXAMPLE.COM');
+                    assert.strictEqual(producer.producer._topic, 'topic-kerberos');
+                    done();
+                });
+            });
+
+        it('should keep non kerberos destinations on node-rdkafka in the same pool',
+            done => {
+                const pool = makePool({ kerberosProducer: 'kafkajs' });
+                pool.get('destA', (err, producer) => {
+                    assert.ifError(err);
+                    assert.strictEqual(producer.producer instanceof DeliveryKafkaProducer,
+                        true);
+                    done();
+                });
+            });
+
+        it('should close a pure JS producer through the same pool path', done => {
+            const closeStubJs = sinon.stub(KerberosKafkaProducer.prototype, 'close')
+                .callsFake(cb => process.nextTick(cb));
+            const pool = makePool({ kerberosProducer: 'kafkajs' });
+            pool.get('destKerberos', err => {
+                assert.ifError(err);
+                pool.closeAll(() => {
+                    assert.strictEqual(closeStubJs.calledOnce, true);
                     done();
                 });
             });
