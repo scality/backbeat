@@ -183,6 +183,59 @@ function register(ctx) {
 
 
         /**
+         * Partitions a workgroup's group holds with records left and no
+         * committed movement over one sample, while its member is alive and
+         * another of its partitions did move.
+         *
+         * Seen in the timed reference run: after a coordinator disconnect,
+         * partitions paused for the rebalance were never resumed
+         * ("Local: Erroneous state" out of _resumePausedPartitions), so the
+         * worker kept filtering another workgroup's records on one partition
+         * while its own destinations' partitions never left their starting
+         * offset, for the whole act, with liveness 200 throughout. Nothing
+         * that only watches start-up cycling or total lag can see it.
+         *
+         * @param {Array} ids - workgroup ids
+         * @param {Number} generation - generation number
+         * @param {Number} sampleMs - time between the two samples
+         * @return {Promise} resolves with [{ id, partitions, lag }]
+         */
+        async function partitionStalls(ids, generation, sampleMs) {
+            const snap = () => Object.fromEntries(ids.map(id => {
+                const g = zk.groupIdFor(env.DELIVERY_GROUP, id, generation);
+                return [id, kafka.groupState(g, env.DELIVERY_TOPIC)];
+            }));
+            const first = snap();
+            await procs.sleep(sampleMs);
+            const second = snap();
+            const out = [];
+            ids.forEach(id => {
+                const a = first[id];
+                const b = second[id];
+                if (!b.members) {
+                    // no live member: not this defect, the start-up path and
+                    // the drain gates own that case
+                    return;
+                }
+                const before = p => a.rows.find(r => r.partition === p.partition);
+                const moved = b.rows.some(r => {
+                    const o = before(r);
+                    return o && r.committed !== o.committed;
+                });
+                const stuck = b.rows.filter(r => {
+                    const o = before(r);
+                    return o && /^\d+$/.test(r.lag) && Number(r.lag) > 0
+                        && r.committed === o.committed;
+                });
+                if (moved && stuck.length) {
+                    out.push({ id, partitions: stuck.map(r => r.partition),
+                        lag: stuck.reduce((s, r) => s + Number(r.lag), 0) });
+                }
+            });
+            return out;
+        }
+
+        /**
          * Wait for every workgroup of a generation to be delivering, and cure
          * a wedged one the documented way.
          *
@@ -211,9 +264,43 @@ function register(ctx) {
                 const rows = await stuck();
                 const idle = rows.filter(r => r.delivered === 0 && r.skipped === 0);
                 if (!idle.length) {
-                    rows.forEach(r => say(`${r.id}: delivered ${r.delivered}, `
-                        + `skipped ${r.skipped} records outside its slice`));
-                    return [];
+                    // nobody is idle, but a live member can progress on one
+                    // partition and never move on the others, so look at the
+                    // partitions before calling the generation healthy
+                    const stalled = await partitionStalls(ids, generation, 20000);
+                    if (!stalled.length) {
+                        rows.forEach(r => say(`${r.id}: delivered ${r.delivered}, `
+                            + `skipped ${r.skipped} records outside its slice`));
+                        return [];
+                    }
+                    for (const s of stalled) {
+                        if ((cured[s.id] || 0) >= 2) {
+                            continue;
+                        }
+                        const w = workers[`${s.id}-gen${generation}`];
+                        const n = Number(w.probePort) - env.PROBE_BASE;
+                        note(`PARTITION STALL on workgroup ${s.id}: partition`
+                            + `${s.partitions.length > 1 ? 's' : ''} `
+                            + `${s.partitions.join(', ')} hold ${s.lag} records`);
+                        note('  and did not move in 20s while the member is alive');
+                        note('  and another of its partitions did. That is the');
+                        note('  paused-partitions variant of the consumer defect:');
+                        note('  after a coordinator disconnect the partitions');
+                        note('  paused for the rebalance are never resumed. The');
+                        note('  cure is the same: restart that one worker.');
+                        act.timeline(`workgroup ${s.id} PARTITION STALL on `
+                            + `${s.partitions.join(',')}, restarting`);
+                        w.stop();
+
+                        await procs.sleep(env.pause(5000));
+
+                        workers[`${s.id}-gen${generation}`] = await flow.startWorker(
+                            act, config, n, { workgroupId: s.id, autoRestart: true });
+                        cured[s.id] = (cured[s.id] || 0) + 1;
+                        act.measured('wedge cures on a workgroup start',
+                            Object.values(cured).reduce((a, b) => a + b, 0));
+                    }
+                    continue;
                 }
                 say(`waiting for ${idle.map(r => r.id).join(', ')} to deliver`);
                  
