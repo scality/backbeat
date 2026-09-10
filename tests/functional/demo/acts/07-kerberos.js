@@ -55,7 +55,7 @@ function register() {
                 '2 distinct identities in one process');
             act.expect('node-rdkafka collision control',
                 'collides on one identity and fails the other');
-            act.expect('the suite\'s arms', '7 passing, 0 failing');
+            act.expect('the suite\'s arms', 'every arm passing, 0 failing');
             act.expect('suite exit code', 0);
         });
 
@@ -175,8 +175,12 @@ function register() {
                     `${uniq.length} distinct identities in one process`);
                 const arms = /(\d+) passing/.exec(log);
                 const failed = /(\d+) failing/.exec(log);
+                // the arm count varies with what the container can reach (the
+                // docker socket arm skips without it), so the row reads on
+                // whether anything failed, with the counts after it
                 act.measured('the suite\'s arms',
-                    `${arms ? arms[1] : '?'} passing, `
+                    `${Number(failed ? failed[1] : 0) === 0 ? 'every arm passing'
+                        : 'arms failing'}: ${arms ? arms[1] : '?'} passing, `
                     + `${failed ? failed[1] : 0} failing`);
                 const collided = /collide on one identity/.test(log);
                 act.measured('node-rdkafka collision control', collided
