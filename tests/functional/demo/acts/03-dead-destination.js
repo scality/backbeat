@@ -91,15 +91,45 @@ function register(ctx) {
                 } else {
                     say(`${LEADERLESS} could not be created: on a single-broker`
                         + ' cluster that request times out rather than failing');
-                    note('so the third class uses the other mechanism the rig');
-                    note('describes for it: a reachable endpoint that accepts');
-                    note('the connection and never completes a Kafka');
-                    note('handshake. The produce is retried until');
-                    note('deliveryTimeoutMs and dropped with delivery_error,');
-                    note('which is the same reason and the same timing.');
-                    note('A destination pointed at a topic that does not');
-                    note('exist would NOT do: auto.create.topics.enable is on,');
-                    note('so the first produce would create it and succeed.');
+                    note('the class has to stay a REACHABLE broker with an');
+                    note('unwritable target, or the legacy half loses its');
+                    note('point: a destination whose producer cannot even');
+                    note('connect stops the processor from starting, and that');
+                    note('is the FIRST failure class, not this one.');
+                    note(`so ${UNWRITABLE} is created normally and then given a`);
+                    note('max.message.bytes far below one event. The producer');
+                    note('connects and reports ready, and every produce is');
+                    note('refused by the broker with RecordTooLargeException.');
+                    note('A destination pointed at a topic that does not exist');
+                    note('would NOT do: auto.create.topics.enable is on, so');
+                    note('the first produce would create it and succeed.');
+                    if (!kafka.topicExists(UNWRITABLE)) {
+                        kafka.createTopic(UNWRITABLE, 1);
+                    }
+                    const cfg = kafka.tool('kafka-configs.sh',
+                        ['--entity-type', 'topics',
+                            '--entity-name', UNWRITABLE,
+                            '--alter', '--add-config',
+                            'max.message.bytes=10']);
+                    say(`${UNWRITABLE}: max.message.bytes=10 `
+                        + `${cfg.ok ? 'applied' : `NOT applied: ${cfg.err}`}`);
+                    assert.ok(cfg.ok, 'the third failure class could not be '
+                        + `built: ${cfg.err || cfg.out}`);
+                    // An immediate rejection and a hang are both silent
+                    // failures, but they are not the same one, and the row
+                    // has to say which this run measured.
+                    const row = act.rows.find(
+                        r => r.key === 'legacy offset advance');
+                    if (row) {
+                        row.expected = 'advances past undelivered events';
+                    }
+                    note('one consequence to state on camera: the rig\'s');
+                    note('leaderless partition made the produce HANG, so the');
+                    note('legacy processor never advanced an offset. An');
+                    note('immediate rejection lets it commit and move on, so');
+                    note('here the offsets DO advance past events that were');
+                    note('never delivered. Same silent failure, one step');
+                    note('worse, and the row below expects it.');
                 }
 
                 step(2, 'a bucket per dead destination, and a healthy control');
