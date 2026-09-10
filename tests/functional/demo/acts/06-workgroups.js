@@ -29,6 +29,7 @@
  */
 
 const assert = require('assert');
+const fs = require('fs');
 const env = require('../lib/env');
 const kafka = require('../lib/kafka');
 const procs = require('../lib/procs');
@@ -181,6 +182,62 @@ function register(ctx) {
             return false;
         }
 
+
+        /**
+         * Wait until any worker of a generation has delivered something.
+         *
+         * @param {Array} ids - workgroup ids
+         * @param {Number} generation - generation number
+         * @param {Number} budgetMs - how long to wait
+         * @return {Promise} resolves true on the first delivery
+         */
+        function firstDelivery(ids, generation, budgetMs) {
+            return wait.until(`generation ${generation}'s first delivery`,
+                async () => {
+                    const counts = await Promise.all(ids.map(id => {
+                        const w = workers[`${id}-gen${generation}`];
+                        return wait.counter(Number(w.probePort) - env.PROBE_BASE,
+                            'delivered');
+                    }));
+                    return counts.some(c => c > 0);
+                }, budgetMs, 2000);
+        }
+
+        /**
+         * A generation change with no overlap, the way the cutover tool's own
+         * printed instruction has it: do not stop the old generation, and do
+         * not start the new one, until verify exits 0. The new generation
+         * starts at the barrier and would deliver post-barrier records while
+         * an old generation still behind its barrier delivers earlier ones
+         * for the same keys, which is exactly how the rehearsal of 2026-09-11
+         * produced 4197 same-key inversions. The price of no overlap is a
+         * delivery pause, measured here: from the old generation's stop to
+         * the new one's first delivery.
+         *
+         * @param {Object} p - { prevIds, prevGen, newIds, newGen, label }
+         * @return {Promise} resolves with { verified, pauseS }
+         */
+        async function changeGeneration(p) {
+            const verified = await waitForDrain(p.prevIds, p.prevGen, 600000);
+            act.measured('verify exit code before stopping the old generation',
+                verified ? 0 : 2);
+            assert.ok(verified, `verify never reached 0, so generation ${p.prevGen} `
+                + 'cannot be stopped without losing records');
+            note('every previous group is past every barrier: the old');
+            note('generation can be stopped now, and the new one started');
+            note('now, and neither before. Between the two nothing is');
+            note('delivered, which is the price of a change with no overlap.');
+            stopGeneration(p.prevIds, p.prevGen);
+            const stoppedAt = Date.now();
+            await startWorkgroupWorkers(p.newIds, p.newGen);
+            const delivered = await firstDelivery(p.newIds, p.newGen, 300000);
+            const pauseS = Math.round((Date.now() - stoppedAt) / 1000);
+            say(`generation ${p.newGen} ${delivered ? 'delivering' : 'still silent'} `
+                + `${pauseS}s after generation ${p.prevGen} was stopped`);
+            act.measured(`delivery pause at the ${p.label}`, `${pauseS}s`);
+            await ensureDelivering(p.newIds, p.newGen, 240000);
+            return { verified, pauseS };
+        }
 
         /**
          * Partitions a workgroup's group holds with records left and no
@@ -549,29 +606,17 @@ function register(ctx) {
             assert.strictEqual(map[pinned], 'wg-pin',
                 'the pin did not take effect in the document');
 
-            step(7, 'start generation 2, drain generation 1, then stop it');
+            step(7, 'wait for verify, stop generation 1, then start generation 2');
             note('the barrier is why this is safe: generation 2 starts at the');
             note('barrier offsets, generation 1 owns everything before them,');
-            note('and verify says when it has got there.');
-            const gen2At = Date.now();
-            await startWorkgroupWorkers(['wg-a', 'wg-b', 'wg-pin'], 2);
-            // The operator's order: stop the old generation the moment verify
-            // says it is past its barriers, and only then worry about the new
-            // one. Every record the old generation consumes past a barrier is
-            // also consumed by the new one, so the time it runs there is
-            // duplicates, and same-key inversions where the two deliveries
-            // interleave. Checking the new generation first, as an earlier
-            // version did, let a four minute wedge cure on it turn into four
-            // minutes of double consumption.
-            const verified = await waitForDrain(['wg-a', 'wg-b'], 1, 480000);
-            act.measured('verify exit code before stopping the old generation',
-                verified ? 0 : 2);
-            assert.ok(verified, 'verify never reached 0, so generation 1 '
-                + 'cannot be stopped without losing records');
-            stopGeneration(['wg-a', 'wg-b'], 1);
-            say(`generation 1 stopped ${Math.round((Date.now() - gen2At) / 1000)}s `
-                + 'after the generation 2 document was written');
-            await ensureDelivering(['wg-a', 'wg-b', 'wg-pin'], 2, 240000);
+            note('and verify says when it has got there. The order matters as');
+            note('much as the barrier: the tool prints "do not start the new');
+            note('generation until verify exits 0", and the rehearsal showed');
+            note('why. Started early, generation 2 delivered post-barrier');
+            note('records while generation 1, still behind its barrier after');
+            note('the kill, was delivering earlier ones for the same keys.');
+            await changeGeneration({ prevIds: ['wg-a', 'wg-b'], prevGen: 1,
+                newIds: ['wg-a', 'wg-b', 'wg-pin'], newGen: 2, label: 'pin cutover' });
             await procs.sleep(env.pause(10000));
 
             step(8, 'the pinned destination is now served by the pin only');
@@ -598,6 +643,19 @@ function register(ctx) {
             step(9, 'plan the reshard: which destinations move, which stay');
             const before = zk.mapping(zk.workgroupsDoc(), DESTS);
             tool('plan', GEN3);
+            // The reshard has to be measured under traffic, and the long load
+            // has ended by now, so start a fresh one and let it flow before the
+            // cutover. Its operations append to the long load's log.
+            extraLoads.push(flow.startDriver(act, {
+                'buckets': Object.values(BUCKETS).join(','),
+                'prefix': 'reshard', 'rate': 6, 'duration': env.workSecs(300, 180),
+                'straddle': 3, 'straddle-every': 5, 'log': load.log,
+            }));
+            await procs.sleep(env.pause(20000));
+            // The reshard's own window: every count below is taken from these
+            // offsets and from the operations completed after this instant,
+            // not from the start of the act.
+            const reshardAt = Date.now();
             const fromOffsets = {};
             DESTS.forEach(d => {
                 fromOffsets[d] = kafka.head(ctx.customerTopicOf[d], 0);
@@ -619,13 +677,12 @@ function register(ctx) {
             say(`stayed: ${stayed.join(', ')}`);
             act.measured('destinations that moved',
                 `${moved.length} of ${DESTS.length}`);
-            watch('grafana', 'row "Workgroups": cutover barriers seen, and the '
+            watch('grafana', 'row "Workgroups": cutover barriers seen (counted '
+                + 'when a worker PROCESSES the barrier record, not when it has '
+                + 'committed up to it, so it is not a drained signal), and the '
                 + 'generation per worker');
 
-            step(11, 'start generation 3, stop generation 2 when verify exits 0');
-            const gen3At = Date.now();
-            await startWorkgroupWorkers(['wg-a', 'wg-b', 'wg-c', 'wg-pin'], 3);
-            let overlapS = 0;
+            step(11, 'wait for verify, stop generation 2, then start generation 3');
             if (STOP_EARLY) {
                 note('DEMO_WORKGROUPS_STOP_EARLY is set: generation 2 is being');
                 note('stopped BEFORE verify exits 0, which is the operator');
@@ -636,26 +693,13 @@ function register(ctx) {
                 stopGeneration(['wg-a', 'wg-b', 'wg-pin'], 2);
                 act.measured('verify exit code before stopping the old generation',
                     v.code);
+                await startWorkgroupWorkers(['wg-a', 'wg-b', 'wg-c', 'wg-pin'], 3);
+                await ensureDelivering(['wg-a', 'wg-b', 'wg-c', 'wg-pin'], 3, 240000);
             } else {
-                // stop the old generation first, the moment verify allows it;
-                // the new generation's health is checked after, because every
-                // second the old one runs past its barriers is double
-                // consumption
-                const verified = await waitForDrain(
-                    ['wg-a', 'wg-b', 'wg-pin'], 2, 600000);
-                act.measured('verify exit code before stopping the old generation',
-                    verified ? 0 : 2);
-                assert.ok(verified, 'verify never reached 0');
-                note('every previous group is past every barrier, so the old');
-                note('generation can be stopped now, and only now');
-                stopGeneration(['wg-a', 'wg-b', 'wg-pin'], 2);
-                overlapS = Math.round((Date.now() - gen3At) / 1000);
-                say(`generation 2 stopped ${overlapS}s after the generation 3 `
-                    + 'document was written');
-                act.measured('old generation ran past its barriers for',
-                    `${overlapS}s`);
+                await changeGeneration({ prevIds: ['wg-a', 'wg-b', 'wg-pin'],
+                    prevGen: 2, newIds: ['wg-a', 'wg-b', 'wg-c', 'wg-pin'],
+                    newGen: 3, label: 'reshard' });
             }
-            await ensureDelivering(['wg-a', 'wg-b', 'wg-c', 'wg-pin'], 3, 240000);
             await procs.sleep(env.pause(10000));
 
             step(12, 'stop the load, drain generation 3, check every destination');
@@ -670,53 +714,81 @@ function register(ctx) {
                 await flow.drainOrCure({ group, topic: env.DELIVERY_TOPIC,
                     label: `${id} gen3`, timeoutMs: 240000 });
             }
+            // Two windows. The whole act, from the offsets recorded before
+            // generation 1 started, for loss: nothing published to any
+            // destination during the act may be missing. And the reshard's
+            // own window, from the offsets and the instant recorded before
+            // the generation 3 cutover, for its duplicates and its ordering,
+            // so that the pin cutover's numbers are not billed to it.
+            const reshardLog = act.file('driver-reshard-window.log');
+            fs.writeFileSync(reshardLog, fs.readFileSync(load.log, 'utf8')
+                .split('\n')
+                .filter(l => l && new Date(l.split(' ')[0]).getTime() >= reshardAt)
+                .join('\n').concat('\n'));
             let gaps = 0;
-            let dups = 0;
-            let inversions = 0;
+            const reshard = { gaps: 0, dups: 0, inversions: 0 };
             DESTS.forEach(d => {
-                const r = flow.dumpAndCheck({ act,
+                const whole = flow.dumpAndCheck({ act,
                     topic: ctx.customerTopicOf[d],
                     from: from[d],
                     driver: load.log,
                     bucket: BUCKETS[d],
                     label: d });
-                gaps += r.totals.gaps;
-                dups += r.totals.duplicate_extras;
-                inversions += r.totals.inversions;
+                gaps += whole.totals.gaps;
+                const win = flow.dumpAndCheck({ act,
+                    topic: ctx.customerTopicOf[d],
+                    from: fromOffsets[d],
+                    driver: reshardLog,
+                    bucket: BUCKETS[d],
+                    label: `${d}-reshard` });
+                reshard.gaps += win.totals.gaps;
+                reshard.dups += win.totals.duplicate_extras;
+                reshard.inversions += win.totals.inversions;
             });
-            act.measured('reshard gaps (loss)', gaps);
-            act.measured('reshard duplicates', dups);
-            act.measured('reshard inversions', inversions);
             act.measured('gaps (loss), generation 1', gaps);
-            note('duplicates are the old generation\'s consumption past its');
-            note('barriers: the longer it runs after the barrier, the more');
-            note('there are. Gaps are impossible once verify has exited 0,');
-            note('which is the property the barrier buys.');
-            note('same-key inversions across a reshard were measured once, in');
-            note('the rehearsal of 2026-09-11: 4197, all on the destination');
-            note('that changed owner, with 877 duplicates, after a wedge cure');
-            note('on the new generation kept the old one running four minutes');
-            note('past its barriers. Zero in the isolated run before it. The');
-            note(`old generation ran ${overlapS}s past its barriers this time.`);
-            note('The procedural rule stands (stop the old generation the');
-            note('moment verify exits 0); whether the design also needs the');
-            note('old generation to stop at its own barrier is for the');
-            note('findings to say once the mechanism is pinned down.');
+            act.measured('reshard gaps (loss)', reshard.gaps);
+            act.measured('reshard duplicates', reshard.dups);
+            act.measured('reshard inversions', reshard.inversions);
+            note('gaps are impossible once verify has exited 0, which is the');
+            note('property the barrier buys. Duplicates are the old');
+            note('generation\'s consumption past its barriers before it was');
+            note('stopped, and re-deliveries after a kill or a cure restart.');
+            note('inversions across a generation change come from overlap:');
+            note('measured once, in the rehearsal of 2026-09-11, when the new');
+            note('generation was started right after the cutover while the old');
+            note('one was still behind its barrier after the kill of step 4.');
+            note('Every one of the 4197 inverted pairs was an old-generation');
+            note('earlier operation against a new-generation later one, all on');
+            note('krb-dest-b, the only destination with several operations per');
+            note('key (the straddle pairs), so the only place an inversion can');
+            note('show. With no overlap there is nothing to interleave, and the');
+            note('price is the delivery pause measured above.');
+            note('two more things the rehearsal measured, worth saying: the');
+            note('"barrier seen" log line and counter fire when a worker');
+            note('processes the barrier record, not when it has committed up');
+            note('to it, so they are not a drained signal (verify reads the');
+            note('committed offsets and is); and a destination\'s per-object');
+            note('ordering lanes deliver one record per producer poll, 2000 ms,');
+            note('so six lanes moved about three records a second. That ceiling');
+            note('is what made the old generation slow to reach its barrier.');
             note('known gap, from the reshard study: a crashed old-generation');
             note('worker cannot restart to finish its drain once the document');
             note('has been overwritten. The proposed amendment is one');
             note('ZooKeeper node per generation plus a current pointer.');
 
             if (STOP_EARLY) {
-                say(`stopped early on purpose: ${gaps} records lost, and the`);
-                say('drain report above had already counted them as remaining');
+                say(`stopped early on purpose: ${reshard.gaps} records lost in `
+                    + 'the reshard window, and the drain report above had '
+                    + 'already counted them as remaining');
             } else {
                 assert.strictEqual(gaps, 0,
+                    'the act lost records even though verify exited 0');
+                assert.strictEqual(reshard.gaps, 0,
                     'the reshard lost records even though verify exited 0');
-                if (inversions > 0) {
-                    say(`${inversions} same-key inversions across the reshard, `
-                        + `from ${overlapS}s of double consumption; not loss, `
-                        + 'and the design note above is the fix');
+                if (reshard.inversions > 0) {
+                    say(`${reshard.inversions} same-key inversions in the reshard `
+                        + 'window: not loss, but not the zero a change with no '
+                        + 'overlap should give; read the evidence before recording');
                 }
             }
         });

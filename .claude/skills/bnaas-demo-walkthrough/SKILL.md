@@ -192,9 +192,15 @@ Then the three things that happen to it:
     delivered twice. The longer it runs, the more there are. On the rig that
     was 18 to 30 per 100 while it drained.
   - **Why gaps are impossible**: only if you wait for `verify` to exit 0.
-    That is the whole discipline. Stopping the old generation early loses
-    exactly the records the drain report was still counting, which the
-    `DEMO_WORKGROUPS_STOP_EARLY=1` variant shows deliberately.
+    The discipline, in the CLI's own words: do not stop the old generation,
+    and do not start the new one, until `verify` exits 0. Stopping early
+    loses exactly the records the drain report was still counting, which the
+    `DEMO_WORKGROUPS_STOP_EARLY=1` variant shows deliberately. Starting the
+    new generation early does not lose anything but reorders keys: it
+    delivers post-barrier records while the old generation, still behind its
+    barrier, delivers earlier ones for the same keys (4197 inversions in one
+    rehearsal). The price of no overlap is a delivery pause, which the act
+    measures; say it aloud.
   - **The known gap**: a crashed old-generation worker cannot restart to
     finish its drain once the document has been overwritten. The proposed
     amendment is one ZooKeeper node per generation plus a current pointer.
