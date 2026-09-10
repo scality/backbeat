@@ -68,6 +68,9 @@ function register(ctx) {
         let config;
         const workers = {};
         let load;
+        // traffic a step starts for itself when the long load has ended; all
+        // of it appends to the long load's log so the final check counts it
+        const extraLoads = [];
         const from = {};
 
         /**
@@ -289,6 +292,7 @@ function register(ctx) {
             if (load && load.proc) {
                 load.proc.stop();
             }
+            extraLoads.forEach(x => x.proc.stop());
             procs.stopAll();
             act.close();
         });
@@ -371,6 +375,21 @@ function register(ctx) {
                 const b = await wait.counter(sN, 'delivered');
                 return a > 0 && b > 0;
             }, 240000, 5000);
+            // The long load runs for a fixed window, and the wedge cures of
+            // step 3 can use most of it up, so this step drives its own
+            // traffic for the isolation window and the catch-up after it.
+            // Without records arriving there is nothing for the survivor to
+            // keep delivering, and the claim could not be true of anything.
+            if (!load.proc.isRunning()) {
+                note('the long load has already ended, so fresh traffic is');
+                note('started for the isolation window and the catch-up');
+            }
+            extraLoads.push(flow.startDriver(act, {
+                'buckets': Object.values(BUCKETS).join(','),
+                'prefix': 'iso', 'rate': 6, 'duration': env.workSecs(240, 150),
+                'straddle': 3, 'straddle-every': 5, 'log': load.log,
+            }));
+            await procs.sleep(env.pause(15000));
             const before = {
                 victim: await wait.counter(vN, 'delivered'),
                 survivor: await wait.counter(sN, 'delivered'),
@@ -401,7 +420,8 @@ function register(ctx) {
             note('topics, not in the lag: that is what the per-workgroup');
             note('delivered panel is for.');
             say(`${survivorId} delivered ${before.survivor} then `
-                + `${during.survivor}: it kept working`);
+                + `${during.survivor}: ${during.survivor > before.survivor
+                    ? 'it kept working' : 'it did NOT deliver more'}`);
             act.measured('workgroup isolation',
                 during.survivor > before.survivor
                     ? 'only the dead workgroup\'s destinations pause'
@@ -530,8 +550,9 @@ function register(ctx) {
 
             step(12, 'stop the load, drain generation 3, check every destination');
             load.proc.stop();
-            await wait.until('the driver to stop', () => !load.proc.isRunning(),
-                90000, 1000);
+            extraLoads.forEach(x => x.proc.stop());
+            await wait.until('the drivers to stop', () => !load.proc.isRunning()
+                && extraLoads.every(x => !x.proc.isRunning()), 90000, 1000);
             await wait.frozen(env.DELIVERY_TOPIC, env.pause(15000));
             for (const id of ['wg-a', 'wg-b', 'wg-c', 'wg-pin']) {
                 const group = zk.groupIdFor(env.DELIVERY_GROUP, id, 3);
