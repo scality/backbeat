@@ -13,7 +13,11 @@ const DeliveryWorker = require('./DeliveryWorker');
 const { resolveProbeServerConfig } = require('./probeConfig');
 const { resolveWorkgroupId } = require('./workgroupConfig');
 const { assertSeededOffsets } = require('./seededOffsets');
-const { buildGroupId, createSliceFilter } = require('../utils/workgroups');
+const {
+    assumedDestinationFor,
+    buildGroupId,
+    createSliceFilter,
+} = require('../utils/workgroups');
 const { startProbeServer } = require('../../../lib/util/probe');
 
 const config = require('../../../lib/Config');
@@ -99,6 +103,9 @@ function setupWorkgroup(done) {
             groupId: buildGroupId(notifConfig.deliveryPool.groupId,
                 workgroupId, loaded.doc.generation),
             filter: createSliceFilter({ doc: loaded.doc, workgroupId }),
+            // null unless this workgroup declares a destination of its own,
+            // in which case the worker ignores the one on every record
+            assumedDestination: assumedDestinationFor(loaded.doc, workgroupId),
         };
         return done();
     });

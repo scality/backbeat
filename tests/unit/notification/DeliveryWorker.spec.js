@@ -13,9 +13,11 @@ const DeliveryProducerPool = require(
 const { DELIVERY_POOL_PROBE_PORT_ENV, resolveProbeServerConfig } = require(
     '../../../extensions/notification/deliveryWorker/probeConfig');
 const {
+    ASSUME_DESTINATION,
     BARRIER_KEY,
     SKIP_BARRIER,
     SKIP_NOT_IN_SLICE,
+    assumedDestinationFor,
     buildBarrierRecord,
     buildGroupId,
     createSliceFilter,
@@ -27,6 +29,8 @@ const DROPPED_METRIC = 's3_notification_delivery_worker_dropped_total';
 const DELAY_METRIC = 's3_notification_delivery_worker_delivery_delay_seconds';
 const SKIPPED_METRIC = 's3_notification_delivery_worker_skipped_total';
 const BARRIER_METRIC = 's3_notification_delivery_worker_barrier_seen_total';
+const ASSUMED_DESTINATION_METRIC =
+    's3_notification_delivery_worker_assumed_destination';
 
 const kafkaConfig = {
     hosts: 'internal-kafka-host:9092',
@@ -85,6 +89,39 @@ const workgroup = {
         doc: workgroupsDocFixture,
         workgroupId: 'wg-mine',
     }),
+};
+
+// one legacy global target: two destination arns are routed to this
+// workgroup and collapse onto the single destination it declares itself.
+// 'legacyDest' is deliberately absent from notifConfig.destinations, which
+// is the point of the submode: no registry lookup happens
+const assumingDoc = validateWorkgroupsDoc({
+    configVersion: 1,
+    generation: 3,
+    topic: 'delivery-topic',
+    workgroups: [
+        {
+            id: 'wg-legacy',
+            submode: ASSUME_DESTINATION,
+            rule: { type: 'static', destinationIds: ['destId', 'legacyDest'] },
+            assumedDestination: {
+                resource: 'assumedDest',
+                type: 'kafka',
+                host: 'legacy-kafka-host',
+                port: 9092,
+                topic: 'legacy-topic',
+            },
+        },
+        { id: 'wg-other', rule: { type: 'hashmod', modulo: 1, remainders: [0] } },
+    ],
+}).value;
+
+const assumingWorkgroup = {
+    id: 'wg-legacy',
+    generation: 3,
+    groupId: buildGroupId(notifConfig.deliveryPool.groupId, 'wg-legacy', 3),
+    filter: createSliceFilter({ doc: assumingDoc, workgroupId: 'wg-legacy' }),
+    assumedDestination: assumedDestinationFor(assumingDoc, 'wg-legacy'),
 };
 
 function makeEntry(value, key) {
@@ -778,6 +815,166 @@ describe('notification DeliveryWorker', () => {
                     }));
 
                 assert(pool.send.calledOnce);
+            });
+        });
+
+        describe('the assume-destination submode', () => {
+            const assumedLabels = {
+                workgroup: 'wg-legacy',
+                target: 'assumedDest',
+                assumed: 'true',
+            };
+            let assuming;
+
+            beforeEach(() => {
+                assuming = new DeliveryWorker(kafkaConfig, notifConfig,
+                    assumingWorkgroup);
+            });
+
+            it('should deliver a record stamped for one destination to the ' +
+            'assumed one', done => {
+                const pool = fakePool((messages, cb) => cb());
+                assuming._producerPool = pool;
+
+                assuming.processKafkaEntry(makeEntry(notifRecord), err => {
+                    assert.ifError(err);
+                    assert(pool.get.calledOnceWith('assumedDest'),
+                        'the producer was not asked for the assumed ' +
+                        'destination');
+                    // the ordering key of the delivered message is the
+                    // object, exactly as without the submode
+                    assert.strictEqual(pool.send.args[0][0][0].key,
+                        'mybucket/mykey');
+                    done();
+                });
+            });
+
+            it('should deliver a record whose destination is in no registry ' +
+            'at all', done => {
+                const pool = fakePool((messages, cb) => cb());
+                assuming._producerPool = pool;
+
+                const entry = makeEntry(
+                    { ...notifRecord, destinationId: 'legacyDest' },
+                    Buffer.from('legacyDest'));
+                assuming.processKafkaEntry(entry, err => {
+                    assert.ifError(err);
+                    assert(pool.get.calledOnceWith('assumedDest'));
+                    assert.strictEqual(pool.send.args[0][0][0].key,
+                        'mybucket/mykey');
+                    done();
+                });
+            });
+
+            it('should leave the ordering key on the stamped destination', () => {
+                const entry = makeEntry(notifRecord);
+                assert.strictEqual(assuming._orderBy({ entry }),
+                    'destId|mybucket/mykey');
+                assert.strictEqual(entry._notifSkip, null);
+                const legacy = makeEntry(
+                    { ...notifRecord, destinationId: 'legacyDest' },
+                    Buffer.from('legacyDest'));
+                assert.strictEqual(assuming._orderBy({ entry: legacy }),
+                    'legacyDest|mybucket/mykey');
+            });
+
+            it('should still apply the slice filter', async () => {
+                const pool = fakePool((messages, cb) => cb());
+                assuming._producerPool = pool;
+
+                const skipLabels = {
+                    workgroup: 'wg-legacy',
+                    reason: SKIP_NOT_IN_SLICE,
+                    assumed: 'true',
+                };
+                const before = await exactCounterValue(SKIPPED_METRIC, skipLabels);
+
+                await new Promise(resolve => assuming.processKafkaEntry(
+                    makeForeignEntry({ ...notifRecord, destinationId: 'otherDest' }),
+                    err => {
+                        assert.ifError(err);
+                        resolve();
+                    }));
+
+                assert(pool.get.notCalled,
+                    'a record this workgroup does not own reached the ' +
+                    'assumed destination');
+                assert.strictEqual(
+                    await exactCounterValue(SKIPPED_METRIC, skipLabels), before + 1);
+            });
+
+            it('should say on every delivery that it was made under ' +
+            'assumption', async () => {
+                assuming._producerPool = fakePool((messages, cb) => cb());
+
+                const deliveredBefore =
+                    await exactCounterValue(DELIVERED_METRIC, assumedLabels);
+                const observedBefore = await exactDelayObservations(
+                    { ...assumedLabels, status: 'success' });
+
+                await new Promise(resolve => assuming.processKafkaEntry(
+                    makeEntry(notifRecord), err => {
+                        assert.ifError(err);
+                        resolve();
+                    }));
+
+                assert.strictEqual(
+                    await exactCounterValue(DELIVERED_METRIC, assumedLabels),
+                    deliveredBefore + 1);
+                assert.strictEqual(await exactDelayObservations(
+                    { ...assumedLabels, status: 'success' }), observedBefore + 1);
+                // nothing was ever attributed to the destination the record
+                // named, which is the whole point of the label
+                assert.strictEqual(await exactCounterValue(DELIVERED_METRIC,
+                    { workgroup: 'wg-legacy', target: 'destId',
+                        assumed: 'true' }), 0);
+            });
+
+            it('should count a failed delivery against the assumed ' +
+            'destination', async () => {
+                assuming._producerPool = fakePool(
+                    (messages, cb) => cb(new Error('delivery error')));
+
+                const labels = { ...assumedLabels, reason: 'delivery_error' };
+                const before = await exactCounterValue(DROPPED_METRIC, labels);
+
+                await new Promise(resolve => assuming.processKafkaEntry(
+                    makeEntry(notifRecord), err => {
+                        assert.ifError(err);
+                        resolve();
+                    }));
+
+                assert.strictEqual(
+                    await exactCounterValue(DROPPED_METRIC, labels), before + 1);
+            });
+
+            it('should expose the redirection as a gauge before any ' +
+            'traffic', async () => {
+                const data = await ZenkoMetrics
+                    .getMetric(ASSUMED_DESTINATION_METRIC).get();
+                const entry = data.values.find(value =>
+                    sameLabels(value.labels,
+                        { workgroup: 'wg-legacy', target: 'assumedDest' }));
+                assert(entry, 'the assumed destination is not in the metrics');
+                assert.strictEqual(entry.value, 1);
+            });
+
+            it('should keep a plain workgroup free of the assumed label', async () => {
+                wgWorker._producerPool = fakePool((messages, cb) => cb());
+
+                const plainLabels = { workgroup: 'wg-mine', target: 'destId' };
+                const before =
+                    await exactCounterValue(DELIVERED_METRIC, plainLabels);
+
+                await new Promise(resolve => wgWorker.processKafkaEntry(
+                    makeEntry(notifRecord), err => {
+                        assert.ifError(err);
+                        resolve();
+                    }));
+
+                assert.strictEqual(
+                    await exactCounterValue(DELIVERED_METRIC, plainLabels),
+                    before + 1);
             });
         });
 

@@ -24,19 +24,19 @@ const UNKNOWN_TARGET = 'unknown';
 const deliveredEvents = ZenkoMetrics.createCounter({
     name: 's3_notification_delivery_worker_delivered_total',
     help: 'Total number of notifications delivered to an external destination',
-    labelNames: ['workgroup', 'target'],
+    labelNames: ['workgroup', 'target', 'assumed'],
 });
 
 const droppedEvents = ZenkoMetrics.createCounter({
     name: 's3_notification_delivery_worker_dropped_total',
     help: 'Total number of notifications dropped without being delivered',
-    labelNames: ['workgroup', 'target', 'reason'],
+    labelNames: ['workgroup', 'target', 'reason', 'assumed'],
 });
 
 const deliveryDelay = ZenkoMetrics.createHistogram({
     name: 's3_notification_delivery_worker_delivery_delay_seconds',
     help: 'Time between sending a notification and receiving its delivery report',
-    labelNames: ['workgroup', 'target', 'status'],
+    labelNames: ['workgroup', 'target', 'status', 'assumed'],
     buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30],
 });
 
@@ -44,14 +44,26 @@ const skippedEvents = ZenkoMetrics.createCounter({
     name: 's3_notification_delivery_worker_skipped_total',
     help: 'Total number of records committed without being delivered because ' +
         'they do not belong to this workgroup',
-    labelNames: ['workgroup', 'reason'],
+    labelNames: ['workgroup', 'reason', 'assumed'],
 });
 
 const barriersSeen = ZenkoMetrics.createCounter({
     name: 's3_notification_delivery_worker_barrier_seen_total',
     help: 'Total number of cutover barrier records consumed, by whether the ' +
         'barrier belongs to the generation this worker runs',
-    labelNames: ['workgroup', 'match'],
+    labelNames: ['workgroup', 'match', 'assumed'],
+});
+
+// the one place where an operator can send a tenant's events to a physical
+// destination the tenant does not own and cannot see. Set at startup rather
+// than on the first delivery, so the configuration is visible before any
+// traffic proves it
+const assumedDestinations = ZenkoMetrics.createGauge({
+    name: 's3_notification_delivery_worker_assumed_destination',
+    help: 'Set to one for a workgroup that ignores the destination stamped ' +
+        'on the record and delivers everything it consumes to the target ' +
+        'named by this series instead',
+    labelNames: ['workgroup', 'target'],
 });
 
 // wgLabels is {} when workgroups are off, so the spread adds nothing and
@@ -87,6 +99,11 @@ class DeliveryWorker extends EventEmitter {
      * are carried by the record, so no bucket notification configuration
      * lookup is needed here.
      *
+     * A workgroup may instead declare a destination of its own, which the
+     * worker delivers every record it consumes to whatever destination the
+     * record names. That is how a legacy global destination keeps its one
+     * topic, one target behaviour without a second delivery code path.
+     *
      * @constructor
      * @param {Object} kafkaConfig - kafka configuration object
      * @param {string} kafkaConfig.hosts - list of kafka brokers
@@ -108,6 +125,10 @@ class DeliveryWorker extends EventEmitter {
      * @param {String} workgroup.groupId - consumer group id to join
      * @param {Object} workgroup.filter - slice filter, classify(key) returns
      *   null for a record this workgroup owns and a skip reason otherwise
+     * @param {Object} [workgroup.assumedDestination] - destination every
+     *   record this workgroup consumes is delivered to, whatever destination
+     *   the record itself names. Absent for a workgroup that delivers each
+     *   record to the destination stamped on it
      */
     constructor(kafkaConfig, notifConfig, workgroup) {
         super();
@@ -129,6 +150,58 @@ class DeliveryWorker extends EventEmitter {
         if (this._workgroup) {
             this._warnOnPrefixRoutedDestinations();
         }
+        // after the warning above, which is about routing tokens: the assumed
+        // destination is a physical target and is never routed to by name
+        this._assumedDestination =
+            (workgroup && workgroup.assumedDestination) || null;
+        if (this._assumedDestination) {
+            this._adoptAssumedDestination();
+        }
+    }
+
+    /**
+     * Make the workgroup's own destination the one this worker delivers to.
+     *
+     * The destination of an assume-destination workgroup is declared on the
+     * workgroup rather than in the destination registry, so the producer
+     * pool learns it from here. Everything else is unchanged: the same pool,
+     * the same message format, the same ordering.
+     *
+     * @return {undefined}
+     */
+    _adoptAssumedDestination() {
+        const assumed = this._assumedDestination;
+        this._destinationsById[assumed.resource] = assumed;
+        // every series this worker renders says that it delivered under
+        // assumption, so the operator trust boundary is readable from the
+        // metrics and not only from the configuration
+        this._wgLabels = { ...this._wgLabels, assumed: 'true' };
+        assumedDestinations.set({
+            workgroup: this._workgroup.id,
+            target: assumed.resource,
+        }, 1);
+        this.logger.info('workgroup ignores the destination stamped on the ' +
+            'record and delivers everything it consumes to its own ' +
+            'destination', {
+            method: 'DeliveryWorker._adoptAssumedDestination',
+            workgroup: this._workgroup.id,
+            assumedDestination: assumed.resource,
+            endpoint: assumed.port ?
+                `${assumed.host}:${assumed.port}` : assumed.host,
+            topic: assumed.topic,
+        });
+    }
+
+    /**
+     * The destination a record is delivered to: the one stamped on it, or
+     * the assumed destination of a workgroup that ignores the stamp
+     *
+     * @param {String} destinationId - destination stamped on the record
+     * @return {String} destination id to deliver to
+     */
+    _targetOf(destinationId) {
+        return this._assumedDestination ?
+            this._assumedDestination.resource : destinationId;
     }
 
     /**
@@ -318,7 +391,8 @@ class DeliveryWorker extends EventEmitter {
 
     /**
      * Process a kafka entry: deliver it to the external destination named by
-     * the entry.
+     * the entry, or to the assumed destination of a workgroup that ignores
+     * what the entry names.
      *
      * The callback is held until the delivery report is received, so that the
      * consumer offset is only committed once the notification has left the
@@ -354,28 +428,31 @@ class DeliveryWorker extends EventEmitter {
             }
         }
         const { destinationId, bucket, key } = parsed;
-        const destConfig = this._destinationsById[destinationId];
+        const target = this._targetOf(destinationId);
+        const destConfig = this._destinationsById[target];
         if (!destConfig) {
             this.logger.warn('no destination configured for entry, dropping', {
                 method: 'DeliveryWorker.processKafkaEntry',
                 destinationId,
+                target,
                 bucket,
                 key,
             });
-            onDropped(this._wgLabels, destinationId || UNKNOWN_TARGET,
+            onDropped(this._wgLabels, target || UNKNOWN_TARGET,
                 'unknown_destination');
             return done();
         }
-        return this._producerPool.get(destinationId, (err, producer) => {
+        return this._producerPool.get(target, (err, producer) => {
             if (err) {
                 this.logger.error('could not get a producer for destination, dropping', {
                     method: 'DeliveryWorker.processKafkaEntry',
                     destinationId,
+                    target,
                     bucket,
                     key,
                     error: err.message,
                 });
-                onDropped(this._wgLabels, destinationId, 'producer_error');
+                onDropped(this._wgLabels, target, 'producer_error');
                 return done();
             }
             const message = messageUtil.transformToSpec(parsed);
@@ -389,6 +466,7 @@ class DeliveryWorker extends EventEmitter {
             this.logger.debug('sending message to external destination', {
                 method: 'DeliveryWorker.processKafkaEntry',
                 destinationId,
+                target,
                 bucket,
                 key,
                 eventType: parsed.eventType,
@@ -404,17 +482,18 @@ class DeliveryWorker extends EventEmitter {
                     this.logger.error('error delivering notification to external destination', {
                         method: 'DeliveryWorker.processKafkaEntry',
                         destinationId,
+                        target,
                         bucket,
                         key,
                         reason,
                         error: sendErr.message,
                     });
-                    observeDelay(this._wgLabels, destinationId, 'failure', delay);
-                    onDropped(this._wgLabels, destinationId, reason);
+                    observeDelay(this._wgLabels, target, 'failure', delay);
+                    onDropped(this._wgLabels, target, reason);
                     return done();
                 }
-                observeDelay(this._wgLabels, destinationId, 'success', delay);
-                onDelivered(this._wgLabels, destinationId);
+                observeDelay(this._wgLabels, target, 'success', delay);
+                onDelivered(this._wgLabels, target);
                 return done();
             });
         });
