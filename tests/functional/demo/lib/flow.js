@@ -486,26 +486,39 @@ async function warmLegacyGroup(act, p) {
         const g = kafka.groupState(group);
         return g.partitions > 0 && g.committed > 0 && g.unknown === 0;
     };
-    let ok = await wait.until('the group to hold committed offsets',
-        hasCommitted, 90000, 5000);
-    if (!ok) {
+    // Two cure attempts, the same as cureChurn and progressOrCure. On this
+    // host one restart is often not enough, and a consumer that comes back
+    // wedged looks identical to one that never cleared.
+    let ok = false;
+    let timeout = 90000;
+    for (let attempt = 0; attempt < 3; attempt++) {
+        // eslint-disable-next-line no-await-in-loop
+        ok = await wait.until(attempt
+            ? `the group to hold committed offsets, after restart ${attempt}`
+            : 'the group to hold committed offsets',
+        hasCommitted, timeout, 5000);
+        if (ok || attempt === 2) {
+            break;
+        }
         const g = kafka.groupState(group);
         note(`WEDGE SUSPECTED: ${group} holds ${g.partitions} partitions with`);
         note(`  ${g.unknown} of them showing NO committed offset while the`);
         note('  topic has records. That is the design/06 consumer defect, and');
         note('  it can fire well after the process passed its start-up check,');
         note('  so the cure is applied here too: restart that one consumer.');
-        act.timeline(`processor ${p.dest} WEDGED during warm-up, restarting`);
+        act.timeline(`processor ${p.dest} WEDGED during warm-up, `
+            + `restart ${attempt + 1}`);
+        // eslint-disable-next-line no-await-in-loop
         await restartInPlace(`processor-${p.dest}`, 60000);
-        ok = await wait.until('the group to hold committed offsets after the '
-            + 'restart', hasCommitted, 150000, 5000);
+        timeout = 150000;
     }
     const st = kafka.groupState(group);
     if (!ok) {
         throw new Error(`${group} never committed an offset: `
             + `${st.unknown} of ${st.partitions} partitions uncommitted, lag `
-            + `${st.lag}. The consumer wedge did not clear after one restart, `
-            + 'so nothing measured past this point would be honest.');
+            + `${st.lag}. The consumer wedge did not clear after two `
+            + 'restarts, so nothing measured past this point would be '
+            + 'honest.');
     }
     say(`warmed: committed ${st.committed} over ${st.partitions} partitions, `
         + `lag ${st.lag}`);
