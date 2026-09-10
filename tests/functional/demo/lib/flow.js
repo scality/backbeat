@@ -86,6 +86,21 @@ async function startProcessor(act, configFile, dest, opts) {
     note(`group ${env.legacyGroup(dest)}; one process per destination is what`);
     note('today\'s deployment does, twelve of them per destination on a real');
     note('platform, eleven idle standbys among them');
+    // A group that has run in production for years has a committed offset on
+    // every partition. One this suite just deleted has none, and the
+    // processor's consumer then starts at `latest` and skips whatever lands
+    // during its first-join rebalance. Put the group in the production state
+    // before the process starts, and say so.
+    const group = env.legacyGroup(dest);
+    const seeded = kafka.seedGroupAtHead(group, env.INTERNAL_TOPIC);
+    if (seeded.length) {
+        note(`seeded ${group} at the head of ${env.INTERNAL_TOPIC} on `
+            + `partition${seeded.length > 1 ? 's' : ''} ${seeded.join(', ')},`);
+        note('  which had no committed offset. A production group has one');
+        note('  everywhere; a brand-new one starts at latest and would skip');
+        note('  records published during its first-join rebalance.');
+        act.timeline(`processor ${dest} group seeded on ${seeded.join(',')}`);
+    }
     let p = procs.legacyProcessor(act, configFile, dest);
     try {
         const secs = await procs.waitReady(p, 45000);

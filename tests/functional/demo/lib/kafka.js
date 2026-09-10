@@ -278,6 +278,41 @@ function deleteOffsets(group, topic) {
 }
 
 /**
+ * Give a consumer group a committed offset, at the partition's current end,
+ * on every partition of a topic it has none on, so that a fresh group never
+ * falls back to auto.offset.reset.
+ *
+ * The legacy queue processor builds its consumer with no fromOffset, so
+ * librdkafka's default `latest` applies to any partition the group has never
+ * committed on, and its first-join revoke leaves a window of about forty
+ * seconds with no assignment: whatever is published in that window is skipped
+ * when the assignment comes back, and a partition that then receives nothing
+ * more never gets a committed offset at all, which reads exactly like the
+ * wedge. A group that has run in production for years has a committed offset
+ * everywhere; a group this suite just deleted has none. This puts it in the
+ * production state before the process starts. It touches only partitions
+ * with no committed offset, and it needs the group to have no members, which
+ * is true before the processor is started. A group that does not exist yet
+ * is created by the reset.
+ *
+ * @param {String} group - consumer group
+ * @param {String} topic - topic
+ * @return {Array} the partitions that were seeded, empty if none needed it
+ */
+function seedGroupAtHead(group, topic) {
+    const ends = heads(topic);
+    const committed = new Set(groupState(group, topic).rows
+        .filter(r => /^\d+$/.test(r.committed)).map(r => r.partition));
+    const missing = Object.keys(ends).map(Number).filter(p => !committed.has(p));
+    if (!missing.length) {
+        return [];
+    }
+    tool('kafka-consumer-groups.sh', ['--reset-offsets', '--group', group,
+        '--topic', `${topic}:${missing.join(',')}`, '--to-latest', '--execute']);
+    return missing;
+}
+
+/**
  * Wait until every partition of a topic reports a leader, three consecutive
  * looks. A consumer that joins before that can wedge, which is the design/06
  * trigger, so this is not optional politeness.
@@ -487,6 +522,7 @@ module.exports = {
     deleteTopic,
     deleteGroup,
     deleteOffsets,
+    seedGroupAtHead,
     waitForLeaders,
     recreateTopic,
     dump,
