@@ -129,6 +129,15 @@ class Act {
         if (m === head) {
             return 'close';
         }
+        // A worded expectation ("moved, past undelivered events") agrees with a
+        // worded measurement that starts the same way ("moved, 33 to 53").
+        // Numeric heads stay strict: "20, producer_error" against
+        // "20, delivery_timeout" is a real difference in the reason and must
+        // keep printing as one.
+        const mHead = m.split(' ')[0].replace(/,$/, '');
+        if (!/^\d/.test(head) && mHead === head) {
+            return 'close';
+        }
         const or = / or (\S+)/.exec(e);
         if (or && m === or[1].replace(/,$/, '')) {
             return 'close';

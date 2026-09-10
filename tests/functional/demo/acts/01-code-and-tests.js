@@ -128,7 +128,7 @@ function register() {
 
         before(() => {
             act.open();
-            act.expect('unit suite', 'about 1720 passing, 1 pending');
+            act.expect('unit suite', '1720 passing, 1 pending');
             act.expect('lint', 'no errors');
             if (full) {
                 act.expect('delivery pool functional suite', 'green');
