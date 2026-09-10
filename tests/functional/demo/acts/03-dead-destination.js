@@ -175,7 +175,7 @@ function register(ctx) {
                     tag: 'dead',
                 });
                 await flow.startPopulator(act, pool, 'pool');
-                await flow.startWorker(act, pool, 1);
+                const worker = await flow.startWorker(act, pool, 1);
                 const live = await wait.liveness(1);
                 say(`worker liveness ${live}, with four unreachable `
                     + 'destinations configured');
@@ -198,7 +198,8 @@ function register(ctx) {
 
                 step(7, 'watch dropped_total{target,reason}');
                 const firstDrop = {};
-                await wait.until('every dead destination to be counted',
+                const counted = await flow.progressOrCure(act, worker,
+                    'every dead destination to be counted',
                     async () => {
                         const byTarget = await wait.counterBy(1, 'dropped', 'target');
                         const byReason = await wait.counterBy(1, 'dropped', 'reason');
@@ -211,7 +212,12 @@ function register(ctx) {
                         say(`dropped by target ${JSON.stringify(byTarget)} `
                             + `by reason ${JSON.stringify(byReason)}`);
                         return DEAD.every(id => (byTarget[id] || 0) >= 20);
-                    }, 180000, 10000);
+                    }, { timeoutMs: 90000, retryTimeoutMs: 180000,
+                        everyMs: 10000 });
+                if (!counted) {
+                    note('the drops were never counted, so the rows below are');
+                    note('what this run actually saw, not what the pool does.');
+                }
 
                 const rows = await wait.metrics(1);
                 for (const id of DEAD) {

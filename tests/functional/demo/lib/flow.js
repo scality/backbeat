@@ -283,20 +283,6 @@ async function cureChurn(act, configFile, n, proc, opts) {
 
 
 /**
- * Warm a legacy consumer group before measuring anything through it.
- *
- * The legacy processor builds its consumer with no fromOffset, so
- * auto.offset.reset stays at librdkafka's `latest`: a group that has not
- * committed yet can skip what is already on the topic, and a first-join
- * revoke can move it past records published in between. A few operations
- * before the measured window, and a wait for committed offsets, removes that
- * from every measurement. It is the rig's own method note.
- *
- * @param {Object} act - the act
- * @param {Object} p - { dest, bucket, count, internalAtLeast }
- * @return {Promise} resolves with the group state
- */
-/**
  * Restart one process in place, reusing its Proc so that every handle an act
  * is holding stays valid and its log file keeps its history. This is the
  * operator cure for the design/06 consumer wedge: restart that one consumer,
@@ -323,6 +309,69 @@ async function restartInPlace(name, timeoutMs) {
     return p;
 }
 
+/**
+ * Wait for a worker to make progress, and cure the wedge once if it does not.
+ *
+ * cureChurn runs when a worker starts, before an act's workload exists, so a
+ * worker that wedges on the first records it sees is never caught by it. This
+ * is the same test applied where the symptom shows: if the condition never
+ * comes true, and the delivery topic holds records while the worker's own
+ * counters are all zero, that is the design/06 wedge rather than an idle
+ * consumer, and the cure is a restart of that one worker.
+ *
+ * @param {Object} act - the act
+ * @param {Object} proc - the worker's process
+ * @param {String} what - what is being waited for, for the narration
+ * @param {Function} condition - async predicate, true when progress happened
+ * @param {Object} [opts] - { timeoutMs, retryTimeoutMs, everyMs, index }
+ * @return {Promise} resolves true if progress happened, first or second try
+ */
+async function progressOrCure(act, proc, what, condition, opts) {
+    const o = opts || {};
+    const n = o.index || Number((/worker(\d+)/.exec(proc.name) || [])[1]) || 1;
+    const every = o.everyMs || 10000;
+    if (await wait.until(what, condition, o.timeoutMs || 90000, every)) {
+        return true;
+    }
+    const onTopic = kafka.headTotal(env.DELIVERY_TOPIC);
+    const moved = (await wait.counter(n, 'delivered'))
+        + (await wait.counter(n, 'dropped'))
+        + (await wait.counter(n, 'skipped'));
+    const bal = proc.rebalances();
+    if (onTopic === 0 || moved > 0) {
+        note(`no progress on ${what}, and this is NOT the wedge: `
+            + `${onTopic} records on the delivery topic and ${moved} of them `
+            + 'accounted for by this worker. Something else is wrong, so '
+            + 'nothing is being restarted.');
+        return false;
+    }
+    note(`WEDGE SUSPECTED: ${onTopic} records on the delivery topic, `
+        + `${bal.assign} assigns and ${bal.revoke} revokes on worker ${n}, and`);
+    note(`  nothing delivered, dropped or skipped. Liveness is still `
+        + `${await wait.liveness(n)}, which is what makes this defect hard to`);
+    note('  see in production. The cure is a restart of that one worker.');
+    act.timeline(`worker${n} WEDGED during ${what}, restarting`);
+    await restartInPlace(proc.name, 90000);
+    await wait.until(`worker ${n}'s probe to answer`,
+        async () => (await wait.liveness(n)) === 200, 60000, 2000);
+    return wait.until(`${what}, after the restart`, condition,
+        o.retryTimeoutMs || 150000, every);
+}
+
+/**
+ * Warm a legacy consumer group before measuring anything through it.
+ *
+ * The legacy processor builds its consumer with no fromOffset, so
+ * auto.offset.reset stays at librdkafka's `latest`: a group that has not
+ * committed yet can skip what is already on the topic, and a first-join
+ * revoke can move it past records published in between. A few operations
+ * before the measured window, and a wait for committed offsets, removes that
+ * from every measurement. It is the rig's own method note.
+ *
+ * @param {Object} act - the act
+ * @param {Object} p - { dest, bucket, count, internalAtLeast }
+ * @return {Promise} resolves with the group state
+ */
 async function warmLegacyGroup(act, p) {
     const count = p.count || 8;
     say(`warming ${env.legacyGroup(p.dest)} with ${count} operations, so the`);
@@ -462,6 +511,7 @@ function recordChecker(act, result) {
 
 module.exports = {
     restartInPlace,
+    progressOrCure,
     warmLegacyGroup,
     legacyConfig,
     poolConfig,
