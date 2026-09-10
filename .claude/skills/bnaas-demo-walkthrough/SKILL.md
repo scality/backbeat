@@ -256,24 +256,28 @@ previous-generation worker is what makes `verify` never exit 0.
 
 ## Recording the demo: the exact commands
 
-`DEMO_PACE=slow` doubles every deliberate wait, which is what gives you room
-to talk over a step. `fast` cuts them to about a third and is for iterating,
-not for recording. Disable system sleep first: the containers survive it, but
-the consumer groups rebalance and a long act never recovers its narration.
+The minute-by-minute script, with the measured times from the reference run,
+is `poc-demo/PLAYBOOK.md`; this section is the short form. `DEMO_PACE=demo` is
+the default and is tuned for recording. `slow` doubles every deliberate wait
+for a careful take; `fast` cuts them to about a third and is for iterating.
+Before a take: stop every other Kafka stack and rig on the machine (the
+PLAYBOOK says which and why), and disable system sleep with
+`caffeinate -dimsu`, because the consumer groups rebalance during a sleep and a
+long act never recovers its narration.
 
 ```bash
-# once, before the take
+# once, before the take, from the checkout you run the suite from
 yarn demo:up:krb
 yarn demo:wait
 
-# the whole demo at recording pace, about 90 minutes
-DEMO_PACE=slow yarn ft_test:demo
+# the recording: the four acts that carry the argument, at the default pace
+DEMO_ACTS=02,03,04,06 yarn ft_test:demo
 
-# the short version, the four acts that carry the argument, about 45 minutes
-DEMO_PACE=slow DEMO_ACTS=02,03,04,06 yarn ft_test:demo
+# the whole demo, every act, for a reference run (about 80 minutes measured)
+yarn ft_test:demo
 
 # one act, to reshoot it
-DEMO_PACE=slow DEMO_ACTS=04 yarn ft_test:demo
+DEMO_ACTS=04 yarn ft_test:demo
 
 # the four-pane terminal layout, if you want the processes on screen
 poc-demo/bin/demo-layout.sh
