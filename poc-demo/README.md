@@ -383,7 +383,12 @@ plus Kafka 3.4.0 from `archive.apache.org`, so both need network on a fresh
 machine.
 
 `poc-ft-kafka:latest` and `ci-mongodb:latest` are local build artifacts rather
-than published images, and a fresh machine needs them built first.
+than published images. They carry `build:` stanzas pointing at
+`../.github/dockerfiles/kafka` and `../.github/dockerfiles/mongodb`, and
+`bin/stack-up.sh` (so `yarn demo:up`) builds either one the daemon does not
+already have, so a fresh machine builds them on the first bring-up. The kafka
+Dockerfile downloads Kafka 3.9.0 from `archive.apache.org`, so that build needs
+network.
 
 ## Files
 

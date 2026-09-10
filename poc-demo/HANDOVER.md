@@ -297,18 +297,26 @@ drainer.
 Three commands, four browser tabs.
 
 ```bash
-yarn demo:up                # containers, mongo replica set, topics, CloudServer
+yarn demo:preflight         # docker, node 22, free ports, python for node-gyp
+yarn demo:install           # yarn install, with the node-gyp workaround folded in
+yarn demo:up                # builds the two local images if missing, then the stack
 yarn demo:up:krb            # the same plus the Kerberos KDC and broker, for act 07
 yarn demo:wait              # blocks until broker, mongo PRIMARY, S3 and grafana answer
-yarn ft_test:demo           # every act, in order
+yarn ft_test:demo           # every act, in order, at DEMO_PACE=demo (the default)
 
-DEMO_ACTS=02,04,06 yarn ft_test:demo        # only these acts, in this order
-DEMO_ACTS=06 yarn ft_test:demo:act          # the same thing, one act
+DEMO_ACTS=02,03,04,06 yarn ft_test:demo      # the acts that carry the argument
+DEMO_ACTS=06 yarn ft_test:demo:act          # one act
+DEMO_PACE=slow yarn ft_test:demo            # every wait doubled, for a careful take
 DEMO_PACE=fast yarn ft_test:demo            # shorter waits, while iterating
 poc-demo/scenarios/run.sh --list            # the acts, by name
 yarn demo:status                            # what is up, and the URLs
 yarn demo:down                              # stop the containers
 ```
+
+The full minute-by-minute recording script, with what to point at in each UI
+and the numbers to expect per act, is `poc-demo/PLAYBOOK.md`. `DEMO_PACE=demo`
+is the default and is tuned for recording; `slow` doubles every wait, `fast` is
+for iterating.
 
 CloudServer is a container of the stack, published on `CLOUDSERVER_PORT`, and
 the suite's before-hook waits for the stack and then finds the endpoint
@@ -368,25 +376,31 @@ by act, with what to say), `bnaas-poc-state` (this map, in skill form).
 
 ## Recording the demo
 
-The pace knob is the whole difference between a run and a take. `slow` doubles
-every deliberate wait, which is what gives you time to talk over a step;
-`fast` cuts them to about a third, which is for iterating, not for recording.
-Disable system sleep first: the containers survive it, but the consumer groups
-rebalance and a long act never recovers its narration.
+The minute-by-minute script for the recording, act by act, is
+`poc-demo/PLAYBOOK.md`: the ten commands from a clean clone, then per act what
+the terminal prints, what to point at in Grafana, Kafka UI and ZooNavigator,
+the numbers to expect, the caveats to say out loud, and how long it takes.
+Troubleshooting and teardown are there too.
+
+`DEMO_PACE=demo` is the default and is tuned for recording: brisk enough that
+the whole suite fits a sitting, slow enough to talk over. `slow` doubles every
+wait for a careful take; `fast` is for iterating, not recording. Disable system
+sleep first (`caffeinate -dimsu`): the containers survive it, but the consumer
+groups rebalance and a long act never recovers its narration.
 
 ```bash
 # once, before the take: infrastructure with the Kerberos profile, then wait
 yarn demo:up:krb
 yarn demo:wait
 
-# the whole demo, at recording pace. About 90 minutes at DEMO_PACE=slow.
-DEMO_PACE=slow yarn ft_test:demo
+# the whole demo at the default recording pace (~50-80 min, the wedge varies it)
+yarn ft_test:demo
 
-# the short version, the four acts that carry the argument, about 45 minutes
-DEMO_PACE=slow DEMO_ACTS=02,03,04,06 yarn ft_test:demo
+# the argument, ~30-40 minutes: baseline, dead destination, migration, workgroups
+DEMO_ACTS=02,03,04,06 yarn ft_test:demo
 
 # one act, to reshoot it
-DEMO_PACE=slow DEMO_ACTS=04 yarn ft_test:demo
+DEMO_ACTS=04 yarn ft_test:demo
 
 # the four-pane terminal layout, if you want the processes on screen
 poc-demo/bin/demo-layout.sh
@@ -406,46 +420,51 @@ showing the cure reads better than hiding the symptom.
 ## A fresh clone
 
 ```bash
-git clone --branch poc/S3C-11127-demo git@github.com:scality/backbeat.git
-cd backbeat
-export PATH=$HOME/.nvm/versions/node/v22.22.3/bin:$PATH
-yarn install --frozen-lockfile
-yarn demo:up          # or demo:up:krb, if you want act 07
+git clone --branch poc/S3C-11127-demo git@github.com:scality/backbeat.git && cd backbeat
+nvm install 22 && nvm use 22   # or any node 22 on PATH; 24 breaks native modules
+yarn demo:install              # yarn install, node-gyp workaround folded in
+yarn demo:preflight            # docker, node, free ports, python for node-gyp
+yarn demo:up                   # builds the two local images if missing, then the stack
 yarn demo:wait
-yarn ft_test:demo
+yarn ft_test:demo              # or demo:up:krb first, for act 07
 ```
 
-Three things a fresh machine needs that the clone does not carry:
+What a fresh machine needs, now handled by the scripts:
 
-**Two local images.** `poc-ft-kafka:latest` and `ci-mongodb:latest` are
-local build artifacts, published nowhere, and the stack cannot come up
-without them. That is the one hard prerequisite in the whole handover.
-Everything else in `.env` pulls: CloudServer, kafka-ui, kafka-exporter,
-ZooNavigator, socat, prometheus, grafana, zookeeper, redis. CloudServer and
-ZooNavigator are amd64 only and run under emulation on Apple silicon. The
-Kerberos KDC and broker build on first use of the `krb` profile, so that
-needs network.
+**The two local images build themselves.** `poc-ft-kafka:latest` and
+`ci-mongodb:latest` are local build artifacts, published nowhere. They now
+carry `build:` stanzas pointing at `.github/dockerfiles/kafka` and
+`.github/dockerfiles/mongodb`, and `yarn demo:up` builds any image the daemon
+does not already have, so the first run builds them (the kafka one downloads
+Kafka 3.9.0 from archive.apache.org, so it needs network). Everything else in
+`.env` pulls: CloudServer, kafka-ui, kafka-exporter, ZooNavigator, socat,
+prometheus, grafana, zookeeper, redis. CloudServer and ZooNavigator are amd64
+only and run under emulation on Apple silicon.
 
-**`yarn install` fails on one native module, and it does not matter.**
-`fcntl`, a transitive dependency pinned to an old node-gyp, cannot configure
-under Python 3.12 or later, because gyp imports `distutils`, which Python
-removed. It is only used by arsenal's file data backend, which the demo does
-not touch: the demo runs MongoDB metadata and in-memory data. Everything the
-suite needs, `node-rdkafka` included, builds and loads. This is a
-pre-existing repository problem, not something this branch introduced. If
-you want a clean install, give the build a Python that still has
-`distutils`, or `pip install setuptools` into the interpreter node-gyp
-picks.
+**`yarn demo:install` handles the one native-module failure.** `fcntl`, a
+transitive dependency pinned to an old node-gyp, cannot configure under Python
+3.12+, because gyp imports `distutils`, which Python removed. It is only used
+by arsenal's file data backend, which the demo does not touch (the demo runs
+MongoDB metadata and in-memory data), so a plain `yarn install` still works;
+it is just noisy. `yarn demo:install` makes a throwaway venv with setuptools
+and points node-gyp at it, so the install is clean. Everything the suite
+needs, `node-rdkafka` included, builds and loads either way. `yarn
+demo:preflight` warns about this before you start.
 
-**Kerberos keytabs.** `poc-demo/krb/keytabs/` is empty in git on purpose:
-the KDC container writes the keytabs on its first start, so
-`yarn demo:up:krb` creates them. Act 07 skips with a clear message if they
-are not there, rather than failing.
+**Node is no longer pinned to one path.** The suite and the scripts default to
+the node they are already running on, so a fresh machine needs no `NODE_BIN`
+edit; set it in `.env` only if the node on PATH is not 22.
+
+**Kerberos, for act 07.** `poc-demo/krb/keytabs/` is empty in git on purpose:
+the KDC container writes the keytabs on its first start, so `yarn demo:up:krb`
+creates them, and the same command builds the test image and seeds its
+node_modules volume (`bin/krb-test-image.sh`, setup time, not demo time). Act
+07 skips with a clear message that names that script if any of it is missing,
+rather than failing.
 
 `PORT_OFFSET` is 1000 in `.env`, which is the machine this was built on.
 Nothing about the demo needs that value; set it to 0 on a machine where the
 standard ports are free and every derived port follows.
-
 
 ## Known gotchas
 
