@@ -85,7 +85,6 @@ class KerberosCredentials {
         // keytab path -> file contents, in registration order
         this._keytabs = new Map();
         this._mergedKeytabPath = null;
-        this._ccacheConfigured = false;
     }
 
     /**
@@ -119,7 +118,6 @@ class KerberosCredentials {
     useCollectionCache(log) {
         const current = this._env.KRB5CCNAME;
         if (current && current.startsWith('DIR:')) {
-            this._ccacheConfigured = true;
             return current;
         }
         const value = `DIR:${this.ccacheDir}`;
@@ -134,7 +132,6 @@ class KerberosCredentials {
             });
         }
         this._env.KRB5CCNAME = value;
-        this._ccacheConfigured = true;
         return value;
     }
 
@@ -142,18 +139,20 @@ class KerberosCredentials {
      * Register a destination's keytab so that MIT can obtain tickets for its
      * principal, and make sure the cache is a collection.
      *
-     * Registering the same keytab twice is a no-op. Registering a second,
-     * different keytab rebuilds the merged client keytab, so a destination
-     * added later is served without restarting the process.
+     * Registering the same keytab twice adds nothing, but the cache is
+     * checked every time rather than only on the first call: the settings
+     * live in the environment, which anything in the process can change, and
+     * a cache that stopped being a collection would silently hand every
+     * destination the same identity. Registering a second, different keytab
+     * rebuilds the merged client keytab, so a destination added later is
+     * served without restarting the process.
      *
      * @param {string} keytabPath - path of the destination's keytab
      * @param {Logger} log - logger object
      * @return {undefined}
      */
     registerKeytab(keytabPath, log) {
-        if (!this._ccacheConfigured) {
-            this.useCollectionCache(log);
-        }
+        this.useCollectionCache(log);
         if (this._keytabs.has(keytabPath)) {
             return;
         }

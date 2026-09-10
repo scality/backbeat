@@ -168,6 +168,22 @@ describe('notification kerberosCredentials', () => {
             assert.strictEqual(mode, 0o600);
         });
 
+        it('should restore a collection cache that was unset under it', () => {
+            const keytabPath = writeKeytab('alpha.keytab', ['alpha-key']);
+            credentials.registerKeytab(keytabPath, FakeLogger);
+            delete env.KRB5CCNAME;
+            credentials.registerKeytab(keytabPath, FakeLogger);
+            assert.strictEqual(env.KRB5CCNAME, `DIR:${credentials.ccacheDir}`);
+        });
+
+        it('should replace a single file cache set after the first registration', () => {
+            const keytabPath = writeKeytab('alpha.keytab', ['alpha-key']);
+            credentials.registerKeytab(keytabPath, FakeLogger);
+            env.KRB5CCNAME = 'FILE:/tmp/krb5cc_0';
+            credentials.registerKeytab(writeKeytab('beta.keytab', ['beta-key']), FakeLogger);
+            assert.strictEqual(env.KRB5CCNAME, `DIR:${credentials.ccacheDir}`);
+        });
+
         it('should ignore a keytab it already holds', () => {
             const keytabPath = writeKeytab('alpha.keytab', ['alpha-key']);
             credentials.registerKeytab(keytabPath, FakeLogger);
