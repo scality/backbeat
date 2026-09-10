@@ -314,13 +314,31 @@ async function restartInPlace(name, timeoutMs) {
         note(`no process called ${name} to restart`);
         return null;
     }
+    // stop() clears autoRestart so that a deliberate stop is not undone by
+    // the supervisor. A restart is not a stop: the replacement must keep
+    // the supervision the original had, or the next crash or kill leaves
+    // the pool with no consumer and nothing to bring one back.
+    const supervised = p.autoRestart;
+    const assignsBefore = p.rebalances().assign;
     p.stop();
     await wait.sleep(env.pause(6000));
     p.held = false;
+    p.autoRestart = supervised;
     p.restarts += 1;
     p.spawnOnce();
     await procs.waitReady(p, timeoutMs || 60000);
     say(`${name} restarted as pid ${p.pid}, restart ${p.restarts}`);
+    // A consumer that has just started holds nothing for a while: the dead
+    // member's session has to expire and the first join is revoked and
+    // re-assigned about forty seconds later. Nothing can progress before
+    // that, so a stall clock started here would fire on a healthy
+    // consumer. Wait for the first assignment before judging anything.
+    const joined = await wait.until(`${name}'s first assignment after the restart`,
+        () => p.rebalances().assign > assignsBefore, 150000, 2000);
+    if (joined) {
+        say(`${name} holds an assignment again, `
+            + `${Math.round((Date.now() - p.startedAt) / 1000)}s after it started`);
+    }
     return p;
 }
 
@@ -460,8 +478,14 @@ async function drainOrCure(p) {
                 async () => (await wait.liveness(n)) === 200, 60000, 2000);
         }
     }
-    const again = await wait.drain(Object.assign({}, p,
-        { timeoutMs: p.retryTimeoutMs || p.timeoutMs || 300000 }));
+    // The restarted consumer has an assignment now, but its first records
+    // still take a while to flow, so the second drain gets a longer stall
+    // limit than the first: sixty seconds fired on a healthy consumer that
+    // had joined a second earlier.
+    const again = await wait.drain(Object.assign({}, p, {
+        timeoutMs: p.retryTimeoutMs || p.timeoutMs || 300000,
+        stallSeconds: Math.max(p.stallSeconds || 60, 120),
+    }));
     if (again.drained) {
         say(`${p.label || p.group}: drained after the restart, in `
             + `${again.seconds}s. That is the operator cure working, and it is `

@@ -138,18 +138,37 @@ function register(ctx) {
             act.measured('uncommitted window at the kill', `${window} records`);
             watch('grafana', 'row "Health": delivery workers up drops to 0, '
                 + 'then back to 1');
+            const restartsBefore = worker.restarts;
+            const assignsBefore = worker.rebalances().assign;
+            const killedAt = Date.now();
             worker.kill('SIGKILL');
             act.timeline(`worker1 KILL9 window=${window}`);
             note('the supervisor restarts it about two seconds later, which is');
             note('what systemd does on a deployment');
-            await wait.until('the worker to come back',
-                () => worker.isRunning(), 90000, 1000);
+            // The killed pid can still answer a signal-0 probe for a moment
+            // as a zombie, so "is it running" is the wrong question. The
+            // right one is whether the supervisor has spawned a replacement.
+            const respawned = await wait.until('the supervisor to spawn a replacement',
+                () => worker.restarts > restartsBefore && worker.isRunning(),
+                90000, 1000);
+            assert.ok(respawned, 'the supervisor never restarted the worker');
             // its probe has to come back too, or the numbers below are blind:
             // a probe that cannot bind is non-fatal by design
             await wait.until('the restarted worker\'s probe to answer',
                 async () => (await wait.liveness(1)) === 200, 60000, 2000);
             say(`worker back as pid ${worker.pid}, exits so far `
                 + `${worker.exits.length}`);
+            note('it holds nothing yet: the dead member\'s session has to');
+            note('expire, and the first join is revoked and re-assigned about');
+            note('forty seconds later. That pause is part of what a worker');
+            note('death costs, so it is waited for and measured here.');
+            const joined = await wait.until('the replacement\'s first assignment',
+                () => worker.rebalances().assign > assignsBefore, 150000, 2000);
+            const pause = Math.round((Date.now() - killedAt) / 1000);
+            say(`replacement ${joined ? 'assigned' : 'still unassigned'} `
+                + `${pause}s after the kill`);
+            act.measured('pause until the replacement is assigned',
+                `${pause}s`);
 
             step(5, 'let the load finish, drain, and check');
             await wait.until('the driver to finish',

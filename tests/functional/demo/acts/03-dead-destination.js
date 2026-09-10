@@ -78,10 +78,19 @@ function register(ctx) {
                 note('a reachable broker with an unwritable target. Created');
                 note('with --replica-assignment 99, a broker that does not');
                 note('exist, so the partition has no leader and never will.');
-                if (!kafka.topicExists(LEADERLESS)) {
+                // Only a cluster with a second broker can be asked for a
+                // replica that is not the answering one. On a single broker
+                // the request never completes, the CLI still exits 0, and a
+                // half-created topic is left in ZooKeeper with its only
+                // replica on a broker that does not exist. So do not ask.
+                const brokers = kafka.brokerCount();
+                if (brokers >= 2 && !kafka.topicExists(LEADERLESS)) {
                     kafka.tool('kafka-topics.sh',
                         ['--create', '--topic', LEADERLESS,
                             '--replica-assignment', '99']);
+                } else if (brokers < 2) {
+                    say(`${brokers} broker in this cluster, so the leaderless`
+                        + ' class is not attempted');
                 }
                 // The CLI exits 0 even when the controller never completes
                 // the request, so ask the cluster rather than trusting it.

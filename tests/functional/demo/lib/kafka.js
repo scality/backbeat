@@ -100,6 +100,21 @@ function topics() {
         .map(s => s.trim()).filter(Boolean);
 }
 
+/**
+ * How many brokers the cluster has. A leaderless partition, the third
+ * failure class of the dead-destination act, can only be built where a
+ * replica can be placed on a broker that is not the one answering, so a
+ * single-broker cluster has to use another mechanism, and must not even try:
+ * the create request for a replica on a nonexistent broker never completes
+ * and leaves a half-created topic behind in ZooKeeper.
+ *
+ * @return {Number} broker count, 0 if it cannot be read
+ */
+function brokerCount() {
+    const out = tool('kafka-broker-api-versions.sh', []).out;
+    return out.split('\n').filter(l => /^\S.*\(id: \d+/.test(l)).length;
+}
+
 function topicExists(name) {
     return topics().includes(name);
 }
@@ -511,6 +526,7 @@ module.exports = {
     tool,
     topics,
     topicExists,
+    brokerCount,
     heads,
     headTotal,
     head,
