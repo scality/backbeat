@@ -52,10 +52,10 @@ function register() {
         before(() => {
             act.open();
             act.expect('two principals in one process',
-                '9 of 9 and 9 of 9, each as its own identity');
+                '2 distinct identities in one process');
             act.expect('node-rdkafka collision control',
-                'the losing producer delivers 0 of 9');
-            act.expect('50 principals in one process', '250 of 250');
+                'collides on one identity and fails the other');
+            act.expect('the suite\'s arms', '7 passing, 0 failing');
             act.expect('suite exit code', 0);
         });
 
@@ -126,6 +126,7 @@ function register() {
                     `localhost:${env.KRB_VERIFY_PORT}`);
                 say(`image ${IMAGE}, namespace ${netns}, brokers ${brokers}`);
                 say(`log ${act.file('suite.log')}`);
+                const startedAt = Date.now();
                 const r = run('docker', ['run', '--rm',
                     '--name', 'bnaas-demo-krbtest',
                     '--network', `container:${netns}`,
@@ -150,18 +151,42 @@ function register() {
                     .map(l => `      | ${l}`).join('\n'));
 
                 step(3, 'read the result out of the broker\'s own lines');
-                const log = `${r.out}\n${r.err}`;
-                const ids = (log.match(/authenticationID=\S+/g) || []);
+                note('only the broker\'s own authenticationID line counts: a');
+                note('client stack can report the identity it was configured');
+                note('with rather than the one it authenticated as. Those');
+                note('lines are in the kerberised broker\'s container log, not');
+                note('in the test container\'s output, so that is where this');
+                note('reads them from.');
+                const krbBroker = env.knob('KRB_KAFKA_CONTAINER',
+                    `${env.PROJECT}-krb-kafka-1`);
+                const secs = Math.ceil((Date.now() - startedAt) / 1000) + 60;
+                const krbBrokerLog = run('docker',
+                    ['logs', krbBroker, '--since', `${secs}s`],
+                    { maxBuffer: 256 * 1024 * 1024 });
+                const log = `${r.out}\n${r.err}\n`
+                    + `${krbBrokerLog.out}\n${krbBrokerLog.err}`;
+                fs.writeFileSync(act.file('krb-broker.log'),
+                    `${krbBrokerLog.out}\n${krbBrokerLog.err}\n`);
+                const ids = (log.match(/authenticationID=[^\s,;)]+/g) || []);
                 const uniq = Array.from(new Set(ids));
-                say(`${ids.length} authenticationID lines, distinct: `
-                    + `${uniq.join(', ')}`);
+                say(`${ids.length} authenticationID lines from ${krbBroker}, `
+                    + `distinct: ${uniq.join(', ')}`);
                 act.measured('two principals in one process',
-                    uniq.length >= 2
-                        ? `${uniq.length} distinct identities in one process`
-                        : `${uniq.length} identity`);
-                const fifty = (log.match(/25\d of 25\d/g) || []).pop();
-                act.measured('50 principals in one process', fifty || 'not seen');
+                    `${uniq.length} distinct identities in one process`);
+                const arms = /(\d+) passing/.exec(log);
+                const failed = /(\d+) failing/.exec(log);
+                act.measured('the suite\'s arms',
+                    `${arms ? arms[1] : '?'} passing, `
+                    + `${failed ? failed[1] : 0} failing`);
+                const collided = /collide on one identity/.test(log);
+                act.measured('node-rdkafka collision control', collided
+                    ? 'collides on one identity and fails the other'
+                    : 'the control arm did not run');
                 act.measured('suite exit code', r.code);
+                note('the 50-principals-in-one-process number, 250 of 250, is');
+                note('a separate scale experiment and is written up in');
+                note('poc-demo/results/RESULTS-kerberos-nodejs.md. This suite');
+                note('proves the mechanism, not the scale.');
                 if (r.code !== 0) {
                     note('the suite did not exit 0. An arm that SKIPS because');
                     note('the docker socket or a keytab is missing is not a');
