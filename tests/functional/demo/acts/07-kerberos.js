@@ -85,7 +85,10 @@ function register() {
                         + 'Set KRB_BACKBEAT_DIR to one that does.');
                 }
                 if (!run('docker', ['image', 'inspect', IMAGE]).ok) {
-                    reasons.push(`the test image ${IMAGE} is not built`);
+                    reasons.push(`the test image ${IMAGE} is not built. `
+                        + 'Build it with `yarn demo:up:krb`, which runs '
+                        + 'poc-demo/bin/krb-test-image.sh, or run that script '
+                        + 'directly');
                 }
                 if (!keytabs || !fs.existsSync(path.join(keytabs, 'notifa.keytab'))) {
                     reasons.push('the keytabs notifa.keytab and notifb.keytab '

@@ -39,8 +39,19 @@ fi
 if [ -z "${BACKBEAT_DIR:-}" ]; then
     BACKBEAT_DIR=$(git -C "$DEMO" rev-parse --show-toplevel 2>/dev/null)
 fi
-NODE_BIN=${NODE_BIN:-$HOME/.nvm/versions/node/v22.22.3/bin}
-NODE=$NODE_BIN/node
+# The node 22 bin dir. An explicit NODE_BIN wins when its node is executable;
+# otherwise use whatever node is on PATH, because a fresh machine will not
+# have the pinned nvm path and the scripts must still find a node. The "not
+# 22" caveat stands: node 24 breaks the native modules.
+if [ -n "${NODE_BIN:-}" ] && [ -x "${NODE_BIN}/node" ]; then
+    NODE="$NODE_BIN/node"
+elif command -v node >/dev/null 2>&1; then
+    NODE_BIN="$(dirname "$(command -v node)")"
+    NODE="$NODE_BIN/node"
+else
+    NODE_BIN="$HOME/.nvm/versions/node/v22.22.3/bin"
+    NODE="$NODE_BIN/node"
+fi
 SUITE=$BACKBEAT_DIR/tests/functional/demo
 
 # CLOUDSERVER_DIR may be relative in demo/.env: resolve it against the

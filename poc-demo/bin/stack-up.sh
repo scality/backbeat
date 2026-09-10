@@ -26,6 +26,29 @@ load_env
 
 say "BNaaS demo stack, project ${PROJECT}, PORT_OFFSET ${PORT_OFFSET}"
 
+# ---- build local-only images ------------------------------------------
+# poc-ft-kafka and ci-mongodb are built from .github/dockerfiles, not pulled
+# from any registry, so a fresh machine has neither. Build the ones the
+# daemon does not already have, so the whole stack comes up with one
+# `yarn demo:up`. An existing image is left alone: this is not a rebuild.
+for pair in "kafka:${KAFKA_IMAGE:-poc-ft-kafka:latest}" \
+            "mongo:${MONGO_IMAGE:-ci-mongodb:latest}"; do
+    svc="${pair%%:*}"
+    img="${pair#*:}"
+    if docker image inspect "$img" >/dev/null 2>&1; then
+        info "$img present"
+    else
+        say "building $img from .github/dockerfiles ($svc): one-time, needs network"
+        dck build "$svc" || die "could not build $img. See the build output above."
+    fi
+done
+
+# The Kerberos functional test image (act 07) is built at setup time, not
+# demo time, so it is behind --krb and does not slow an ordinary run.
+if [ "$WITH_KRB" -eq 1 ] && [ -x "$DEMO_DIR/bin/krb-test-image.sh" ]; then
+    "$DEMO_DIR/bin/krb-test-image.sh" || warn "the kerberos test image could not be built; act 07 will skip"
+fi
+
 # ---- port preflight ----------------------------------------------------
 CHECK=(ZK_PORT KAFKA_PORT REDIS_PORT MONGO_PORT PROMETHEUS_PORT GRAFANA_PORT \
        KAFKA_UI_PORT KAFKA_EXPORTER_PORT ZOONAV_PORT CLOUDSERVER_PORT)

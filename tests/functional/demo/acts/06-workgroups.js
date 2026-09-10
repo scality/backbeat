@@ -57,7 +57,8 @@ const BUCKETS = {};
 DESTS.forEach((d, i) => { BUCKETS[d] = `demo-wg-${i + 1}`; });
 const CUTOVER = 'bin/notificationWorkgroupCutover.js';
 const STOP_EARLY = env.knob('DEMO_WORKGROUPS_STOP_EARLY', '') === '1';
-const LOAD_SECONDS = Number(env.knob('DEMO_ACT06_SECONDS', 420));
+const LOAD_SECONDS = Number(env.knob('DEMO_ACT06_SECONDS',
+    env.workSecs(420, 200)));
 
 function register(ctx) {
     describe('Act 06: workgroups', () => {

@@ -73,7 +73,8 @@ function register(ctx) {
             await flow.warmLegacyGroup(act, { dest: D1, bucket, count: 8 });
             const from = kafka.head(t1, 0);
             const load = flow.startDriver(act, { bucket, 'prefix': 'm5', 'rate': 3,
-                'duration': 150, 'straddle': 3, 'straddle-every': 5 });
+                'duration': env.workSecs(150, 75), 'straddle': 3,
+                'straddle-every': 5 });
             await procs.sleep(env.pause(25000));
             const internal1 = kafka.headTotal(env.INTERNAL_TOPIC);
             const delivery1 = kafka.headTotal(env.DELIVERY_TOPIC);

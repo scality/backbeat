@@ -103,14 +103,36 @@ function resolveCloudserver() {
 }
 
 const CLOUDSERVER_DIR = resolveCloudserver();
-const NODE_BIN = knob('NODE_BIN',
-    path.join(os.homedir(), '.nvm/versions/node/v22.22.3/bin'));
+
+// The node 22 bin directory. mocha is already running on the right node, so
+// the safe default is the directory of THIS process's own node: on a fresh
+// machine the pinned nvm path does not exist, and procs.js would then spawn
+// with a PATH that has no node at all. An explicit NODE_BIN knob still wins,
+// but only when the node in it is actually executable; otherwise fall back
+// to the interpreter this process is running under.
+function resolveNodeBin() {
+    const raw = knob('NODE_BIN');
+    if (raw) {
+        try {
+            fs.accessSync(path.join(raw, 'node'), fs.constants.X_OK);
+            return raw;
+        } catch {
+            // the knob points somewhere with no usable node; fall through
+        }
+    }
+    return path.dirname(process.execPath);
+}
+const NODE_BIN = resolveNodeBin();
 
 const PORT_OFFSET = num('PORT_OFFSET', 0);
 const port = (name, base) => num(name, base + PORT_OFFSET);
 
-const PACE = (knob('DEMO_PACE', 'normal') || 'normal').toLowerCase();
-const PACE_FACTOR = { slow: 2, normal: 1, fast: 0.35 }[PACE] || 1;
+// 'demo' is the recording default: brisk enough that a full run fits a
+// recording window, slow enough to talk over. 'slow' doubles every
+// deliberate wait for a careful take, 'fast' is for iterating, 'normal' is
+// the original one-to-one.
+const PACE = (knob('DEMO_PACE', 'demo') || 'demo').toLowerCase();
+const PACE_FACTOR = { slow: 2, normal: 1, demo: 0.6, fast: 0.35 }[PACE] || 1;
 
 const RUN_ID = knob('DEMO_RUN_ID',
     new Date().toISOString().replace(/[-:T.Z]/g, '').slice(2, 14));
@@ -183,6 +205,18 @@ env.customerTopic = n => env.CUSTOMER_TOPICS[n - 1];
 
 // pace-scaled pause, in milliseconds
 env.pause = ms => Math.round(ms * env.PACE_FACTOR);
+
+// A workload duration in seconds, scaled by pace with a floor. The fixed
+// driver durations an act runs (how long traffic flows during a cutover or a
+// reshard) are not env.pause waits, so they need their own knob: at demo and
+// fast pace a shorter run still exercises the same procedure with fewer
+// events, which is what keeps the whole suite inside a recording window. The
+// floor keeps enough traffic for every consumer group to see load.
+env.workSecs = (baseSeconds, floorSeconds) => {
+    const factor = { slow: 1.25, normal: 1, demo: 0.55, fast: 0.4 }[env.PACE]
+        || 1;
+    return Math.max(floorSeconds || 30, Math.round(baseSeconds * factor));
+};
 
 env.urls = () => ({
     grafana: `http://localhost:${env.GRAFANA_PORT}`,

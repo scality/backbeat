@@ -63,13 +63,29 @@ is 10,000.
 The act that earns the redesign.
 
 Legacy half: the processor for a refused destination **cannot start**, and
-under a supervisor that is a crash loop consuming nothing. Then the
-leaderless destination: it starts, attempts only its concurrency worth of
-records, and the group's committed offset does not move, on any partition, for
-five minutes. No counter moves. The failed topic the config names stays at
-zero, because no production code reads it. At about t+300s the log shows the
-sends timing out and the commit failing with the group assignment lost: the
-stall blew the poll interval and the broker had already evicted the member.
+under a supervisor that is a crash loop consuming nothing. Then a reachable
+broker with an unwritable target, the third failure class. What it does
+depends on the cluster, and the act says which it built:
+
+- On a multi-broker cluster (the rig) the class is a **leaderless partition**:
+  the broker is reachable, the producer is ready, but the produce **hangs**.
+  The processor attempts only its concurrency worth of records, the group's
+  committed offset does not move on any partition for five minutes, and at
+  about t+300s the log shows the sends timing out and the commit failing with
+  the group assignment lost: the stall blew the poll interval and the broker
+  evicted the member.
+- On the **single-broker demo** that partition cannot be created, so the class
+  is a topic with `max.message.bytes` far below one event: the producer
+  connects and reports ready, and every produce is **rejected immediately**.
+  The send callback fires with an error, the processor calls `done()`, and the
+  consumer **commits and advances past events it never delivered**. The act's
+  offset row says "advances past N undelivered events" rather than "none".
+
+Say the point out loud: same silent failure, one step worse. Either the
+offsets freeze and the destination stalls forever, or they advance past
+records that were dropped on the floor. No counter moves either way, and the
+failed topic the config names stays at zero, because no production code reads
+it.
 
 Pool half: the worker starts **healthy** with four unreachable destinations
 configured. Grafana, the drops panel: 20 of 20 per destination, labelled
@@ -78,10 +94,11 @@ configured. Grafana, the drops panel: 20 of 20 per destination, labelled
 configured deadline. The delivery group's lag goes to zero: it commits past
 the drops. A healthy destination delivers throughout.
 
-The line to say: today a dead destination does not drop with the offsets
-advancing, it stalls that destination indefinitely with no counter at all.
-The pool turns the same failure into a bounded, counted, per-destination drop
-visible in 30 seconds. Neither side has a dead-letter path.
+The line to say: today a dead destination fails silently with no counter at
+all, either by stalling that destination indefinitely or by committing past
+events it never delivered. The pool turns the same failure into a bounded,
+counted, per-destination drop visible in 30 seconds. Neither side has a
+dead-letter path.
 
 Keep the honest caveat on camera: the drop reason cannot yet tell a timeout
 from a rejection, because the delivery report carries a different error code

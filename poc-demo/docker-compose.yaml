@@ -34,6 +34,11 @@ services:
 
   kafka:
     image: ${KAFKA_IMAGE:-poc-ft-kafka:latest}
+    # Built, not pulled: poc-ft-kafka is a local artifact. The Dockerfile
+    # downloads Kafka 3.9.0 from archive.apache.org, so the one-time build
+    # needs network. stack-up.sh builds it if the image is not present.
+    build:
+      context: ../.github/dockerfiles/kafka
     depends_on:
       zookeeper:
         condition: service_healthy
@@ -87,6 +92,10 @@ services:
     # ${MONGO_PORT} with a matching member host instead (bin/mongo-init.sh),
     # published 1:1 for the same reason as the kafka listener.
     image: ${MONGO_IMAGE:-ci-mongodb:latest}
+    # Built, not pulled: ci-mongodb is a local artifact (mongo 5.0.21 plus the
+    # CI replica-set init). stack-up.sh builds it if the image is not present.
+    build:
+      context: ../.github/dockerfiles/mongodb
     entrypoint: ["bash", "-c"]
     command:
       - mongod --bind_ip_all --port ${MONGO_PORT} --replSet rs0

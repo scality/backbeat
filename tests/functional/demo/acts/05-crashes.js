@@ -68,7 +68,8 @@ function register(ctx) {
             async () => {
                 const from = kafka.head(topic, 0);
                 const load = flow.startDriver(act, { 'bucket': BUCKET,
-                    'prefix': 'm11', 'rate': 5, 'duration': 120, 'straddle': 2,
+                    'prefix': 'm11', 'rate': 5, 'duration': env.workSecs(120, 60),
+                    'straddle': 2,
                     'straddle-every': 5 });
                 await procs.sleep(env.pause(20000));
 
@@ -122,7 +123,8 @@ function register(ctx) {
         it('confines a worker kill to the uncommitted window', async () => {
             const from = kafka.head(topic, 0);
             const load = flow.startDriver(act, { 'bucket': BUCKET, 'prefix': 'm12',
-                'rate': 5, 'duration': 90, 'straddle': 2, 'straddle-every': 5 });
+                'rate': 5, 'duration': env.workSecs(90, 45), 'straddle': 2,
+                'straddle-every': 5 });
 
             step(4, 'wait for real lag on the delivery topic, then kill -9');
             await procs.sleep(env.pause(45000));

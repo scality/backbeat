@@ -41,6 +41,8 @@
     "notification_delivery_worker": "node extensions/notification/deliveryWorker/task.js",
     "notification_delivery_replay": "node bin/notificationDeliveryReplay.js",
     "notification_workgroup_cutover": "node bin/notificationWorkgroupCutover.js",
+    "demo:preflight": "bash poc-demo/bin/preflight.sh",
+    "demo:install": "bash poc-demo/bin/install.sh",
     "demo:up": "bash poc-demo/bin/stack-up.sh",
     "demo:up:krb": "bash poc-demo/bin/stack-up.sh --krb",
     "demo:down": "bash poc-demo/bin/stack-down.sh",

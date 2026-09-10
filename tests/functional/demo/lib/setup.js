@@ -241,6 +241,53 @@ async function ensureStackReady() {
     say('host CloudServer answering');
 }
 
+// Only one demo run at a time may drive one broker: two runs share the same
+// topics and consumer groups, and the reset one does at startup deletes the
+// groups the other just seeded. The lock is keyed to the compose project and
+// the port offset, so runs against different stacks do not collide.
+const LOCK = path.join(env.RUN, `demo-${env.PROJECT}-${env.PORT_OFFSET}.lock`);
+
+/**
+ * Take the single-run lock, or throw naming who holds it. A lock whose pid is
+ * no longer alive is stale and is taken over.
+ *
+ * @return {undefined}
+ */
+function acquireLock() {
+    fs.mkdirSync(env.RUN, { recursive: true });
+    if (fs.existsSync(LOCK)) {
+        const held = (fs.readFileSync(LOCK, 'utf8').trim().split(/\s+/)[0]) || '';
+        const pid = Number(held);
+        let alive = false;
+        try {
+            process.kill(pid, 0);
+            alive = pid !== process.pid;
+        } catch {
+            alive = false;
+        }
+        if (alive) {
+            throw new Error('another demo run is already driving this stack '
+                + `(pid ${pid}, lock ${LOCK}). Wait for it to finish, or stop `
+                + 'it, then run again. Different PORT_OFFSET values do not '
+                + 'collide.');
+        }
+        note(`taking over a stale lock left by pid ${pid || 'unknown'}`);
+    }
+    fs.writeFileSync(LOCK, `${process.pid} ${new Date().toISOString()}\n`);
+}
+
+/** Release the single-run lock, but only if it is still ours. */
+function releaseLock() {
+    try {
+        const held = Number(fs.readFileSync(LOCK, 'utf8').trim().split(/\s+/)[0]);
+        if (held === process.pid) {
+            fs.unlinkSync(LOCK);
+        }
+    } catch {
+        // no lock to release
+    }
+}
+
 /**
  * Everything before the first act.
  *
@@ -248,6 +295,7 @@ async function ensureStackReady() {
  */
 async function globalSetup() {
     header();
+    acquireLock();
     fs.mkdirSync(env.EVIDENCE, { recursive: true });
     fs.mkdirSync(env.RUN, { recursive: true });
     ctx.reset = resetKafka();
@@ -278,6 +326,7 @@ async function globalTeardown() {
     say('stopping every process this run started');
     procs.stopAll(true);
     await procs.sleep(1000);
+    releaseLock();
     say(`evidence is under ${env.EVIDENCE}`);
 }
 

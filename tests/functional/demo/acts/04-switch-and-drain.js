@@ -33,7 +33,7 @@ const { Act, say, note, watch, step } = require('../lib/narrate');
 
 const DEST = 'poc-dest-1';
 const BUCKET = 'demo-bucket';
-const SECONDS = Number(env.knob('DEMO_ACT04_SECONDS', 240));
+const SECONDS = Number(env.knob('DEMO_ACT04_SECONDS', env.workSecs(240, 90)));
 
 function register(ctx) {
     describe('Act 04: the cutover and its rollback', () => {

@@ -41,7 +41,7 @@ const NO_LEADER = 'krb-dest-b';
 const HEALTHY = 'poc-dest-1';
 const DEAD = [REFUSED, BLACKHOLE, NO_LEADER];
 const STALL_WATCH_S = Number(env.knob('DEMO_STALL_WATCH_S',
-    env.PACE === 'fast' ? 90 : 300));
+    { fast: 60, demo: 75 }[env.PACE] || 300));
 
 function register(ctx) {
     describe('Act 03: a destination is down', () => {
@@ -197,6 +197,13 @@ function register(ctx) {
                     await procs.sleep(30000);
                 }
                 const after6 = kafka.groupState(group6).committed;
+                // Two silent failures: a hang (leaderless partition, offsets
+                // never advance) or an immediate rejection (unwritable topic,
+                // the processor commits past events it never delivered). The
+                // expected value above is set to whichever this run built, and
+                // both start with the same word as the measurement here, so an
+                // agreeing row reads as a match rather than a first-token
+                // DIFFERS at whoever is watching.
                 act.measured('legacy offset advance', before6 === after6
                     ? 'none, on any partition'
                     : `moved, ${before6} to ${after6}`);
