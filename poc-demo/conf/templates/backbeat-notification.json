@@ -1,0 +1,114 @@
+{
+    "replicationGroupId": "RG00001",
+    "zookeeper": {
+        "connectionString": "127.0.0.1:2181",
+        "autoCreateNamespace": true
+    },
+    "kafka": {
+        "hosts": "127.0.0.1:9092"
+    },
+    "queuePopulator": {
+        "cronRule": "*/5 * * * * *",
+        "batchMaxRead": 10000,
+        "batchTimeoutMs": 9000,
+        "zookeeperPath": "/bnaas-rig/queue-populator",
+        "logSource": "mongo",
+        "mongo": {
+            "replicaSetHosts": "localhost:27117",
+            "logName": "s3-recordlog",
+            "writeConcern": "majority",
+            "replicaSet": "rs0",
+            "readPreference": "primary",
+            "database": "metadata"
+        },
+        "probeServer": {
+            "bindAddress": "localhost",
+            "port": 4142
+        }
+    },
+    "extensions": {
+        "notification": {
+            "bucketMetastore": "__metastore",
+            "topic": "backbeat-bucket-notification",
+            "monitorNotificationFailures": true,
+            "notificationFailedTopic": "backbeat-bucket-notification-failed",
+            "queueProcessor": {
+                "groupId": "bnaas-rig-notification-group",
+                "concurrency": 10
+            },
+            "destinations": [
+                {
+                    "resource": "poc-dest-1",
+                    "type": "kafka",
+                    "host": "localhost",
+                    "port": 9092,
+                    "topic": "customer-topic-1",
+                    "auth": {}
+                },
+                {
+                    "resource": "poc-dest-2",
+                    "type": "kafka",
+                    "host": "localhost",
+                    "port": 9092,
+                    "topic": "customer-topic-2",
+                    "auth": {}
+                },
+                {
+                    "resource": "poc-dest-3",
+                    "type": "kafka",
+                    "host": "localhost",
+                    "port": 9999,
+                    "topic": "customer-topic-3",
+                    "auth": {}
+                },
+                {
+                    "resource": "poc-dest-4",
+                    "type": "kafka",
+                    "host": "10.255.255.1",
+                    "port": 9092,
+                    "topic": "customer-topic-4",
+                    "auth": {}
+                },
+                {
+                    "resource": "poc-dest-5",
+                    "type": "kafka",
+                    "host": "localhost",
+                    "port": 9092,
+                    "topic": "customer-topic-5",
+                    "requiredAcks": -1,
+                    "auth": {}
+                },
+                {
+                    "resource": "poc-dest-6",
+                    "type": "kafka",
+                    "host": "localhost",
+                    "port": 9092,
+                    "topic": "customer-topic-6",
+                    "auth": {}
+                }
+            ]
+        }
+    },
+    "log": {
+        "logLevel": "info",
+        "dumpLevel": "error"
+    },
+    "metrics": {
+        "topic": "backbeat-metrics"
+    },
+    "server": {
+        "healthChecks": {
+            "allowFrom": [
+                "127.0.0.1"
+            ]
+        },
+        "host": "localhost",
+        "port": 8901
+    },
+    "redis": {
+        "host": "127.0.0.1",
+        "port": 6379,
+        "name": "backbeat"
+    },
+    "certFilePaths": {}
+}

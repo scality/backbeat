@@ -1,0 +1,47 @@
+# Kerberos destination broker for the demo.
+#   KERB   (__KRB_BROKER_PORT__): SASL_PLAINTEXT/GSSAPI, what the
+#          notification producers deliver to.
+#   VERIFY (__KRB_VERIFY_PORT__): plaintext, for topic and ACL setup and for
+#          reading the topics back. Its clients authenticate as ANONYMOUS,
+#          which is a super user, so the ACL assertion below stays
+#          unambiguous.
+# broker-entrypoint.sh substitutes both ports from the environment, so the
+# listener, the advertised listener and the published host port are always
+# the same number. They have to be: a client is handed the advertised port
+# and then connects to it.
+broker.id=2
+num.network.threads=3
+num.io.threads=8
+socket.send.buffer.bytes=102400
+socket.receive.buffer.bytes=102400
+socket.request.max.bytes=104857600
+log.dir=/data
+num.partitions=1
+num.recovery.threads.per.data.dir=1
+offsets.topic.replication.factor=1
+transaction.state.log.replication.factor=1
+transaction.state.log.min.isr=1
+log.retention.hours=168
+log.retention.check.interval.ms=300000
+zookeeper.connect=127.0.0.1:2181/dest-krb
+zookeeper.connection.timeout.ms=18000
+group.initial.rebalance.delay.ms=0
+
+listeners=KERB://:__KRB_BROKER_PORT__, VERIFY://:__KRB_VERIFY_PORT__
+advertised.listeners=KERB://localhost:__KRB_BROKER_PORT__, VERIFY://localhost:__KRB_VERIFY_PORT__
+listener.security.protocol.map=KERB:SASL_PLAINTEXT, VERIFY:PLAINTEXT
+inter.broker.listener.name=VERIFY
+sasl.enabled.mechanisms=GSSAPI
+sasl.kerberos.service.name=kafka
+listener.name.kerb.gssapi.sasl.jaas.config=com.sun.security.auth.module.Krb5LoginModule required \
+   useKeyTab=true \
+   storeKey=true \
+   keyTab="/keytabs/kafka.keytab" \
+   principal="kafka/localhost@SCALITY.TEST";
+
+# ACLs make the per-destination identity assertion binary: a destination
+# that lost its principal lands nothing at all rather than quietly
+# delivering as somebody else.
+authorizer.class.name=kafka.security.authorizer.AclAuthorizer
+allow.everyone.if.no.acl.found=false
+super.users=User:ANONYMOUS

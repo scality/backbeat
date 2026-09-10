@@ -1,0 +1,113 @@
+# Prometheus for the BNaaS demo stack.
+#
+# Prometheus does not expand environment variables in this file, so the
+# host-process ports are written out. They are the delivery workers' probe
+# ports, DELIVERY_PROBE_PORT_BASE..+COUNT in demo/.env: keep the two in
+# sync by hand if you move the range.
+#
+# Everything scraped over host.docker.internal is a process running on the
+# Mac, not a container. Two things have to be true for those to work:
+#   1. Docker Desktop resolves host.docker.internal (the compose file also
+#      pins it to host-gateway).
+#   2. the process binds an address reachable from a container. The rig's
+#      backbeat configs set "bindAddress": "localhost", which is 127.0.0.1
+#      and is NOT reachable from the prometheus container. Set it to
+#      "0.0.0.0" in the probeServer block of whatever config the worker and
+#      the populator are started with.
+
+global:
+  scrape_interval: 15s
+  scrape_timeout: 10s
+  evaluation_interval: 15s
+  external_labels:
+    stack: bnaas-demo
+
+scrape_configs:
+
+  # kafka broker, topic and consumer-group state. This is where consumer
+  # group lag per group/topic/partition comes from, so a legacy group and
+  # the delivery pool group can be compared during a cutover.
+  - job_name: kafka-exporter
+    static_configs:
+      - targets: ['kafka-exporter:9308']
+
+  # delivery pool workers. One process per port, chosen with
+  # DELIVERY_POOL_PROBE_PORT, and /metrics is the arsenal ProbeServer's
+  # default metrics route. A target that is down simply means no worker is
+  # running on that port, which is what makes up{job="delivery-workers"}
+  # the worker up/down signal on the dashboard.
+  #
+  # Both port ranges are the SAME eleven workers under the two PORT_OFFSET
+  # values this stack runs at: 8920-8930 at offset 0, the handover shape,
+  # and 9920-9930 at offset 1000, which is what the process scripts use
+  # while the older rig still owns 8920-8930. Listing both means the same
+  # prometheus.yml works either way, at the cost of eleven targets always
+  # showing down. Prometheus does not expand environment variables in this
+  # file, so this is the alternative to generating it.
+  - job_name: delivery-workers
+    scrape_interval: 5s
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - 'host.docker.internal:8920'
+          - 'host.docker.internal:8921'
+          - 'host.docker.internal:8922'
+          - 'host.docker.internal:8923'
+          - 'host.docker.internal:8924'
+          - 'host.docker.internal:8925'
+          - 'host.docker.internal:8926'
+          - 'host.docker.internal:8927'
+          - 'host.docker.internal:8928'
+          - 'host.docker.internal:8929'
+          - 'host.docker.internal:8930'
+        labels:
+          offset: '0'
+      - targets:
+          - 'host.docker.internal:9920'
+          - 'host.docker.internal:9921'
+          - 'host.docker.internal:9922'
+          - 'host.docker.internal:9923'
+          - 'host.docker.internal:9924'
+          - 'host.docker.internal:9925'
+          - 'host.docker.internal:9926'
+          - 'host.docker.internal:9927'
+          - 'host.docker.internal:9928'
+          - 'host.docker.internal:9929'
+          - 'host.docker.internal:9930'
+        labels:
+          offset: '1000'
+    relabel_configs:
+      # probe-8920 rather than a host:port nobody can read
+      - source_labels: [__address__]
+        regex: '.*:(\d+)'
+        target_label: worker
+        replacement: 'probe-${1}'
+
+  # notification queue populator. Its probeServer is configured in the rig
+  # backbeat configs (queuePopulator.probeServer, port 4142) and serves the
+  # same /metrics route.
+  - job_name: queue-populator
+    scrape_interval: 5s
+    metrics_path: /metrics
+    static_configs:
+      # 4142 is what the rig configs use, 8910/9910 what the demo process
+      # scripts use at PORT_OFFSET 0 and 1000
+      - targets:
+          - 'host.docker.internal:4142'
+          - 'host.docker.internal:8910'
+          - 'host.docker.internal:9910'
+
+  # The legacy per-destination notification queue processor exposes
+  # s3_notification_queue_processor_events_total{target,eventType} and a
+  # ProbeServer, but only when extensions.notification.probeServer is set
+  # in the backbeat config. S3C's rendered config does not set it, and
+  # neither do the rig's configs, so on S3C there is nothing to scrape and
+  # the legacy path has no delivery counter at all. That is the whole point
+  # of the lag-based comparison above: during a cutover, the legacy side is
+  # only observable through kafka-exporter.
+  # Uncomment after adding an extensions.notification.probeServer block:
+  # - job_name: notification-queue-processor
+  #   scrape_interval: 5s
+  #   metrics_path: /metrics
+  #   static_configs:
+  #     - targets: ['host.docker.internal:4143']

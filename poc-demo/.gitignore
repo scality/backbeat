@@ -1,0 +1,12 @@
+# Everything a run produces. The tree in git is the recipe, not the output.
+evidence/
+conf/generated/
+run/
+logs/
+
+# Rendered from krb/krb5.conf.host.tmpl and created by the KDC at run time.
+krb/keytabs/
+krb/krb5.conf.host
+
+# Rendered from cloudserver/config.json.tmpl by bin/stack-up.sh.
+cloudserver/config.json

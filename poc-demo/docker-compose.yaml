@@ -1,0 +1,335 @@
+# BNaaS demo stack. Every published port comes from demo/.env, which
+# bin/_common.sh derives from the single PORT_OFFSET knob. Container
+# internal ports are fixed, so service-to-service URLs never move.
+#
+# Bring it up with bin/stack-up.sh, not with `docker compose up`, so the
+# topics are created before any consumer joins and mongo gets its replica
+# set. A bare `docker compose --profile krb up -d` does work, because the
+# scripts keep .env in sync.
+
+name: ${COMPOSE_PROJECT_NAME:-bnaasdemo}
+
+services:
+
+  # ---------------------------------------------------------------- kafka
+  zookeeper:
+    image: ${ZOOKEEPER_IMAGE:-zookeeper:3.9.4}
+    ports:
+      - "${ZK_PORT}:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      # topic metadata lives in zookeeper on this broker, so topics only
+      # survive a restart if BOTH this and kafka-data are persisted
+      - zk-data:/data
+      - zk-datalog:/datalog
+    healthcheck:
+      # `srvr` and not `ruok`: this image whitelists only srvr, so ruok
+      # answers "not in the whitelist" and the check never passes
+      test: ["CMD-SHELL", "echo srvr | nc -w 2 localhost 2181 | grep -q Mode"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  kafka:
+    image: ${KAFKA_IMAGE:-poc-ft-kafka:latest}
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    ports:
+      # host-facing listener. Published 1:1 because the broker advertises
+      # localhost:${KAFKA_PORT} and a client must be able to reach exactly
+      # the port it is handed back.
+      - "${KAFKA_PORT}:${KAFKA_PORT}"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      # two listeners, same PLAINTEXT protocol, different advertised host:
+      #   PLAINTEXT -> host processes (cloudserver, populator, workers)
+      #   INTERNAL  -> containers on this network (kafka-ui, exporter)
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:${KAFKA_PORT},INTERNAL://0.0.0.0:${KAFKA_INTERNAL_PORT}
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:${KAFKA_PORT},INTERNAL://kafka:${KAFKA_INTERNAL_PORT}
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,INTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+      - ./kafka-entrypoint.sh:/demo/kafka-entrypoint.sh:ro
+    command: /demo/kafka-entrypoint.sh
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:${KAFKA_PORT} --list >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 20s
+      retries: 30
+      start_period: 20s
+
+  # -------------------------------------------------- backbeat dependencies
+  redis:
+    image: ${REDIS_IMAGE:-redis:7-alpine}
+    ports:
+      - "${REDIS_PORT}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  mongo:
+    # The ci-mongodb image's own initReplicaSet.js pins the replica set
+    # member to 127.0.0.1:27018, and the address a client is handed back in
+    # the handshake is the one it then uses. 27018 belongs to another
+    # workstream's container on this machine, so mongod runs on
+    # ${MONGO_PORT} with a matching member host instead (bin/mongo-init.sh),
+    # published 1:1 for the same reason as the kafka listener.
+    image: ${MONGO_IMAGE:-ci-mongodb:latest}
+    entrypoint: ["bash", "-c"]
+    command:
+      - mongod --bind_ip_all --port ${MONGO_PORT} --replSet rs0
+        --dbpath /data/db --enableMajorityReadConcern
+    ports:
+      - "${MONGO_PORT}:${MONGO_PORT}"
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "mongo --port ${MONGO_PORT} --quiet --eval 'db.adminCommand({ping:1}).ok' | grep -q 1"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+
+  # ------------------------------------------------------- observability
+  kafka-exporter:
+    # consumer group lag per group, topic and partition, plus topic offsets.
+    # Talks to the INTERNAL listener, which advertises a name resolvable on
+    # this network.
+    image: ${KAFKA_EXPORTER_IMAGE:-danielqsj/kafka-exporter:v1.7.0}
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "${KAFKA_EXPORTER_PORT}:9308"
+    command:
+      - --kafka.server=kafka:${KAFKA_INTERNAL_PORT}
+      - --web.listen-address=:9308
+      - --topic.filter=.*
+      - --group.filter=.*
+
+  prometheus:
+    image: ${PROMETHEUS_IMAGE:-prom/prometheus:v2.54.1}
+    ports:
+      - "${PROMETHEUS_PORT}:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    extra_hosts:
+      # backbeat processes run on the host, not in a container
+      - "host.docker.internal:host-gateway"
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+      - --web.enable-lifecycle
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:9090/-/ready >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  grafana:
+    image: ${GRAFANA_IMAGE:-grafana/grafana:11.3.0}
+    depends_on:
+      prometheus:
+        condition: service_started
+    ports:
+      - "${GRAFANA_PORT}:3000"
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_AUTH_DISABLE_LOGIN_FORM: "false"
+      GF_USERS_DEFAULT_THEME: dark
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_FEATURE_TOGGLES_ENABLE: ""
+      GF_LOG_LEVEL: warn
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:3000/api/health >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  kafka-ui:
+    image: ${KAFKA_UI_IMAGE:-provectuslabs/kafka-ui:v0.7.2}
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "${KAFKA_UI_PORT}:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: bnaas-demo
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:${KAFKA_INTERNAL_PORT}
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+      KAFKA_CLUSTERS_0_METRICS_PORT: ""
+      DYNAMIC_CONFIG_ENABLED: "true"
+      AUTH_TYPE: DISABLED
+      LOGGING_LEVEL_ROOT: warn
+
+  zoonavigator:
+    # ZooKeeper browser, so the workgroups document and the populator's
+    # offsets can be shown on screen rather than read out of zkCli. It
+    # auto-connects, so the landing page is already inside the tree.
+    # amd64 only, so it runs under emulation on Apple silicon.
+    image: ${ZOONAV_IMAGE:-elkozmon/zoonavigator:1.1.2}
+    platform: linux/amd64
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    ports:
+      - "${ZOONAV_PORT}:9000"
+    environment:
+      AUTO_CONNECT_CONNECTION_STRING: zookeeper:2181
+      CONNECTION_LOCALZK_NAME: bnaas demo zookeeper
+      CONNECTION_LOCALZK_CONN: zookeeper:2181
+
+  # --------------------------------------------------------- cloudserver
+  # CloudServer needs the mongo replica set, and the replica set advertises
+  # its single member as 127.0.0.1:${MONGO_PORT} because that is the only
+  # address which works for the host processes that also use it. The address
+  # a client dials after the handshake is the advertised one, so inside a
+  # container 127.0.0.1 would be the container itself.
+  #
+  # cloudserver-net fixes that and does two jobs. It owns the network
+  # namespace CloudServer runs in, publishing the S3 port from there, and it
+  # runs socat so that 127.0.0.1:${MONGO_PORT} inside that namespace really
+  # is mongod. Nothing about the mongo service changes, so the host
+  # processes keep the address they already use.
+  cloudserver-net:
+    image: ${SOCAT_IMAGE:-alpine/socat:1.8.0.0}
+    depends_on:
+      mongo:
+        condition: service_healthy
+    ports:
+      - "${CLOUDSERVER_PORT}:8000"
+    command:
+      - -d
+      - TCP-LISTEN:${MONGO_PORT},bind=127.0.0.1,fork,reuseaddr
+      - TCP:mongo:${MONGO_PORT}
+
+  cloudserver:
+    image: ${CLOUDSERVER_IMAGE:-ghcr.io/scality/cloudserver:9.3.20}
+    # amd64 only: no arm64 manifest is published for the 9.3 tags
+    platform: linux/amd64
+    network_mode: "service:cloudserver-net"
+    depends_on:
+      cloudserver-net:
+        condition: service_started
+      mongo:
+        condition: service_healthy
+    environment:
+      S3METADATA: mongodb
+      S3DATA: mem
+      S3VAULT: mem
+      REMOTE_MANAGEMENT_DISABLE: 1
+      S3_CONFIG_FILE: /conf/config.json
+      # No ENDPOINT or LOG_LEVEL: those make the image's entrypoint rewrite
+      # its own config.json with jq, which is not the file we hand it.
+    volumes:
+      - ./cloudserver/config.json:/conf/config.json:ro
+    # `yarn start` runs the file metadata daemon in parallel, which this
+    # configuration does not use, so start the server directly.
+    command: ["node", "index.js"]
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://127.0.0.1:8000/', r => process.exit(r.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))\""]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 30s
+
+  # Fallback for a machine where no published tag pulls: build from a
+  # cloudserver clone. Slower, and it needs CLOUDSERVER_DIR to point at the
+  # clone. Enable with `--profile cloudserver-build` and set
+  # CLOUDSERVER_IMAGE to the tag this builds.
+  cloudserver-from-source:
+    profiles: ["cloudserver-build"]
+    image: bnaasdemo-cloudserver:local
+    build:
+      context: ./cloudserver
+      dockerfile: Dockerfile
+      additional_contexts:
+        src: ${CLOUDSERVER_DIR:-../../cloudserver}
+    command: ["true"]
+
+  # ------------------------------------------------- krb profile (optional)
+  # Kerberos destination broker, from bnaas-poc/krb-spike/rig adapted to
+  # this compose. `krb-net` owns the network namespace for the KDC, its
+  # zookeeper and the SASL_GSSAPI broker, and its hostname is `localhost`,
+  # which is what keeps the broker principal kafka/localhost@SCALITY.TEST
+  # valid for clients that connect to localhost. Published ports are the
+  # only way in from the host.
+  krb-net:
+    profiles: ["krb"]
+    image: debian:bookworm-slim
+    hostname: localhost
+    command: ["sleep", "infinity"]
+    ports:
+      - "${KRB_KDC_PORT}:1088/udp"
+      - "${KRB_KDC_PORT}:1088/tcp"
+      - "${KRB_BROKER_PORT}:${KRB_BROKER_PORT}"
+      - "${KRB_VERIFY_PORT}:${KRB_VERIFY_PORT}"
+
+  krb-kdc:
+    profiles: ["krb"]
+    image: ${KRB_KDC_IMAGE:-bnaasdemo-kdc:latest}
+    build:
+      context: ./krb
+      dockerfile: Dockerfile.kdc
+    network_mode: "service:krb-net"
+    volumes:
+      - ./krb/keytabs:/keytabs
+    depends_on: [krb-net]
+
+  krb-zookeeper:
+    profiles: ["krb"]
+    image: ${ZOOKEEPER_IMAGE:-zookeeper:3.9.4}
+    network_mode: "service:krb-net"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    depends_on: [krb-net]
+
+  krb-kafka:
+    profiles: ["krb"]
+    image: ${KRB_KAFKA_IMAGE:-bnaasdemo-krb-kafka:latest}
+    build:
+      context: ./krb/kafka
+    network_mode: "service:krb-net"
+    environment:
+      KAFKA_OPTS: -Djava.security.krb5.conf=/etc/krb5.conf
+      KRB_BROKER_PORT: ${KRB_BROKER_PORT}
+      KRB_VERIFY_PORT: ${KRB_VERIFY_PORT}
+    volumes:
+      - ./krb/keytabs:/keytabs:ro
+      - ./krb/krb5.conf:/etc/krb5.conf:ro
+      - ./krb/server-kerberos.properties.tmpl:/demo/server-kerberos.properties.tmpl:ro
+      - ./krb/broker-entrypoint.sh:/demo/broker-entrypoint.sh:ro
+      - ./krb/setup-topics-acls.sh:/demo/setup-topics-acls.sh:ro
+      - krb-kafka-data:/data
+    command: /demo/broker-entrypoint.sh
+    depends_on: [krb-net, krb-zookeeper, krb-kdc]
+
+volumes:
+  zk-data:
+  zk-datalog:
+  kafka-data:
+  redis-data:
+  mongo-data:
+  prometheus-data:
+  grafana-data:
+  krb-kafka-data:

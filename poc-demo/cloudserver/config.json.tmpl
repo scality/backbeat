@@ -1,0 +1,199 @@
+{
+    "port": 8000,
+    "listenOn": [],
+    "metricsPort": 8002,
+    "metricsListenOn": [],
+    "replicationGroupId": "RG001",
+    "restEndpoints": {
+        "localhost": "us-east-1",
+        "127.0.0.1": "us-east-1",
+        "cloudserver": "us-east-1",
+        "s3.docker.test": "us-east-1",
+        "s3.amazonaws.com": "us-east-1"
+    },
+    "websiteEndpoints": [
+        "s3-website-us-east-1.amazonaws.com",
+        "s3-website.us-east-2.amazonaws.com",
+        "s3-website-us-west-1.amazonaws.com",
+        "s3-website-us-west-2.amazonaws.com",
+        "s3-website.ap-south-1.amazonaws.com",
+        "s3-website.ap-northeast-2.amazonaws.com",
+        "s3-website-ap-southeast-1.amazonaws.com",
+        "s3-website-ap-southeast-2.amazonaws.com",
+        "s3-website-ap-northeast-1.amazonaws.com",
+        "s3-website.eu-central-1.amazonaws.com",
+        "s3-website-eu-west-1.amazonaws.com",
+        "s3-website-sa-east-1.amazonaws.com",
+        "s3-website.localhost",
+        "s3-website.scality.test",
+        "zenkoazuretest.blob.core.windows.net"
+    ],
+    "replicationEndpoints": [
+        {
+            "site": "zenko",
+            "servers": [
+                "127.0.0.1:8000"
+            ],
+            "default": true
+        },
+        {
+            "site": "us-east-2",
+            "type": "aws_s3"
+        }
+    ],
+    "backbeat": {
+        "host": "localhost",
+        "port": 8900
+    },
+    "workflowEngineOperator": {
+        "host": "localhost",
+        "port": 3001
+    },
+    "cdmi": {
+        "host": "localhost",
+        "port": 81,
+        "path": "/dewpoint",
+        "readonly": true
+    },
+    "bucketd": {
+        "bootstrap": [
+            "localhost:9000"
+        ]
+    },
+    "vaultd": {
+        "host": "localhost",
+        "port": 8500
+    },
+    "clusters": 1,
+    "log": {
+        "logLevel": "info",
+        "dumpLevel": "error"
+    },
+    "healthChecks": {
+        "allowFrom": [
+            "127.0.0.1/8",
+            "::1"
+        ]
+    },
+    "metadataClient": {
+        "host": "127.0.0.1",
+        "port": 9990
+    },
+    "dataClient": {
+        "host": "127.0.0.1",
+        "port": 9991
+    },
+    "pfsClient": {
+        "host": "127.0.0.1",
+        "port": 9992
+    },
+    "metadataDaemon": {
+        "bindAddress": "127.0.0.1",
+        "port": 9990
+    },
+    "dataDaemon": {
+        "bindAddress": "127.0.0.1",
+        "port": 9991
+    },
+    "pfsDaemon": {
+        "bindAddress": "127.0.0.1",
+        "port": 9992
+    },
+    "recordLog": {
+        "enabled": true,
+        "recordLogName": "s3-recordlog"
+    },
+    "mongodb": {
+        "replicaSetHosts": "127.0.0.1:__MONGO_PORT__",
+        "writeConcern": "majority",
+        "replicaSet": "rs0",
+        "readPreference": "primary",
+        "database": "metadata"
+    },
+    "externalBackends": {
+        "aws_s3": {
+            "httpAgent": {
+                "keepAlive": false,
+                "keepAliveMsecs": 1000,
+                "maxFreeSockets": 256,
+                "maxSockets": null
+            }
+        },
+        "gcp": {
+            "httpAgent": {
+                "keepAlive": true,
+                "keepAliveMsecs": 1000,
+                "maxFreeSockets": 256,
+                "maxSockets": null
+            }
+        }
+    },
+    "requests": {
+        "viaProxy": false,
+        "trustedProxyCIDRs": [],
+        "extractClientIPFromHeader": ""
+    },
+    "bucketNotificationDestinations": [
+        {
+            "resource": "poc-dest-1",
+            "type": "kafka",
+            "host": "kafka",
+            "port": __KAFKA_INTERNAL_PORT__,
+            "topic": "customer-topic-1"
+        },
+        {
+            "resource": "poc-dest-2",
+            "type": "kafka",
+            "host": "kafka",
+            "port": __KAFKA_INTERNAL_PORT__,
+            "topic": "customer-topic-2"
+        },
+        {
+            "resource": "poc-dest-3",
+            "type": "kafka",
+            "host": "kafka",
+            "port": __KAFKA_INTERNAL_PORT__,
+            "topic": "customer-topic-3"
+        },
+        {
+            "resource": "krb-dest-a",
+            "type": "kafka",
+            "host": "krb-net",
+            "port": __KRB_BROKER_PORT__,
+            "topic": "topic-a"
+        },
+        {
+            "resource": "krb-dest-b",
+            "type": "kafka",
+            "host": "krb-net",
+            "port": __KRB_BROKER_PORT__,
+            "topic": "topic-b"
+        }
+    ],
+    "defaultEncryptionKeyPerAccount": true,
+    "kmsHideScalityArn": false,
+    "kmsAWS": {
+        "providerName": "aws",
+        "region": "us-east-1",
+        "endpoint": "http://127.0.0.1:8080",
+        "ak": "tbd",
+        "sk": "tbd"
+    },
+    "kmip": {
+        "providerName": "thales"
+    },
+    "apiBodySizeLimits": {
+        "multiObjectDelete": 2097152,
+        "bucketPutPolicy": 20480
+    },
+    "integrityChecks": {
+        "objectPutRetention": true
+    },
+    "serverAccessLogs": {
+        "mode": "DISABLED",
+        "outputFile": "/logs/server-access.log",
+        "highWaterMarkBytes": 10485760,
+        "retryReopenDelayMS": 1000,
+        "checkFileRotationIntervalMS": 10000
+    }
+}

@@ -1,0 +1,20 @@
+# krb5.conf for processes running on the Mac (the delivery worker with the
+# KafkaJS Kerberos producer, kinit, klist). Rendered by bin/stack-up.sh to
+# demo/krb/krb5.conf.host with the published KDC port substituted; point
+# KRB5_CONFIG at that file.
+[libdefaults]
+    default_realm = SCALITY.TEST
+    dns_lookup_kdc = false
+    dns_lookup_realm = false
+    dns_canonicalize_hostname = false
+    rdns = false
+    udp_preference_limit = 1
+
+[realms]
+    SCALITY.TEST = {
+        kdc = 127.0.0.1:__KRB_KDC_PORT__
+    }
+
+[domain_realm]
+    localhost = SCALITY.TEST
+    .localhost = SCALITY.TEST
