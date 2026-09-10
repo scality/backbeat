@@ -573,7 +573,7 @@ async function warmLegacyGroup(act, p) {
  * @return {Promise} resolves with the number of operations logged
  */
 async function runDriver(act, opts) {
-    const log = act.file(`driver${opts.prefix ? `-${opts.prefix}` : ''}.log`);
+    const log = act.file(`driver-${procs.fileTag(opts.prefix)}.log`);
     const o = Object.assign({ log, endpoint: env.S3_ENDPOINT }, opts);
     say(`workload: ${o.count ? `${o.count} operations` : `${o.duration}s`} at `
         + `${o.rate}/s into ${o.buckets || o.bucket}`
@@ -601,7 +601,7 @@ async function runDriver(act, opts) {
  * @return {Object} { proc, log }
  */
 function startDriver(act, opts) {
-    const log = act.file(`driver${opts.prefix ? `-${opts.prefix}` : ''}.log`);
+    const log = act.file(`driver-${procs.fileTag(opts.prefix)}.log`);
     const o = Object.assign({ log, endpoint: env.S3_ENDPOINT }, opts);
     say(`workload on for the whole procedure: ${o.rate}/s into `
         + `${o.buckets || o.bucket} for ${o.duration}s`);

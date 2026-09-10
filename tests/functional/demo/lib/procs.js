@@ -304,6 +304,18 @@ function worker(act, configFile, n, opts) {
  * @param {Object} opts - driver-cli options
  * @return {Proc} started process
  */
+/**
+ * A driver prefix as a file-name fragment. Prefixes are object-key prefixes
+ * and may carry a slash ("legacy-logs/x"), which would make the log file a
+ * path into a directory that does not exist.
+ *
+ * @param {String} prefix - driver prefix
+ * @return {String} a safe fragment
+ */
+function fileTag(prefix) {
+    return String(prefix || 'x').replace(/[^A-Za-z0-9._-]+/g, '_');
+}
+
 function driver(act, opts) {
     const args = [path.join(__dirname, 'driver-cli.js')];
     Object.keys(opts).forEach(k => {
@@ -314,10 +326,10 @@ function driver(act, opts) {
         }
     });
     const p = new Proc({
-        name: `driver-${opts.prefix || 'x'}`,
+        name: `driver-${fileTag(opts.prefix)}`,
         argv: args,
         configFile: 'none',
-        logFile: act.file(`driver-${opts.prefix || 'x'}.out`),
+        logFile: act.file(`driver-${fileTag(opts.prefix)}.out`),
         readyRe: /driver start/,
         cwd: env.DEMO,
     });
@@ -382,6 +394,7 @@ function stopAll(force) {
 
 module.exports = {
     Proc,
+    fileTag,
     sleep,
     waitReady,
     populator,
