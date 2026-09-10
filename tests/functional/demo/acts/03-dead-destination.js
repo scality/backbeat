@@ -75,10 +75,27 @@ function register(ctx) {
                 note('with --replica-assignment 99, a broker that does not');
                 note('exist, so the partition has no leader and never will.');
                 if (!kafka.topicExists(LEADERLESS)) {
-                    const r = kafka.tool('kafka-topics.sh',
+                    kafka.tool('kafka-topics.sh',
                         ['--create', '--topic', LEADERLESS,
                             '--replica-assignment', '99']);
-                    say(`${LEADERLESS}: ${r.ok ? 'created' : 'already there or refused'}`);
+                }
+                // The CLI exits 0 even when the controller never completes
+                // the request, so ask the cluster rather than trusting it.
+                const leaderlessBuilt = kafka.topicExists(LEADERLESS);
+                if (leaderlessBuilt) {
+                    say(`${LEADERLESS} exists with no leader for its partition`);
+                } else {
+                    say(`${LEADERLESS} could not be created: on a single-broker`
+                        + ' cluster that request times out rather than failing');
+                    note('so the third class uses the other mechanism the rig');
+                    note('describes for it: a reachable endpoint that accepts');
+                    note('the connection and never completes a Kafka');
+                    note('handshake. The produce is retried until');
+                    note('deliveryTimeoutMs and dropped with delivery_error,');
+                    note('which is the same reason and the same timing.');
+                    note('A destination pointed at a topic that does not');
+                    note('exist would NOT do: auto.create.topics.enable is on,');
+                    note('so the first produce would create it and succeed.');
                 }
 
                 step(2, 'a bucket per dead destination, and a healthy control');
@@ -103,8 +120,11 @@ function register(ctx) {
                 const legacy = flow.legacyConfig(act, ctx, {
                     customerTopics: topics,
                     only: [HEALTHY].concat(DEAD),
-                    dead: { [REFUSED]: 'refused', [BLACKHOLE]: 'blackhole' },
-                    leaderless: { [NO_LEADER]: LEADERLESS },
+                    dead: Object.assign({ [REFUSED]: 'refused',
+                        [BLACKHOLE]: 'blackhole' },
+                    leaderlessBuilt ? {} : { [NO_LEADER]: 'notabroker' }),
+                    leaderless: leaderlessBuilt
+                        ? { [NO_LEADER]: LEADERLESS } : {},
                 });
                 await flow.startPopulator(act, legacy, 'legacy');
                 const p3 = await flow.startProcessor(act, legacy, REFUSED,
@@ -172,8 +192,11 @@ function register(ctx) {
                 const pool = flow.poolConfig(act, ctx, {
                     customerTopics: topics,
                     only: [HEALTHY].concat(DEAD),
-                    dead: { [REFUSED]: 'refused', [BLACKHOLE]: 'blackhole' },
-                    leaderless: { [NO_LEADER]: LEADERLESS },
+                    dead: Object.assign({ [REFUSED]: 'refused',
+                        [BLACKHOLE]: 'blackhole' },
+                    leaderlessBuilt ? {} : { [NO_LEADER]: 'notabroker' }),
+                    leaderless: leaderlessBuilt
+                        ? { [NO_LEADER]: LEADERLESS } : {},
                     tag: 'dead',
                 });
                 await flow.startPopulator(act, pool, 'pool');

@@ -71,6 +71,13 @@ function register(ctx) {
             step(0, 'start on the legacy path, caught up, under load');
             let populator = await flow.startPopulator(act, legacy, 'legacy');
             let processor = await flow.startProcessor(act, legacy, DEST);
+            note('the processor builds its consumer with no fromOffset, so a');
+            note('group that has never committed can skip what is already on');
+            note('the topic and its first-join revoke can move it past');
+            note('records published in between. Warming it first is the rig\'s');
+            note('own method note, and it is what makes this window honest.');
+            await flow.warmLegacyGroup(act, { dest: DEST, bucket: BUCKET,
+                count: 8 });
             const cutFrom = kafka.head(topic, 0);
             const load = flow.startDriver(act, { 'bucket': BUCKET, 'prefix': 'm2b',
                 'rate': 2, 'duration': SECONDS, 'straddle': 3, 'straddle-every': 5 });

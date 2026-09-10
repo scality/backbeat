@@ -330,32 +330,56 @@ async function progressOrCure(act, proc, what, condition, opts) {
     const o = opts || {};
     const n = o.index || Number((/worker(\d+)/.exec(proc.name) || [])[1]) || 1;
     const every = o.everyMs || 10000;
-    if (await wait.until(what, condition, o.timeoutMs || 90000, every)) {
-        return true;
+    let timeout = o.timeoutMs || 90000;
+    // Two attempts, the same as cureChurn: on this host one restart is often
+    // not enough, and a worker that comes back wedged looks identical to one
+    // that never cleared.
+    for (let attempt = 0; attempt < 3; attempt++) {
+        // eslint-disable-next-line no-await-in-loop
+        if (await wait.until(attempt ? `${what}, after restart ${attempt}`
+            : what, condition, timeout, every)) {
+            if (attempt) {
+                say(`${what}: progress after restart ${attempt}. That is the `
+                    + 'operator cure working, and it is the reliability '
+                    + 'ceiling this defect sets.');
+            }
+            return true;
+        }
+        if (attempt === 2) {
+            break;
+        }
+        const onTopic = kafka.headTotal(env.DELIVERY_TOPIC);
+        // eslint-disable-next-line no-await-in-loop
+        const moved = (await wait.counter(n, 'delivered'))
+            // eslint-disable-next-line no-await-in-loop
+            + (await wait.counter(n, 'dropped'))
+            // eslint-disable-next-line no-await-in-loop
+            + (await wait.counter(n, 'skipped'));
+        const bal = proc.rebalances();
+        if (onTopic === 0 || moved > 0) {
+            note(`no progress on ${what}, and this is NOT the wedge: `
+                + `${onTopic} records on the delivery topic and ${moved} of `
+                + 'them accounted for by this worker. Something else is '
+                + 'wrong, so nothing is being restarted.');
+            return false;
+        }
+        note(`WEDGE SUSPECTED: ${onTopic} records on the delivery topic, `
+            + `${bal.assign} assigns and ${bal.revoke} revokes on worker `
+            + `${n}, and`);
+        // eslint-disable-next-line no-await-in-loop
+        note('  nothing delivered, dropped or skipped. Liveness is still '
+            + `${await wait.liveness(n)}, which is what makes this defect `
+            + 'hard to');
+        note('  see in production. The cure is a restart of that one worker.');
+        act.timeline(`worker${n} WEDGED during ${what}, restart ${attempt + 1}`);
+        // eslint-disable-next-line no-await-in-loop
+        await restartInPlace(proc.name, 90000);
+        // eslint-disable-next-line no-await-in-loop
+        await wait.until(`worker ${n}'s probe to answer`,
+            async () => (await wait.liveness(n)) === 200, 60000, 2000);
+        timeout = o.retryTimeoutMs || 150000;
     }
-    const onTopic = kafka.headTotal(env.DELIVERY_TOPIC);
-    const moved = (await wait.counter(n, 'delivered'))
-        + (await wait.counter(n, 'dropped'))
-        + (await wait.counter(n, 'skipped'));
-    const bal = proc.rebalances();
-    if (onTopic === 0 || moved > 0) {
-        note(`no progress on ${what}, and this is NOT the wedge: `
-            + `${onTopic} records on the delivery topic and ${moved} of them `
-            + 'accounted for by this worker. Something else is wrong, so '
-            + 'nothing is being restarted.');
-        return false;
-    }
-    note(`WEDGE SUSPECTED: ${onTopic} records on the delivery topic, `
-        + `${bal.assign} assigns and ${bal.revoke} revokes on worker ${n}, and`);
-    note(`  nothing delivered, dropped or skipped. Liveness is still `
-        + `${await wait.liveness(n)}, which is what makes this defect hard to`);
-    note('  see in production. The cure is a restart of that one worker.');
-    act.timeline(`worker${n} WEDGED during ${what}, restarting`);
-    await restartInPlace(proc.name, 90000);
-    await wait.until(`worker ${n}'s probe to answer`,
-        async () => (await wait.liveness(n)) === 200, 60000, 2000);
-    return wait.until(`${what}, after the restart`, condition,
-        o.retryTimeoutMs || 150000, every);
+    return false;
 }
 
 /**
