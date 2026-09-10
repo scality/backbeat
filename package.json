@@ -23,6 +23,7 @@
     "ft_test:notification": "mocha --recursive $(find tests/functional/notification -name '*.js') --timeout 30000 --exit",
     "ft_test:notification:deliverypool": "mocha tests/functional/deliverypool/deliveryPool.js --timeout 120000 --exit",
     "ft_test:notification:workgroups": "mocha tests/functional/deliverypool/workgroups.js --timeout 120000 --exit",
+    "ft_test:notification:assumedestination": "mocha tests/functional/deliverypool/assumeDestination.js --timeout 120000 --exit",
     "ft_test:replication": "mocha --recursive $(find tests/functional/replication -name '*.js') --timeout 30000 --exit",
     "ft_test:lib": "mocha --recursive $(find tests/functional/lib -name '*.js') --timeout 30000 --exit",
     "ft_test:lifecycle": "mocha --recursive $(find tests/functional/lifecycle -name '*.js') --timeout 30000 --exit",
