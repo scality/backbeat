@@ -62,6 +62,10 @@ class Act {
 
     /** open the evidence directory, moving a previous run's aside */
     open() {
+        // Every act is constructed when the suite loads, so the clock has to
+        // start here, or "took" reports the time since the run began rather
+        // than the act's own duration.
+        this.started = Date.now();
         if (fs.existsSync(this.dir) && fs.readdirSync(this.dir).length) {
             const moved = `${this.dir}.${new Date().toISOString()
                 .replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z')}`;
