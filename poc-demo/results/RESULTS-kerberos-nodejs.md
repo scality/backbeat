@@ -1,11 +1,12 @@
 <!-- markdownlint-disable -->
 <!-- A verbatim copy of the POC write-up. Reflowing it would make
      this copy differ from the original, so it is not linted. -->
+<!-- The one edit: absolute home paths are written as ~. -->
 
 # GATE 2 follow-up: can ONE Node process authenticate as TWO Kerberos principals?
 
 Pure-JS producer stack, run 2026-09-10. Everything under
-`/Users/anurag/capsule-corp/bnaas-poc/krb-spike/pure-js/`.
+`~/capsule-corp/bnaas-poc/krb-spike/pure-js/`.
 tmux session `bnaas-krb`, window `pure-js`. docker compose project `bnaaskrb`
 (the librdkafka spike's rig, reused unchanged). No git repository was modified.
 
@@ -277,7 +278,7 @@ that jump, but the API surface change was not exercised.
 The standalone harness under `harness/` is what proved the mechanism. The
 implementation moved into backbeat, branch `poc/S3C-11127-kerberos-producer`
 off `poc/S3C-11127-workgroups`, worktree
-`/Users/anurag/capsule-corp/scality/backbeat-krb`:
+`~/capsule-corp/scality/backbeat-krb`:
 
 - `extensions/notification/destination/saslGssapi.js`, the RFC 4752 exchange as
   a kafkajs custom SASL mechanism, with the GSSAPI binding injected so the

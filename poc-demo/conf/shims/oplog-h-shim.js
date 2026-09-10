@@ -1,6 +1,7 @@
 /*
- * Rig-local preload shim. Lives OUTSIDE every git repo and is loaded with
- * `node --require`, so no repository code (including node_modules) is modified.
+ * Demo-only preload shim, loaded with `node --require`. It patches a module
+ * in memory for the life of one process, so nothing on disk, in the
+ * repository or in node_modules, is modified.
  *
  * WHY
  * ---
@@ -27,11 +28,39 @@
 
 const path = require('path');
 
-const REPO = '/Users/anurag/capsule-corp/scality/backbeat-wg-merge';
-const LOG_CONSUMER = path.join(
-    REPO,
-    'node_modules/arsenal/build/lib/storage/metadata/mongoclient/LogConsumer.js'
-);
+/**
+ * Resolve a module the way the process this shim is preloaded into resolves
+ * it, so the copy that gets patched is the copy that gets loaded.
+ *
+ * The suite spawns every backbeat process with the repository root as its
+ * working directory, so that is the first place to look. BACKBEAT_DIR is the
+ * explicit override, and this file's own repository is the fallback for a
+ * process started from somewhere else. There is no hardcoded path: a shim
+ * that patches another checkout's node_modules reports success and changes
+ * nothing.
+ *
+ * @param {String} spec - a module path under node_modules
+ * @return {String} an absolute, resolvable module path
+ */
+function resolveInRepo(spec) {
+    const bases = [
+        process.cwd(),
+        process.env.BACKBEAT_DIR,
+        // poc-demo/conf/shims -> the repository root
+        path.resolve(__dirname, '..', '..', '..'),
+    ].filter(Boolean);
+    for (const base of bases) {
+        try {
+            return require.resolve(path.join(base, 'node_modules', spec));
+        } catch {
+            // try the next base
+        }
+    }
+    return require.resolve(spec);
+}
+
+const LOG_CONSUMER = resolveInRepo(
+    'arsenal/build/lib/storage/metadata/mongoclient/LogConsumer.js');
 
 function aliasH(doc) {
     if (doc && doc.h === undefined && doc.ts !== undefined) {

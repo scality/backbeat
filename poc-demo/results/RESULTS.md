@@ -1,12 +1,13 @@
 <!-- markdownlint-disable -->
 <!-- A verbatim copy of the POC write-up. Reflowing it would make
      this copy differ from the original, so it is not linted. -->
+<!-- The one edit: absolute home paths are written as ~. -->
 
 # BNaaS migration edge-case experiments - results
 
-Rig: `/Users/anurag/capsule-corp/bnaas-poc/rig` (see `README.md` for how it
+Rig: `~/capsule-corp/bnaas-poc/rig` (see `README.md` for how it
 runs). Code under test: worktree
-`/Users/anurag/capsule-corp/scality/backbeat-wg-merge` @ `poc/S3C-11127-workgroups`.
+`~/capsule-corp/scality/backbeat-wg-merge` @ `poc/S3C-11127-workgroups`.
 Nothing in any git repository was modified, committed, stashed or pushed.
 
 **Caveat that applies to every number below.** Every backbeat process in these

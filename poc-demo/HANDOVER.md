@@ -403,6 +403,50 @@ pre-existing defects with evidence files, the suite says WEDGE SUSPECTED when
 it sees one and restarts that one consumer the way an operator would, and
 showing the cure reads better than hiding the symptom.
 
+## A fresh clone
+
+```bash
+git clone --branch poc/S3C-11127-demo git@github.com:scality/backbeat.git
+cd backbeat
+export PATH=$HOME/.nvm/versions/node/v22.22.3/bin:$PATH
+yarn install --frozen-lockfile
+yarn demo:up          # or demo:up:krb, if you want act 07
+yarn demo:wait
+yarn ft_test:demo
+```
+
+Three things a fresh machine needs that the clone does not carry:
+
+**Two local images.** `poc-ft-kafka:latest` and `ci-mongodb:latest` are
+local build artifacts, published nowhere, and the stack cannot come up
+without them. That is the one hard prerequisite in the whole handover.
+Everything else in `.env` pulls: CloudServer, kafka-ui, kafka-exporter,
+ZooNavigator, socat, prometheus, grafana, zookeeper, redis. CloudServer and
+ZooNavigator are amd64 only and run under emulation on Apple silicon. The
+Kerberos KDC and broker build on first use of the `krb` profile, so that
+needs network.
+
+**`yarn install` fails on one native module, and it does not matter.**
+`fcntl`, a transitive dependency pinned to an old node-gyp, cannot configure
+under Python 3.12 or later, because gyp imports `distutils`, which Python
+removed. It is only used by arsenal's file data backend, which the demo does
+not touch: the demo runs MongoDB metadata and in-memory data. Everything the
+suite needs, `node-rdkafka` included, builds and loads. This is a
+pre-existing repository problem, not something this branch introduced. If
+you want a clean install, give the build a Python that still has
+`distutils`, or `pip install setuptools` into the interpreter node-gyp
+picks.
+
+**Kerberos keytabs.** `poc-demo/krb/keytabs/` is empty in git on purpose:
+the KDC container writes the keytabs on its first start, so
+`yarn demo:up:krb` creates them. Act 07 skips with a clear message if they
+are not there, rather than failing.
+
+`PORT_OFFSET` is 1000 in `.env`, which is the machine this was built on.
+Nothing about the demo needs that value; set it to 0 on a machine where the
+standard ports are free and every derived port follows.
+
+
 ## Known gotchas
 
 **Node 22.** Everything runs on the path in `NODE_BIN`, by default

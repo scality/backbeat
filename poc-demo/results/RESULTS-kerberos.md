@@ -1,10 +1,11 @@
 <!-- markdownlint-disable -->
 <!-- A verbatim copy of the POC write-up. Reflowing it would make
      this copy differ from the original, so it is not linted. -->
+<!-- The one edit: absolute home paths are written as ~. -->
 
 # GATE 2: can one Node process hold Kafka producers for two Kerberos principals?
 
-Spike run 2026-09-09. Everything under `/Users/anurag/capsule-corp/bnaas-poc/krb-spike/`.
+Spike run 2026-09-09. Everything under `~/capsule-corp/bnaas-poc/krb-spike/`.
 tmux session `bnaas-krb`, docker compose project `bnaaskrb`. No git repository was
 modified.
 
