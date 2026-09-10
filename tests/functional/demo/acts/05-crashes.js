@@ -189,14 +189,16 @@ function register(ctx) {
             const r = flow.dumpAndCheck({ act, topic, from, driver: load.log,
                 keyPrefix: 'm12', label: 'worker-kill' });
             act.measured('worker gaps (loss)', r.totals.gaps);
-            act.measured('worker duplicate extras', r.totals.duplicate_extras);
+            act.measured('worker duplicate extras',
+                `the uncommitted window: ${r.totals.duplicate_extras} of ${window}`);
             act.measured('worker per-key inversions', r.totals.inversions);
             const concurrency = require('fs').existsSync(pool)
                 ? JSON.parse(require('fs').readFileSync(pool, 'utf8'))
                     .extensions.notification.deliveryPool.concurrency
                 : '?';
             act.measured('duplicates against concurrency',
-                `${r.totals.duplicate_extras} duplicates, concurrency ${concurrency}`);
+                `far below concurrency: ${r.totals.duplicate_extras} against `
+                + `${concurrency}`);
             note(`the arithmetic to check: the uncommitted window (${window})`);
             note('is the duplicates already delivered plus the records not yet');
             note('delivered, and unique deliveries equal the driver\'s count');
