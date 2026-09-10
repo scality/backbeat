@@ -28,8 +28,14 @@ const env = require('../lib/env');
 const { run } = require('../lib/sh');
 const { Act, say, note, step, line } = require('../lib/narrate');
 
-const KRB_WORKTREE = env.knob('KRB_BACKBEAT_DIR',
-    path.resolve(env.BACKBEAT_DIR, '..', 'backbeat-krb'));
+// The kerberos work is on this branch, so the suite it runs is in this
+// repository. The sibling-worktree fallback is for a checkout that carries
+// the demo but not the kerberos segment.
+const KRB_SUITE = 'tests/functional/deliverypool/kerberos.js';
+const KRB_WORKTREE = env.knob('KRB_BACKBEAT_DIR')
+    || (fs.existsSync(path.join(env.BACKBEAT_DIR, KRB_SUITE))
+        ? env.BACKBEAT_DIR
+        : path.resolve(env.BACKBEAT_DIR, '..', 'backbeat-krb'));
 const IMAGE = env.knob('KRB_TEST_IMAGE', 'backbeat-krbtest:spike');
 const NM_VOLUME = env.knob('KRB_NODE_MODULES_VOLUME', 'backbeat-krb-nm');
 
@@ -71,12 +77,12 @@ function register() {
                 const reasons = [];
                 if (!names.split('\n').includes(netns)) {
                     reasons.push(`the krb profile is not up (no ${netns}). `
-                        + 'Bring it up with demo/bin/stack-up.sh --krb');
+                        + 'Bring it up with `yarn demo:up:krb`');
                 }
-                if (!fs.existsSync(path.join(KRB_WORKTREE,
-                    'tests/functional/deliverypool/kerberos.js'))) {
-                    reasons.push('the kerberos branch worktree is not at '
-                        + `${KRB_WORKTREE}. Set KRB_BACKBEAT_DIR.`);
+                if (!fs.existsSync(path.join(KRB_WORKTREE, KRB_SUITE))) {
+                    reasons.push(`no ${KRB_SUITE} under ${KRB_WORKTREE}, so `
+                        + 'this checkout does not carry the kerberos work. '
+                        + 'Set KRB_BACKBEAT_DIR to one that does.');
                 }
                 if (!run('docker', ['image', 'inspect', IMAGE]).ok) {
                     reasons.push(`the test image ${IMAGE} is not built`);
@@ -92,7 +98,7 @@ function register() {
                 if (reasons.length) {
                     reasons.forEach(r => note(`skipping: ${r}`));
                     note('the written-up result is in '
-                        + 'krb-spike/pure-js/RESULTS-nodejs.md');
+                        + 'poc-demo/results/RESULTS-kerberos-nodejs.md');
                     act.measured('suite exit code', 'skipped');
                     this.skip();
                     return;
