@@ -69,6 +69,8 @@
     "httpagent": "git+https://github.com/scality/httpagent#1.0.6",
     "ioredis": "^5.4.2",
     "joi": "^17.13.3",
+    "kafkajs": "2.2.4",
+    "kerberos": "2.2.2",
     "minimatch": "^10.0.1",
     "mongodb": "^6.11.0",
     "node-forge": "^1.3.1",
