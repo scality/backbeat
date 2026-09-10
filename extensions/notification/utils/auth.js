@@ -123,4 +123,5 @@ function generateKafkaAuthObject(auth) {
 
 module.exports = {
     generateKafkaAuthObject,
+    getAuthFilePath,
 };

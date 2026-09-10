@@ -25,6 +25,14 @@ const constants = {
     eventSource: 'scality:s3',
     eventS3SchemaVersion: '1.0',
     supportedSaslProtocols: ['SASL_PLAINTEXT', 'SASL_SSL'],
+    // SASL mechanism name kafka expects for kerberos, on both client stacks
+    saslGssapiMechanism: 'GSSAPI',
+    // where a kerberos destination's credential comes from: 'keytab' lets
+    // MIT get the ticket from the keytab on demand, 'ccache' expects the
+    // ticket to be in the credential cache collection already
+    kerberosCredentialSources: ['keytab', 'ccache'],
+    // producer stack serving kerberos destinations
+    kerberosProducers: ['rdkafka', 'kafkajs'],
     supportedScramMechanisms: ['SHA-256', 'SHA-512']
 };
 

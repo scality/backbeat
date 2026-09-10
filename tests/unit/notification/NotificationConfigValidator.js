@@ -639,4 +639,63 @@ describe('NotificationConfigValidator delivery pool ::', () => {
                 validate(workgroups).deliveryPool.workgroups, workgroups);
         });
     });
+
+    describe('kerberos producer selection ::', () => {
+        const kerberosAuth = {
+            type: 'kerberos',
+            protocol: 'SASL_PLAINTEXT',
+            keytab: 'notifications.keytab',
+            principal: 'notifications@EXAMPLE.COM',
+            serviceName: 'kafka',
+        };
+
+        const withPool = deliveryPool => notificationConfigValidator(null, {
+            ...defaultExtConfig,
+            deliveryPool: {
+                enabled: true, topic: 'delivery', groupId: 'delivery-group',
+                ...deliveryPool,
+            },
+        });
+
+        const withAuth = auth => notificationConfigValidator(null, {
+            ...defaultExtConfig,
+            destinations: [{
+                resource: 'dest', type: 'kafka', host: 'host', topic: 'topic', auth,
+            }],
+        }).destinations[0].auth;
+
+        it('should keep node-rdkafka as the default kerberos producer', () => {
+            assert.strictEqual(withPool({}).deliveryPool.kerberosProducer, 'rdkafka');
+        });
+
+        it('should accept the pure JS kerberos producer', () => {
+            assert.strictEqual(
+                withPool({ kerberosProducer: 'kafkajs' }).deliveryPool.kerberosProducer,
+                'kafkajs');
+        });
+
+        it('should reject an unknown kerberos producer', () => {
+            assert.throws(() => withPool({ kerberosProducer: 'sarama' }));
+        });
+
+        it('should default a kerberos destination to the keytab credential source', () => {
+            assert.strictEqual(withAuth(kerberosAuth).credentialSource, 'keytab');
+        });
+
+        it('should accept the ccache credential source', () => {
+            assert.strictEqual(
+                withAuth({ ...kerberosAuth, credentialSource: 'ccache' }).credentialSource,
+                'ccache');
+        });
+
+        it('should reject an unknown credential source', () => {
+            assert.throws(() => withAuth({ ...kerberosAuth, credentialSource: 'vault' }));
+        });
+
+        it('should not add a credential source to a non kerberos destination', () => {
+            const auth = withAuth({ type: 'basic', protocol: 'SASL_PLAINTEXT',
+                username: 'u', password: 'p' });
+            assert.strictEqual('credentialSource' in auth, false);
+        });
+    });
 });

@@ -1,6 +1,11 @@
 const joi = require('joi');
 const { probeServerJoi } = require('../../lib/config/configItems.joi');
-const { supportedSaslProtocols, supportedScramMechanisms } = require('./constants');
+const {
+    kerberosCredentialSources,
+    kerberosProducers,
+    supportedSaslProtocols,
+    supportedScramMechanisms,
+} = require('./constants');
 
 const { MAX_QUEUED_DEFAULT }  = require('../../lib/constants').backbeatConsumer;
 const { WORKGROUP_ID_PATTERN } = require('./utils/workgroups');
@@ -22,6 +27,12 @@ const kerberosAuthSchema = saslAuthSchema.append({
     keytab: joi.string().required(),
     principal: joi.string().required(),
     serviceName: joi.string().required(),
+    // 'keytab' lets MIT krb5 obtain and renew this principal's ticket from
+    // the keytab when the producer authenticates, which is the only source
+    // that works for several principals in one process without a kinit.
+    // 'ccache' leaves the credential cache alone, for a deployment that
+    // populates a cache collection itself.
+    credentialSource: joi.string().valid(...kerberosCredentialSources).default('keytab'),
 });
 
 const basicAuthBaseSchema = saslAuthSchema.append({
@@ -115,6 +126,12 @@ const joiSchema = joi.object({
         deliveryTimeoutMs: joi.number().min(6000).max(240000).default(30000),
         producerIdleMs: joi.number().greater(0).default(300000),
         maxProducers: joi.number().greater(0).default(50),
+        // client stack used for destinations authenticating with kerberos.
+        // 'rdkafka' is the shipping behaviour, one kerberos identity per
+        // process. 'kafkajs' asks GSSAPI for each destination's principal by
+        // name, so one worker can serve destinations owned by different
+        // principals. Non kerberos destinations use node-rdkafka either way.
+        kerberosProducer: joi.string().valid(...kerberosProducers).default('rdkafka'),
         concurrency: joi.number().greater(0).default(1000),
         maxQueued: joi.number().greater(0).default(MAX_QUEUED_DEFAULT),
         probeServer: probeServerJoi.optional(),
