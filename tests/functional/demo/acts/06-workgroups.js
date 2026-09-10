@@ -459,6 +459,13 @@ function register(ctx) {
             const pinWorker = workers['wg-pin-gen2'];
             const pinN = Number(pinWorker.probePort) - env.PROBE_BASE;
             const start = await wait.counter(pinN, 'delivered', { target: pinned });
+            note('the long load runs for a fixed window and has usually');
+            note('finished by now, so this step drives its own burst rather');
+            note('than hoping traffic is still arriving. The claim is that');
+            note('the pinned workgroup serves this destination, and that');
+            note('needs records for it to be true of.');
+            await flow.runDriver(act, { bucket: BUCKETS[pinned],
+                prefix: `pin-${pinned}`, rate: 4, count: 12 });
             await procs.sleep(env.pause(45000));
             const now = await wait.counter(pinN, 'delivered', { target: pinned });
             say(`wg-pin delivered ${start} then ${now} records for ${pinned}`);
