@@ -39,6 +39,56 @@ const KRB_WORKTREE = env.knob('KRB_BACKBEAT_DIR')
 const IMAGE = env.knob('KRB_TEST_IMAGE', 'backbeat-krbtest:spike');
 const NM_VOLUME = env.knob('KRB_NODE_MODULES_VOLUME', 'backbeat-krb-nm');
 
+/**
+ * Run a command, streaming its output to a log file as it arrives and
+ * echoing the lines that matter (mocha results, errors) to the terminal.
+ *
+ * @param {string} cmd - executable
+ * @param {string[]} args - arguments
+ * @param {string} logPath - file that receives every line
+ * @param {number} timeoutMs - kill the command after this long
+ * @return {Promise<{code: number, out: string, err: string}>} result
+ */
+function streamRun(cmd, args, logPath, timeoutMs) {
+    const { spawn } = require('child_process');
+    const show = /(\u2713|\u2714|passing|failing|pending|^\s+\d+\) |Error|authenticationID)/;
+    return new Promise(resolve => {
+        const fd = fs.openSync(logPath, 'w');
+        let out = '';
+        let err = '';
+        let rest = '';
+        const onData = (chunk, isErr) => {
+            const text = chunk.toString();
+            fs.writeSync(fd, text);
+            if (isErr) {
+                err += text;
+            } else {
+                out += text;
+            }
+            rest += text;
+            const parts = rest.split('\n');
+            rest = parts.pop();
+            parts.filter(l => show.test(l))
+                .forEach(l => line(`      | ${l.trimEnd()}`));
+        };
+        const child = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+        child.stdout.on('data', c => onData(c, false));
+        child.stderr.on('data', c => onData(c, true));
+        const timer = setTimeout(() => {
+            line('      | timeout, stopping the container');
+            child.kill('SIGTERM');
+        }, timeoutMs);
+        child.on('close', code => {
+            clearTimeout(timer);
+            if (rest) {
+                fs.writeSync(fd, rest);
+            }
+            fs.closeSync(fd);
+            resolve({ code, out, err });
+        });
+    });
+}
+
 function firstExisting(candidates) {
     return candidates.find(c => c && fs.existsSync(c)) || null;
 }
@@ -62,7 +112,7 @@ function register() {
         after(() => act.close());
 
         it('runs the branch\'s kerberos suite against the krb profile',
-            function kerberosTest() {
+            async function kerberosTest() {
                 const netns = env.knob('KRB_NET_CONTAINER',
                     `${env.PROJECT}-krb-net-1`);
                 const names = run('docker', ['ps', '--format', '{{.Names}}']).out;
@@ -127,7 +177,7 @@ function register() {
                 say(`image ${IMAGE}, namespace ${netns}, brokers ${brokers}`);
                 say(`log ${act.file('suite.log')}`);
                 const startedAt = Date.now();
-                const r = run('docker', ['run', '--rm',
+                const dockerArgs = ['run', '--rm',
                     '--name', 'bnaas-demo-krbtest',
                     '--network', `container:${netns}`,
                     '-v', '/var/run/docker.sock:/var/run/docker.sock',
@@ -143,12 +193,17 @@ function register() {
                     '-e', `KRB_KDC_CONTAINER=${env.knob('KRB_KDC_CONTAINER',
                         `${env.PROJECT}-krb-kdc-1`)}`,
                     IMAGE,
-                    'yarn', 'ft_test:notification:kerberos'],
-                { timeout: 20 * 60 * 1000 });
-                fs.writeFileSync(act.file('suite.log'),
-                    `${r.out}\n${r.err}\n`);
-                line(r.out.split('\n').slice(-40)
-                    .map(l => `      | ${l}`).join('\n'));
+                    'yarn', 'ft_test:notification:kerberos'];
+                // The suite inside the container takes minutes and waits on
+                // real events (two broker restarts, a two-minute ticket), so
+                // its output is streamed to the terminal and to suite.log as
+                // it arrives rather than written when the container exits.
+                // The terminal gets the mocha result lines only; the file
+                // gets everything.
+                note('the suite runs for several minutes; each arm prints');
+                note('here as it finishes, the full log grows in suite.log');
+                const r = await streamRun('docker', dockerArgs,
+                    act.file('suite.log'), 20 * 60 * 1000);
 
                 step(3, 'read the result out of the broker\'s own lines');
                 note('only the broker\'s own authenticationID line counts: a');
