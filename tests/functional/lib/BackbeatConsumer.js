@@ -965,6 +965,32 @@ describe('BackbeatConsumer shutdown tests', () => {
         ], done);
     }).timeout(30000);
 
+    it('should shuttdown when no partition has been assigned yet', function (done) {
+        this.timeout(20000);
+        // A consumer of its own, in a group of its own so that it takes no
+        // partition from the shared group, closed in the same tick as its
+        // subscribe so that the group join cannot have completed.
+        const earlyConsumer = new BackbeatConsumer({
+            zookeeper: zookeeperConf,
+            kafka: {
+                maxPollIntervalMs: 45000,
+                ...consumerKafkaConf,
+            },
+            queueProcessor,
+            groupId: `bucket-processor-early-${Math.random()}`,
+            topic,
+            concurrency: 2,
+        });
+        // out of the ready handler, so that the consumer has finished
+        // arming its offset publication timer and close() can clear it
+        earlyConsumer.on('ready', () => setImmediate(() => {
+            earlyConsumer.subscribe();
+            // no partition to revoke, so no rebalance callback is coming
+            assert.strictEqual(earlyConsumer._consumer.assignments().length, 0);
+            earlyConsumer.close(() => consumer.close(done));
+        }));
+    });
+
     it('should shuttdown when consumer has been disconnected', done => {
         async.series([
             next => {
