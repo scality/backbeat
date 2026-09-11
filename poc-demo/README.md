@@ -15,7 +15,7 @@ Then open these beside the terminal, at the default `PORT_OFFSET=1000`:
 | what | url | what to look at |
 |---|---|---|
 | Grafana | <http://localhost:4000> | dashboard "BNaaS delivery pool" |
-| Kafka UI | <http://localhost:9085> | the internal topic, the delivery topic, the consumer groups |
+| Kafka UI | <http://localhost:9085> | today's topic, the processor groups and the pool groups |
 | ZooNavigator | <http://localhost:10000> | `/bnaas-demo/delivery-workgroups` and `/bnaas-demo/queue-populator` |
 | Prometheus | <http://localhost:10090> | the raw worker and populator metrics |
 | S3 endpoint | <http://localhost:9010> | `accessKey1` / `verySecretKey1` |
@@ -129,15 +129,16 @@ All idempotent, all read `.env`, all print what they do.
   answers a metadata request, mongo reports PRIMARY, CloudServer answers as
   S3, and grafana answers its health endpoint. For the suite's before-hook:
   quiet on success, names the missing piece on failure, exit 1.
-- **`bin/topics-create.sh`** The legacy internal topic (P=4), the failed topic
-  (P=1), the delivery topic (P=3) and the customer topics (P=1), then proves
-  every partition has a leader three consecutive times.
+- **`bin/topics-create.sh`** Today's internal topic (P=4), the failed topic
+  (P=1), the customer topics (P=1) and, for reference runs of the previous
+  model, the delivery topic (P=3), then proves every partition has a leader
+  three consecutive times.
 - **`bin/mongo-init.sh`** Initiate replica set `rs0` with the member host
   pinned to the port mongod actually runs on.
 - **`bin/zk-show.sh [znode]`** The workgroups document pretty-printed, the
   generation it declares, the consumer group each workgroup therefore joins,
-  the previous generation's groups, the cutover barriers, and the populator's
-  log offsets. With an argument, any node.
+  the per-destination watermarks the seed tool wrote for it, and the
+  populator's log offsets. With an argument, any node.
 
 `bin/_common.sh` is sourced by all of them and needs bash.
 
@@ -180,21 +181,22 @@ source. Fifteen panels in two areas.
 
 The pool: delivered per second by destination; drops per second by reason and
 by target; delivery delay p50 and p99; consumer-group lag by group and topic;
-legacy groups versus the pool group on one axis; records per partition on the
-delivery topic; workers up; deliveries in flight; open producers per endpoint.
+processor groups versus pool groups on one axis (the migration); records per
+partition on today's topic; workers up; deliveries in flight; open producers
+per endpoint.
 
 A **Workgroups** row: delivered per second by workgroup; lag for every group
-matching the pool's base group id, which is what makes a generation cutover
-visible; drops per second by workgroup; records skipped by reason; cutover
-barriers seen; and a table of the generation each worker is running.
+matching the pool's base group id, which is what makes a generation change
+visible; drops per second by workgroup; records skipped by reason; records
+skipped under a watermark; and a table of the generation each worker is
+running.
 
 A workgroup's real consumer group is `<base>-<workgroupId>-gen<generation>`.
-So during a cutover the old generation's group drains to zero while the new
-generation's starts from the barrier, and both lines are on the lag panel. Both
-matter: stopping the old generation before its lag reaches zero is what strands
-records. Lag alone is not enough either, because a wedged consumer holds its
-partitions with a lag that simply stops falling; read it next to the delivered
-rate.
+A generation change is a container swap: the old generation's groups go
+memberless, the new generation's start from the offsets the seed tool gave
+them, and both lines are on the lag panel. Lag alone is not enough to read
+health, because a wedged consumer holds its partitions with a lag that simply
+stops falling; read it next to the delivered rate.
 
 Metric names and labels, read off the code rather than guessed. Every name
 below carries the prefix `s3_notification_delivery_worker_`:
@@ -205,11 +207,16 @@ below carries the prefix `s3_notification_delivery_worker_`:
 | `dropped_total` | counter | `workgroup`, `target`, `reason` |
 | `delivery_delay_seconds` | histogram | `workgroup`, `target`, `status` |
 | `skipped_total` | counter | `workgroup`, `reason` |
-| `barrier_seen_total` | counter | `workgroup`, `match` |
+| `barrier_seen_total` | counter | `workgroup`, `match` (previous model) |
 | `lanes` | gauge | none |
 | `producers` | gauge | `endpoint` |
 | `workgroup_generation` | gauge | `workgroup`, `source` |
 | `workgroup_config_changes_total` | counter | `workgroup` |
+
+One more counter carries a different prefix:
+`s3_notification_delivery_watermark_skipped_total{destination}` counts the
+records a worker committed without delivering because the destination's
+previous owner had already delivered them.
 
 `reason` on the drop counter is one of `delivery_timeout`, `delivery_error`,
 `producer_error`, `unknown_destination` or `parse_error`. On the skip counter
@@ -465,8 +472,7 @@ At `PORT_OFFSET=1000`, on Docker Desktop, arm64.
   dashboard to an anonymous reader and its datasource proxy answered the same
   PromQL a panel issues.
 - `zk-show.sh` printed a three-workgroup document with its generation, the
-  derived group id per workgroup, the previous generation's groups, the
-  barriers, and the populator's live log offset.
+  derived group id per workgroup, and the populator's live log offset.
 - `wait-ready.sh` passed all four checks and, pointed at a port with nothing on
   it, failed in six seconds naming that check.
 - The port preflight refused to start at offset 0 while another project held

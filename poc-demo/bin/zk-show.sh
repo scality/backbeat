@@ -44,7 +44,7 @@ say "workgroups document at ${ZK_WORKGROUPS_PATH}"
 doc="$(zk_get "$ZK_WORKGROUPS_PATH")"
 if [ -z "$doc" ]; then
     warn "no document there yet. The workers read it at startup, and the"
-    warn "cutover tool writes it. Check the workgroups.zookeeperPath in the"
+    warn "layout change writes it. Check the workgroups.zookeeperPath in the"
     warn "backbeat config the workers are started with, and remember the"
     warn "path is relative to any chroot on the zookeeper connection string."
 else
@@ -79,6 +79,28 @@ if barriers:
         print("    partition %-3s offset %s" % (k, barriers[k]))
 '
 fi
+
+say "per-destination watermarks under ${ZK_WORKGROUPS_PATH}/watermarks"
+found=0
+for node in $(zk_ls_r "${ZK_WORKGROUPS_PATH}/watermarks" 2>/dev/null); do
+    case "$node" in
+        */watermarks/gen*)
+            printf '    %s\n' "$node"
+            zk_get "$node" | python3 -c '
+import json, sys
+try:
+    d = json.load(sys.stdin)
+except ValueError:
+    sys.exit(0)
+for dest in sorted(d):
+    parts = d[dest]
+    print("        %-14s %s" % (dest, " ".join("p%s=%s" % (k, parts[k]) for k in sorted(parts, key=lambda x: int(x)))))
+'
+            found=1
+            ;;
+    esac
+done
+[ "$found" -eq 0 ] && info "no watermarks yet; the seed tool writes one document per generation it seeds"
 
 say "populator log offsets under ${ZK_POPULATOR_PATH}"
 found=0
