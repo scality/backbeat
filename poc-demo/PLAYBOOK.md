@@ -14,6 +14,14 @@ fresh clone of this branch on the build machine, started 2026-09-10 23:09:40
 CEST (21:09:40 UTC; the suite's own log lines are UTC). Where a step in this
 file was executed, its timestamp is given. Nothing else is stated as fact.
 
+The host that run shared: a 12-core Apple-silicon Mac with a 7.75 GiB Docker
+VM holding **two** Kafka brokers and two ZooKeepers (this stack and the older
+`ft` rig), the emulated CloudServer, the `bnaaskrb` spike containers, and three
+parked rig workers on the host; load average about 6. Every consumer start
+wedged, one coordinator request timed out at 36 s. Taylor's numbers on a quiet
+machine should be the better case, which is why "Before the take" starts with
+giving the demo the machine.
+
 ## The ten commands
 
 From nothing to the demo. Each was executed on the build machine on
@@ -288,7 +296,19 @@ assignment, and the post-cure drain allows 120 s.
 
 ### Act 06: workgroups, and ZooKeeper (rig W gates and C5r)
 
-Reference run: filled in from the run's verdict, see "Reference run totals".
+Reference run: 23:37:54 to 00:15:10, 2236 s, **red on all four tests**, from
+one cause. The wg-b worker's consumer paused two of its three partitions during
+a rebalance, a group-coordinator request then timed out (36 s, under host
+pressure), and the resume threw `Local: Erroneous state`; the partitions stayed
+paused for the rest of the act while the member looked healthy and kept
+committing on the third partition, where it only filtered wg-a's records. Its
+three destinations delivered 0 of 240, 0 of 239 and 0 of 478 (the 957 gaps in
+the table); wg-a's two delivered 240 of 240 each. The isolation test then had
+nothing to measure, the pin test never ran, and the reshard's gaps are the same
+957. Mapping, verify exit 0 and reshard inversions 0 held. Four start-up wedges
+were cured. Fixed in cba93c7e (a per-partition stall detector) and 2c7369a3
+(the isolation step drives its own traffic); the rerun is recorded under "Act
+06 rerun" at the end of this file.
 
 The act to slow down on, and the longest. **One** internal delivery topic; a
 workgroup is a consumer group over it with a slice filter, so a worker commits
@@ -332,19 +352,36 @@ Then the three things that happen to it:
   partition, then the document with those offsets, then pre-seeds the new
   generation's groups while they are empty; the ZooKeeper write is the commit
   point. The old generation owns everything before its barrier, the new one
-  starts at it. **Wait for `verify` to exit 0** before stopping the old
-  generation: that is the whole discipline. `DEMO_WORKGROUPS_STOP_EARLY=1`
-  shows the loss when you do not.
+  starts at it. The discipline, in the CLI's own words: **do not stop the old
+  generation, and do not start the new one, until `verify` exits 0.** The
+  first half protects against loss, the second against reordering: a new
+  generation started early delivers post-barrier records while an old one
+  still behind its barrier delivers earlier ones for the same keys (the
+  rehearsal's 4197 inversions). The price of no overlap is a delivery pause
+  between the stop and the new generation's first delivery, and the act
+  measures it into the table; say it aloud. `DEMO_WORKGROUPS_STOP_EARLY=1`
+  shows the loss when the first half is broken.
 
-Duplicates are the old generation consuming past its barrier while it drains:
-the longer it runs, the more there are. Gaps are impossible once `verify` has
-exited 0. Known gap: a crashed old-generation worker cannot restart to finish
-its drain once the document is overwritten; the proposed amendment is one
-ZooKeeper node per generation plus a current pointer.
+Duplicates are the old generation consuming past its barrier before it is
+stopped: the longer it runs there, the more there are. Gaps are impossible once
+`verify` has exited 0. Two Grafana cautions: the **cutover barriers seen**
+panel counts a barrier when a worker processes the record, not when it has
+committed up to it, so it is not a drained signal (`verify` reads committed
+offsets and is); and a destination's deliveries are capped by its per-object
+ordering lanes at one record per producer poll, 2000 ms, so a lagging
+workgroup catches up slowly. Known gap: a crashed old-generation worker cannot
+restart to finish its drain once the document is overwritten; the proposed
+amendment is one ZooKeeper node per generation plus a current pointer.
 
 ### Act 07: Kerberos (rig GATE 2)
 
-Reference run: filled in from the run's verdict, see "Reference run totals".
+Reference run: **skipped**, with the message the act prints for it: the clone's
+`poc-demo/krb/keytabs/` was empty. The KDC writes the keytabs into the checkout
+whose compose file started the krb profile, and the stack had been started from
+another checkout. Run `yarn demo:up:krb` from the checkout you run the suite
+from and the act runs; the integrator's run earlier on 2026-09-10 did, with the
+suite's seven arms passing and the broker logging 38 authentications as
+`notifa` and 40 as `notifb` from one process.
 
 One process, two identities. librdkafka gives one Kerberos identity per OS
 process, measured, with every documented workaround tried and failed; the
@@ -359,7 +396,24 @@ Without the profile the act skips with a message that names that script.
 
 ### Act 08: the semantics that change (rig M5, M9, M8, M6b)
 
-Reference run: filled in from the run's verdict, see "Reference run totals".
+Reference run: 00:15:10 to 00:32:29, 1038 s. Mixed window 0 gaps and **129
+duplicates**; detach 0 of 20 on legacy and 20 of 20 on the pool; unknown
+account-scoped ARN refused, colliding one accepted, 12 of 12 delivered to the
+global destination. Two cases red: the overlapping-rules case never measured
+(a harness fault, its driver log name carried a slash, fixed in 9091baff), and
+the mixed-window case asserted zero duplicates.
+
+Those 129 duplicates are a finding about the **switch**, not the window, and
+belong in the migration runbook: the populators never overlapped (the legacy
+one exited at 22:16:27 UTC, the pool one started at 22:16:31), and the first
+record the pool populator published, `m5-00078`, is exactly the first
+duplicated key. A populator stopped for the switch can die between publishing a
+batch and saving its checkpoint; its successor re-reads from that checkpoint and
+publishes the window again, to the other topic, so both paths deliver it. It is
+the cost act 05's mid-batch kill shows, landing on the switch, and the rig's
+window happened to be empty. Bounded, at-least-once, zero loss. Say it when the
+table prints, and say what would remove it: a populator that saves its
+checkpoint before acknowledging a stop.
 
 Four short cases, each ending in a decision:
 
@@ -389,7 +443,152 @@ target with the known rebalance exception. They are in
 
 ## Reference run totals
 
-REFERENCE_RUN_TOTALS
+One `yarn ft_test:demo`, all eight acts, `DEMO_PACE=demo`, fresh clone at
+79916ae2, 2026-09-10 23:09:40 to 2026-09-11 00:32:30 CEST: **82 min 50 s**
+wall, mocha 8 passing, 1 pending, 7 failing. Durations are ACT START to ACT END
+from each act's `timeline.txt`; the 20 s before act 01 are the suite's setup
+(topic recreation, group deletion, stack check).
+
+| act | duration | result in the reference run | wedge cures |
+|---|---|---|---|
+| 01 code-and-tests | 62 s | green: 1720 passing, 1 pending, lint clean | 0 |
+| 02 legacy-baseline | 95 s | green: 25 of 25, 0/0/0 | 0 |
+| 03 dead-destination | 423 s | green: 20/20/20 drops, 5 of 5, lag 0 | 1 |
+| 04 switch-and-drain | 458 s | green: cutover 218/218 0/0/0, rollback 151/151 0/0/0 | 1 |
+| 05 crashes | 634 s | populator kills green (0 gaps, 105 dups); worker kill red, harness (fixed cf046aae) | 1 |
+| 06 workgroups | 2236 s | red on all four tests from one paused-partitions stall (fixed cba93c7e, 2c7369a3) | 4 |
+| 07 kerberos | 0 s | skipped: keytabs in the other checkout | 0 |
+| 08 semantics | 1038 s | detach and collision green; mixed window 0 gaps and 129 switch duplicates; overlap case red, harness (fixed 9091baff) | 2 |
+
+Every red is a harness fault, a host-pressure stall, or an assertion that
+forbade a measured, bounded, at-least-once duplicate. No run lost a record on a
+path that was consuming. The recording cut `02,03,04,06` summed to 53.5 min in
+this run, 37 of them act 06's stall; the rehearsal on the fixed code, recorded
+below, is the number to plan a take around.
+
+### Rehearsal and reruns on the fixed code
+
+**Rehearsal of the recording cut**, `DEMO_ACTS=02,03,04,06 yarn ft_test:demo`,
+fresh clone at 9091baff, 2026-09-11 00:37:11 to 01:07:42 CEST: **30 min 31 s**
+wall, 6 of 7 mocha cases passing. This is the number to plan a take around, on
+a machine under the same pressure as above (both other Kafka stacks and the
+rig workers still alive).
+
+| act | duration | result |
+|---|---|---|
+| 02 legacy-baseline | 83 s | green, every row `same` |
+| 03 dead-destination | 281 s | green, every row `same` or `close`; one start-up wedge cured in 12 s |
+| 04 switch-and-drain | 303 s | green, every row `same` or `close`; one start-up wedge cured in 12 s |
+| 06 workgroups | 1122 s | mapping, isolation, pin, verify 0, generation-1 gaps 0 and reshard gaps 0 all green; reshard duplicates 877 and **inversions 4197**, all on `krb-dest-b`, the destination that changed owner, with 11 wedge cures on the timeline |
+
+The isolated act 06 run of 2026-09-10 (integrator, fast pace) measured 0
+inversions and 122 to 202 duplicates. The analysis of the rehearsal's evidence
+(every inverted pair attributed by the worker that delivered each side) settled
+the mechanism, and corrected two premises:
+
+- krb-dest-b **never moved**: it was wg-b's in all three generations. The
+  movers were poc-dest-1 to wg-pin at generation 2 and poc-dest-3 to wg-c at
+  generation 3. krb-dest-b is where every inversion showed because it is the
+  only destination with several operations per key: the drivers send every
+  straddle Put/Delete pair to its bucket.
+- All 4197 inverted pairs were produced during the **pin cutover** (generation
+  1 to 2), not the reshard: the act started the generation-2 wg-b worker one
+  second after the cutover, at the barrier, while the generation-1 wg-b worker
+  was still 916 records behind that barrier after the step-4 kill, delivering
+  pre-barrier records for the same keys at about three a second. Every pair is
+  an old-generation earlier operation against a new-generation later one. The
+  generation-3 reshard ran on an idle topic (the load had ended five minutes
+  earlier), so none of the reshard rows were backed by deliveries.
+- Duplicates decompose exactly: 90 from the deliberate `kill -9` replay, 787
+  from generation 1 consuming past the barrier before it was stopped, 0 from
+  the wedge cures.
+
+Fixed in the act after the rehearsal: both generation changes are now strictly
+sequential (verify exits 0, stop the old generation, then start the new one,
+the cutover CLI's own instruction), the delivery pause that costs is measured
+into the table, a fresh load runs before the reshard, and the reshard rows are
+counted from the reshard's own offsets. Two further measurements from the same
+analysis are stated in the act's narration: the worker's "barrier seen" line
+and counter fire at processing time, not at commit, so they are not a drained
+signal; and per-object ordering lanes deliver one record per producer poll
+(2000 ms), a throughput ceiling of the POC worker that is what made the old
+generation slow to reach its barrier.
+
+**Act 06 sample on the no-overlap code** (`DEMO_ACTS=06`, clone at af740ab6,
+2026-09-11 01:44:48 to 02:05:13 CEST, **1224 s**): **green on all four
+cases**, exit 0. Every destination owned by exactly one workgroup; generation-1
+gaps 0; isolation held (only the killed workgroup's destinations paused); the
+pinned destination served by the pin only; `verify` 0 before each stop;
+reshard gaps 0; reshard **inversions 0**; reshard duplicates 166, the old
+generation's consumption past its barriers before it was stopped. Two start-up
+wedges cured in 12 s each, no partition stall. The price of no overlap,
+measured: **50 s** of delivery pause at the pin cutover and **176 s** at the
+reshard (the generation-3 workers' start plus their wedge cures), which is what
+to say aloud while the panels go quiet. With this sample the recording cut
+`02,03,04,06` sums to about 31.5 minutes at demo pace.
+
+**Act 05 rerun** (`DEMO_ACTS=05,07,08`, clone at 9091baff, 2026-09-11
+01:12:10 to 01:21:49 CEST, 579 s): **green on both cases**. Populator kills 2,
+0 gaps, 133 duplicates (the republished checkpoint window). Worker kill: 0
+gaps, 0 inversions, 49 duplicates inside a 67-record uncommitted window, and
+**45 s** from the `kill -9` to the replacement's first assignment: the dead
+member's session timeout, which is what a worker death costs and is worth
+saying aloud when the pause appears. Three wedge cures: two at worker start,
+each caught within 12 s, one by the drain gate after 60 s.
+
+**Act 07 rerun** (same run, 435 s), from the clone whose `yarn demo:up:krb`
+wrote the keytabs: **green**. The kerberos suite ran inside the container on
+the krb profile's network namespace, exit 0, every arm passing (8 of 8), and
+the broker's own log carried two distinct `authenticationID`s from one
+process. That is the gate for account-scoped Kerberos closed on the recording
+machine, not only on the spike rig.
+
+**Act 08 rerun** (same run, 889 s): mixed window 278 of 278, **0 gaps, 0
+duplicates, 0 inversions** (this time the switch landed on an empty checkpoint
+window); detach 0 of 20 on legacy and 20 of 20 on the pool; unknown
+account-scoped ARN refused, colliding one accepted, 12 of 12 delivered to the
+global destination. Three wedge cures. One case red: overlapping rules, which
+reached its measurement for the first time (the earlier runs died on the
+driver-log name) and showed the prefixed object reaching poc-dest-1 twice and
+poc-dest-2 never, on both paths. That is a harness fault: the driver's object
+keys began with `legacy-logs/x`, so the rule's `logs/` prefix never matched
+them. Fixed after this run; the third run is recorded below.
+
+**Act 08 third run** (`DEMO_ACTS=08`, clone at 59100971, 2026-09-11 02:06:12
+to 02:20:48 CEST, 876 s): **green on all four cases**, exit 0, every row
+`same`: mixed window 0 gaps and 0 duplicates; detach 0 of 20 on legacy and 20
+of 20 on the pool; the prefixed object reached both destinations on both paths
+and the other object only the catch-all one; unknown account-scoped ARN
+refused, colliding one accepted, 12 of 12 to the global destination. Three
+wedge cures, one of them on a legacy processor by the drain gate.
+
+With this run every act has a green run on the shipped code: 01 to 04 in the
+reference run, 05 and 07 in the rerun of 01:12, 06 in the sample of 01:44, 08
+here.
+
+## Timing at a glance
+
+Measured, ACT START to ACT END, at `DEMO_PACE=demo`, on the pressured build
+machine described at the top, across the reference run and the reruns of
+2026-09-10 and 2026-09-11. The low end of a range is a run with few or fast
+wedge cures, the high end a run with more.
+
+| act | what | measured | notes |
+|---|---|---|---|
+| 01 | code + unit + lint | 62 s | `DEMO_ACT01_FULL=1` adds the functional suites (15 to 30 min) |
+| 02 | legacy baseline | 83 to 95 s | |
+| 03 | dead destination | 281 to 423 s | `DEMO_STALL_WATCH_S` sets the legacy stall watch (75 s at demo) |
+| 04 | switch and drain | 303 to 458 s | |
+| 05 | crashes | 579 to 634 s | |
+| 06 | workgroups | 1122 to 1224 s | the long one; 176 s of it is the reshard's no-overlap pause |
+| 07 | kerberos | 434 s | or a clean skip without the krb profile |
+| 08 | semantics | 889 to 1038 s | |
+
+The whole suite measured 82 min 50 s in the reference run. The recording cut
+`DEMO_ACTS=02,03,04,06` measured **30 min 31 s** in the rehearsal and sums to
+about 31.5 min with the green act 06 sample, inside the 30 to 40 minute
+window. Read the rest from `poc-demo/results/RESULTS.md`, or add 08 for a
+take of about 45 minutes.
 
 ## Troubleshooting
 
