@@ -595,6 +595,42 @@ function seedPoolGroupAtHead(act, group) {
 }
 
 /**
+ * Save a worker's counters into the act's evidence, and return the skipped
+ * and dropped totals by reason, so a record that was consumed and not
+ * delivered can be told from one that was never consumed.
+ *
+ * @param {Object} act - the act
+ * @param {Number} n - worker index
+ * @param {String} label - file label
+ * @return {Promise} resolves with { delivered, skipped: {reason: n},
+ *   dropped: {reason: n}, watermark }
+ */
+async function snapshotMetrics(act, n, label) {
+    const rows = await wait.metrics(n);
+    fs.writeFileSync(act.file(`metrics-${label || `worker${n}`}.txt`),
+        rows.map(r => `${r.name}${JSON.stringify(r.labels)} ${r.value}`)
+            .join('\n').concat('\n'));
+    const out = { delivered: 0, skipped: {}, dropped: {}, watermark: 0 };
+    rows.forEach(r => {
+        if (r.name === wait.COUNTER.delivered) {
+            out.delivered += r.value;
+        } else if (r.name === wait.COUNTER.skipped) {
+            const k = r.labels.reason || '(none)';
+            out.skipped[k] = (out.skipped[k] || 0) + r.value;
+        } else if (r.name === wait.COUNTER.dropped) {
+            const k = r.labels.reason || '(none)';
+            out.dropped[k] = (out.dropped[k] || 0) + r.value;
+        } else if (r.name === wait.COUNTER.watermark) {
+            out.watermark += r.value;
+        }
+    });
+    say(`worker ${n} counters: delivered ${out.delivered}, skipped `
+        + `${JSON.stringify(out.skipped)}, dropped ${JSON.stringify(out.dropped)}, `
+        + `watermark ${out.watermark}`);
+    return out;
+}
+
+/**
  * Start an act with no pool groups and no workgroups document left over by
  * an earlier act, so its own generation 1 starts where the act seeds it and
  * not where a previous act's group of the same name had got to.
@@ -797,6 +833,7 @@ module.exports = {
     seedFromGeneration,
     seedPoolGroupAtHead,
     resetPoolGroups,
+    snapshotMetrics,
     restartInPlace,
     drainOrCure,
     progressOrCure,

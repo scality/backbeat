@@ -339,6 +339,7 @@ function register(ctx) {
                     note('what this run actually saw, not what the pool does.');
                 }
 
+                await flow.snapshotMetrics(act, 1, 'worker1');
                 const rows = await wait.metrics(1);
                 for (const id of DEAD) {
                     const mine = rows.filter(r => r.name === wait.COUNTER.dropped

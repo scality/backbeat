@@ -654,6 +654,11 @@ function register(ctx) {
                 && extraLoads.every(x => !x.proc.isRunning()), 90000, 1000);
             await wait.frozen(env.POOL_TOPIC, env.pause(15000));
             for (const id of IDS[3]) {
+                const w = workers[`${id}-gen3`];
+                if (w) {
+                    await flow.snapshotMetrics(act, Number(w.probePort) - env.PROBE_BASE,
+                        `${id}-gen3`);
+                }
                 const group = zk.groupIdFor(env.DELIVERY_GROUP, id, 3);
                  
                 await flow.drainOrCure({ group, topic: env.POOL_TOPIC,

@@ -209,6 +209,7 @@ function register(ctx) {
                 const drain = await flow.drainOrCure({ group, topic: env.POOL_TOPIC,
                     label: 'pool', timeoutMs: 300000, workers: [1] });
                 assert.ok(drain.drained, 'the pool did not drain to lag 0');
+                await flow.snapshotMetrics(act, 1, 'worker1');
                 const skipped = await wait.counter(1, 'watermark');
                 act.measured('records skipped under the watermark',
                     `${skipped}, already delivered by a processor`);

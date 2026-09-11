@@ -134,6 +134,7 @@ function register(ctx) {
                 const worker = await flow.startWorker(act, pool, 1);
                 await flow.drainOrCure({ group: env.DELIVERY_GROUP, label: 'pool',
                     timeoutMs: 240000, workers: [1] });
+                await flow.snapshotMetrics(act, 1, 'worker1-detach');
                 kafka.dump(t2, poolFrom2, act.file('events-pool-detached.jsonl'), 0);
                 const poolGone = countKey(
                     act.file('events-pool-detached.jsonl'), 'pool-detach');

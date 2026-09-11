@@ -45,6 +45,7 @@ function register(ctx) {
             act.open();
             topic = ctx.customerTopicOf[DEST];
             act.expect('populator kills', 2);
+            act.expect('worker counters after the populator kills', '(not predicted)');
             act.expect('populator gaps (loss)', 0);
             act.expect('populator duplicate extras',
                 'republished checkpoint window, 0 in the rig\'s two kills');
@@ -109,6 +110,11 @@ function register(ctx) {
                 await wait.frozen(env.POOL_TOPIC, env.pause(12000));
                 await flow.drainOrCure({ group: env.DELIVERY_GROUP, label: 'pool',
                     timeoutMs: 300000, workers: [1] });
+                const counters = await flow.snapshotMetrics(act, 1, 'worker1-after-m11');
+                act.measured('worker counters after the populator kills',
+                    `delivered ${counters.delivered}, skipped `
+                    + `${JSON.stringify(counters.skipped)}, dropped `
+                    + `${JSON.stringify(counters.dropped)}`);
                 const r = flow.dumpAndCheck({ act, topic, from,
                     driver: load.log, keyPrefix: 'm11', label: 'populator-kills' });
                 act.measured('populator gaps (loss)', r.totals.gaps);
