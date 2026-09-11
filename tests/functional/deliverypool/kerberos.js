@@ -221,6 +221,61 @@ function readBack(topic, cb) {
     consumer.connect();
 }
 
+/*
+ * Arm C is the control on the shipping producer, and it only says something
+ * if it is not a race.
+ *
+ * librdkafka passes GSS_C_NO_CREDENTIAL, so every GSSAPI handshake it makes
+ * authenticates as whatever principal the process default credential cache
+ * holds; sasl.kerberos.principal only renders the kinit command librdkafka
+ * runs per client. Two clients created back to back therefore each overwrite
+ * that one cache, and which identity a handshake gets depends on whether it
+ * lands before or after the other client's kinit. Populating the cache once
+ * and putting a kinit that does nothing ahead of the real one on PATH takes
+ * that ordering out of it: the cache holds notifa for the whole arm, both
+ * producers authenticate as notifa, and the destination that needs notifb is
+ * denied every record it sends.
+ */
+const ARM_C_CACHE = `/tmp/krb-arm-c-${RUN_ID}.cc`;
+const ARM_C_BIN = `/tmp/krb-arm-c-bin-${RUN_ID}`;
+const ARM_C_ROUNDS = 3;
+const ARM_C_PRINCIPAL = 'a';
+
+// the PATH to put back once the arm is over, so that no later arm, and no
+// process arm D forks, inherits the no-op kinit
+let pathBeforeArmC = null;
+
+/**
+ * Put a kinit that does nothing ahead of the real one on PATH.
+ *
+ * librdkafka runs its kinit command through system(), which resolves it
+ * against the process environment, and node writes process.env through
+ * setenv, so this reaches the C library.
+ *
+ * @return {undefined}
+ */
+function installNoopKinit() {
+    fs.mkdirSync(ARM_C_BIN, { recursive: true });
+    const shim = path.join(ARM_C_BIN, 'kinit');
+    fs.writeFileSync(shim, '#!/bin/sh\nexit 0\n');
+    fs.chmodSync(shim, 0o755);
+    pathBeforeArmC = process.env.PATH;
+    process.env.PATH = `${ARM_C_BIN}:${process.env.PATH}`;
+}
+
+/**
+ * Undo installNoopKinit and the credential cache it was installed for
+ * @return {undefined}
+ */
+function restoreArmCEnvironment() {
+    if (pathBeforeArmC === null) {
+        return;
+    }
+    process.env.PATH = pathBeforeArmC;
+    pathBeforeArmC = null;
+    delete process.env.KRB5CCNAME;
+}
+
 /**
  * Populate a DIR: credential cache collection with a ticket per principal,
  * standing in for whatever a deployment uses to do that out of band
@@ -263,6 +318,9 @@ describe('notification delivery pool, kerberos destinations', function kerberosS
     });
 
     afterEach(done => {
+        // here rather than at the end of arm C, so that an arm C that threw
+        // still leaves the environment as every other arm expects it
+        restoreArmCEnvironment();
         if (!pool) {
             return done();
         }
@@ -340,28 +398,49 @@ describe('notification delivery pool, kerberos destinations', function kerberosS
     describe('arm C, control on the shipping producer', () => {
         it('should collide on one identity and fail the other destination', done => {
             // node-rdkafka takes the process default credential, so this is
-            // the behaviour the new producer exists to fix. The kinit that
-            // librdkafka runs per client is what overwrites the cache, so the
-            // collection and the client keytab an earlier arm configured are
-            // cleared to reproduce a deployment that has neither.
-            delete process.env.KRB5CCNAME;
+            // the behaviour the new producer exists to fix. The client
+            // keytab an earlier arm configured is cleared, so that the
+            // cache written just below is the only credential there is.
             delete process.env.KRB5_CLIENT_KTNAME;
-            pool = makePool({ kerberosProducer: 'rdkafka' });
-            runRounds(pool, { arm: 'C', rounds: 3, roundMs: 3000 }, (err, results) => {
-                assert.ifError(err);
-                brokerEvidence((logErr, principals) => {
-                    assert.ifError(logErr);
-                    const distinct = [...new Set(principals)];
-                    assert.strictEqual(distinct.length, 1,
-                        `expected one identity for both connections, saw ${JSON.stringify(principals)}`);
-                    const denied = results.a.errors.length + results.b.errors.length;
-                    assert.ok(denied > 0,
-                        'expected the destination that lost its identity to be denied');
-                    assert.ok(/authorization|Authorization/.test(
-                        results.a.errors.concat(results.b.errors).join(' ')),
-                    `expected an authorization failure, got ${JSON.stringify(
-                        results.a.errors.concat(results.b.errors))}`);
-                    done();
+            process.env.KRB5CCNAME = `FILE:${ARM_C_CACHE}`;
+            const kept = `notif${ARM_C_PRINCIPAL}@${REALM}`;
+            const denied = ARM_C_PRINCIPAL === 'a' ? 'b' : 'a';
+            // the real kinit, before the no-op one goes on PATH
+            execFile('kinit', [
+                '-k', '-t',
+                `${process.env.CONF_DIR}/ssl/notif${ARM_C_PRINCIPAL}.keytab`,
+                kept,
+            ], kinitErr => {
+                assert.ifError(kinitErr);
+                installNoopKinit();
+                pool = makePool({ kerberosProducer: 'rdkafka' });
+                runRounds(pool, {
+                    arm: 'C', rounds: ARM_C_ROUNDS, roundMs: 3000,
+                }, (err, results) => {
+                    assert.ifError(err);
+                    brokerEvidence((logErr, principals) => {
+                        assert.ifError(logErr);
+                        const distinct = [...new Set(principals)];
+                        assert.deepStrictEqual(distinct, [kept],
+                            'expected both connections to authenticate as the ' +
+                            `one principal in the cache, saw ${JSON.stringify(principals)}`);
+                        assert.deepStrictEqual(results[ARM_C_PRINCIPAL].errors, []);
+                        assert.strictEqual(results[ARM_C_PRINCIPAL].delivered,
+                            ARM_C_ROUNDS);
+                        assert.strictEqual(results[denied].delivered, 0,
+                            'the destination that lost its identity ' +
+                            `delivered ${results[denied].delivered} of ` +
+                            `${ARM_C_ROUNDS}`);
+                        assert.strictEqual(results[denied].errors.length,
+                            ARM_C_ROUNDS,
+                            `expected every record to be denied, got ${JSON.stringify(
+                                results[denied].errors)}`);
+                        assert.ok(results[denied].errors.every(
+                            error => /authoriz/i.test(error)),
+                        `expected authorization failures, got ${JSON.stringify(
+                            results[denied].errors)}`);
+                        done();
+                    });
                 });
             });
         });
@@ -554,11 +633,16 @@ describe('notification delivery pool, kerberos destinations', function kerberosS
                 // arm E ran 24 rounds per destination across three restarts
                 assert.ok(topicA['E:a'] >= 20, `arm E topic-a ${topicA['E:a']}`);
                 assert.ok(topicB['E:b'] >= 20, `arm E topic-b ${topicB['E:b']}`);
-                // and the destination that lost its identity in arm C landed
-                // nothing at all
-                const cCounts = [topicA['C:a'], topicB['C:b']].filter(count => count);
-                assert.strictEqual(cCounts.length, 1,
-                    `expected exactly one arm C destination to deliver, got ${cCounts}`);
+                // arm C held one principal in the cache for both producers,
+                // so its destination landed every record and the one that
+                // lost its identity landed nothing at all
+                const armC = { a: topicA['C:a'], b: topicB['C:b'] };
+                const denied = ARM_C_PRINCIPAL === 'a' ? 'b' : 'a';
+                assert.strictEqual(armC[ARM_C_PRINCIPAL], ARM_C_ROUNDS,
+                    `arm C ${ARM_C_PRINCIPAL} landed ${armC[ARM_C_PRINCIPAL]}`);
+                assert.strictEqual(armC[denied], undefined,
+                    `arm C ${denied} lost its identity and still landed ` +
+                    `${armC[denied]}`);
                 done();
             });
         });
