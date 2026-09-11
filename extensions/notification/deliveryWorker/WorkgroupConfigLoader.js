@@ -136,6 +136,55 @@ class WorkgroupConfigLoader {
     }
 
     /**
+     * Reads the per destination watermarks seeded for the generation this
+     * worker runs, or null when the seeding tool wrote none
+     *
+     * @param {Function} done - callback: done(err, watermarks)
+     * @return {undefined}
+     */
+    loadWatermarks(done) {
+        if (!this._doc || !this._zkClient) {
+            return process.nextTick(() => done(null, null));
+        }
+        const { buildWatermarksPath, validateWatermarksDoc } =
+            require('../utils/workgroups');
+        const path = buildWatermarksPath(this._zkPath, this._doc.generation);
+        return this._zkClient.getData(path, undefined, (err, data) => {
+            if (err) {
+                if (err.name === 'NO_NODE') {
+                    this.log.info('no watermarks seeded for this generation, ' +
+                        'every matching record is delivered', {
+                        method: 'WorkgroupConfigLoader.loadWatermarks',
+                        path,
+                    });
+                    return done(null, null);
+                }
+                return done(err);
+            }
+            let parsed;
+            try {
+                parsed = JSON.parse(data);
+            } catch (parseErr) {
+                return done(errors.InternalError.customizeDescription(
+                    `the watermarks document at ${path} is not valid JSON: ` +
+                    `${parseErr.message}`));
+            }
+            const { error, value } = validateWatermarksDoc(parsed);
+            if (error) {
+                return done(errors.InternalError.customizeDescription(
+                    `the watermarks document at ${path} is invalid: ` +
+                    `${error.message}`));
+            }
+            this.log.info('loaded the per destination watermarks', {
+                method: 'WorkgroupConfigLoader.loadWatermarks',
+                path,
+                destinations: Object.keys(value).length,
+            });
+            return done(null, value);
+        });
+    }
+
+    /**
      * Arms the one-shot data watch on the workgroups node. Does nothing when
      * the watch load() armed is still in place.
      *

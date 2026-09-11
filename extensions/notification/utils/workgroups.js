@@ -321,6 +321,32 @@ function buildGroupId(baseGroupId, workgroupId, generation) {
     return `${baseGroupId}-${workgroupId}-gen${generation}`;
 }
 
+/**
+ * Zookeeper node holding the per destination offset watermarks of a
+ * generation: the offsets each destination had already been served up to
+ * when the generation was seeded, as { destinationId: { partition: offset } }
+ *
+ * @param {String} zkPath - the workgroups document path
+ * @param {Number} generation - config generation
+ * @return {String} `${zkPath}/watermarks/gen${generation}`
+ */
+function buildWatermarksPath(zkPath, generation) {
+    return `${zkPath}/watermarks/gen${generation}`;
+}
+
+/**
+ * Checks a watermarks document: destination ids to partition numbers to
+ * non negative offsets
+ *
+ * @param {Object} doc - parsed document
+ * @return {Object} { error, value }
+ */
+function validateWatermarksDoc(doc) {
+    const schema = joi.object().pattern(joi.string().min(1),
+        joi.object().pattern(/^\d+$/, joi.number().integer().min(0)));
+    return schema.validate(doc);
+}
+
 module.exports = {
     // constants
     BARRIER_KEY,
@@ -345,4 +371,6 @@ module.exports = {
     // runtime
     createSliceFilter,
     buildGroupId,
+    buildWatermarksPath,
+    validateWatermarksDoc,
 };

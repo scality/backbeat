@@ -84,6 +84,8 @@ function _getPartitions(consumer, topic, done) {
  * @param {String} params.topic - unprefixed delivery topic name
  * @param {String} params.groupId - consumer group the worker will join
  * @param {Object} [params.barriers] - barrier offsets by partition
+ * @param {String} [params.seedCommand] - the command to name when the group
+ *   is not seeded, defaults to the cutover tool's preseed
  * @param {Logger} params.logger - werelogs logger
  * @param {Object} [params.consumer] - node-rdkafka consumer, for tests
  * @param {Function} done - callback: done(err)
@@ -132,7 +134,7 @@ function assertSeededOffsets(params, done) {
                 `partitions ${unseeded.join(', ')} of topic ${prefixedTopic}: ` +
                 'the group was never pre-seeded or its offsets expired, and ' +
                 'joining it would replay the topic. Run ' +
-                'notificationWorkgroupCutover preseed'));
+                `${params.seedCommand || 'notificationWorkgroupCutover preseed'}`));
         }
         const behind = result.partitions
             .filter(partition => barriers &&

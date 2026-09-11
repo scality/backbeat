@@ -19,7 +19,16 @@ const { startProbeServer } = require('../../../lib/util/probe');
 const config = require('../../../lib/Config');
 const kafkaConfig = config.kafka;
 const zkConfig = config.zookeeper;
+const mongoConfig = config.queuePopulator && config.queuePopulator.mongo;
 const notifConfig = config.extensions.notification;
+
+// 'internal': the worker reads today's internal topic and matches events
+// against the bucket rules itself; 'delivery': it reads the addressed
+// delivery topic
+const isInternalSource = notifConfig.deliveryPool &&
+    notifConfig.deliveryPool.source !== 'delivery';
+const consumedTopic = isInternalSource ?
+    notifConfig.topic : notifConfig.deliveryPool.topic;
 
 const log = new werelogs.Logger('Backbeat:NotificationDeliveryWorker:task');
 werelogs.configure({
@@ -36,6 +45,7 @@ assert(notifConfig && notifConfig.deliveryPool && notifConfig.deliveryPool.enabl
 let deliveryWorker = null;
 let workgroupLoader = null;
 let workgroup = null;
+let watermarks = null;
 
 /**
  * Handle ProbeServer liveness check
@@ -84,7 +94,7 @@ function setupWorkgroup(done) {
     workgroupLoader = new WorkgroupConfigLoader({
         zkConfig,
         workgroupsConfig,
-        topic: notifConfig.deliveryPool.topic,
+        topic: consumedTopic,
         workgroupId,
         logger: log,
     });
@@ -105,21 +115,58 @@ function setupWorkgroup(done) {
 }
 
 /**
- * Fails the process rather than joining a consumer group that lost its
- * pre-seeded offsets: fromOffset is 'earliest', so an expired pre-seed
- * would replay the whole delivery topic instead of resuming at the barrier.
+ * Loads the per destination watermarks of the generation, when the worker
+ * reads the internal topic: a matching record below a destination's
+ * watermark was already delivered to it before this generation took over
+ *
+ * @param {Function} done - callback
+ * @return {undefined}
+ */
+function loadWatermarks(done) {
+    if (!isInternalSource || !workgroupLoader) {
+        return process.nextTick(done);
+    }
+    return workgroupLoader.loadWatermarks((err, loaded) => {
+        if (err) {
+            return done(err);
+        }
+        watermarks = loaded;
+        return done();
+    });
+}
+
+/**
+ * Fails the process rather than joining a consumer group with no committed
+ * offsets: fromOffset is 'earliest', so a group that was never seeded, or
+ * whose seed expired, would replay the whole topic.
+ *
+ * On the delivery topic only a generation past its first is checked, since
+ * the first one starts on an empty topic. On the internal topic every group
+ * is checked: the topic already holds everything the processors delivered.
  *
  * @param {Function} done - callback
  * @return {undefined}
  */
 function assertOffsetsAreSeeded(done) {
     const doc = workgroupLoader && workgroupLoader.getConfig();
+    if (isInternalSource) {
+        return assertSeededOffsets({
+            kafkaConfig,
+            topic: consumedTopic,
+            groupId: workgroup ? workgroup.groupId :
+                notifConfig.deliveryPool.groupId,
+            barriers: doc && doc.barriers,
+            seedCommand: 'notificationDeliverySeed seed-from-processors ' +
+                '(or seed-from-generation)',
+            logger: log,
+        }, done);
+    }
     if (!doc || !(doc.barriers || doc.generation >= 2)) {
         return process.nextTick(done);
     }
     return assertSeededOffsets({
         kafkaConfig,
-        topic: notifConfig.deliveryPool.topic,
+        topic: consumedTopic,
         groupId: workgroup.groupId,
         barriers: doc.barriers,
         logger: log,
@@ -128,12 +175,14 @@ function assertOffsetsAreSeeded(done) {
 
 async.series([
     next => setupWorkgroup(next),
+    next => loadWatermarks(next),
     next => assertOffsetsAreSeeded(next),
     next => {
-        // no destination argument: the destination and the notification
-        // configuration id are carried by each record of the delivery topic
+        // no destination argument: the worker serves every destination it
+        // owns, matched per record on the internal topic or carried by the
+        // record on the delivery topic
         deliveryWorker = new DeliveryWorker(kafkaConfig, notifConfig,
-            workgroup);
+            workgroup, { mongoConfig, zkConfig, watermarks });
         return deliveryWorker.start(null, next);
     },
     next => startProbeServer(probeServerConfig, jsutil.once((err, probeServer) => {

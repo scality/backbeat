@@ -92,6 +92,102 @@ async function counterValue(name, labels) {
     return entry ? entry.value : 0;
 }
 
+describe('WorkgroupConfigLoader watermarks', () => {
+    let tmpDir;
+    let cachePath;
+
+    beforeEach(() => {
+        tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wg-loader-wm-'));
+        cachePath = path.join(tmpDir, 'workgroups.json');
+    });
+
+    afterEach(() => {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+    });
+
+    function makeLoader(zkClient) {
+        return new WorkgroupConfigLoader({
+            zkConfig: { connectionString: 'zookeeper:2181' },
+            workgroupsConfig: { zookeeperPath: ZK_PATH, cachePath, id: 'wg-a' },
+            topic: TOPIC,
+            workgroupId: 'wg-a',
+            logger: makeLogger(),
+            zkClient,
+            validate: doc => ({ error: null, value: doc }),
+        });
+    }
+
+    it('should answer null before the document is loaded', done => {
+        makeLoader(makeZkClient([])).loadWatermarks((err, watermarks) => {
+            assert.ifError(err);
+            assert.strictEqual(watermarks, null);
+            done();
+        });
+    });
+
+    it('should read the watermarks of the loaded generation', done => {
+        const doc = makeDoc();
+        const watermarks = { 'dest-a': { 0: 100, 1: 5 } };
+        const zkClient = makeZkClient([
+            { data: Buffer.from(JSON.stringify(doc)) },
+            { data: Buffer.from(JSON.stringify(watermarks)) },
+        ]);
+        const loader = makeLoader(zkClient);
+        loader.load(err => {
+            assert.ifError(err);
+            loader.loadWatermarks((wmErr, loaded) => {
+                assert.ifError(wmErr);
+                assert.deepStrictEqual(loaded, watermarks);
+                assert.strictEqual(zkClient.getDataCalls[1].zkPath,
+                    `${ZK_PATH}/watermarks/gen${doc.generation}`);
+                assert.strictEqual(zkClient.getDataCalls[1].watcher, undefined);
+                done();
+            });
+        });
+    });
+
+    it('should answer null when no watermarks were seeded', done => {
+        const loader = makeLoader(makeZkClient([
+            { data: Buffer.from(JSON.stringify(makeDoc())) },
+            { err: { name: 'NO_NODE' } },
+        ]));
+        loader.load(err => {
+            assert.ifError(err);
+            loader.loadWatermarks((wmErr, loaded) => {
+                assert.ifError(wmErr);
+                assert.strictEqual(loaded, null);
+                done();
+            });
+        });
+    });
+
+    it('should refuse an unusable watermarks document', done => {
+        const loader = makeLoader(makeZkClient([
+            { data: Buffer.from(JSON.stringify(makeDoc())) },
+            { data: Buffer.from(JSON.stringify({ 'dest-a': { zero: -1 } })) },
+        ]));
+        loader.load(err => {
+            assert.ifError(err);
+            loader.loadWatermarks(wmErr => {
+                assert(wmErr, 'expected an error');
+                assert(/invalid/.test(wmErr.description));
+                const broken = makeLoader(makeZkClient([
+                    { data: Buffer.from(JSON.stringify(makeDoc())) },
+                    { data: Buffer.from('{ not json') },
+                ]));
+                broken.load(loadErr => {
+                    assert.ifError(loadErr);
+                    broken.loadWatermarks(jsonErr => {
+                        assert(jsonErr);
+                        assert(/not valid JSON/.test(jsonErr.description));
+                        done();
+                    });
+                });
+            });
+        });
+    });
+});
+
 describe('WorkgroupConfigLoader', () => {
     let tmpDir;
     let cachePath;
