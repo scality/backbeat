@@ -9,21 +9,26 @@ the acts compare themselves against are `poc-demo/results/`.
 
 The operator procedure, what one Federation `run.yml` renders, stops and
 starts and what to do when each part of it fails, is `poc-demo/OPERATOR.md`.
+The short version of this file, one page with the commands, what each act
+shows and what is in the branch, is the handover page
+<https://claude.ai/code/artifact/de555c0d-f462-4ddf-a5dc-c9d843b4f5ae>.
+Where the two differ, the page is the corrected one; this file keeps the
+history.
 
 ## Where this stands
 
 The bucket-notifications-as-a-service POC has done its job: the data plane is
 built, run against real Kafka, ZooKeeper, MongoDB and CloudServer, and
-measured end to end, and the migration onto it is measured in both
-directions. The headline is that nothing loses events, that today's silent
-failures become counted ones, and that what is left to settle is wording in
-the design document and answers from product, not code. The demo is now a
+measured end to end, and the migration onto it is measured as one container
+swap, the way Ansible will run it. The headline is that nothing loses events,
+that today's silent failures become counted ones, and that what is left to
+settle is wording in the design document and answers from product, not code. The demo is now a
 test suite: bring the infrastructure up with compose, run `yarn ft_test:demo`,
 and eight acts drive the whole story end to end while Grafana, Kafka UI and
-the ZooKeeper browser show it happening. What remains open in the POC itself
-is one pre-existing consumer defect that sets the reliability ceiling, and it
-lives in code that replication and lifecycle share, so it is groundwork rather
-than pool work.
+the ZooKeeper browser show it happening. The consumer defects that set the
+reliability ceiling during the round (the start-up stall and the state-read
+throws) are root-caused and fixed on this branch; they live in code that
+replication and lifecycle share, so they ship to product as their own tickets.
 
 ## Decisions already taken
 
@@ -158,19 +163,16 @@ already depends on, so it needs nothing the repository does not install.
                                     |  reads the oplog, matches each |
                                     |  bucket's rules per destination|
                                     +--------------------------------+
-                              legacy path  |            |  pool path
-             (no deliveryPool block)       |            |  (deliveryPool block)
-                                           v            v
-              +--------------------------------+   +---------------------------------+
-              | backbeat-bucket-notification   |   | bucket-notification-delivery    |
-              | P=4, one record per object     |   | P=3, one ADDRESSED record per   |
-              |                                |   | matching destination, keyed by  |
-              |                                |   | destination                     |
-              +--------------------------------+   +---------------------------------+
+                                                   |
+                                                   v
+              +--------------------------------------------------------------+
+              | backbeat-bucket-notification (today's topic, unchanged)      |
+              | P=4, one record per event, keyed by bucket/object            |
+              +--------------------------------------------------------------+
                      |            |                     |        |        |
-        one process per destination            one consumer group per WORKGROUP,
-                     v            v            each with a slice filter over the
-              +-----------+ +-----------+      same topic
+        today: one process per destination      pool: one consumer group per
+                     v            v            WORKGROUP, each with a slice filter,
+              +-----------+ +-----------+      matching per destination itself
               | queue     | | queue     |           v        v        v
               | processor | | processor |      +--------+ +--------+ +--------+
               | dest-1    | | dest-2    |      | worker | | worker | | worker |
@@ -184,9 +186,9 @@ already depends on, so it needs nothing the repository does not install.
               |  what the tenant's own consumer reads                          |
               +----------------------------------------------------------------+
 
-   Which path runs is decided by ONE thing: whether the config file the
-   processes were started with has an extensions.notification.deliveryPool
-   block. No rebuild, no image change, no repo change.
+   Which path runs is decided by which processes run: processors today,
+   workers with an extensions.notification.deliveryPool block after the swap.
+   Same topic, same populator, no rebuild, no image change.
 
    ZooKeeper holds three things the demo shows: the populator's log offset,
    which is its checkpoint, the workgroups document, which carries the
@@ -324,24 +326,29 @@ drainer.
 
 ## How to run it
 
-Three commands, four browser tabs.
+Eight commands from a fresh clone, in order; the handover page carries the
+same list with what to expect after each one.
 
 ```bash
-yarn demo:preflight         # docker, node 22, free ports, python for node-gyp
+git clone --branch poc/S3C-11127-demo git@github.com:scality/backbeat.git && cd backbeat
+node --version                              # v22.x already? skip the next line
+nvm install 22 && nvm use 22 && npm install -g yarn
 yarn demo:install           # yarn install, with the node-gyp workaround folded in
-yarn demo:up                # builds the two local images if missing, then the stack
-yarn demo:up:krb            # the same plus the Kerberos KDC and broker, for act 07
+yarn demo:preflight         # docker, node 22, free ports, python for node-gyp
+yarn demo:up:krb            # the stack plus the Kerberos KDC and broker (act 07)
 yarn demo:wait              # blocks until broker, mongo PRIMARY, S3 and grafana answer
-yarn ft_test:demo           # every act, in order, at DEMO_PACE=demo (the default)
+yarn demo:clean             # removes topics and groups left by earlier test runs
+DEMO_ACTS=02,03,04,05,06,07,08 yarn ft_test:demo   # the take, about 45 min
 
-DEMO_ACTS=02,03,04,06 yarn ft_test:demo      # the acts that carry the argument
-DEMO_ACTS=06 yarn ft_test:demo:act          # one act
+yarn ft_test:demo                           # all eight acts, about 48 min
+DEMO_ACTS=04 yarn ft_test:demo              # one act
 DEMO_PACE=slow yarn ft_test:demo            # every wait doubled, for a careful take
-DEMO_PACE=fast yarn ft_test:demo            # shorter waits, while iterating
-poc-demo/scenarios/run.sh --list            # the acts, by name
 yarn demo:status                            # what is up, and the URLs
-yarn demo:down                              # stop the containers
+yarn demo:stop                              # kill leftover demo processes after a dead terminal
+yarn demo:down                              # stop the containers; --volumes wipes the data too
 ```
+
+Ctrl+C stops a run, its processes and its lock; the next run starts clean.
 
 The full minute-by-minute recording script, with what to point at in each UI
 and the numbers to expect per act, is `poc-demo/PLAYBOOK.md`. `DEMO_PACE=demo`
@@ -368,16 +375,16 @@ list, which the suite generates, is what decides where a record is actually
 delivered, so the same five names carry the healthy destinations, the three
 failure classes of act 03 and the six-way spread of act 06.
 
-| act | rig scenario | what it proves | minutes |
+| act | rig scenario | what it proves | minutes, measured 2026-09-11 |
 |---|---|---|---|
-| 01 code-and-tests | the branches | commit lists, the file map, the unit suite and the linter | 5, or 30 with `DEMO_ACT01_FULL=1` |
-| 02 legacy-baseline | M1 | today's path end to end, 25 events, the event shape | 2 |
-| 03 dead-destination | M10 | the silent stall today, the counted drop on the pool | 6 |
-| 04 switch-and-drain | M2b, M4b | the cutover, worker first, and the free rollback | 8 |
-| 05 crashes | M11, M12 | two populator kills, then a worker kill | 6 |
-| 06 workgroups | W gates, C5r | two workgroups over hashmod modulo 4, a worker death, a pin, a live reshard to three | 15 |
-| 07 kerberos | GATE 2 | two Kerberos principals in one process | 10 |
-| 08 semantics | M5, M9, M8, M6b | mixed window, detach, overlapping rules, collision | 12 |
+| 01 code-and-tests | the branches | commit list, the file map, the unit suite and the linter; not in the take | 3 |
+| 02 legacy-baseline | M1 | today's path end to end, 25 events, the event shape | 1.6 |
+| 03 dead-destination | M10 | the silent stall today, the counted drop on the pool, isolation on shared partitions | 4.4 |
+| 04 switch-and-drain | M2b | the migration as one container swap: processors stopped, workers start and seed themselves | 7.2 |
+| 05 crashes | M11, M12 | two populator kills, then a worker kill | 6.3 |
+| 06 workgroups | W gates, C5r | two workgroups over hashmod, a worker death, a pin, two layout changes as swaps | 9.0 |
+| 07 kerberos | GATE 2 | two Kerberos principals in one process | 7.3 |
+| 08 semantics | M9, M8, M6b | detach, overlapping rules, the ARN collision | 9.5 |
 
 Every act is self-contained: it starts the processes it needs as real child
 processes, so a scenario can kill one and the audience sees it, stops them
@@ -719,10 +726,9 @@ the PLAYBOOK. The pre-fix samples of the same morning (act 04 429 s, act 06
 `PLAYBOOK.md` as history.
 
 CI: the four delivery pool suites run on every push (see
-`.github/README-poc-ci.md`); deliverypool and internal are green, workgroups
-and kerberos carry known timing and control failures and are marked
-experimental until the BackbeatConsumer fixes land. Last run:
-<https://github.com/scality/backbeat/actions/runs/34582649670>.
+`.github/README-poc-ci.md`) as blocking jobs, all green since the flags came
+off on 2026-09-11. Verification run:
+<https://github.com/scality/backbeat/actions/runs/34595925693>.
 
 **Update, 2026-09-11 morning (the previous model).** The record then was: one
 uninterrupted `yarn ft_test:demo` over all eight acts from a fresh clone
