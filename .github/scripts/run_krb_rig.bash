@@ -10,6 +10,7 @@
 # listeners name, for the containers and for the test process alike.
 #
 #   run_krb_rig.bash up      build the images, start the rig, write CONF_DIR
+#   run_krb_rig.bash probe   kinit and kvno from the runner, with KRB5_TRACE
 #   run_krb_rig.bash logs    copy the container logs under $KRB_DIR/logs
 #   run_krb_rig.bash down    remove the containers
 #
@@ -79,7 +80,38 @@ up() {
     # the suite reads CONF_DIR/ssl/<principal>.keytab
     cp "$KRB_DIR"/keytabs/*.keytab "$KRB_DIR/ssl/"
     klist -kte "$KRB_DIR/ssl/notifa.keytab"
-    echo "rig up: CONF_DIR=$KRB_DIR brokers localhost:$KRB_BROKER_PORT verify localhost:$KRB_VERIFY_PORT"
+    write_krb5_conf
+    echo "rig up: CONF_DIR=$KRB_DIR KRB5_CONFIG=$KRB_DIR/krb5.conf brokers localhost:$KRB_BROKER_PORT verify localhost:$KRB_VERIFY_PORT"
+}
+
+# The runner's krb5.conf is the rig's, plus one line. MIT krb5 1.18 and later
+# qualify a single-label hostname with the machine's DNS domain before mapping
+# it to a realm (qualify_shortname), so on a cloud runner "localhost" became
+# "localhost.<runner domain>", the realm became the uppercased runner domain,
+# and every client asked the KDC for a cross-realm ticket it does not have
+# ("Server krbtgt/<RUNNER DOMAIN>@SCALITY.TEST not found"). An empty
+# qualify_shortname keeps "localhost" as it is, which is what the broker
+# principal kafka/localhost and the domain_realm section name. Containers
+# never hit this because they have no search domain.
+write_krb5_conf() {
+    awk '
+        { print }
+        /^\[libdefaults\]/ { print "    qualify_shortname =" }
+    ' "$KRB_SRC/krb5.conf" > "$KRB_DIR/krb5.conf"
+    echo "--- $KRB_DIR/krb5.conf"; cat "$KRB_DIR/krb5.conf"
+}
+
+# Fail fast, with the library's own trace, before the suite runs: a ticket for
+# notifa from its keytab, then a service ticket for the broker principal.
+probe() {
+    export KRB5_CONFIG="$KRB_DIR/krb5.conf"
+    export KRB5CCNAME="FILE:$KRB_DIR/probe.cc"
+    echo "hostname -f: $(hostname -f 2>/dev/null || hostname)"
+    echo "getent hosts localhost: $(getent hosts localhost | tr '\n' ' ')"
+    KRB5_TRACE=/dev/stderr kinit -kt "$KRB_DIR/ssl/notifa.keytab" notifa@SCALITY.TEST
+    KRB5_TRACE=/dev/stderr kvno -S kafka localhost
+    klist
+    kdestroy || true
 }
 
 logs() {
@@ -96,7 +128,8 @@ down() {
 
 case "${1:-}" in
     up) up ;;
+    probe) probe ;;
     logs) logs ;;
     down) down ;;
-    *) echo "usage: $0 up|logs|down" >&2; exit 2 ;;
+    *) echo "usage: $0 up|probe|logs|down" >&2; exit 2 ;;
 esac
