@@ -5,7 +5,10 @@
 The bucket-notifications-as-a-service POC, as it stands on this branch.
 Written 2026-09-10 for whoever picks it up next. The stack is
 `poc-demo/`, the demo is `tests/functional/demo/`, and the measurements
-the acts compare themselves against are `poc-demo/results/`.
+the acts compare themselves against are in
+[`poc-demo/results/`](https://github.com/scality/backbeat/tree/poc/S3C-11127-demo/poc-demo/results):
+the rig write-ups, the Kerberos spikes, the design critique, the Gateway to
+CTO draft and the product questions.
 
 The operator procedure, what one Federation `run.yml` renders, stops and
 starts and what to do when each part of it fails, is `poc-demo/OPERATOR.md`.
