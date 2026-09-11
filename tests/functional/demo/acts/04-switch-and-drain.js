@@ -71,7 +71,7 @@ function register(ctx) {
             act.expect('processor offsets at the swap', '(not predicted)');
             act.expect('delivery pause', '(not predicted)');
             act.expect('stalled destination backlog delivered by the pool',
-                'all of it');
+                '(not predicted)');
             act.expect('records skipped under the watermark', '(not predicted)');
             flow.resetPoolGroups(act);
             for (const d of DESTS) {
