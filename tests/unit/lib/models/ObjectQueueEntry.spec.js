@@ -144,6 +144,21 @@ describe('ObjectQueueEntry', () => {
             assert.strictEqual(replicaA.getBucket(), 'bucket-a');
             assert.strictEqual(replicaB.getBucket(), 'bucket-b');
         });
+
+        it('toReplicaEntry drops the other destinations statuses', () => {
+            const entry = _makeEntryWithBackends([
+                { site: 'siteA', status: 'PENDING', dataStoreVersionId: '' },
+                { site: 'siteB', status: 'PENDING', dataStoreVersionId: '' },
+            ]);
+
+            const replica = entry.toReplicaEntry({ site: 'siteB' });
+            assert.deepStrictEqual(
+                replica.getReplicationBackends().map(b => b.site), ['siteB']);
+            assert.strictEqual(replica.getReplicationSiteStatus({ site: 'siteB' }), 'REPLICA');
+            assert.strictEqual(replica.getReplicationStatus(), 'REPLICA');
+            assert.strictEqual(entry.getReplicationBackends().length, 2);
+            assert.strictEqual(entry.getReplicationSiteStatus({ site: 'siteB' }), 'PENDING');
+        });
     });
 
     describe('same-site backend disambiguation', () => {
