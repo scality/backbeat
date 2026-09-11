@@ -105,33 +105,38 @@ from a rejection, because the delivery report carries a different error code
 than the timeout branch tests for. Fix it before the label is promised to
 operators.
 
-## Act 04: the migration, and its free rollback
+## Act 04: the migration, one Ansible run
 
-Five steps, no new tooling, because today's per-destination processor **is**
-the design's single-destination worker of generation v0.
+Say the model first: production applies every change by replacing
+containers, so there is no drain, no switch and no rollback step. The
+populator is untouched; it keeps writing one record per event to today's
+topic. The processors are deleted, the workers start on the same topic and
+match per destination themselves.
 
-1. Start the worker first, on the quiet delivery topic. Say why: started
-   after the switch it replays whatever accumulated during the switch, which
-   is where the rig's 69 duplicates came from.
-2. Switch the populator. Kafka UI: the internal topic freezes, the delivery
-   topic starts moving. Point at the delivery topic's partitions: one
-   destination occupies exactly **one**, because the key is the bare
-   destination name. Capacity for one destination goes through `spreadFactor`,
-   never through the partition count.
-3. Drain the legacy side, gating on lag zero **and** progress. Say the reason
-   out loud: a wedged consumer holds its partitions with a lag that stops
-   falling while its liveness probe answers 200, and that wedge landed on this
-   exact step during the measured rollback.
-4. Stop the legacy processor. The act shows the legacy group committed exactly
-   at the frozen internal-topic head, which is what makes the rollback free.
-5. Then the mirror rollback: populator back, pool drains to zero, legacy
-   resumes at its own offset, stop the worker. Nothing lost, nothing
-   duplicated, nothing reordered, and nothing from the cutover window
-   re-delivered.
+1. Today's path, three destinations, one processor each, under load.
+2. Freeze one processor (SIGSTOP): a stalled destination whose backlog
+   grows. Stop another a little later: a small backlog. Leave one caught up.
+   Grafana, row "Migration": three processor groups, three different lags.
+3. **The run, part one: delete every processor.** The act prints each
+   group's committed offset per partition first; that table is the whole
+   argument for the next step.
+4. **Part two: write the layout, seed.** `bin/notificationDeliverySeed.js
+   seed-from-processors --generation 1`: the lowest processor offset per
+   partition, so nothing is skipped, and a watermark per destination at its
+   own processor's offset, so nothing already delivered is sent again.
+   ZooNavigator: the document and its `watermarks/gen1` child.
+5. **Part three: start the worker.** Say the pause aloud when the act prints
+   it: the container swap plus the group join, 45 s of it the consumer
+   session.
+6. The check: nothing lost, nothing doubled, order kept, and the stalled
+   destination's whole backlog delivered by the pool. Point at the
+   "records skipped under a watermark" panel: that is the caught-up
+   destination's already-delivered records being committed without a second
+   delivery.
 
-Contrast with the other rollback, the one after the drainer path: 106
-re-delivered and 161 stranded on the delivery topic, with no reverse drainer
-to recover them. That is the argument for this path as the default.
+The variant `DEMO_ACT04_WITHOUT_WATERMARK=1` runs the same swap with the
+watermarks deleted after seeding: it measures what the watermark saves, the
+spread between the processors' offsets delivered twice.
 
 ## Act 05: crashes
 
@@ -145,16 +150,19 @@ and that interval is not exposed in the schema. Product question 8.
 
 ## Act 06: workgroups, and ZooKeeper
 
-The act to slow down on. Say the topology is decided: **one** internal
-delivery topic. The populator writes to that one topic; a workgroup is a
-consumer group over it with a slice filter, so a worker commits records
-outside its slice without delivering them. Per-workgroup topics are out.
+The act to slow down on. Say the topology is decided: the workers read
+**today's** topic. A workgroup is a consumer group over it with a slice
+filter, so a worker commits records outside its slice without delivering
+them. No second topic, no populator change, no per-workgroup topics.
 
 What to explain, in this order, with the ZooKeeper browser open:
 
-- **The document is the contract.** A generation, a hashmod rule, optional
-  static pins, and at a change the barrier offsets. Show it in ZooNavigator
-  at `/bnaas-demo/delivery-workgroups` and in the terminal (`bin/zk-show.sh`).
+- **The document is the contract.** A generation, a hashmod rule and optional
+  static pins. Show it in ZooNavigator at `/bnaas-demo/delivery-workgroups`
+  and in the terminal (`bin/zk-show.sh`). Account-scoped destinations never
+  touch it: they hash into a workgroup by name and start delivering with no
+  change and no restart. Only a layout change (the number of auto workgroups,
+  a pin) is a new generation, and a new generation is an Ansible run.
 - **How a destination picks its workgroup.** md5 over the encoded destination
   token, modulo the hashmod modulo, and the remainders cover the whole
   modulo. That total coverage is what makes ownership a total function: every
@@ -173,37 +181,31 @@ Then the three things that happen to it:
   workgroup keeps delivering. Point at the per-workgroup **delivered** panel,
   not the lag one: every workgroup reads the whole topic and skips what it
   does not own, so the raw lag of two workgroups is about the same number and
-  the isolation does not show there. Then say
-  what a wedge looks like instead, because it is worse: the worker is up,
-  holds its partitions, answers liveness 200, and its delivered counter does
-  not move. Check the counter, not the lag. The cure is a restart.
-- **A noisy destination is pinned.** A static rule beats the hashmod one, so
-  the destination is carved out of the hash space and gets its own workgroup
-  and its own blast radius. That is the lever for a hostile tenant.
-- **A live reshard, two workgroups to three**, over the same hashmod modulo,
-  so exactly one destination changes owner and the others stay put. Say why the barrier exists:
-  the tool writes a barrier record on every partition, then the document with
-  those offsets, then pre-seeds the new generation's groups while they are
-  still empty; the ZooKeeper write is the commit point. The old generation
-  owns everything before its barrier, the new one starts at it, so no record
-  is reordered across the change and none is missed.
-  - **Why duplicates appear**: the old generation keeps consuming past its
-    barrier until you stop it, and every record it consumes there is
-    delivered twice. The longer it runs, the more there are. On the rig that
-    was 18 to 30 per 100 while it drained.
-  - **Why gaps are impossible**: only if you wait for `verify` to exit 0.
-    The discipline, in the CLI's own words: do not stop the old generation,
-    and do not start the new one, until `verify` exits 0. Stopping early
-    loses exactly the records the drain report was still counting, which the
-    `DEMO_WORKGROUPS_STOP_EARLY=1` variant shows deliberately. Starting the
-    new generation early does not lose anything but reorders keys: it
-    delivers post-barrier records while the old generation, still behind its
-    barrier, delivers earlier ones for the same keys (4197 inversions in one
-    rehearsal). The price of no overlap is a delivery pause, which the act
-    measures; say it aloud.
-  - **The known gap**: a crashed old-generation worker cannot restart to
-    finish its drain once the document has been overwritten. The proposed
-    amendment is one ZooKeeper node per generation plus a current pointer.
+  the isolation does not show there. Then say what a wedge looks like
+  instead, because it is worse: the worker is up, holds its partitions,
+  answers liveness 200, and its delivered counter does not move. Check the
+  counter, not the lag. The cure is a restart.
+- **A noisy destination is pinned**, generation 2. A static rule beats the
+  hashmod one, so the destination is carved out of the hash space and gets
+  its own workgroup and its own blast radius. That is the lever for a hostile
+  tenant. The change is the Ansible order: stop generation 1, write the
+  document, `seed-from-generation --from 1 --to 2`, start generation 2. Say
+  the pause when the act prints it.
+- **A reshard, two auto workgroups to three**, generation 3, under traffic.
+  Same order. The seed tool takes, per partition, the lowest committed offset
+  across the generation 2 groups a new group inherits from, and a watermark
+  per destination at its previous owner's offset, so the one destination that
+  changes owner keeps its place in the stream.
+  - **Why loss is impossible**: every record either was delivered by the old
+    generation or is read by the new one from the lowest offset.
+  - **Why nothing is doubled**: the watermark. Without it the new generation
+    would re-deliver the spread between the old groups' offsets.
+  - **Why nothing is reordered**: one generation at a time. Two generations
+    delivering the same keys together reordered 4197 pairs in one rehearsal
+    of the previous model; the price of never doing that is the pause.
+  - **What still stands**: a destination's per-object lanes deliver one record
+    per producer poll, 2000 ms; and a kill or a cure restart re-delivers the
+    worker's uncommitted window, at-least-once.
 
 ## Act 07: Kerberos
 
@@ -220,13 +222,15 @@ says why if it is not there.
 
 ## Act 08: the semantics that change
 
-Four short cases, each ending in a decision:
+Three short cases, each ending in a decision. The mixed-window case is gone
+with the second topic: one path, and every change is a container swap, so no
+two consumers are ever alive together.
 
-- **Mixed window**: both consumers alive partition the stream, they do not
-  duplicate it, because the populator's routing is an if/else.
 - **Detach**: today a detached destination's queued events are dropped
-  silently, which reads like a revocation. On the pool they still arrive.
-  Release note, and product question 3.
+  silently, which reads like a revocation. The pool matches at delivery time
+  on the same topic, so the act measures what it does; the previous model,
+  which resolved the destination at publish time, delivered them. What the
+  pool can do that the processor cannot is count the drop. Product question 3.
 - **Overlapping rules**: a catch-all plus a prefix rule delivers to both
   destinations, on both paths. First-match-wins is what neither
   implementation does, so shipping it literally would be a silent behaviour

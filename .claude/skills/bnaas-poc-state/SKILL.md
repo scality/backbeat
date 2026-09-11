@@ -17,19 +17,22 @@ one place that carries them.
 
 ## Decided, so nobody reopens it
 
-**Topology.** One internal delivery topic. The populator writes to that one
-topic, addressing each record to its destination; a workgroup is a consumer
-group over the same topic with a slice filter, so a worker commits records
-outside its slice without delivering them. Per-workgroup topics are out. The
-built mechanism is the one with measurements, and its cost (a hash and a
-commit per record a workgroup does not own, no I/O) is stated rather than
-hidden.
+**Topology (2026-09-11).** The workers read today's internal topic, the one
+the populator already writes to, and match per destination themselves; a
+workgroup is a consumer group over it with a slice filter. No second topic, no
+populator change. The destination-keyed delivery topic the POC first built is
+kept in the code as `deliveryPool.source: "delivery"` for reference; its
+2026-09-10 measurements are under `poc-demo/results/`. Every migration or
+layout change is an Ansible container swap: stop the old containers, seed the
+new groups from the old ones (`bin/notificationDeliverySeed.js`), start the new
+ones. No drain, no barrier, no rollback to processors.
 
 **The engine** is a backbeat delivery worker in Node, on the existing
-consumer. **The migration default** is drain-then-switch with the worker
-started before the populator switch; the drainer stays only for a legacy
-processor that cannot drain. **Assume-destination is out of scope**: explored
-and set aside, reference only on its branch, not in the demo.
+consumer. **The migration** is one Ansible run: delete the processor
+containers, seed the worker groups from the processors' committed offsets,
+start the worker containers (act 04 is that run). **Assume-destination is out
+of scope**: explored and set aside, reference only on its branch, not in the
+demo.
 
 ## Code: one branch to run, two segments in it
 

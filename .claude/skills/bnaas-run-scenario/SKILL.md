@@ -31,11 +31,11 @@ which otherwise runs only the unit suite and the linter, `DEMO_STALL_WATCH_S` se
 | 01 code-and-tests | the branches | the commit lists, the file map, and the unit, lint and functional suites | 2, or 10 with the suites |
 | 02 legacy-baseline | M1 | today's path end to end: 25 events, in per-key order, in the shape the migration preserves | 2 |
 | 03 dead-destination | M10 | the legacy stall with no counter, against 60 counted drops in about 30 seconds | 6, or 12 with the full stall watch |
-| 04 switch-and-drain | M2b, M4b | the cutover with the worker started first, then the mirror rollback that costs nothing | 8 |
+| 04 switch-and-drain | one run | the migration as one Ansible run: delete the processors, seed the worker groups from their offsets, start the workers; loss, duplicates, order, pause, the stalled backlog | 8 |
 | 05 crashes | M11, M12 | two populator kills cost nothing, a worker kill costs the uncommitted window | 6 |
-| 06 workgroups | W gates, C5r | two workgroups, one worker's death, a pin, and a live reshard through the barrier cutover | 15 |
+| 06 workgroups | W gates, C5r | two workgroups, one worker's death, a pin and a reshard, each layout change a seeded container swap | 20 |
 | 07 kerberos | GATE 2 | two Kerberos principals in one process, skipped cleanly without the krb profile | 10 |
-| 08 semantics | M5, M9, M8, M6b | mixed window, detach, overlapping rules, name collision | 12 |
+| 08 semantics | M9, M8, M6b | detach, overlapping rules, name collision | 12 |
 
 Each act is self-contained: it starts the processes it needs, stops them
 afterwards, and writes evidence under `poc-demo/evidence/<act>/`. Any subset

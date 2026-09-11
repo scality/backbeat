@@ -24,21 +24,33 @@ than pool work.
 
 ## Decisions already taken
 
-**Topology.** One internal delivery topic. The populator writes to that one
-topic, addressing each record to its destination; a workgroup is a consumer
-group over the same topic with a slice filter, so a worker commits records
-outside its slice without delivering them. Per-workgroup topics are out. This
-is decided, not an option: the built mechanism is the one with measurements,
-and the trade it makes (a hash and a commit per record a workgroup does not
-own, against G topics and routing logic in the populator) is stated openly.
+**Topology (decided 2026-09-11, supersedes the delivery topic).** The workers
+read today's internal topic, the one the populator already writes one record
+per event to, and match each event against the bucket's rules per
+destination themselves, exactly as a processor does. A workgroup is a
+consumer group over that same topic with a slice filter, so a worker commits
+records outside its slice without delivering them. No second topic, no
+populator change, no per-workgroup topics. The destination-keyed delivery
+topic the POC first built (`deliveryPool.source: "delivery"`) stays in the
+code for reference and its 2026-09-10 measurements are kept under `results/`.
+
+**How change is applied.** Production applies every change through Ansible,
+which stops the old containers and starts the new ones. The migration and
+every workgroup layout change are therefore container swaps with one step in
+between: the new worker groups are seeded from the committed offsets of what
+they replace (`bin/notificationDeliverySeed.js`), lowest per partition plus a
+per-destination watermark, so nothing is lost and nothing already delivered
+is sent again. No drain, no barrier, no verify wait, no overlap, no return to
+per-destination processors.
 
 **The engine.** A backbeat delivery worker in Node, on the existing consumer.
 No new service, no second language.
 
-**The migration path.** Drain-then-switch is the default, with the worker
-started before the populator switch. The drainer stays for the one case
-drain-then-switch cannot handle, a legacy processor that is wedged or whose
-destination is dead.
+**The migration path.** One Ansible run: delete the processor containers,
+seed the worker groups from the processors' committed offsets, start the
+worker containers. Act 04 is that run, measured. Drain-then-switch and the
+drainer belonged to the delivery-topic model and are not part of the demo
+any more; their measurements (2026-09-10) are kept under `results/`.
 
 **Assume-destination is out of scope.** It was explored and set aside; its
 partial work is pushed as reference only on branch
