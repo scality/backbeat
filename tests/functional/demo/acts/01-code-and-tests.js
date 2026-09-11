@@ -128,7 +128,8 @@ function register() {
 
         before(() => {
             act.open();
-            act.expect('unit suite', 'about 1800 passing, 0 failing (5 specs outside the POC need a MongoDB on the default port)');
+            act.expect('unit suite', 'about 1800 passing, 0 failing (5 specs '
+                + 'outside the POC need a MongoDB on the default port)');
             act.expect('lint', 'no errors');
             if (full) {
                 act.expect('delivery pool functional suite', 'green');

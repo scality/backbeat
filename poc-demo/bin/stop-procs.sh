@@ -34,5 +34,5 @@ if [ -n "$left" ]; then
     warn "$(echo "$left" | wc -l | tr -d ' ') ignored SIGTERM, sending KILL"
     kill -9 $left 2>/dev/null || true
 fi
-rm -f "$DEMO"/run/*.pid 2>/dev/null
-say "done. The single-run lock, if any, is taken over by the next run."
+rm -f "$DEMO"/run/*.pid "$DEMO"/run/demo-*.lock 2>/dev/null
+say "done. Pidfiles and the single-run lock are removed; the next run starts clean."

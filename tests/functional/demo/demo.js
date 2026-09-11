@@ -48,10 +48,16 @@ const wanted = env.ACTS.length
 ['SIGINT', 'SIGTERM'].forEach(sig => process.once(sig, () => {
     line('');
     line(`${sig}: stopping every demo process, then exiting`);
+    // Order matters: the lock goes first, so a run started right after
+    // Ctrl+C can begin while this one exits; then every child gets KILL at
+    // once (the terminal already sent them the signal, and a worker's
+    // graceful stop can hang on a revoke callback); then exit. No waiting,
+    // so one Ctrl+C is enough. A second Ctrl+C hits node's default and
+    // exits anyway.
+    setup.releaseLock();
     try {
-        require('./lib/procs').stopAll(true);
+        require('./lib/procs').killAllNow();
     } finally {
-        setup.releaseLock();
         process.exit(130);
     }
 }));

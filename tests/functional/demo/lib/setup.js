@@ -273,10 +273,25 @@ function acquireLock() {
             alive = false;
         }
         if (alive) {
+            // A run that was interrupted a moment ago is still stopping its
+            // processes and releasing this lock; give it a few seconds.
+            const deadline = Date.now() + 15000;
+            note(`another run (pid ${pid}) holds the lock, waiting up to 15 s`);
+            while (Date.now() < deadline) {
+                require('./sh').sleepSync(500);
+                try {
+                    process.kill(pid, 0);
+                } catch {
+                    alive = false;
+                    break;
+                }
+            }
+        }
+        if (alive) {
             throw new Error('another demo run is already driving this stack '
                 + `(pid ${pid}, lock ${LOCK}). Wait for it to finish, or stop `
-                + 'it, then run again. Different PORT_OFFSET values do not '
-                + 'collide.');
+                + 'it with yarn demo:stop, then run again. Different '
+                + 'PORT_OFFSET values do not collide.');
         }
         note(`taking over a stale lock left by pid ${pid || 'unknown'}`);
     }

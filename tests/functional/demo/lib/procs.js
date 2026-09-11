@@ -369,7 +369,7 @@ function runTool(p) {
  * @param {Boolean} [force] - include the keepers
  * @return {undefined}
  */
-function stopAll(force) {
+function stopAll(force, waitMs) {
     ALL.slice().reverse().filter(p => force || !p.keep).forEach(p => {
         p.held = true;
         p.autoRestart = false;
@@ -380,7 +380,7 @@ function stopAll(force) {
     // a delivery worker does not reliably stop on SIGTERM: its consumer close
     // waits for a revoke callback with no deadline of its own
     const mine = ALL.filter(p => force || !p.keep);
-    const deadline = Date.now() + 8000;
+    const deadline = Date.now() + (waitMs || 8000);
     while (Date.now() < deadline && mine.some(p => p.isRunning())) {
         require('./sh').sleepSync(500);
     }
@@ -388,6 +388,26 @@ function stopAll(force) {
         if (p.isRunning()) {
             note(`${p.name} ignored SIGTERM, sending KILL`);
             p.kill('SIGKILL');
+        }
+    });
+}
+
+/**
+ * Kill every process this run started, immediately and without waiting.
+ * For the interrupt path only; the acts use stopAll().
+ *
+ * @return {undefined}
+ */
+function killAllNow() {
+    ALL.slice().reverse().forEach(p => {
+        p.held = true;
+        p.autoRestart = false;
+        if (p.isRunning()) {
+            try {
+                process.kill(p.pid, 'SIGKILL');
+            } catch {
+                // already gone
+            }
         }
     });
 }
@@ -403,5 +423,6 @@ module.exports = {
     driver,
     runTool,
     stopAll,
+    killAllNow,
     ALL,
 };
