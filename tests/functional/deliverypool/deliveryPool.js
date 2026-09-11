@@ -15,7 +15,7 @@ const DeliveryTopicDrainer =
 const { buildDeliveryKey } =
     require('../../../extensions/notification/utils/deliveryKey');
 
-const KAFKA_HOSTS = 'localhost:9092';
+const KAFKA_HOSTS = process.env.KAFKA_HOSTS || 'localhost:9092';
 const CONNECT_TIMEOUT = 20000;
 const STOP_TIMEOUT = 20000;
 const METADATA_TIMEOUT = 10000;
@@ -466,8 +466,8 @@ function destinationConfig(params) {
     return {
         resource: params.resource,
         type: 'kafka',
-        host: params.host || 'localhost',
-        port: params.port || 9092,
+        host: params.host || KAFKA_HOSTS.split(':')[0],
+        port: params.port || Number(KAFKA_HOSTS.split(':')[1]),
         topic: params.topic,
         auth: {},
         spreadFactor: params.spreadFactor || 1,
@@ -478,6 +478,8 @@ function destinationConfig(params) {
 function deliveryPoolConfig(params) {
     return {
         enabled: true,
+        // these suites exercise the addressed delivery topic
+        source: 'delivery',
         topic: params.topic,
         groupId: params.groupId,
         deliveryTimeoutMs: params.deliveryTimeoutMs || 30000,

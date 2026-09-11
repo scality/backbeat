@@ -787,6 +787,7 @@ describe('NotificationQueuePopulator with delivery pool ::', () => {
                 deliveryPool: {
                     ...notificationConfig.deliveryPool,
                     enabled: true,
+                    source: 'delivery',
                 },
             },
             bnConfigManager,
@@ -795,6 +796,36 @@ describe('NotificationQueuePopulator with delivery pool ::', () => {
         notificationQueuePopulator._metricsStore = {
             notifEvent: () => null,
         };
+    });
+
+    it('should keep publishing to the internal topic when the source is internal', async () => {
+        const internalPopulator = new NotificationQueuePopulator({
+            config: {
+                ...notificationConfig,
+                deliveryPool: {
+                    ...notificationConfig.deliveryPool,
+                    enabled: true,
+                    source: 'internal',
+                },
+            },
+            bnConfigManager,
+            logger,
+        });
+        internalPopulator._metricsStore = { notifEvent: () => null };
+        const publishStub = sinon.stub(internalPopulator, 'publish');
+        await internalPopulator._processObjectEntry(
+            'example-bucket',
+            'example-key',
+            objectEntry);
+        // the legacy publish: one record per internal topic, keyed by the
+        // object, nothing addressed, and nothing on the delivery topic
+        assert(publishStub.called);
+        publishStub.getCalls().forEach(call => {
+            assert.notStrictEqual(call.args.at(0), deliveryTopic);
+            assert.strictEqual(call.args.at(1), 'example-bucket/example-key');
+            const record = JSON.parse(call.args.at(2));
+            assert.strictEqual(record.destinationId, undefined);
+        });
     });
 
     it('should publish one record per matching destination on the delivery topic', async () => {

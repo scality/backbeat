@@ -378,7 +378,10 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
                     eventType,
                 });
                 const { deliveryPool } = this.notificationConfig;
-                if (deliveryPool && deliveryPool.enabled) {
+                // in 'internal' mode the workers read the internal topic,
+                // so the populator keeps publishing exactly what it does today
+                if (deliveryPool && deliveryPool.enabled &&
+                    deliveryPool.source === 'delivery') {
                     this._publishAddressedEntries(bucket, config, ent, value);
                 } else {
                     this._publishLegacyEntries(bucket, config, ent, value);

@@ -526,6 +526,30 @@ describe('NotificationConfigValidator delivery pool ::', () => {
         assert.strictEqual(config.deliveryPool.maxQueued, 1000);
     });
 
+    it('should default the delivery pool source to the internal topic', () => {
+        const config = notificationConfigValidator(null, {
+            ...defaultExtConfig,
+            deliveryPool: { enabled: true, topic: 't', groupId: 'g' },
+        });
+        assert.strictEqual(config.deliveryPool.source, 'internal');
+    });
+
+    it('should accept the delivery topic as the source and reject others', () => {
+        const config = notificationConfigValidator(null, {
+            ...defaultExtConfig,
+            deliveryPool: {
+                enabled: true, topic: 't', groupId: 'g', source: 'delivery',
+            },
+        });
+        assert.strictEqual(config.deliveryPool.source, 'delivery');
+        assert.throws(() => notificationConfigValidator(null, {
+            ...defaultExtConfig,
+            deliveryPool: {
+                enabled: true, topic: 't', groupId: 'g', source: 'legacy',
+            },
+        }));
+    });
+
     it('should accept an enabled delivery pool with a topic and a group id', () => {
         assert.doesNotThrow(() => notificationConfigValidator(null, {
             ...defaultExtConfig,

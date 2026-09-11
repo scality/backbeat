@@ -1,6 +1,7 @@
 const joi = require('joi');
 const { probeServerJoi } = require('../../lib/config/configItems.joi');
 const {
+    deliveryPoolSources,
     kerberosCredentialSources,
     kerberosProducers,
     supportedSaslProtocols,
@@ -115,6 +116,12 @@ const joiSchema = joi.object({
     // consumer is evicted.
     deliveryPool: joi.object({
         enabled: joi.boolean().default(false),
+        // 'internal': the workers read today's internal topic and match each
+        // event against the bucket's rules themselves, so the populator is
+        // untouched and processors are replaced by workers in one restart.
+        // 'delivery': the populator writes one addressed record per matching
+        // destination to the delivery topic, which the workers read.
+        source: joi.string().valid(...deliveryPoolSources).default('internal'),
         topic: joi.string().when('enabled', {
             is: joi.boolean().valid(true).required(),
             then: joi.required(),

@@ -44,6 +44,7 @@ const notifConfig = {
     ],
     deliveryPool: {
         enabled: true,
+        source: 'delivery',
         topic: 'delivery-topic',
         groupId: 'delivery-group',
         deliveryTimeoutMs: 30000,

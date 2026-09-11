@@ -9,7 +9,7 @@ const errors = require('arsenal').errors;
 
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 const NotificationDestination = require('../destination');
-const configUtil = require('../utils/config');
+const { matchDestinations } = require('../utils/matcher');
 const messageUtil = require('../utils/message');
 const NotificationConfigManager = require('../NotificationConfigManager');
 
@@ -251,14 +251,6 @@ class QueueProcessor extends EventEmitter {
                     return done(err);
                 }
                 if (notifConfig && Object.keys(notifConfig).length > 0) {
-                    // get destination specific notification config
-                    const queueConfig = notifConfig.notificationConfiguration.queueConfig.filter(
-                            c => c.queueArn.split(':').pop() === this.destinationId
-                    );
-                    if (!queueConfig.length) {
-                        // skip, if there is no config for the current destination resource
-                        return done();
-                    }
                     this.logger.debug('validating entry', {
                         method: 'QueueProcessor.processKafkaEntry',
                         bucket,
@@ -267,16 +259,18 @@ class QueueProcessor extends EventEmitter {
                         eventType,
                         destination: this.destinationId,
                     });
-                    const destConfig = {
-                        bucket,
-                        notificationConfiguration: {
-                            queueConfig,
-                        },
-                    };
-                    const { isValid, matchingConfig } = configUtil.validateEntry(destConfig, sourceEntry);
-                    if (isValid) {
+                    // the same decision the delivery worker makes for every
+                    // destination it serves, made here for this one
+                    const [match] = matchDestinations({
+                        bucketConfig: notifConfig,
+                        entry: sourceEntry,
+                        isServed: destinationId =>
+                            destinationId === this.destinationId,
+                    });
+                    if (match) {
+                        const matchingConfig = { id: match.configurationId };
                         // add notification configuration id to the message
-                        sourceEntry.configurationId = matchingConfig.id;
+                        sourceEntry.configurationId = match.configurationId;
                         const message
                             = messageUtil.transformToSpec(sourceEntry);
                         const msg = {

@@ -8,6 +8,8 @@ const { ZenkoMetrics } = require('arsenal').metrics;
 
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 const messageUtil = require('../utils/message');
+const { matchDestinations } = require('../utils/matcher');
+const NotificationConfigManager = require('../NotificationConfigManager');
 const DeliveryProducerPool = require('./DeliveryProducerPool');
 const {
     destinationTokenFromKey,
@@ -15,7 +17,17 @@ const {
     isBarrierKey,
     parseBarrierRecord,
     SKIP_BARRIER,
+    SKIP_NOT_IN_SLICE,
 } = require('../utils/workgroups');
+
+// the two places a worker can read from, see deliveryPool.source
+const SOURCE_INTERNAL = 'internal';
+const SOURCE_DELIVERY = 'delivery';
+
+// skip reasons of the internal source: the event matched no destination this
+// worker serves, or the destination reads its own internal topic
+const SKIP_NO_MATCH = 'no_match';
+const SKIP_OWN_INTERNAL_TOPIC = 'own_internal_topic';
 
 // target label used when the entry could not be parsed, so no destination
 // is known for it
@@ -54,6 +66,14 @@ const barriersSeen = ZenkoMetrics.createCounter({
     labelNames: ['workgroup', 'match'],
 });
 
+const watermarkSkipped = ZenkoMetrics.createCounter({
+    name: 's3_notification_delivery_watermark_skipped_total',
+    help: 'Total number of matching events committed without being delivered ' +
+        'because the destination had already received them before this ' +
+        'worker took over (its offset watermark is past the record)',
+    labelNames: ['workgroup', 'destination'],
+});
+
 // wgLabels is {} when workgroups are off, so the spread adds nothing and
 // prom-client emits the same label set, hence the same series, as before
 function onDelivered(wgLabels, target) {
@@ -74,6 +94,10 @@ function onSkipped(wgLabels, reason) {
 
 function onBarrierSeen(wgLabels, match) {
     barriersSeen.inc({ ...wgLabels, match });
+}
+
+function onWatermarkSkipped(wgLabels, destination) {
+    watermarkSkipped.inc({ ...wgLabels, destination });
 }
 
 class DeliveryWorker extends EventEmitter {
@@ -108,26 +132,101 @@ class DeliveryWorker extends EventEmitter {
      * @param {String} workgroup.groupId - consumer group id to join
      * @param {Object} workgroup.filter - slice filter, classify(key) returns
      *   null for a record this workgroup owns and a skip reason otherwise
+     * @param {Object} [deps] - what the internal source needs
+     * @param {Object} [deps.mongoConfig] - mongodb connection configuration,
+     *   for the bucket notification configuration manager
+     * @param {Object} [deps.zkConfig] - zookeeper configuration, for the
+     *   configuration manager when there is no mongodb
+     * @param {Object} [deps.configManager] - a ready configuration manager,
+     *   for tests
+     * @param {Object} [deps.watermarks] - per destination offsets below which
+     *   a matching record is not delivered, as
+     *   { destinationId: { partition: offset } }
      */
-    constructor(kafkaConfig, notifConfig, workgroup) {
+    constructor(kafkaConfig, notifConfig, workgroup, deps) {
         super();
         this.kafkaConfig = kafkaConfig;
         this.notifConfig = notifConfig;
         this.deliveryPoolConfig = notifConfig.deliveryPool;
+        this._source = this.deliveryPoolConfig.source === SOURCE_DELIVERY ?
+            SOURCE_DELIVERY : SOURCE_INTERNAL;
+        this._deps = deps || {};
         this._workgroup = workgroup || null;
         this._wgLabels = workgroup ? { workgroup: workgroup.id } : {};
         this._filter = workgroup ? workgroup.filter : null;
         this._destinationsById = {};
+        // destinations reading their own internal topic are not on the
+        // topic this worker reads in internal mode, so it cannot serve them
+        this._ownTopicDestinations = [];
         (notifConfig.destinations || []).forEach(destConfig => {
+            if (this.isInternalSource() && destConfig.internalTopic &&
+                destConfig.internalTopic !== notifConfig.topic) {
+                this._ownTopicDestinations.push(destConfig.resource);
+                return;
+            }
             this._destinationsById[destConfig.resource] = destConfig;
         });
+        this._watermarks = this._deps.watermarks || null;
+        this._configManager = this._deps.configManager || null;
         this._consumer = null;
         this._producerPool = null;
 
         this.logger = new Logger('Backbeat:Notification:DeliveryWorker');
 
+        if (this._ownTopicDestinations.length > 0) {
+            this.logger.warn('destinations reading their own internal topic ' +
+                'are not served by a worker on the shared internal topic', {
+                method: 'DeliveryWorker',
+                destinations: this._ownTopicDestinations,
+            });
+        }
         if (this._workgroup) {
             this._warnOnPrefixRoutedDestinations();
+        }
+    }
+
+    /**
+     * @return {boolean} true when this worker reads today's internal topic
+     *   and matches events against bucket rules itself
+     */
+    isInternalSource() {
+        return this._source === SOURCE_INTERNAL;
+    }
+
+    /**
+     * Sets the per destination watermarks, before start()
+     *
+     * @param {Object|null} watermarks - { destinationId: { partition: offset } }
+     * @return {undefined}
+     */
+    setWatermarks(watermarks) {
+        this._watermarks = watermarks || null;
+    }
+
+    /**
+     * Builds the bucket notification configuration manager the internal
+     * source needs, the way the queue processor does
+     *
+     * @param {Function} done - callback
+     * @return {undefined}
+     */
+    _setupConfigManager(done) {
+        if (!this.isInternalSource() || this._configManager) {
+            return process.nextTick(done);
+        }
+        try {
+            this._configManager = new NotificationConfigManager({
+                mongoConfig: this._deps.mongoConfig,
+                bucketMetastore: this.notifConfig.bucketMetastore,
+                maxCachedConfigs: this.notifConfig.maxCachedConfigs,
+                zkConfig: this._deps.zkConfig,
+                zkPath: this.notifConfig.zookeeperPath,
+                zkConcurrency: this.notifConfig.zookeeperOpConcurrency,
+                logger: this.logger,
+            });
+            return this._configManager.setup(done);
+        } catch (err) {
+            return done(err);
         }
     }
 
@@ -171,10 +270,43 @@ class DeliveryWorker extends EventEmitter {
      * @return {string|null} skip reason, or null to deliver the record
      */
     _classifyEntry(entry) {
-        if (this._filter) {
+        if (this._filter && !this.isInternalSource()) {
             return this._filter.classify(entry.key);
         }
+        // on the internal topic the key names the object, not a destination:
+        // the slice is applied per matching destination after the lookup
         return isBarrierKey(entry.key) ? SKIP_BARRIER : null;
+    }
+
+    /**
+     * Whether this worker's workgroup owns a destination
+     *
+     * @param {String} destinationId - destination resource name
+     * @return {boolean} true when owned, or when there is no workgroup
+     */
+    _ownsDestination(destinationId) {
+        if (!this._filter) {
+            return true;
+        }
+        return this._filter.classify(
+            encodeDestinationToken(destinationId)) === null;
+    }
+
+    /**
+     * Whether a destination has already received a record, according to the
+     * offsets it was served up to before this worker took over
+     *
+     * @param {String} destinationId - destination resource name
+     * @param {Object} entry - consumed kafka entry
+     * @return {boolean} true when the record is below the watermark
+     */
+    _isBelowWatermark(destinationId, entry) {
+        const perDestination = this._watermarks && this._watermarks[destinationId];
+        if (!perDestination) {
+            return false;
+        }
+        const watermark = perDestination[String(entry.partition)];
+        return typeof watermark === 'number' && entry.offset < watermark;
     }
 
     /**
@@ -213,6 +345,12 @@ class DeliveryWorker extends EventEmitter {
             return undefined;
         }
         entry._notifEntry = parsed;
+        if (this.isInternalSource()) {
+            // the destinations are only known after the configuration
+            // lookup, so the lane is the object: its events stay ordered
+            // for every destination they fan out to
+            return `${parsed.bucket}/${parsed.key}`;
+        }
         return `${parsed.destinationId}|${parsed.bucket}/${parsed.key}`;
     }
 
@@ -235,12 +373,15 @@ class DeliveryWorker extends EventEmitter {
         });
         this._producerPool.start();
         async.series([
+            next => this._setupConfigManager(next),
             next => {
                 if (options && options.disableConsumer) {
                     this.emit('ready');
                     return process.nextTick(next);
                 }
-                const { topic, concurrency, maxQueued } = this.deliveryPoolConfig;
+                const { concurrency, maxQueued } = this.deliveryPoolConfig;
+                const topic = this.isInternalSource() ?
+                    this.notifConfig.topic : this.deliveryPoolConfig.topic;
                 const groupId = this._workgroup ?
                     this._workgroup.groupId : this.deliveryPoolConfig.groupId;
                 this._consumer = new BackbeatConsumer({
@@ -273,6 +414,8 @@ class DeliveryWorker extends EventEmitter {
                     this._consumer.subscribe();
                     this.logger.info('delivery worker is ready to consume ' +
                         'notification entries', {
+                        topic,
+                        source: this._source,
                         groupId,
                         workgroup: this._workgroup && this._workgroup.id,
                         generation: this._workgroup &&
@@ -353,6 +496,9 @@ class DeliveryWorker extends EventEmitter {
                 return done();
             }
         }
+        if (this.isInternalSource()) {
+            return this._processInternalEntry(kafkaEntry, parsed, done);
+        }
         const { destinationId, bucket, key } = parsed;
         const destConfig = this._destinationsById[destinationId];
         if (!destConfig) {
@@ -366,6 +512,91 @@ class DeliveryWorker extends EventEmitter {
                 'unknown_destination');
             return done();
         }
+        return this._deliver(destinationId, parsed, done);
+    }
+
+    /**
+     * Process an entry of the internal topic: look the bucket's notification
+     * configuration up, find the destinations the event matches, keep the
+     * ones this workgroup owns and that have not already received it, and
+     * deliver to each of them.
+     *
+     * A configuration lookup failure drops the entry with its own reason,
+     * counted, the way an undeliverable record is: the offset advances, and
+     * the loss is visible rather than a stall.
+     *
+     * @param {object} kafkaEntry - entry consumed from the internal topic
+     * @param {object} parsed - its parsed payload
+     * @param {function} done - callback
+     * @return {undefined}
+     */
+    _processInternalEntry(kafkaEntry, parsed, done) {
+        const { bucket, key, eventType } = parsed;
+        return this._configManager.getConfig(bucket, (err, bucketConfig) => {
+            if (err) {
+                this.logger.error('error getting the bucket notification ' +
+                    'configuration, dropping', {
+                    method: 'DeliveryWorker._processInternalEntry',
+                    bucket,
+                    key,
+                    eventType,
+                    error: err.message,
+                });
+                onDropped(this._wgLabels, UNKNOWN_TARGET, 'config_error');
+                return done();
+            }
+            const matches = matchDestinations({
+                bucketConfig,
+                entry: parsed,
+                isServed: destinationId => {
+                    if (this._destinationsById[destinationId]) {
+                        return true;
+                    }
+                    if (this._ownTopicDestinations.indexOf(destinationId) !== -1) {
+                        onSkipped(this._wgLabels, SKIP_OWN_INTERNAL_TOPIC);
+                    }
+                    return false;
+                },
+            });
+            if (matches.length === 0) {
+                onSkipped(this._wgLabels, SKIP_NO_MATCH);
+                return done();
+            }
+            const deliveries = matches.filter(match => {
+                if (!this._ownsDestination(match.destinationId)) {
+                    onSkipped(this._wgLabels, SKIP_NOT_IN_SLICE);
+                    return false;
+                }
+                if (this._isBelowWatermark(match.destinationId, kafkaEntry)) {
+                    onWatermarkSkipped(this._wgLabels, match.destinationId);
+                    return false;
+                }
+                return true;
+            });
+            if (deliveries.length === 0) {
+                return done();
+            }
+            // one lane per object already serializes the events of that
+            // object, so its destinations can be served in parallel
+            return async.each(deliveries, (match, next) =>
+                this._deliver(match.destinationId, Object.assign({}, parsed, {
+                    destinationId: match.destinationId,
+                    configurationId: match.configurationId,
+                }), next), () => done());
+        });
+    }
+
+    /**
+     * Deliver one notification to one destination. The callback is never
+     * called with an error: failures are counted and dropped.
+     *
+     * @param {String} destinationId - destination resource name
+     * @param {object} parsed - notification entry, with configurationId
+     * @param {function} done - callback
+     * @return {undefined}
+     */
+    _deliver(destinationId, parsed, done) {
+        const { bucket, key } = parsed;
         return this._producerPool.get(destinationId, (err, producer) => {
             if (err) {
                 this.logger.error('could not get a producer for destination, dropping', {
