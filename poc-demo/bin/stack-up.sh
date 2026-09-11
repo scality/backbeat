@@ -198,6 +198,6 @@ fi
 
 say "up. URLs and endpoints:"
 urls
-say "next: bin/wait-ready.sh, then the test suite. bin/stack-status.sh shows the rest."
+say "next: yarn demo:wait, then the demo: DEMO_ACTS=02,03,04,05,06,08 yarn ft_test:demo (yarn demo:status shows what is up)"
 info "prometheus scrapes the delivery workers at host.docker.internal:${DELIVERY_PROBE_PORT_BASE}..$(( DELIVERY_PROBE_PORT_BASE + DELIVERY_PROBE_PORT_COUNT - 1 ))"
 info 'their probeServer bindAddress must be 0.0.0.0, not localhost, or the scrape cannot reach them'

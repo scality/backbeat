@@ -400,7 +400,7 @@ wait_drain() {
 
 # ----------------------------------------------------------- checks --------
 need_stack() {
-    kafka_container >/dev/null 2>&1 || die "no demo kafka container running. Bring the stack up: demo/bin/stack-up.sh"
+    kafka_container >/dev/null 2>&1 || die "no demo kafka container running. Bring the stack up: yarn demo:up"
     say "kafka container: $(kafka_container) (broker port $KAFKA_PORT)"
 }
 

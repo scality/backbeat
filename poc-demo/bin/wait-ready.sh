@@ -67,7 +67,7 @@ for pair in "kafka broker on localhost:${KAFKA_PORT}:check_kafka" \
     done
     if [ -n "$failed" ]; then
         warn "not ready after ${TIMEOUT}s: $failed"
-        warn "bin/stack-status.sh shows what is up"
+        warn "yarn demo:status shows what is up"
         exit 1
     fi
     note "$what ready"

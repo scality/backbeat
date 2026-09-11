@@ -13,7 +13,7 @@ if docker ps -a --filter "label=com.docker.compose.project=${PROJECT}" --format 
     docker ps -a --filter "label=com.docker.compose.project=${PROJECT}" \
         --format '    {{.Names}}\t{{.Status}}\t{{.Image}}' | expand -t 34,58
 else
-    warn "nothing running. bin/stack-up.sh"
+    warn "nothing running. Start it with yarn demo:up (or yarn demo:up:krb for act 07)"
     exit 0
 fi
 
@@ -151,7 +151,7 @@ if docker ps --format '{{.Names}}' | grep -q "^${PROJECT}-krb-kafka-1$"; then
     ls "$DEMO_DIR/krb/keytabs"/*.keytab >/dev/null 2>&1 \
         && info "keytabs: $(cd "$DEMO_DIR/krb/keytabs" && echo *.keytab)"
 else
-    info "not running (bin/stack-up.sh --krb)"
+    info "not running (yarn demo:up:krb)"
 fi
 
 say "URLs and endpoints"
