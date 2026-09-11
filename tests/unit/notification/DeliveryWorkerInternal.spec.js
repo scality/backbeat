@@ -462,16 +462,29 @@ describe('notification DeliveryWorker on the internal topic', () => {
             process.nextTick(() => cb(null, answers.shift())));
         const worker = new DeliveryWorker(kafkaConfig, makeNotifConfig(), null,
             { configManager: { getConfig, setup: cb => cb() },
-                noConfigRetryMs: [5, 10, 20] });
+                noConfigRetryMs: [1000, 2000, 4000] });
         const pool = fakePool();
         worker._producerPool = pool;
         const before = await counterValue(SKIPPED_METRIC, { reason: 'no_config' });
-        const started = Date.now();
+        // fake timers for setTimeout only: the stubs answer on nextTick,
+        // which stays real, so each tick below is one backoff step
+        const clock = sinon.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+        let finished = false;
+        const done = processEntry(worker, makeEntry(legacyRecord())).then(() => {
+            finished = true;
+        });
+        await new Promise(resolve => setImmediate(resolve));
+        assert.strictEqual(getConfig.callCount, 1, 'first read, no configuration');
+        assert.strictEqual(finished, false);
+        await clock.tickAsync(1000);
+        await new Promise(resolve => setImmediate(resolve));
+        assert.strictEqual(getConfig.callCount, 2, 'second read after the 1 s backoff');
+        assert.strictEqual(finished, false);
+        await clock.tickAsync(2000);
+        await done;
+        clock.restore();
 
-        await processEntry(worker, makeEntry(legacyRecord()));
-
-        assert.strictEqual(getConfig.callCount, 3);
-        assert(Date.now() - started >= 15, 'the two backoffs were waited for');
+        assert.strictEqual(getConfig.callCount, 3, 'third read found the configuration');
         assert.deepStrictEqual(pool.get.args.map(a => a[0]), ['dest-a']);
         assert.strictEqual(await counterValue(SKIPPED_METRIC, { reason: 'no_config' }),
             before);
