@@ -12,10 +12,13 @@
  * The one thing the run has to get right is where the new consumer groups
  * start reading. A group with no committed offset starts at the oldest
  * record still retained, which would re-deliver hours of events to every
- * customer. So between "delete" and "start" the run seeds each worker group
- * from the committed offsets of the processors it replaces: the lowest per
- * partition, so nothing is skipped, plus a watermark per destination at its
- * own processor's offset, so nothing already delivered is sent again.
+ * customer. The worker does that itself: a start that finds its group
+ * empty takes a lock in ZooKeeper and seeds every group of the generation
+ * from the committed offsets of the processors it replaces, the lowest per
+ * partition so nothing is skipped, plus a watermark per destination at its
+ * own processor's offset so nothing already delivered is sent again. So the
+ * run is stop, write, start, with no command in between, which is the only
+ * shape Federation can express as one playbook.
  *
  * To make the offsets differ, as they do on a real platform, one processor
  * is caught up, one is stopped a little before the swap (a small backlog) and
@@ -47,15 +50,18 @@ DESTS.forEach((d, i) => { BUCKETS[d] = `demo-mig-${i + 1}`; });
 const WORKGROUP = 'wg-a';
 const GENERATION = 1;
 const SECONDS = Number(env.knob('DEMO_ACT04_SECONDS', env.workSecs(240, 120)));
-// the second pass: seed, then throw the watermarks away, to measure what the
-// per-destination watermark saves
+// the second pass: seed ahead with the CLI, then throw the watermarks away
+// before the worker starts, to measure what the per-destination watermark
+// saves. It is also the pass that keeps the CLI covered: an operator who
+// prefers to seed before the run still can, with seedOnStart off.
 const WITHOUT_WATERMARK = env.knob('DEMO_ACT04_WITHOUT_WATERMARK', '') === '1';
 
 function register(ctx) {
     describe('Act 04: the migration, one Ansible run', () => {
         const act = new Act('04', 'switch-and-drain', 'one run',
-            'delete the processors, seed the worker groups from their offsets, '
-            + 'start the workers: nothing lost, nothing doubled, order kept');
+            'delete the processors, write the layout, start the workers: they '
+            + 'seed themselves from the processors\' offsets, nothing lost, '
+            + 'nothing doubled, order kept');
         const from = {};
         const processors = {};
 
@@ -69,6 +75,9 @@ function register(ctx) {
                 ? 'the offset spread between the processors'
                 : 'the processors\' uncommitted windows only, about 5 s each');
             act.expect('per-key inversions', 0);
+            act.expect('the seeding',
+                WITHOUT_WATERMARK ? 'run ahead with the CLI, seedOnStart off'
+                    : 'done by the first worker to start, no command in the run');
             act.expect('processor offsets at the swap', '(not predicted)');
             act.expect('delivery pause', '(not predicted)');
             act.expect('stalled destination backlog delivered by the pool',
@@ -91,7 +100,10 @@ function register(ctx) {
             async () => {
                 const legacy = flow.legacyConfig(act, ctx, { only: DESTS });
                 const pool = flow.poolConfig(act, ctx, { only: DESTS,
-                    workgroups: true, tag: 'mig' });
+                    workgroups: true, tag: 'mig',
+                    // the control pass seeds ahead with the CLI so that the
+                    // watermarks can be deleted before any worker reads them
+                    seedOnStart: !WITHOUT_WATERMARK });
 
                 step(0, 'today: the populator and one processor per destination');
                 await flow.startPopulator(act, legacy, 'legacy');
@@ -156,37 +168,69 @@ function register(ctx) {
                 note('the populator is untouched: it keeps writing to the same');
                 note('topic, and does not know or care which path consumes it.');
 
-                step(4, 'part two: write the layout, seed the worker groups');
+                step(4, 'part two: write the layout');
                 const doc = zk.buildWorkgroupsDoc({ generation: GENERATION,
                     modulo: 1, workgroups: { [WORKGROUP]: [0] } });
                 zk.writeWorkgroupsDoc(doc);
                 line(zk.describeDoc(zk.workgroupsDoc()).map(l => `      | ${l}`)
                     .join('\n'));
-                const seeded = flow.seedFromProcessors(act, pool, GENERATION);
-                assert.strictEqual(seeded.code, 0,
-                    'the seed tool did not seed every partition of every group');
                 const group = zk.groupIdFor(env.DELIVERY_GROUP, WORKGROUP, GENERATION);
-                const seededOffsets = kafka.committedByPartition(group,
-                    env.INTERNAL_TOPIC);
-                say(`${group} seeded at ${JSON.stringify(seededOffsets)}, the lowest `
-                    + 'processor offset per partition');
-                const marks = zk.watermarks(GENERATION);
-                say(`watermarks: ${JSON.stringify(marks)}`);
-                watch('zoonavigator', `${env.ZK_WORKGROUPS_PATH} and its watermarks `
-                    + `child for generation ${GENERATION}`);
                 if (WITHOUT_WATERMARK) {
-                    note('DEMO_ACT04_WITHOUT_WATERMARK=1: the watermarks are');
-                    note('deleted now, so the worker delivers everything from the');
-                    note('lowest offset. What it sends twice is the spread between');
-                    note('the processors\' offsets, and that is the number this');
-                    note('pass measures.');
+                    note('DEMO_ACT04_WITHOUT_WATERMARK=1: this pass runs the');
+                    note('seeding CLI ahead of the start, with seedOnStart off,');
+                    note('and then deletes the watermarks, so the worker');
+                    note('delivers everything from the lowest offset. What it');
+                    note('sends twice is the spread between the processors\'');
+                    note('offsets, and that is the number this pass measures.');
+                    const seeded = flow.seedFromProcessors(act, pool, GENERATION);
+                    assert.strictEqual(seeded.code, 0,
+                        'the seed tool did not seed every partition of every group');
                     zk.deleteWatermarks(GENERATION);
                     act.timeline('watermarks DELETED on purpose');
+                } else {
+                    note('and that is the whole of part two. No seeding command');
+                    note('runs here: the worker container started next finds its');
+                    note('consumer group empty, takes a lock in ZooKeeper and');
+                    note('seeds itself from the processor groups before it');
+                    note('subscribes. An Ansible run therefore has nothing');
+                    note('between its stop and its start.');
                 }
+                watch('zoonavigator', `${env.ZK_WORKGROUPS_PATH} and its watermarks `
+                    + `child for generation ${GENERATION}`);
 
                 step(5, 'part three: start the worker container');
+                // started without awaiting, so the watermarks node is caught
+                // as the worker writes it and not minutes later
+                const seedWatch = WITHOUT_WATERMARK ? null
+                    : flow.captureSelfSeed(act, { generation: GENERATION });
                 const worker = await flow.startWorker(act, pool, 1,
                     { workgroupId: WORKGROUP, autoRestart: true });
+                if (seedWatch) {
+                    const selfSeed = await seedWatch;
+                    const seeders = selfSeed.seeders;
+                    say(`${seeders.join(', ') || 'no worker'} says in its log that `
+                        + `it seeded itself, ${selfSeed.waitedS}s after the layout `
+                        + 'was written');
+                    say(`the seeding put ${group} at `
+                        + `${JSON.stringify(selfSeed.start)}, the lowest processor `
+                        + 'offset per partition');
+                    act.measured('the seeding', 'done by the worker itself, '
+                        + `${selfSeed.waitedS}s after the layout was written`);
+                    assert.ok(selfSeed.watermarks,
+                        'the worker did not seed itself: no watermarks in zookeeper');
+                    assert.strictEqual(seeders.length, 1,
+                        'exactly one worker should say it did the seeding');
+                    DESTS.forEach(d => {
+                        assert.deepStrictEqual(selfSeed.watermarks[d],
+                            offsets[d],
+                            `${d}'s watermark is its processor's committed offset`);
+                    });
+                    say(`watermarks: ${JSON.stringify(selfSeed.watermarks)}, each `
+                        + 'one its own processor\'s committed offset');
+                } else {
+                    act.measured('the seeding',
+                        'run ahead with the CLI, seedOnStart off');
+                }
                 await wait.until('the pool\'s first delivery',
                     async () => (await wait.counter(1, 'delivered')) > 0,
                     240000, 2000);
@@ -195,9 +239,10 @@ function register(ctx) {
                     + 'stopped');
                 act.measured('delivery pause', `${pauseS}s, processors stopped to `
                     + 'first pool delivery');
-                note('the pause is the container swap plus the group join. On a');
-                note('real platform the swap is Ansible\'s stop and start, and');
-                note('the join is the consumer session, 45 s by default.');
+                note('the pause is the container swap, the self seeding and the');
+                note('group join. On a real platform the swap is Ansible\'s stop');
+                note('and start, the seeding is a second, and the join is the');
+                note('consumer session, 45 s by default.');
                 watch('grafana', 'delivered per second by destination: the');
                 watch('grafana', `stalled ${STALLED} comes back first and fastest, `
                     + 'it has the most to catch up');

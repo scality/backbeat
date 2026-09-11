@@ -105,7 +105,8 @@ function destinations(opts) {
  * @param {Object} [opts] - pool: add the deliveryPool block; workgroups: add
  *   the workgroups block; only, dead, leaderless and customerTopics as
  *   destinations() takes them; concurrency, deliveryTimeoutMs, probePort,
- *   internalTopic, deliveryTopic, legacyGroupPrefix, deliveryGroup
+ *   internalTopic, deliveryTopic, legacyGroupPrefix, deliveryGroup,
+ *   seedOnStart (false to seed with the CLI instead)
  * @return {Object} the configuration
  */
 function backbeat(opts) {
@@ -139,6 +140,14 @@ function backbeat(opts) {
                 ? (o.deliveryTopic || env.DELIVERY_TOPIC)
                 : (o.internalTopic || env.INTERNAL_TOPIC),
             groupId: o.deliveryGroup || env.DELIVERY_GROUP,
+            // a worker whose group has no committed offsets seeds every
+            // group of the generation itself, under a zookeeper lock,
+            // before it subscribes. That is what makes a deployment a
+            // plain container replacement: the run stops the old
+            // containers, writes the configuration and starts the new
+            // ones, with no command in between. Set false to go back to
+            // seeding ahead with bin/notificationDeliverySeed.js.
+            seedOnStart: o.seedOnStart !== false,
             deliveryTimeoutMs: o.deliveryTimeoutMs || 30000,
             producerIdleMs: 300000,
             maxProducers: 50,

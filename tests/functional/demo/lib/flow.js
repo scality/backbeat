@@ -6,6 +6,7 @@
  */
 
 const fs = require('fs');
+const path = require('path');
 const env = require('./env');
 const conf = require('./conf');
 const kafka = require('./kafka');
@@ -503,6 +504,83 @@ async function drainOrCure(p) {
     return again;
 }
 
+/**
+ * Watch for the evidence that a generation seeded itself.
+ *
+ * A worker whose consumer group has no committed offsets takes a zookeeper
+ * lock, seeds every group of the document from the groups it inherits from,
+ * and writes the per-destination watermarks last, after the groups are
+ * committed and read back. So the watermarks node appearing is the proof
+ * that the whole seeding ran, and it is durable: the group's own offsets
+ * move as soon as the worker starts committing, the watermarks do not.
+ *
+ * Call it without awaiting, start the workers, then await it.
+ *
+ * @param {Object} act - the act
+ * @param {Object} p - { generation, budgetMs }
+ * @return {Promise} resolves with { watermarks, waitedS, start, seeders },
+ *   where start is the lowest watermark per partition, which is where the
+ *   seeding put the group of a workgroup owning every destination, and
+ *   seeders names the workers whose log says they did it
+ */
+async function captureSelfSeed(act, p) {
+    const zk = require('./zk');
+    const started = Date.now();
+    let marks = null;
+    await wait.until(`generation ${p.generation} to seed itself`, () => {
+        marks = zk.watermarks(p.generation);
+        return marks !== null;
+    }, p.budgetMs || 240000, 2000);
+    const waitedS = Math.round((Date.now() - started) / 1000);
+    // the watermarks are written inside the seeding, the log line just
+    // after it returns, so give the line a moment to land
+    if (marks) {
+        await wait.until('the seeding worker to say so in its log',
+            () => selfSeedersIn(act, p.generation).length > 0, 60000, 2000);
+    }
+    const seeders = selfSeedersIn(act, p.generation);
+    const start = {};
+    Object.values(marks || {}).forEach(byPartition => {
+        Object.entries(byPartition).forEach(([partition, offset]) => {
+            if (start[partition] === undefined || offset < start[partition]) {
+                start[partition] = offset;
+            }
+        });
+    });
+    if (marks) {
+        act.timeline(`generation ${p.generation} SELF-SEEDED after ${waitedS}s `
+            + `by ${seeders.join(',') || 'a worker that did not say so'}`);
+    }
+    return { watermarks: marks, waitedS, start, seeders };
+}
+
+/**
+ * Which of a generation's workers said in its log that it did the seeding.
+ * Exactly one of them takes the lock, so exactly one says it.
+ *
+ * Read from the log files rather than from the processes, so it can be
+ * called while a start is still in flight, and matched on the generation
+ * the line carries, so an earlier generation's seeding is not counted.
+ *
+ * @param {Object} act - the act
+ * @param {Number} generation - generation number
+ * @return {Array} the worker log files that carry the line
+ */
+function selfSeedersIn(act, generation) {
+    const seen = [];
+    fs.readdirSync(act.dir)
+        .filter(f => /^worker.*\.log$/.test(f))
+        .forEach(f => {
+            const text = fs.readFileSync(path.join(act.dir, f), 'utf8');
+            const said = text.split('\n').some(l => l.includes('seeded itself')
+                && l.includes(`"generation":${generation}`));
+            if (said) {
+                seen.push(f.replace(/\.log$/, ''));
+            }
+        });
+    return seen;
+}
+
 const SEED_TOOL = 'bin/notificationDeliverySeed.js';
 
 /**
@@ -829,6 +907,8 @@ function recordChecker(act, result) {
 module.exports = {
     SEED_TOOL,
     runSeedTool,
+    captureSelfSeed,
+    selfSeedersIn,
     seedFromProcessors,
     seedFromGeneration,
     seedPoolGroupAtHead,

@@ -16,8 +16,12 @@
  * which is why a slice filter can commit what it does not deliver without
  * losing anything. A layout change is a new generation, applied the way
  * production applies every change: stop the old generation's containers,
- * seed the new generation's groups from the old ones, start the new
- * containers. No barrier, no verify step, no overlap, and a measured pause.
+ * write the new document, start the new containers. The seeding is not a
+ * step: the first new worker to come up finds its group empty, takes a lock
+ * in ZooKeeper and seeds every group of the generation from the groups it
+ * inherits from, while the others wait for their offsets. No barrier, no
+ * verify step, no overlap, no command between the stop and the start, and a
+ * measured pause.
  *
  * Four things happen here, in order:
  *   a  two auto workgroups, five destinations, one worker each
@@ -26,8 +30,10 @@
  *   d  a reshard from two auto workgroups to three, under load
  *      (generation 3)
  *
- * The seed tool is the repository's own bin/notificationDeliverySeed.js, and
- * the ownership function is extensions/notification/utils/workgroups.js.
+ * The seeding is the repository's own DeliverySeeder, run inside the worker
+ * by SelfSeeder; bin/notificationDeliverySeed.js still exposes it for an
+ * operator who would rather seed ahead. The ownership function is
+ * extensions/notification/utils/workgroups.js.
  */
 
 const assert = require('assert');
@@ -150,57 +156,78 @@ function register(ctx) {
 
         /**
          * A generation change the way production does every change: stop
-         * every container of the old generation, write the new layout, seed
-         * the new generation's groups from the old ones (lowest committed
+         * every container of the old generation, write the new layout,
+         * start the new containers. Three steps, and nothing between them:
+         * the first new worker to come up finds its group empty, takes the
+         * generation's lock in ZooKeeper and seeds every group of the
+         * document from the groups it inherits from (lowest committed
          * offset per partition, a watermark per destination at its previous
-         * owner's offset), start the new containers. No two generations ever
-         * run together, so nothing can interleave; the price is a delivery
-         * pause, measured from the old generation's stop to the new one's
-         * first delivery.
+         * owner's offset), while the others wait for their own offsets to
+         * appear. No two generations ever run together, so nothing can
+         * interleave; the price is a delivery pause, measured from the old
+         * generation's stop to the new one's first delivery.
          *
          * @param {Object} p - { prevGen, newGen, label }
          * @return {Promise} resolves with { pauseS }
          */
         async function changeGeneration(p) {
             note('the operator\'s order, which is Ansible\'s order: stop the');
-            note('old generation, write the new layout, seed, start the new');
-            note('generation. Between the stop and the first delivery nothing');
-            note('is delivered, and that pause is the whole price of a change');
-            note('with no overlap.');
+            note('old generation, write the new layout, start the new');
+            note('generation. No seeding command in between: the workers do');
+            note('it themselves, one of them under a ZooKeeper lock. Between');
+            note('the stop and the first delivery nothing is delivered, and');
+            note('that pause is the whole price of a change with no overlap.');
             stopGeneration(IDS[p.prevGen], p.prevGen);
             const stoppedAt = Date.now();
             boundaries.push({ label: `generation ${p.prevGen} stop`, at: stoppedAt });
             act.timeline(`generation ${p.prevGen} STOPPED`);
             writeLayout(p.newGen);
-            const seeded = flow.seedFromGeneration(act, config, p.prevGen, p.newGen);
-            const seededAt = Date.now();
-            act.measured(`seed exit code, generation ${p.newGen}`, seeded.code);
-            assert.strictEqual(seeded.code, 0,
-                `generation ${p.newGen} was not seeded on every partition`);
-            const marks = zk.watermarks(p.newGen) || {};
-            say(`watermarks for generation ${p.newGen}: `
-                + `${Object.keys(marks).length} destinations`);
             const wedgesBefore = wedgeCount();
+            // started without awaiting, so the watermarks node is caught as
+            // the seeding worker writes it
+            const seedWatch = flow.captureSelfSeed(act, { generation: p.newGen });
             await startWorkgroupWorkers(IDS[p.newGen], p.newGen);
             const startedAt = Date.now();
             const cures = wedgeCount() - wedgesBefore;
+            const selfSeed = await seedWatch;
+            const seededAt = Date.now();
+            const seeders = selfSeed.seeders;
+            const marks = selfSeed.watermarks || {};
+            say(`generation ${p.newGen} seeded itself ${selfSeed.waitedS}s after `
+                + `the layout was written, by ${seeders.join(', ') || 'a worker '
+                + 'whose log does not say so'}: watermarks for `
+                + `${Object.keys(marks).length} destinations, groups starting at `
+                + `${JSON.stringify(selfSeed.start)}`);
+            act.measured(`self seed, generation ${p.newGen}`,
+                selfSeed.watermarks
+                    ? `${seeders.length} worker of ${IDS[p.newGen].length} did it, `
+                      + `${selfSeed.waitedS}s after the layout was written`
+                    : 'no watermarks appeared in zookeeper');
+            assert.ok(selfSeed.watermarks,
+                `generation ${p.newGen} did not seed itself`);
+            assert.strictEqual(seeders.length, 1,
+                `exactly one worker of generation ${p.newGen} should say it `
+                + 'did the seeding');
             const delivered = await firstDelivery(IDS[p.newGen], p.newGen, 300000);
             const pauseS = Math.round((Date.now() - stoppedAt) / 1000);
-            const seedS = Math.round((seededAt - stoppedAt) / 1000);
-            const startS = Math.round((startedAt - seededAt) / 1000);
+            const seedS = Math.round((seededAt - startedAt) / 1000);
+            const startS = Math.round((startedAt - stoppedAt) / 1000);
             say(`generation ${p.newGen} ${delivered ? 'delivering' : 'still silent'} `
-                + `${pauseS}s after generation ${p.prevGen} was stopped: seed `
-                + `${seedS}s, worker start ${startS}s with ${cures} start-up wedge `
-                + `cure${cures === 1 ? '' : 's'}, first delivery `
-                + `${Math.round((Date.now() - startedAt) / 1000)}s after that`);
-            act.measured(`delivery pause at the ${p.label}`,
-                `${pauseS}s: seed ${seedS}s, start ${startS}s (${cures} wedge `
-                + `cure${cures === 1 ? '' : 's'}), first delivery `
+                + `${pauseS}s after generation ${p.prevGen} was stopped: worker `
+                + `start ${startS}s with ${cures} start-up wedge `
+                + `cure${cures === 1 ? '' : 's'}, self seed seen ${seedS}s after `
+                + 'that, first delivery '
                 + `${Math.round((Date.now() - startedAt) / 1000)}s after start`);
-            note('the seed is a second. What the pause is made of is the');
-            note('container start and the pre-existing start-up wedge, cured');
-            note('by a restart, which is the reliability ceiling this codebase');
-            note('sets and not a property of the swap.');
+            act.measured(`delivery pause at the ${p.label}`,
+                `${pauseS}s: start ${startS}s (${cures} wedge `
+                + `cure${cures === 1 ? '' : 's'}), self seed seen ${seedS}s after `
+                + 'that, first delivery '
+                + `${Math.round((Date.now() - startedAt) / 1000)}s after start`);
+            note('the seeding is a second, and it happens inside the first');
+            note('worker\'s start. What the pause is made of is the container');
+            note('start and the pre-existing start-up wedge, cured by a');
+            note('restart, which is the reliability ceiling this codebase sets');
+            note('and not a property of the swap.');
             await ensureDelivering(IDS[p.newGen], p.newGen, 240000);
             return { pauseS };
         }
@@ -385,8 +412,10 @@ function register(ctx) {
                 'the stopped generation\'s uncommitted window, plus cure '
                 + 're-deliveries; none from the seed itself');
             act.expect('duplicates, whole act, by cause', '(not predicted)');
-            act.expect('seed exit code, generation 2', 0);
-            act.expect('seed exit code, generation 3', 0);
+            act.expect('self seed, generation 2',
+                'one worker of three seeds the generation, no command in the run');
+            act.expect('self seed, generation 3',
+                'one worker of four seeds the generation, no command in the run');
             config = flow.poolConfig(act, ctx, {
                 only: DESTS,
                 workgroups: true,
@@ -425,8 +454,12 @@ function register(ctx) {
                 assert.ok(doc, 'no workgroups document was written');
                 note('the first generation on a topic that already has history');
                 note('starts at the head: the processors it replaces are act');
-                note('04\'s story. Here each group is seeded at the head, the');
-                note('way the seed tool would put it.');
+                note('04\'s story, and the earlier acts left their own events');
+                note('on this topic. So the rig puts generation 1 where an');
+                note('operator\'s first run would leave it, at the head, which');
+                note('also means these groups have offsets and the workers');
+                note('find nothing to seed. Everything from generation 2 on is');
+                note('seeded by the workers themselves.');
                 IDS[1].forEach(id => {
                     flow.seedPoolGroupAtHead(act,
                         zk.groupIdFor(env.DELIVERY_GROUP, id, 1));
@@ -577,7 +610,7 @@ function register(ctx) {
             assert.strictEqual(map[pinned], 'wg-pin',
                 'the pin does not take effect in the planned document');
 
-            step(7, 'the layout change: stop generation 1, seed, start generation 2');
+            step(7, 'the layout change: stop generation 1, write, start generation 2');
             await changeGeneration({ prevGen: 1, newGen: 2, label: 'pin cutover' });
             await procs.sleep(env.pause(10000));
 
@@ -630,13 +663,14 @@ function register(ctx) {
                 fromOffsets[d] = kafka.head(ctx.customerTopicOf[d], 0);
             });
 
-            step(10, 'the reshard, with traffic flowing: stop 2, seed, start 3');
-            note('the seed tool takes, per partition, the lowest committed');
+            step(10, 'the reshard, with traffic flowing: stop 2, write, start 3');
+            note('the seeding takes, per partition, the lowest committed');
             note('offset across the generation 2 groups a new group inherits');
             note('from, and writes a watermark per destination at its previous');
             note('owner\'s offset. A destination that moves workgroup keeps its');
             note('place in the stream; nothing is skipped and nothing is sent');
-            note('again. The ZooKeeper write is the commit point.');
+            note('again. It runs inside the first generation 3 worker to come');
+            note('up, under a lock, so the run itself is stop, write, start.');
             await changeGeneration({ prevGen: 2, newGen: 3, label: 'reshard' });
             act.measured('destinations that moved',
                 `${moved.length} of ${DESTS.length}`);
