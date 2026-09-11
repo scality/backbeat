@@ -178,6 +178,14 @@ jobs:
             runner: run_ft_tests.bash
           - testsuite: oplogPopulator
             runner: run_ft_tests.bash
+          # delivery pool suites (bucket notifications as a service): they need
+          # only the kafka, zookeeper and mongo services this job already has
+          - testsuite: notification:deliverypool
+            runner: run_ft_tests.bash
+          - testsuite: notification:workgroups
+            runner: run_ft_tests.bash
+          - testsuite: notification:internal
+            runner: run_ft_tests.bash
     services:
       redis:
         image: redis:alpine
@@ -378,3 +386,64 @@ jobs:
         continue-on-error: true
         timeout-minutes: 60
         if: failure() && runner.debug == '1'
+
+  # Delivery pool Kerberos suite: one worker process authenticating as several
+  # Kerberos principals. It needs a KDC and a kerberised broker, which no
+  # existing service provides, so this job builds the two small images from
+  # poc-demo/krb and runs them on the runner's host network (the broker
+  # principal is kafka/localhost and the advertised listeners are localhost).
+  # The suite reads the broker log and restarts the broker through the docker
+  # socket, so the rig must be plain containers, not job services.
+  kerberos-tests:
+    name: notification:kerberos tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - uses: actions/setup-node@v6
+      with:
+        node-version: '22'
+        cache: yarn
+    - name: Install MIT Kerberos client and SASL GSSAPI libraries
+      # before yarn install, so node-rdkafka's librdkafka is built with SASL
+      # GSSAPI (the suite's collision-control arm) and the kerberos binding
+      # finds its headers
+      run: |
+        sudo DEBIAN_FRONTEND=noninteractive apt-get update
+        sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+          krb5-user libkrb5-dev libgssapi-krb5-2 libsasl2-dev libsasl2-2 libsasl2-modules-gssapi-mit
+        sudo cp poc-demo/krb/krb5.conf /etc/krb5.conf
+    - name: Install node dependencies
+      run: yarn install --ignore-engines --frozen-lockfile --network-concurrency 1
+    - name: Bring up the Kerberos rig
+      run: .github/scripts/run_krb_rig.bash up
+    - name: Run notification:kerberos tests
+      env:
+        CONF_DIR: ${{ runner.temp }}/krb
+        KRB_BROKERS: localhost:19095
+        KRB_VERIFY_BROKERS: localhost:19096
+        KRB_KAFKA_CONTAINER: krb-kafka
+        KRB_KDC_CONTAINER: krb-kdc
+        KRB5_CONFIG: /etc/krb5.conf
+      run: yarn ft_test:notification:kerberos
+    - name: Collect the rig logs
+      if: always()
+      run: .github/scripts/run_krb_rig.bash logs
+    - name: Upload the rig logs
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: kerberos-rig-logs
+        path: ${{ runner.temp }}/krb/logs
+        if-no-files-found: ignore
+    - name: Debug wait
+      uses: scality/actions/action-ssh-to-runner@1.8.0
+      with:
+        tmate-server-host: ${{ secrets.TMATE_SERVER_HOST }}
+        tmate-server-port: ${{ secrets.TMATE_SERVER_PORT }}
+        tmate-server-rsa-fingerprint: ${{ secrets.TMATE_SERVER_RSA_FINGERPRINT }}
+        tmate-server-ed25519-fingerprint: ${{ secrets.TMATE_SERVER_ED25519_FINGERPRINT }}
+      continue-on-error: true
+      timeout-minutes: 60
+      if: failure() && runner.debug == '1'
