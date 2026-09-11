@@ -13,6 +13,8 @@ const DeliveryKafkaProducer = require(
     '../../../extensions/notification/deliveryWorker/DeliveryKafkaProducer');
 const KerberosKafkaProducer = require(
     '../../../extensions/notification/destination/KerberosKafkaProducer');
+const PlatformaticKerberosProducer = require(
+    '../../../extensions/notification/destination/PlatformaticKerberosProducer');
 
 const kerberosAuth = {
     type: 'kerberos',
@@ -44,6 +46,7 @@ describe('notification deliveryProducerFactory', () => {
         process.env.CONF_DIR = confDir;
         sinon.stub(DeliveryKafkaProducer.prototype, 'connect');
         sinon.stub(KerberosKafkaProducer.prototype, '_connect');
+        sinon.stub(PlatformaticKerberosProducer.prototype, '_connect');
     });
 
     afterEach(() => {
@@ -69,8 +72,13 @@ describe('notification deliveryProducerFactory', () => {
                 true);
         });
 
+        it('should serve a kerberos destination with the platformatic producer when asked', () => {
+            assert.strictEqual(
+                build(kerberosAuth, 'platformatic') instanceof PlatformaticKerberosProducer, true);
+        });
+
         it('should keep node-rdkafka for a non kerberos destination either way', () => {
-            ['rdkafka', 'kafkajs'].forEach(stack => {
+            ['rdkafka', 'kafkajs', 'platformatic'].forEach(stack => {
                 const producer = build({ type: 'basic', protocol: 'SASL_PLAINTEXT',
                     username: 'u', password: 'p' }, stack);
                 assert.strictEqual(producer instanceof DeliveryKafkaProducer, true,
@@ -92,6 +100,7 @@ describe('notification deliveryProducerFactory', () => {
         it('should answer for every combination it is asked about', () => {
             assert.strictEqual(usesKerberosProducer({ auth: kerberosAuth }, 'kafkajs'), true);
             assert.strictEqual(usesKerberosProducer({ auth: kerberosAuth }, 'rdkafka'), false);
+            assert.strictEqual(usesKerberosProducer({ auth: kerberosAuth }, 'platformatic'), true);
             assert.strictEqual(usesKerberosProducer({ auth: { ssl: true } }, 'kafkajs'), false);
             assert.strictEqual(usesKerberosProducer({}, 'kafkajs'), false);
             assert.strictEqual(usesKerberosProducer(undefined, 'kafkajs'), false);
@@ -107,7 +116,8 @@ describe('notification deliveryProducerFactory', () => {
                 const f = require('${repoRoot}/extensions/notification/destination/` +
                 `deliveryProducerFactory');
                 const loaded = Object.keys(require.cache)
-                    .some(p => p.includes('node_modules/kerberos/'));
+                    .some(p => p.includes('node_modules/kerberos/')
+                        || p.includes('node_modules/@platformatic/'));
                 console.log(loaded ? 'LOADED' : 'NOT_LOADED');
             `;
             const out = execFileSync(process.execPath, ['-e', script], { encoding: 'utf8' });

@@ -674,6 +674,12 @@ describe('NotificationConfigValidator delivery pool ::', () => {
                 'kafkajs');
         });
 
+        it('should accept the platformatic producer for kerberos destinations', () => {
+            assert.strictEqual(
+                withPool({ kerberosProducer: 'platformatic' }).deliveryPool.kerberosProducer,
+                'platformatic');
+        });
+
         it('should reject an unknown kerberos producer', () => {
             assert.throws(() => withPool({ kerberosProducer: 'sarama' }));
         });

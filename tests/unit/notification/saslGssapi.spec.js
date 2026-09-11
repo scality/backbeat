@@ -4,6 +4,8 @@ const FakeLogger = require('../../utils/fakeLogger');
 
 const {
     gssapiAuthenticationProvider,
+    gssapiAuthenticator,
+    gssapiPlatformaticSaslOption,
     gssapiSaslOption,
     readSaslBytes,
     writeSaslBytes,
@@ -289,6 +291,95 @@ describe('notification saslGssapi', () => {
             });
             assert.strictEqual(option.mechanism, 'GSSAPI');
             assert.strictEqual(typeof option.authenticationProvider, 'function');
+        });
+    });
+
+    describe('platformatic authenticate hook', () => {
+        /**
+         * A platformatic saslAuthenticate(connection, Buffer, cb) that replies
+         * with the given raw broker tokens in order
+         * @param {Buffer[]} brokerTokens - raw tokens the broker sends back
+         * @return {Object} { saslAuthenticate, sent }
+         */
+        function stubPlatformaticSaslAuthenticate(brokerTokens) {
+            const sent = [];
+            let round = 0;
+            const saslAuthenticate = (connection, outgoing, cb) => {
+                sent.push(Buffer.from(outgoing));
+                const authBytes = brokerTokens[round] || Buffer.alloc(0);
+                round++;
+                process.nextTick(() => cb(null, { authBytes, sessionLifetimeMs: 0 }));
+            };
+            return { saslAuthenticate, sent };
+        }
+
+        const connection = { host: 'broker.example.com', port: 9093 };
+
+        it('should run the same exchange over raw tokens and call back once', done => {
+            const client = new StubGssClient();
+            const kerberos = stubKerberos(client);
+            const { saslAuthenticate, sent } = stubPlatformaticSaslAuthenticate([
+                Buffer.from('broker-ap-rep'),
+                Buffer.from('wrapped-layer-challenge'),
+                Buffer.alloc(0),
+            ]);
+            const hook = gssapiAuthenticator({
+                kerberos, principal: PRINCIPAL, serviceName: 'kafka', logger: FakeLogger,
+            });
+            hook('GSSAPI', connection, saslAuthenticate, undefined, undefined, undefined,
+                (err, response) => {
+                    assert.ifError(err);
+                    // the hook hands the client the last SaslAuthenticate
+                    // response, which carries the session lifetime
+                    assert.deepStrictEqual(response, { authBytes: Buffer.alloc(0), sessionLifetimeMs: 0 });
+                    // three client tokens: the initial token, the empty token
+                    // asking for the layer challenge, the wrapped final message
+                    assert.strictEqual(sent.length, 3);
+                    assert.strictEqual(sent[0].toString(), 'client-token-1');
+                    assert.strictEqual(sent[1].length, 0);
+                    assert.strictEqual(sent[2].toString(), 'client-final');
+                    // service name is host based, principal is the desired name
+                    assert.deepStrictEqual(kerberos.initializeClientCalls[0][0],
+                        'kafka@broker.example.com');
+                    assert.strictEqual(kerberos.initializeClientCalls[0][1].principal, PRINCIPAL);
+                    const wrapCall = client.calls.find(call => call[0] === 'wrap');
+                    assert.deepStrictEqual(wrapCall[2], { user: PRINCIPAL });
+                    done();
+                });
+        });
+
+        it('should never throw: a broker error reaches the callback', done => {
+            const client = new StubGssClient();
+            const hook = gssapiAuthenticator({
+                kerberos: stubKerberos(client), principal: PRINCIPAL, serviceName: 'kafka',
+            });
+            const failing = (conn, outgoing, cb) => process.nextTick(() =>
+                cb(new Error('SASL_AUTHENTICATION_FAILED')));
+            hook('GSSAPI', connection, failing, undefined, undefined, undefined, err => {
+                assert.match(err.message, /SASL_AUTHENTICATION_FAILED/);
+                done();
+            });
+        });
+
+        it('should never throw: a binding error reaches the callback', done => {
+            const client = new StubGssClient({ stepError: new Error('Server not found in Kerberos database') });
+            const { saslAuthenticate } = stubPlatformaticSaslAuthenticate([Buffer.from('x')]);
+            const hook = gssapiAuthenticator({
+                kerberos: stubKerberos(client), principal: PRINCIPAL, serviceName: 'kafka',
+            });
+            hook('GSSAPI', connection, saslAuthenticate, undefined, undefined, undefined, err => {
+                assert.match(err.message, /Server not found/);
+                done();
+            });
+        });
+
+        it('should build a sasl option the client accepts', () => {
+            const option = gssapiPlatformaticSaslOption({
+                kerberos: stubKerberos(new StubGssClient()), principal: PRINCIPAL, serviceName: 'kafka',
+            });
+            assert.strictEqual(option.mechanism, 'GSSAPI');
+            assert.strictEqual(typeof option.authenticate, 'function');
+            assert.strictEqual(option.authenticate.length, 7);
         });
     });
 });
