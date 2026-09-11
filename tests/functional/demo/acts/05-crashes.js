@@ -20,6 +20,7 @@
  */
 
 const assert = require('assert');
+const fs = require('fs');
 const env = require('../lib/env');
 const kafka = require('../lib/kafka');
 const procs = require('../lib/procs');
@@ -46,6 +47,7 @@ function register(ctx) {
             topic = ctx.customerTopicOf[DEST];
             act.expect('populator kills', 2);
             act.expect('worker counters after the populator kills', '(not predicted)');
+            act.expect('time to first delivery after the worker start', '(not predicted)');
             act.expect('populator gaps (loss)', 0);
             act.expect('populator duplicate extras',
                 'republished checkpoint window, 0 in the rig\'s two kills');
@@ -70,6 +72,7 @@ function register(ctx) {
         it('survives two populator kills with no loss and no duplicates',
             async () => {
                 const from = kafka.head(topic, 0);
+                const loadStart = Date.now();
                 const load = flow.startDriver(act, { 'bucket': BUCKET,
                     'prefix': 'm11', 'rate': 5, 'duration': env.workSecs(120, 60),
                     'straddle': 2,
@@ -108,8 +111,28 @@ function register(ctx) {
                 await wait.until('the driver to finish',
                     () => !load.proc.isRunning(), 200000, 2000);
                 await wait.frozen(env.POOL_TOPIC, env.pause(12000));
+                // The check gates on delivery, not on elapsed time: a worker
+                // still in its start-up wedge has fetched nothing, so a dump
+                // taken now would read as total loss when nothing is lost.
+                // Wait for the first delivery, cure the wedge if it holds,
+                // and say how long the pool took to start delivering.
+                const firstDelivered = await flow.progressOrCure(act, worker,
+                    'the pool\'s first delivery',
+                    async () => (await wait.counter(1, 'delivered')) > 0,
+                    { timeoutMs: 120000, retryTimeoutMs: 180000, everyMs: 5000 });
+                const wedges = fs.existsSync(act.file('timeline.txt'))
+                    ? (fs.readFileSync(act.file('timeline.txt'), 'utf8')
+                        .match(/WEDGED/g) || []).length : 0;
+                act.measured('time to first delivery after the worker start',
+                    `${Math.round((Date.now() - loadStart) / 1000)}s after the load `
+                    + `began, ${wedges} wedge cure${wedges === 1 ? '' : 's'}`
+                    + `${firstDelivered ? '' : ', and still nothing delivered'}`);
+                const ops = fs.readFileSync(load.log, 'utf8').split('\n')
+                    .filter(l => / ok$/.test(l)).length;
                 await flow.drainOrCure({ group: env.DELIVERY_GROUP, label: 'pool',
                     timeoutMs: 300000, workers: [1] });
+                await wait.until(`the customer topic to hold the ${ops} m11 events`,
+                    () => kafka.head(topic, 0) - from >= ops, 300000, 5000);
                 const counters = await flow.snapshotMetrics(act, 1, 'worker1-after-m11');
                 act.measured('worker counters after the populator kills',
                     `delivered ${counters.delivered}, skipped `
