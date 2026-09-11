@@ -451,7 +451,7 @@ showing the cure reads better than hiding the symptom.
 
 ```bash
 git clone --branch poc/S3C-11127-demo git@github.com:scality/backbeat.git && cd backbeat
-nvm install 22 && nvm use 22   # or any node 22 on PATH; 24 breaks native modules
+nvm install 22 && nvm use 22 && npm install -g yarn   # node 22 plus yarn 1 for that node; 24 breaks native modules
 yarn demo:install              # yarn install, node-gyp workaround folded in
 yarn demo:preflight            # docker, node, free ports, python for node-gyp
 yarn demo:up                   # builds the two local images if missing, then the stack
