@@ -28,6 +28,16 @@ const SOURCE_DELIVERY = 'delivery';
 // worker serves, or the destination reads its own internal topic
 const SKIP_NO_MATCH = 'no_match';
 const SKIP_OWN_INTERNAL_TOPIC = 'own_internal_topic';
+const SKIP_NO_CONFIG = 'no_config';
+const SKIP_WATERMARK = 'watermark';
+
+// The populator only publishes for buckets that have a notification
+// configuration, so a lookup that finds none is read again before the record
+// is given up on: the configuration store may be catching up. Bounded, so a
+// bucket whose configuration was really removed cannot stall its partition.
+const NO_CONFIG_RETRY_MS = [1000, 2000, 4000, 8000];
+// how many buckets to remember having warned about
+const WARNED_BUCKETS_MAX = 1000;
 
 // target label used when the entry could not be parsed, so no destination
 // is known for it
@@ -66,6 +76,18 @@ const barriersSeen = ZenkoMetrics.createCounter({
     labelNames: ['workgroup', 'match'],
 });
 
+// every record committed without a delivery, by reason, whatever the
+// workgroup: the series an operator watches for silent non-delivery
+const skippedTotal = ZenkoMetrics.createCounter({
+    name: 's3_notification_delivery_skipped_total',
+    help: 'Total number of records committed without being delivered, by ' +
+        'reason: no_config (the bucket has no notification configuration), ' +
+        'no_match (no configured destination matches the event), watermark ' +
+        '(already delivered before this generation), barrier, not_in_slice, ' +
+        'own_internal_topic',
+    labelNames: ['reason'],
+});
+
 const watermarkSkipped = ZenkoMetrics.createCounter({
     name: 's3_notification_delivery_watermark_skipped_total',
     help: 'Total number of matching events committed without being delivered ' +
@@ -90,6 +112,7 @@ function observeDelay(wgLabels, target, status, delay) {
 
 function onSkipped(wgLabels, reason) {
     skippedEvents.inc({ ...wgLabels, reason });
+    skippedTotal.inc({ reason });
 }
 
 function onBarrierSeen(wgLabels, match) {
@@ -98,6 +121,7 @@ function onBarrierSeen(wgLabels, match) {
 
 function onWatermarkSkipped(wgLabels, destination) {
     watermarkSkipped.inc({ ...wgLabels, destination });
+    skippedTotal.inc({ reason: SKIP_WATERMARK });
 }
 
 class DeliveryWorker extends EventEmitter {
@@ -168,6 +192,8 @@ class DeliveryWorker extends EventEmitter {
         });
         this._watermarks = this._deps.watermarks || null;
         this._configManager = this._deps.configManager || null;
+        this._noConfigRetryMs = this._deps.noConfigRetryMs || NO_CONFIG_RETRY_MS;
+        this._warnedBuckets = new Set();
         this._consumer = null;
         this._producerPool = null;
 
@@ -516,6 +542,73 @@ class DeliveryWorker extends EventEmitter {
     }
 
     /**
+     * Look a bucket's notification configuration up, reading again with a
+     * bounded backoff when there is none: the populator only publishes for
+     * buckets that have one, so an empty answer is more likely the store
+     * catching up than a configuration that is really gone.
+     *
+     * @param {String} bucket - bucket name
+     * @param {Number} attempt - retries made so far
+     * @param {Function} cb - callback: cb(err, bucketConfig|null)
+     * @return {undefined}
+     */
+    _lookupConfig(bucket, attempt, cb) {
+        return this._configManager.getConfig(bucket, (err, bucketConfig) => {
+            if (err) {
+                return cb(err);
+            }
+            const queueConfigs = bucketConfig &&
+                bucketConfig.notificationConfiguration &&
+                bucketConfig.notificationConfiguration.queueConfig;
+            if (queueConfigs && queueConfigs.length > 0) {
+                return cb(null, bucketConfig);
+            }
+            if (attempt >= this._noConfigRetryMs.length) {
+                return cb(null, null);
+            }
+            const delayMs = this._noConfigRetryMs[attempt];
+            if (attempt === 0) {
+                this.logger.info('bucket has no notification configuration ' +
+                    'yet, reading it again', {
+                    method: 'DeliveryWorker._lookupConfig',
+                    bucket,
+                    retries: this._noConfigRetryMs.length,
+                    totalWaitMs: this._noConfigRetryMs.reduce((a, b) => a + b, 0),
+                });
+            }
+            return setTimeout(() => this._lookupConfig(bucket, attempt + 1, cb),
+                delayMs);
+        });
+    }
+
+    /**
+     * Log the first record of a bucket given up on for lack of a
+     * configuration, once per bucket
+     *
+     * @param {String} bucket - bucket name
+     * @param {Object} parsed - the record's payload
+     * @return {undefined}
+     */
+    _warnNoConfig(bucket, parsed) {
+        if (this._warnedBuckets.has(bucket)) {
+            return;
+        }
+        if (this._warnedBuckets.size >= WARNED_BUCKETS_MAX) {
+            this._warnedBuckets.clear();
+        }
+        this._warnedBuckets.add(bucket);
+        this.logger.warn('committing records of a bucket that has no ' +
+            'notification configuration; the populator published for it, so ' +
+            'the configuration was removed or the store is behind', {
+            method: 'DeliveryWorker._processInternalEntry',
+            bucket,
+            key: parsed.key,
+            eventType: parsed.eventType,
+            retries: this._noConfigRetryMs.length,
+        });
+    }
+
+    /**
      * Process an entry of the internal topic: look the bucket's notification
      * configuration up, find the destinations the event matches, keep the
      * ones this workgroup owns and that have not already received it, and
@@ -532,7 +625,7 @@ class DeliveryWorker extends EventEmitter {
      */
     _processInternalEntry(kafkaEntry, parsed, done) {
         const { bucket, key, eventType } = parsed;
-        return this._configManager.getConfig(bucket, (err, bucketConfig) => {
+        return this._lookupConfig(bucket, 0, (err, bucketConfig) => {
             if (err) {
                 this.logger.error('error getting the bucket notification ' +
                     'configuration, dropping', {
@@ -543,6 +636,11 @@ class DeliveryWorker extends EventEmitter {
                     error: err.message,
                 });
                 onDropped(this._wgLabels, UNKNOWN_TARGET, 'config_error');
+                return done();
+            }
+            if (!bucketConfig) {
+                this._warnNoConfig(bucket, parsed);
+                onSkipped(this._wgLabels, SKIP_NO_CONFIG);
                 return done();
             }
             const matches = matchDestinations({

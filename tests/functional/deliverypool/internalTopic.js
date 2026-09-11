@@ -61,7 +61,13 @@ const TOPICS = {
     custB: { name: `ftint-cust-b-${RUN_ID}`, partitions: 1 },
     controlA: { name: `ftint-control-a-${RUN_ID}`, partitions: 1 },
     controlB: { name: `ftint-control-b-${RUN_ID}`, partitions: 1 },
+    // a bucket whose configuration shows up after the worker started
+    lateInternal: { name: `ftint-late-internal-${RUN_ID}`, partitions: 1 },
+    lateCust: { name: `ftint-late-cust-${RUN_ID}`, partitions: 1 },
 };
+const LATE_BUCKET = 'ftint-late-bucket';
+const LATE_GROUP = `ftint-late-${RUN_ID}`;
+const LATE_RECORDS = 10;
 
 const log = new werelogs.Logger('Backbeat:Test:InternalTopic');
 werelogs.configure({ level: 'warn', dump: 'error' });
@@ -280,12 +286,12 @@ function stopWorker(worker, done) {
     });
 }
 
-function legacyRecord(index) {
+function legacyRecord(index, bucket) {
     const key = `object-${String(index).padStart(4, '0')}`;
     return {
-        key: `${BUCKET}/${key}`,
+        key: `${bucket || BUCKET}/${key}`,
         message: JSON.stringify({
-            bucket: BUCKET,
+            bucket: bucket || BUCKET,
             key,
             eventType: 's3:ObjectCreated:Put',
             dateTime: new Date(Date.UTC(2026, 0, 1, 0, 0, index)).toISOString(),
@@ -364,9 +370,12 @@ const bucketConfig = {
     },
 };
 
+// the configurations the worker can see, mutable so a test can make one
+// appear while the worker is running
+const knownConfigs = { [BUCKET]: bucketConfig };
 const configManager = {
     getConfig: (bucket, cb) => process.nextTick(() =>
-        cb(null, bucket === BUCKET ? bucketConfig : undefined)),
+        cb(null, knownConfigs[bucket])),
     setup: cb => process.nextTick(cb),
 };
 
@@ -614,6 +623,56 @@ describe('delivery worker on the internal topic', function internalTopic() {
                     'dest-b: seeded at its own offset, nothing twice');
                 next();
             },
+        ], err => stopWorker(worker, () => done(err)));
+    });
+
+    it('delivers a bucket whose configuration appears after the worker started', done => {
+        // an empty group on a topic that already holds the records, and a
+        // bucket the configuration store does not know yet: the worker must
+        // read the configuration again rather than commit the records away
+        const notifConfig = notifConfigFor([
+            destination('dest-a', TOPICS.lateCust.name),
+        ], LATE_GROUP);
+        notifConfig.topic = TOPICS.lateInternal.name;
+        delete notifConfig.deliveryPool.workgroups;
+        let worker = null;
+        return async.series([
+            next => produceRecords(TOPICS.lateInternal.name,
+                [...Array(LATE_RECORDS).keys()].map(i => legacyRecord(i, LATE_BUCKET)),
+                next),
+            next => {
+                worker = new DeliveryWorker(kafkaConfig, notifConfig, null,
+                    { configManager, watermarks: null });
+                worker.start(null, next);
+            },
+            // the worker is consuming: the records are being looked up and
+            // finding nothing, inside the retry window
+            next => setTimeout(next, 3000),
+            next => {
+                knownConfigs[LATE_BUCKET] = {
+                    bucket: LATE_BUCKET,
+                    notificationConfiguration: {
+                        queueConfig: [{
+                            id: 'late-to-a',
+                            queueArn: 'arn:scality:bucketnotif:::dest-a',
+                            events: ['s3:ObjectCreated:*'],
+                        }],
+                    },
+                };
+                return next();
+            },
+            next => readTopic(TOPICS.lateCust.name, LATE_RECORDS, 60000,
+                (err, records) => {
+                    if (err) {
+                        return next(err);
+                    }
+                    const keys = deliveredKeys(records);
+                    assert.strictEqual(new Set(keys).size, LATE_RECORDS,
+                        'every record of the late bucket reached the destination');
+                    assert.strictEqual(keys.length, LATE_RECORDS,
+                        'and none of them twice');
+                    return next();
+                }),
         ], err => stopWorker(worker, () => done(err)));
     });
 });

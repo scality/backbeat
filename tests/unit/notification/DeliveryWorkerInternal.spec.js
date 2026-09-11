@@ -8,11 +8,14 @@ const DeliveryWorker = require(
 const DeliveryProducerPool = require(
     '../../../extensions/notification/deliveryWorker/DeliveryProducerPool');
 const {
+    BARRIER_KEY,
+    buildBarrierRecord,
     buildGroupId,
     createSliceFilter,
 } = require('../../../extensions/notification/utils/workgroups');
 
 const DELIVERED_METRIC = 's3_notification_delivery_worker_delivered_total';
+const SKIPPED_TOTAL_METRIC = 's3_notification_delivery_skipped_total';
 const DROPPED_METRIC = 's3_notification_delivery_worker_dropped_total';
 const SKIPPED_METRIC = 's3_notification_delivery_worker_skipped_total';
 const WATERMARK_METRIC = 's3_notification_delivery_watermark_skipped_total';
@@ -262,13 +265,16 @@ describe('notification DeliveryWorker on the internal topic', () => {
     it('should skip a bucket with no configuration at all', async () => {
         const configManager = fakeConfigManager({});
         const worker = new DeliveryWorker(kafkaConfig, makeNotifConfig(), null,
-            { configManager });
+            { configManager, noConfigRetryMs: [] });
         const pool = fakePool();
         worker._producerPool = pool;
+        const before = await counterValue(SKIPPED_METRIC, { reason: 'no_config' });
 
         await processEntry(worker, makeEntry(legacyRecord()));
 
         assert(pool.send.notCalled);
+        assert.strictEqual(await counterValue(SKIPPED_METRIC, { reason: 'no_config' }),
+            before + 1);
     });
 
     it('should deliver only to the destinations its workgroup owns', async () => {
@@ -422,6 +428,118 @@ describe('notification DeliveryWorker on the internal topic', () => {
             beforeDelivered + 1);
         assert.strictEqual(await counterValue(DROPPED_METRIC,
             { target: 'dest-b', reason: 'delivery_error' }), beforeDropped + 1);
+    });
+
+    it('should not build the consumer before the configuration manager is ready', done => {
+        let releaseSetup = null;
+        const NotificationConfigManager =
+            require('../../../extensions/notification/NotificationConfigManager');
+        sinon.stub(NotificationConfigManager.prototype, 'setup')
+            .callsFake(cb => { releaseSetup = cb; });
+        const worker = new DeliveryWorker(kafkaConfig, makeNotifConfig(), null,
+            { mongoConfig: { replicaSetHosts: 'mongo:27017', database: 'metadata' } });
+        sinon.stub(BackbeatConsumer.prototype, '_init');
+        sinon.stub(DeliveryProducerPool.prototype, 'start');
+        worker.start(null, () => {});
+        setImmediate(() => {
+            assert(releaseSetup, 'setup was not called');
+            assert.strictEqual(worker._consumer, null,
+                'the consumer must not exist before the configuration manager is ready');
+            releaseSetup();
+            setImmediate(() => {
+                assert(worker._consumer, 'the consumer is built once setup completes');
+                done();
+            });
+        });
+    });
+
+    it('should read the configuration again with backoff when a bucket has none yet', async () => {
+        const config = bucketConfig([
+            queueConfig('all-to-a', 'dest-a', ['s3:ObjectCreated:*']),
+        ]);
+        const answers = [undefined, undefined, config];
+        const getConfig = sinon.stub().callsFake((bucket, cb) =>
+            process.nextTick(() => cb(null, answers.shift())));
+        const worker = new DeliveryWorker(kafkaConfig, makeNotifConfig(), null,
+            { configManager: { getConfig, setup: cb => cb() },
+                noConfigRetryMs: [5, 10, 20] });
+        const pool = fakePool();
+        worker._producerPool = pool;
+        const before = await counterValue(SKIPPED_METRIC, { reason: 'no_config' });
+        const started = Date.now();
+
+        await processEntry(worker, makeEntry(legacyRecord()));
+
+        assert.strictEqual(getConfig.callCount, 3);
+        assert(Date.now() - started >= 15, 'the two backoffs were waited for');
+        assert.deepStrictEqual(pool.get.args.map(a => a[0]), ['dest-a']);
+        assert.strictEqual(await counterValue(SKIPPED_METRIC, { reason: 'no_config' }),
+            before);
+    });
+
+    it('should give up after the retries, count no_config and warn once per bucket', async () => {
+        const getConfig = sinon.stub().callsFake((bucket, cb) =>
+            process.nextTick(() => cb(null, undefined)));
+        const worker = new DeliveryWorker(kafkaConfig, makeNotifConfig(), null,
+            { configManager: { getConfig, setup: cb => cb() },
+                noConfigRetryMs: [5, 5] });
+        const warn = sinon.stub(worker.logger, 'warn');
+        const pool = fakePool();
+        worker._producerPool = pool;
+        const before = await counterValue(SKIPPED_METRIC, { reason: 'no_config' });
+        const beforeTotal = await counterValue(SKIPPED_TOTAL_METRIC, { reason: 'no_config' });
+
+        await processEntry(worker, makeEntry(legacyRecord()));
+        await processEntry(worker, makeEntry(legacyRecord({ key: 'other' })));
+        await processEntry(worker, makeEntry(legacyRecord({ bucket: 'another-bucket' })));
+
+        // three retries per record: the first read plus two re-reads
+        assert.strictEqual(getConfig.callCount, 9);
+        assert(pool.send.notCalled);
+        assert.strictEqual(await counterValue(SKIPPED_METRIC, { reason: 'no_config' }),
+            before + 3);
+        assert.strictEqual(await counterValue(SKIPPED_TOTAL_METRIC, { reason: 'no_config' }),
+            beforeTotal + 3);
+        // one warning per bucket, not per record
+        assert.strictEqual(warn.callCount, 2);
+        const warnedBuckets = warn.args.map(a => a[1].bucket).sort();
+        assert.deepStrictEqual(warnedBuckets, ['another-bucket', BUCKET]);
+    });
+
+    it('should count every skip under the reason-only counter', async () => {
+        const configManager = fakeConfigManager({
+            [BUCKET]: bucketConfig([
+                queueConfig('deletes-to-a', 'dest-a', ['s3:ObjectRemoved:*']),
+                queueConfig('all-to-b', 'dest-b', ['s3:ObjectCreated:*']),
+            ]),
+        });
+        const worker = new DeliveryWorker(kafkaConfig, makeNotifConfig(), null,
+            { configManager, watermarks: { 'dest-b': { 0: 1000 } },
+                noConfigRetryMs: [] });
+        const pool = fakePool();
+        worker._producerPool = pool;
+        const before = {};
+        for (const reason of ['no_match', 'watermark', 'barrier']) {
+            before[reason] = await counterValue(SKIPPED_TOTAL_METRIC, { reason });
+        }
+
+        // dest-a does not match a Put, dest-b is below its watermark
+        await processEntry(worker, makeEntry(legacyRecord(), { partition: 0, offset: 5 }));
+        // a barrier record on the internal topic is skipped like anywhere else
+        await processEntry(worker, {
+            topic: INTERNAL_TOPIC, partition: 0, offset: 6,
+            key: Buffer.from(BARRIER_KEY),
+            value: buildBarrierRecord({ generation: 1, partition: 0 }),
+        });
+
+        assert(pool.send.notCalled);
+        assert.strictEqual(await counterValue(SKIPPED_TOTAL_METRIC, { reason: 'watermark' }),
+            before.watermark + 1);
+        assert.strictEqual(await counterValue(SKIPPED_TOTAL_METRIC, { reason: 'barrier' }),
+            before.barrier + 1);
+        // a record whose only match is filtered out is not "no_match"
+        assert.strictEqual(await counterValue(SKIPPED_TOTAL_METRIC, { reason: 'no_match' }),
+            before.no_match);
     });
 
     it('should build the configuration manager from the mongo config when none is injected', done => {
