@@ -17,7 +17,7 @@
 - Chief Product Officer: Erwan Girard
 - Engineering Team: Object Squad
 
-# Context and background
+## Context and background
 
 Service providers (Core42, Orange NAOS, Allstate at ~250 destinations) run RING + S3C as a multitenant platform. A bucket notification needs a destination, a customer Kafka endpoint plus credentials. Today a destination is a Federation inventory entry realized as one OS process per destination: only the platform administrator can create one, every change restarts the notification containers cluster-wide, and every destination is usable by every account. Three limitations, one cause: a destination is a deployment artifact, not a resource.
 
@@ -51,7 +51,7 @@ Detailed requirements: Citadel PR 373. The ones that shape the design:
 | NF5 | Operations | Federation flags, seamless upgrade, health checks, KPIs, L3 dashboard, alerts, audit logs |
 | NF6 | ARTESCA | backbeat stays backward compatible |
 
-# Proposal and general architecture
+## Proposal and general architecture
 
 ### Solution overview
 
@@ -212,6 +212,6 @@ Operational: new public API and IAM actions; a new internal topic and a dedicate
 - Evidence: `~/capsule-corp/bnaas-poc/design/06,07,09,11`; `rig/RESULTS.md` and `rig/evidence/`; `krb-spike/RESULTS.md`; code verification reports `gw2cto/reports/`.
 - Critique, question bank and paste-ready PR comments: `gw2cto/01-design-critique.md`, `gw2cto/04-pr383-review-comments.md`.
 
-# Actions post Gateway to CTO soutenance
+## Actions post Gateway to CTO soutenance
 
 - (to be filled during the meeting)
