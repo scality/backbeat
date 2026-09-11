@@ -8,13 +8,13 @@
  * then the unit suite and the linter running.
  *
  * By default it runs the unit suite and the linter, which together take
- * about five minutes. The three functional suites for the pool, the
- * workgroups and Kerberos are out of CI on purpose and take fifteen to
- * thirty minutes between them, so they are behind DEMO_ACT01_FULL=1 and the
- * act says so on screen rather than skipping them silently. Two constraints
- * decide the rest: those functional suites hardcode localhost:9092, so they
- * need a stack at PORT_OFFSET=0, and one unit file binds port 8080, so two
- * unit runs cannot overlap on one machine.
+ * about three minutes. The functional suites for the pool, today's topic,
+ * the workgroups and Kerberos run in CI on every push and take fifteen to
+ * thirty minutes between them, so here they are behind DEMO_ACT01_FULL=1
+ * and the act says so on screen rather than skipping them silently. They
+ * honour KAFKA_HOSTS and ZOOKEEPER_HOSTS, so they run against this stack at
+ * any PORT_OFFSET. One unit file binds port 8080, so two unit runs cannot
+ * overlap on one machine.
  */
 
 const fs = require('fs');
@@ -128,7 +128,7 @@ function register() {
 
         before(() => {
             act.open();
-            act.expect('unit suite', '1720 passing, 1 pending');
+            act.expect('unit suite', 'about 1800 passing, 0 failing (5 specs outside the POC need a MongoDB on the default port)');
             act.expect('lint', 'no errors');
             if (full) {
                 act.expect('delivery pool functional suite', 'green');
