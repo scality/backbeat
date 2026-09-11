@@ -337,4 +337,4 @@ async function globalTeardown() {
     say(`evidence is under ${env.EVIDENCE}`);
 }
 
-module.exports = { ctx, globalSetup, globalTeardown, resetKafka, header };
+module.exports = { ctx, globalSetup, globalTeardown, resetKafka, header, releaseLock };

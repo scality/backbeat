@@ -50,6 +50,7 @@
     "demo:status": "bash poc-demo/bin/stack-status.sh",
     "demo:wait": "bash poc-demo/bin/wait-ready.sh",
     "demo:clean": "bash poc-demo/bin/clean-suite-topics.sh",
+    "demo:stop": "bash poc-demo/bin/stop-procs.sh",
     "ft_test:demo": "mocha tests/functional/demo/demo.js --timeout 2700000 --exit",
     "ft_test:demo:act": "mocha tests/functional/demo/demo.js --timeout 2700000 --exit"
   },

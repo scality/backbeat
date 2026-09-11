@@ -41,6 +41,21 @@ const wanted = env.ACTS.length
         .sort((a, b) => env.ACTS.indexOf(a[0]) - env.ACTS.indexOf(b[0]))
     : ACTS;
 
+// Ctrl+C or a SIGTERM stops the run cleanly: every process the acts spawned
+// is stopped (SIGTERM, then KILL after 8 s) and the single-run lock is
+// released, so the next run starts from a clean state. Without this, a
+// worker that ignores SIGTERM would survive the terminal.
+['SIGINT', 'SIGTERM'].forEach(sig => process.once(sig, () => {
+    line('');
+    line(`${sig}: stopping every demo process, then exiting`);
+    try {
+        require('./lib/procs').stopAll(true);
+    } finally {
+        setup.releaseLock();
+        process.exit(130);
+    }
+}));
+
 describe('BNaaS delivery pool demo', function demoSuite() {
     this.timeout(30 * 60 * 1000);
 
