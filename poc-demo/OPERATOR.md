@@ -73,10 +73,12 @@ cannot be read at start.
 
 **The migration.** Stops every `queue-processor` container, one per
 destination, on every host. Starts one `delivery-worker` container per
-workgroup, with `DELIVERY_POOL_WORKGROUP_ID` set. Nothing is stopped and
-started at the same time: the run finishes the stop phase across the fleet
-before it starts anything, because a group being seeded must have no live
-members.
+workgroup, with `DELIVERY_POOL_WORKGROUP_ID` set. The run finishes the stop
+phase across the whole fleet before it starts anything, and that ordering is
+not cosmetic: two generations delivering the same destination at the same
+time is the one thing that reorders a customer's events. The POC measured
+4197 same-key inversions when two generations were allowed to overlap, and
+zero when they were not. The pause below is the price of that zero.
 
 **A version bump or a rollback.** Stops the worker containers, starts them
 on the new image. The workgroups document does not change, the generation
@@ -103,16 +105,18 @@ itself, before it subscribes:
    `<zookeeperPath>/seed-locks/gen<N>`. Exactly one worker of the generation
    wins it. The others see it, log that they are waiting, and poll for their
    own offsets to appear.
-4. The winner seeds **every** group of the document, not just its own: per
+4. The winner archives the document it is seeding at
+   `<zookeeperPath>/history/gen<N>`, for whichever generation replaces it,
+   then seeds **every** group of the document, not just its own: per
    partition, the lowest committed offset over the groups each workgroup
    inherits from, so nothing is skipped, and a watermark per destination at
    that destination's own previous offset, so nothing already delivered is
    sent again. Generation 1 inherits from the per-destination processor
    groups; a later generation inherits from the previous generation's
-   groups, named by the `previousGroups` the document carries or by the
-   archive at `<zookeeperPath>/history/gen<N-1>`.
-5. It writes the watermarks to `<zookeeperPath>/watermarks/gen<N>`, archives
-   the document at `<zookeeperPath>/history/gen<N>`, releases the lock, and
+   groups, named by the `previousGroups` the document carries or by that
+   same archive, one generation back.
+5. It reads every group back to check the offsets took, writes the
+   watermarks to `<zookeeperPath>/watermarks/gen<N>`, releases the lock, and
    joins.
 6. Every worker, winner or waiter, then makes the same final check: a group
    still missing an offset on any partition refuses to start, with the
@@ -128,7 +132,8 @@ back, so if it is there the seeding completed.
 **The CLI is still there.** `bin/notificationDeliverySeed.js
 seed-from-processors --generation N` and `seed-from-generation --from N --to
 M` do exactly what the worker does, from a shell, against stopped
-containers. Run it when you want to see the offset table before committing
+containers. It refuses to seed a group that still has live members, and so
+does the worker's copy, so run it after the stop phase and not before. Run it when you want to see the offset table before committing
 to a run, or when you would rather the seeding not be part of the start.
 With `seedOnStart: false` it becomes required again, and the run needs a
 step between its stop and its start.
@@ -224,18 +229,21 @@ generation.
 
 ## A canary
 
-Pin one workgroup to one generation and let the rest of the fleet move.
-`deliveryPool.workgroups.generation` in a container's rendered file refuses
-to start that worker on any other generation, so a canary run can move one
-workgroup to the new image and leave its generation where it is, or move one
-generation and hold one workgroup back. Combine it with a static rule that
-gives a single destination its own workgroup: that destination then has its
-own consumer group, its own blast radius and its own image, and nothing else
-on the platform is exposed to the change.
+A workgroup is the unit of blast radius, so it is also the unit of a canary.
+Give the destination you want to watch its own workgroup with a static rule,
+run the layout change, and that destination now has its own consumer group,
+its own containers and its own panels. Roll the new image onto **those**
+containers only, watch their delivered and drop series for a day, and roll
+the rest of the fleet after. A version bump does not touch the document, so
+the canary and the fleet can sit on different images for as long as you
+like.
 
-The narrow form, and the one to reach for first: add a static workgroup for
-one destination, run the layout change, watch that workgroup's delivered and
-drop panels for a day, then reshard the rest.
+`deliveryPool.workgroups.generation` is the guard rail next to it, not the
+lever. A container whose rendered file pins a generation refuses to start on
+any other one, which is how you stop a host that Ansible missed from
+quietly joining the wrong generation's group. Pin it on the workers you are
+holding back deliberately; leave it out everywhere else, or the next layout
+change needs a config edit as well as a document write.
 
 ## When something goes wrong
 

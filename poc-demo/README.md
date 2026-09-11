@@ -137,7 +137,7 @@ All idempotent, all read `.env`, all print what they do.
   pinned to the port mongod actually runs on.
 - **`bin/zk-show.sh [znode]`** The workgroups document pretty-printed, the
   generation it declares, the consumer group each workgroup therefore joins,
-  the per-destination watermarks the seed tool wrote for it, and the
+  the per-destination watermarks the seeding wrote for it, and the
   populator's log offsets. With an argument, any node.
 
 `bin/_common.sh` is sourced by all of them and needs bash.
@@ -193,8 +193,8 @@ running.
 
 A workgroup's real consumer group is `<base>-<workgroupId>-gen<generation>`.
 A generation change is a container swap: the old generation's groups go
-memberless, the new generation's start from the offsets the seed tool gave
-them, and both lines are on the lag panel. Lag alone is not enough to read
+memberless, the new generation's start from the offsets its first worker
+seeded them with, and both lines are on the lag panel. Lag alone is not enough to read
 health, because a wedged consumer holds its partitions with a lag that simply
 stops falling; read it next to the delivered rate.
 
