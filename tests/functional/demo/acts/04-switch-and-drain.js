@@ -214,8 +214,10 @@ function register(ctx) {
                     say(`the seeding put ${group} at `
                         + `${JSON.stringify(selfSeed.start)}, the lowest processor `
                         + 'offset per partition');
-                    act.measured('the seeding', 'done by the worker itself, '
-                        + `${selfSeed.waitedS}s after the layout was written`);
+                    act.measured('the seeding', seeders.length === 1
+                        ? 'done by the first worker to start, no command in '
+                          + 'the run'
+                        : `${seeders.length} workers say they did the seeding`);
                     assert.ok(selfSeed.watermarks,
                         'the worker did not seed itself: no watermarks in zookeeper');
                     assert.strictEqual(seeders.length, 1,

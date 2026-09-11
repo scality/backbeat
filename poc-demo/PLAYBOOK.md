@@ -282,6 +282,20 @@ path consumes it.
    destination's backlog, 280 records after the swap, of 280 operations in the whole load, delivered by the pool. Today that
    backlog sits behind a frozen offset until somebody notices.
 
+**2026-09-11, self seeding, `DEMO_ACTS=04`, 418 s.** No seeding command ran:
+the worker container took the lock at
+`/bnaas-demo/delivery-workgroups/seed-locks/gen1`, seeded itself from the
+three processor groups, wrote the watermarks and joined, and its log says
+`seeded itself`. Gaps 0, inversions 0, duplicates 13 (poc-dest-1 10,
+poc-dest-2 2, poc-dest-3 1), pause 20 s stop to first pool delivery, 151
+records skipped under the watermark, and the stalled destination's whole 280
+record backlog delivered after the swap. The duplicate count is higher than
+the 2 above because the caught-up processor was still delivering when the
+run stopped it, so its uncommitted window was wider; the class is the same
+and nothing came from the seeding. The watermarks the worker wrote were at
+or past the offsets the step 3 table printed a moment earlier, never behind
+them, which is the assertion the act now makes.
+
 The variant `DEMO_ACT04_WITHOUT_WATERMARK=1 DEMO_ACTS=04 yarn ft_test:demo`
 runs the same swap with `seedOnStart` off, the seeding CLI run ahead of the
 start, and the watermarks deleted before the worker reads them. It measures
@@ -371,6 +385,19 @@ Then what happens to it:
   - **What still stands**: a destination's per-object lanes deliver one record
     per producer poll, 2000 ms; and a kill or a cure restart re-delivers the
     worker's uncommitted window, at-least-once.
+
+**2026-09-11, self seeding, `DEMO_ACTS=04,06`, act 06 in 575 s.** The run
+carried no seeding command at all: generation 2 was seeded by one worker of
+three and generation 3 by one worker of four, each 4 s after its layout was
+written, each naming itself in its log. Every row of the verdict matched or
+was context. Gaps 0 over the whole act and 0 in the reshard window,
+inversions 0, 0 start-up wedge cures. Both pauses 21 s, stop to first
+delivery, with the self seed seen inside the 21 s worker start rather than
+before it. Reshard window duplicates 107; whole act 759, of which 475 across
+the generation 2 stop, 256 across the generation 1 stop, 28 across the wg-b
+kill, and 0 within a generation. The pauses are 2 s longer than the
+reference run above and the duplicate counts differ with the backlog at each
+stop; the loss row is the one that has to match, and it does.
 
 Captures to have ready: `poc-demo/evidence/screenshots/` (bnaas-grafana-act04-migration-topic-a.png, bnaas-zoonavigator-act04-watermarks-gen1.png, bnaas-kafkaui-act06-consumer-groups-topic-a.png and bnaas-grafana-act06-workgroup-lag-by-generation-topic-a.png, all captured live during the 11:07 reference run).
 

@@ -199,10 +199,12 @@ function register(ctx) {
                 + `${Object.keys(marks).length} destinations, groups starting at `
                 + `${JSON.stringify(selfSeed.start)}`);
             act.measured(`self seed, generation ${p.newGen}`,
-                selfSeed.watermarks
-                    ? `${seeders.length} worker of ${IDS[p.newGen].length} did it, `
-                      + `${selfSeed.waitedS}s after the layout was written`
-                    : 'no watermarks appeared in zookeeper');
+                selfSeed.watermarks && seeders.length === 1
+                    ? `one worker of ${IDS[p.newGen].length === 3 ? 'three'
+                        : 'four'} seeds the generation, no command in the run`
+                    : `${seeders.length} of ${IDS[p.newGen].length} workers say `
+                      + 'they did it, watermarks '
+                      + `${selfSeed.watermarks ? 'written' : 'missing'}`);
             assert.ok(selfSeed.watermarks,
                 `generation ${p.newGen} did not seed itself`);
             assert.strictEqual(seeders.length, 1,
