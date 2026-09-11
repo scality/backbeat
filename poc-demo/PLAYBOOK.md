@@ -44,8 +44,10 @@ From nothing to the demo. Each was executed on the build machine on
 # 1. clone the demo branch and enter it                             (11:05:45, 20 s)
 git clone --branch poc/S3C-11127-demo git@github.com:scality/backbeat.git && cd backbeat
 
-# 2. node 22 on PATH, then yarn 1 for that node (nvm keeps global packages per node version,
-#    so a fresh node 22 has no yarn); 24 breaks the native modules and the install.
+# 2. node 22 and yarn 1 on PATH. If `node --version` already prints v22.x and
+#    `yarn --version` prints 1.22.x, skip this step. nvm keeps global packages per
+#    node version, so a fresh node 22 has no yarn; 24 breaks the native modules.
+node --version || true
 nvm install 22 && nvm use 22 && npm install -g yarn
 
 # 3. install, with the one macOS/node-gyp workaround folded in      (11:06:05, 60 s)
