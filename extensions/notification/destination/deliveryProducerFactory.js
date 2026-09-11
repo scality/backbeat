@@ -1,5 +1,9 @@
 const DeliveryKafkaProducer = require('../deliveryWorker/DeliveryKafkaProducer');
 
+// the pure JS stacks that name their principal per client; anything else is
+// node-rdkafka
+const PURE_JS_KERBEROS_PRODUCERS = ['kafkajs', 'platformatic'];
+
 /**
  * Which producer serves a destination.
  *
@@ -12,12 +16,13 @@ const DeliveryKafkaProducer = require('../deliveryWorker/DeliveryKafkaProducer')
  *
  * @param {Object} destConfig - destination configuration
  * @param {string} kerberosProducer - configured stack for kerberos
- *   destinations, 'rdkafka' or 'kafkajs'
+ *   destinations, 'rdkafka', 'kafkajs' or 'platformatic'
  * @return {boolean} whether the pure JS kerberos producer should be used
  */
 function usesKerberosProducer(destConfig, kerberosProducer) {
     const auth = destConfig && destConfig.auth;
-    return kerberosProducer === 'kafkajs' && !!auth && auth.type === 'kerberos';
+    return PURE_JS_KERBEROS_PRODUCERS.includes(kerberosProducer)
+        && !!auth && auth.type === 'kerberos';
 }
 
 /**
@@ -36,7 +41,11 @@ function createDeliveryProducer(params) {
     const { destConfig, producerConfig, kerberosProducer } = params;
     if (usesKerberosProducer(destConfig, kerberosProducer)) {
         // required here so that a deployment leaving the flag off never loads
-        // the native GSSAPI binding
+        // the native GSSAPI binding or the second client library
+        if (kerberosProducer === 'platformatic') {
+            const PlatformaticKerberosProducer = require('./PlatformaticKerberosProducer');
+            return new PlatformaticKerberosProducer(producerConfig);
+        }
         const KerberosKafkaProducer = require('./KerberosKafkaProducer');
         return new KerberosKafkaProducer(producerConfig);
     }
@@ -46,4 +55,5 @@ function createDeliveryProducer(params) {
 module.exports = {
     createDeliveryProducer,
     usesKerberosProducer,
+    PURE_JS_KERBEROS_PRODUCERS,
 };

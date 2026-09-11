@@ -32,7 +32,7 @@ const constants = {
     // ticket to be in the credential cache collection already
     kerberosCredentialSources: ['keytab', 'ccache'],
     // producer stack serving kerberos destinations
-    kerberosProducers: ['rdkafka', 'kafkajs'],
+    kerberosProducers: ['rdkafka', 'kafkajs', 'platformatic'],
     // where the delivery workers read from: today's internal topic, matching
     // each event themselves, or the destination-keyed delivery topic
     deliveryPoolSources: ['internal', 'delivery'],

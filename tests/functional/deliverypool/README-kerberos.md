@@ -37,6 +37,7 @@ Expected, all overridable by environment variable:
 | `KRB_KDC_CONTAINER` | `bnaaskrb-kdc` | KDC container, for `kadmin.local` |
 | `KRB_REALM` | `SCALITY.TEST` | realm of both principals |
 | `KRB_SERVICE` | `kafka` | broker service name |
+| `KRB_PRODUCER` | `kafkajs` | pure JS stack the per-principal arms run on: `kafkajs` or `platformatic` |
 | `CONF_DIR` | none, required | its `ssl/` holds `notifa.keytab` and `notifb.keytab` |
 
 The broker needs `AclAuthorizer` with `allow.everyone.if.no.acl.found=false`,
@@ -44,6 +45,17 @@ The broker needs `AclAuthorizer` with `allow.everyone.if.no.acl.found=false`,
 `topic-b`, a broker principal `kafka/<broker host>`, and `topic-a`, `topic-b`
 created. Every container has to resolve the broker host the broker principal
 names, which is simplest with one shared network namespace.
+
+## Two pure JS stacks
+
+The per-principal producer exists twice, behind one factory switch,
+`deliveryPool.kerberosProducer`: `kafkajs` (`KerberosKafkaProducer`) and
+`platformatic` (`PlatformaticKerberosProducer`, on `@platformatic/kafka`).
+Both use the same GSSAPI exchange in `saslGssapi.js`; only the client's
+framing of the SaslAuthenticate bytes and its callback shape differ. kafkajs
+has not shipped a release since February 2023, which is why the second client
+is there. `KRB_PRODUCER=platformatic yarn ft_test:notification:kerberos` runs
+the same arms on it, so the two stacks produce comparable numbers on one rig.
 
 ## Running it
 

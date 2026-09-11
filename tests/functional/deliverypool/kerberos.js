@@ -37,6 +37,8 @@ const SERVICE_NAME = process.env.KRB_SERVICE || 'kafka';
 
 const ROUNDS = Number(process.env.KRB_ROUNDS || 9);
 const ROUND_MS = Number(process.env.KRB_ROUND_MS || 7000);
+// which pure JS stack the per-principal arms run on: kafkajs or platformatic
+const PURE_JS_PRODUCER = process.env.KRB_PRODUCER || 'kafkajs';
 const ARM_TIMEOUT = ROUNDS * ROUND_MS + 400000;
 
 // one second of docker log granularity, so an arm's slice never picks up the
@@ -295,7 +297,7 @@ function kinitCollection(collectionDir, cb) {
     }, cb);
 }
 
-describe('notification delivery pool, kerberos destinations', function kerberosSuite() {
+describe(`notification delivery pool, kerberos destinations on ${PURE_JS_PRODUCER}`, function kerberosSuite() {
     this.timeout(ARM_TIMEOUT);
 
     before(function checkRig(done) {
@@ -367,7 +369,7 @@ describe('notification delivery pool, kerberos destinations', function kerberosS
             const collectionDir = `/tmp/krb-arm-a-${RUN_ID}`;
             kinitCollection(collectionDir, kinitErr => {
                 assert.ifError(kinitErr);
-                pool = makePool({ kerberosProducer: 'kafkajs', credentialSource: 'ccache' });
+                pool = makePool({ kerberosProducer: PURE_JS_PRODUCER, credentialSource: 'ccache' });
                 runRounds(pool, { arm: 'A' }, (err, results) => {
                     assert.ifError(err);
                     brokerEvidence((logErr, principals) => {
@@ -383,7 +385,7 @@ describe('notification delivery pool, kerberos destinations', function kerberosS
 
     describe('arm B, client keytab with no kinit', () => {
         it('should obtain a ticket per principal without any kinit', done => {
-            pool = makePool({ kerberosProducer: 'kafkajs' });
+            pool = makePool({ kerberosProducer: PURE_JS_PRODUCER });
             runRounds(pool, { arm: 'B' }, (err, results) => {
                 assert.ifError(err);
                 brokerEvidence((logErr, principals) => {
@@ -478,7 +480,7 @@ describe('notification delivery pool, kerberos destinations', function kerberosS
 
     describe('arm E, broker restarts', () => {
         it('should re-authenticate as its own principal after every restart', done => {
-            pool = makePool({ kerberosProducer: 'kafkajs' });
+            pool = makePool({ kerberosProducer: PURE_JS_PRODUCER });
             let restarts = 0;
             const restartTimer = setInterval(() => {
                 restarts++;
@@ -537,7 +539,7 @@ describe('notification delivery pool, kerberos destinations', function kerberosS
                 // a pool per batch, so every batch starts from a fresh SASL
                 // handshake and a ticket that expired has to be obtained again
                 const batch = (arm, next) => {
-                    const batchPool = makePool({ kerberosProducer: 'kafkajs' });
+                    const batchPool = makePool({ kerberosProducer: PURE_JS_PRODUCER });
                     return runRounds(batchPool, {
                         arm, rounds: 3, roundMs: 12000,
                     }, (err, results) => batchPool.closeAll(
@@ -583,7 +585,7 @@ describe('notification delivery pool, kerberos destinations', function kerberosS
                     deliveryTimeoutMs: 30000,
                     producerIdleMs: 300000,
                     maxProducers: 60,
-                    kerberosProducer: 'kafkajs',
+                    kerberosProducer: PURE_JS_PRODUCER,
                 },
                 logger: log,
             });
