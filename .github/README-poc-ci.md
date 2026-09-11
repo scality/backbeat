@@ -1,3 +1,5 @@
+<!-- markdownlint-disable MD013 -->
+
 # Delivery pool suites in CI
 
 What the bucket-notification delivery pool work runs in GitHub Actions, on
@@ -65,7 +67,7 @@ KRB_KDC_CONTAINER=krb-kdc
 KRB5_CONFIG=$RUNNER_TEMP/krb/krb5.conf   # poc-demo/krb/krb5.conf plus an empty qualify_shortname
 ```
 
-One line differs from the rig's own `krb5.conf`: `qualify_shortname =` (empty).
+One line differs from the rig's own `krb5.conf`: `qualify_shortname = ""`.
 MIT krb5 1.18 and later append the machine's DNS domain to a single-label
 hostname before mapping it to a realm, so on a cloud runner `localhost`
 became `localhost.<runner domain>` and every client asked for a cross-realm

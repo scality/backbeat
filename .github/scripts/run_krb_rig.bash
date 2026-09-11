@@ -90,13 +90,14 @@ up() {
 # "localhost.<runner domain>", the realm became the uppercased runner domain,
 # and every client asked the KDC for a cross-realm ticket it does not have
 # ("Server krbtgt/<RUNNER DOMAIN>@SCALITY.TEST not found"). An empty
-# qualify_shortname keeps "localhost" as it is, which is what the broker
+# qualify_shortname (written as "" since a bare empty value does not parse)
+# keeps "localhost" as it is, which is what the broker
 # principal kafka/localhost and the domain_realm section name. Containers
 # never hit this because they have no search domain.
 write_krb5_conf() {
     awk '
         { print }
-        /^\[libdefaults\]/ { print "    qualify_shortname =" }
+        /^\[libdefaults\]/ { print "    qualify_shortname = \"\"" }
     ' "$KRB_SRC/krb5.conf" > "$KRB_DIR/krb5.conf"
     echo "--- $KRB_DIR/krb5.conf"; cat "$KRB_DIR/krb5.conf"
 }
