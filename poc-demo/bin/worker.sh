@@ -42,15 +42,31 @@ cf() { printf '%s\n' "$DEMO/run/worker$1.crashes"; }
 lf() { printf '%s\n' "$DEMO_LOG_DIR/worker$1.log"; }
 wpid() { cat "$(pf "$1")" 2>/dev/null | tr -d '\n '; }
 
+# A worker is identified on disk by its whole suffix, which this rig writes
+# as a number (worker3.pid) and the demo suite writes as a number and the
+# workgroup it serves (worker3-wg-a.pid). Every file is named by the whole
+# suffix; only the probe port is derived from the number. So split the two
+# rather than assume the suffix is a number: doing arithmetic on "3-wg-a"
+# made bash read `wg` as a variable and `status` died on every suite worker.
+widx() { printf '%s\n' "${1%%-*}"; }
+wwg()  { case "$1" in *-*) printf '%s\n' "${1#*-}" ;; *) printf '' ;; esac; }
+
 status_one() {
-    local n="$1" p port
-    p=$(wpid "$n"); port=$(worker_probe_port "$n")
+    local n="$1" p port i wg label
+    i=$(widx "$n"); wg=$(wwg "$n")
+    case "$i" in
+        ''|*[!0-9]*)
+            warn "worker$n: no worker number in the name, skipping"
+            return 0 ;;
+    esac
+    label="worker$n${wg:+  workgroup $wg}"
+    p=$(wpid "$n"); port=$(worker_probe_port "$i")
     if alive "$p"; then
-        say "worker$n RUNNING pid $p probe :$port live=$(worker_live "$n") delivered=$(worker_delivered "$n") exits=$(cnt "$(cf "$n")" ' EXIT rc=')"
-        say "  per destination: $(worker_metrics "$n" | grep '^s3_notification_delivery_worker_delivered_total' | sed -E 's/.*target="([^"]*)".*\} /\1=/' | tr '\n' ' ')"
+        say "$label RUNNING pid $p probe :$port live=$(worker_live "$i") delivered=$(worker_delivered "$i") exits=$(cnt "$(cf "$n")" ' EXIT rc=')"
+        say "  per destination: $(worker_metrics "$i" | grep '^s3_notification_delivery_worker_delivered_total' | sed -E 's/.*target="([^"]*)".*\} /\1=/' | tr '\n' ' ')"
         say "  assign/revoke:   $(cnt "$(lf "$n")" 'rdkafka.assign')/$(cnt "$(lf "$n")" 'rdkafka.revoke')"
     else
-        say "worker$n STOPPED$([ -f "$(hf "$n")" ] && printf ' (held dead)') exits=$(cnt "$(cf "$n")" ' EXIT rc=')"
+        say "$label STOPPED$([ -f "$(hf "$n")" ] && printf ' (held dead)') exits=$(cnt "$(cf "$n")" ' EXIT rc=')"
     fi
 }
 
@@ -137,17 +153,32 @@ signal)
 crashes) [ -n "$N" ] || die "usage: worker.sh crashes <n>"; cnt "$(cf "$N")" ' EXIT rc=' ;;
 status)
     if [ -n "$N" ]; then status_one "$N"; exit 0; fi
+    # every distinct pidfile, not every distinct worker number: the suite
+    # runs several workgroups at once and `sort -un` would fold worker3 and
+    # worker3-wg-a into one line and hide whichever it dropped. Ordered by
+    # number, then by workgroup.
     known=$(for f in "$DEMO"/run/worker*.pid "$DEMO"/run/worker*.crashes; do
         [ -e "$f" ] || continue
         n=$(basename "$f"); n=${n#worker}; printf '%s\n' "${n%%.*}"
-    done | sort -un)
+    done | sort -t- -k1,1n -k2,2 -u)
     if [ -z "$known" ]; then
         say "no worker has ever been started from this demo directory"
     else
         for n in $known; do status_one "$n"; done
     fi
-    say "delivery group $DELIVERY_GROUP:"
-    group_describe "$DELIVERY_GROUP" 2>/dev/null | sed 's/^/  /' | head -10
+    # The pool joins one group per workgroup, <base>-<workgroup>-gen<G>, and
+    # the bare base group only exists when workgroups are off. Describing the
+    # base one unconditionally printed a raw "group does not exist" from the
+    # broker on every workgroup run, so list whichever pool groups are there.
+    pool_groups=$(group_list | grep -E "^${DELIVERY_GROUP}(-|$)" || true)
+    if [ -z "$pool_groups" ]; then
+        say "no pool consumer group on the broker yet"
+    else
+        say "pool consumer groups:"
+        for g in $pool_groups; do
+            say "  $g  lag $(group_lag "$g")"
+        done
+    fi
     ;;
 *) die "usage: worker.sh start <n> [--workgroup <id>] | stop <n> | status | hold <n> | release <n> | signal <n> <SIG> | crashes <n>" ;;
 esac
