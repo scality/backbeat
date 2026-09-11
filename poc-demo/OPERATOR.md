@@ -268,6 +268,16 @@ crash loop to be worked around**. The message names the partitions with no
 committed offset, and joining anyway would replay the topic to every
 customer on it.
 
+## Not part of this: keeping the demo broker tidy
+
+`yarn demo:clean` is demo hygiene, not an operator procedure. It deletes the
+per-run topics and consumer groups the functional suites name after their
+own run (`ftint-`, `poc-bn-`) and never remove, so that the demo broker
+shows the shape of the model rather than a hundred leftovers. Nothing on a
+platform creates those names, and no Federation run should ever call it. The
+operator-facing half of the same fact is above: one topic the pipeline
+consumes, and a second one on the broker means the wrong model is deployed.
+
 ## The evidence behind this file
 
 Every number here comes from the POC rig on this branch. `poc-demo/PLAYBOOK.md`
