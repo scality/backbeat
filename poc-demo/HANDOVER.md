@@ -7,6 +7,9 @@ Written 2026-09-10 for whoever picks it up next. The stack is
 `poc-demo/`, the demo is `tests/functional/demo/`, and the measurements
 the acts compare themselves against are `poc-demo/results/`.
 
+The operator procedure, what one Federation `run.yml` renders, stops and
+starts and what to do when each part of it fails, is `poc-demo/OPERATOR.md`.
+
 ## Where this stands
 
 The bucket-notifications-as-a-service POC has done its job: the data plane is
@@ -120,6 +123,7 @@ poc-demo/
                             design critique. What the acts compare against.
   evidence/<act>/           what each act leaves behind. Not in git.
   README.md, HANDOVER.md    the stack, and this file
+  PLAYBOOK.md, OPERATOR.md  how to record the demo, and how Federation runs it
 tests/functional/demo/
   demo.js                   the entry point, `yarn ft_test:demo`
   acts/01..08               one file per act

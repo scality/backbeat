@@ -9,16 +9,22 @@ prints, what to point at in Grafana, Kafka UI and ZooNavigator, the numbers to
 expect, the caveats to say out loud, and how long each act takes; then
 troubleshooting and teardown.
 
+How Federation actually runs this against a platform, as one `run.yml` with
+nothing between its stop and its start, is `poc-demo/OPERATOR.md`.
+
 **The model, decided 2026-09-11.** The delivery workers read today's topic,
 `backbeat-bucket-notification`, the one the populator already writes one record
 per event to, and match each event against the bucket's rules per destination
 themselves, as a processor does. Production applies every change through
 Ansible, which stops the old containers and starts the new ones, so the
-migration and every workgroup layout change are container swaps with one step
-between them: the new worker groups are seeded from the committed offsets of
-what they replace (`bin/notificationDeliverySeed.js`), lowest per partition
-plus a watermark per destination. No second topic, no populator change, no
-drain, no barrier, no overlap, no return to per-destination processors. The
+migration and every workgroup layout change are plain container swaps: the
+new worker groups are seeded from the committed offsets of what they replace,
+lowest per partition plus a watermark per destination, and since 2026-09-11
+the workers do that themselves at start, so the run is stop, write, start
+with no command in between. `bin/notificationDeliverySeed.js` still exposes
+the same seeding for an operator who would rather run it ahead. No second
+topic, no populator change, no drain, no barrier, no overlap, no return to
+per-destination processors. The
 previous model (a destination-keyed delivery topic, a populator switch, a
 barrier cutover) and its 2026-09-10 numbers are kept under `poc-demo/results/`
 for reference and are not what this playbook records.
@@ -250,18 +256,25 @@ path consumes it.
    group's committed offset per partition first. That table is the whole
    argument for the next step: three groups, three different places in the
    same topic.
-4. **Part two: write the layout, seed the worker groups.** The act writes the
-   generation 1 document (one auto workgroup, since the migration is about
-   offsets, not slicing) and runs
-   `bin/notificationDeliverySeed.js seed-from-processors --generation 1`.
-   Read its table aloud: per partition the lowest processor offset, so nothing
-   is skipped, and a watermark per destination at its own processor's offset,
-   so nothing already delivered is sent again. **ZooNavigator**: the document
-   at `/bnaas-demo/delivery-workgroups` and its `watermarks/gen1` child.
-5. **Part three: start the worker container.** The act prints the delivery
-   pause when the first pool delivery lands: 21s, processors stopped to first pool delivery. Say what it is: the
-   container swap plus the group join, and 45 s of the join is the consumer
-   session by default.
+4. **Part two: write the layout.** The act writes the generation 1 document
+   (one auto workgroup, since the migration is about offsets, not slicing)
+   and stops. That is the whole of part two: **no seeding command runs**.
+   Say it out loud, because it is the point of the act: an Ansible run can
+   express stop, template, start, and nothing else.
+5. **Part three: start the worker container.** The worker finds its consumer
+   group empty, takes an ephemeral lock at
+   `/bnaas-demo/delivery-workgroups/seed-locks/gen1`, seeds every group of
+   the generation from the processor groups and writes the watermarks,
+   releases the lock, and only then subscribes. The act reads that evidence
+   back out of ZooKeeper and out of the worker's log, which says `seeded
+   itself`. Read the numbers aloud: per partition the lowest processor
+   offset, so nothing is skipped, and a watermark per destination at its own
+   processor's offset, so nothing already delivered is sent again.
+   **ZooNavigator**: the document at `/bnaas-demo/delivery-workgroups`, its
+   `watermarks/gen1` child and its `history/gen1` archive. The act then
+   prints the delivery pause when the first pool delivery lands: 21s, processors stopped to first pool delivery. Say what it is: the
+   container swap, about a second of seeding, and the group join, 45 s of
+   which is the consumer session by default.
 6. The check, per destination: gaps 0, inversions 0, duplicates the processors' uncommitted windows only: 2 (poc-dest-1 2, poc-dest-2 0, poc-dest-3 0). Point at **Grafana, "Records
    skipped under a watermark"**: those are the caught-up destination's
    already-delivered records being committed without a second delivery,
@@ -270,9 +283,11 @@ path consumes it.
    backlog sits behind a frozen offset until somebody notices.
 
 The variant `DEMO_ACT04_WITHOUT_WATERMARK=1 DEMO_ACTS=04 yarn ft_test:demo`
-runs the same swap with the watermarks deleted after seeding. It measures what
-the watermark saves: the spread between the processors' offsets, delivered
-twice. Measured once on 2026-09-11 (10:39, before the consumer fix): 258 records delivered twice against 30 with the watermark on the same swap, 0 lost, 0 inversions, pause 21 s; the stalled destination's 280 backlog records arrived either way.
+runs the same swap with `seedOnStart` off, the seeding CLI run ahead of the
+start, and the watermarks deleted before the worker reads them. It measures
+what the watermark saves, the spread between the processors' offsets
+delivered twice, and it is also the pass that keeps
+`bin/notificationDeliverySeed.js` covered. Measured once on 2026-09-11 (10:39, before the consumer fix): 258 records delivered twice against 30 with the watermark on the same swap, 0 lost, 0 inversions, pause 21 s; the stalled destination's 280 backlog records arrived either way.
 
 ### Act 06: workgroups, and ZooKeeper (540 s, rig W gates and C5r)
 
@@ -283,7 +298,11 @@ The act to slow down on. Say the topology is decided: the workers read
 so a worker commits records outside its slice without delivering them. No
 second topic, no populator change, no per-workgroup topics. And say how a
 change is applied: a layout change is a new generation, and a new generation
-is an Ansible run, containers stopped and started, with one seed step between.
+is an Ansible run, containers stopped and started, with nothing between them.
+The seeding is not a step. The first worker of the new generation to come up
+finds its group empty, takes a lock in ZooKeeper, seeds every group of the
+generation from the groups it inherits from, and the others wait for their
+own offsets before they join.
 
 With the ZooKeeper browser open, in this order:
 
@@ -317,12 +336,14 @@ Then what happens to it:
   hashmod one, so `poc-dest-1` is carved out of the hash space into its own
   workgroup with its own blast radius: the lever for a hostile tenant. The
   change runs in Ansible's order: stop generation 1, write the document,
-  `seed-from-generation --from 1 --to 2`, start generation 2. Pause measured:
+  start generation 2, and generation 2 seeds itself from generation 1's
+  groups as it comes up. Pause measured:
   19s: seed 5s, start 14s (0 wedge cures), first delivery 0s after start. Measured: served by the pinned workgroup only.
 - **A reshard, two auto workgroups to three**, generation 3, under traffic.
-  Same order. The seed tool takes, per partition, the lowest committed offset
-  across the generation 2 groups a new group inherits from, and a watermark
-  per destination at its previous owner's offset, so the destination that
+  Same order, and again no command between the stop and the start. The
+  seeding takes, per partition, the lowest committed offset across the
+  generation 2 groups a new group inherits from, and a watermark per
+  destination at its previous owner's offset, so the destination that
   changes owner keeps its place in the stream. Pause measured:
   19s: seed 5s, start 14s (0 wedge cures), first delivery 0s after start. In the reshard's own window: gaps 0, inversions 0, duplicates the stopped generation's window 573, cure re-deliveries 0, in the window 162; whole act: 952: 356 across the generation 1 stop, 573 across the generation 2 stop, 23 across the wg-b kill; 0 within a generation.
   - **Why loss is impossible**: every record either was delivered by the old
