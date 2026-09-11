@@ -599,14 +599,6 @@ class S3Mock extends TestConfigurator {
                 site: 'sf',
                 status: 'REPLICA',
                 dataStoreVersionId: '',
-            }, {
-                site: 'replicationaws',
-                status: 'PENDING',
-                dataStoreVersionId: '',
-            }, {
-                site: 'toazure',
-                status: 'PENDING',
-                dataStoreVersionId: '',
             }],
             content: replicatedContent,
             destination: this.getParam('source.md.replicationInfo.destination'),

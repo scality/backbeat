@@ -39,7 +39,7 @@ describe('QueueEntry helper class', () => {
                 'REPLICA');
             assert.strictEqual(
                 replica.getReplicationSiteStatus({ site: 'replicationaws' }),
-                'PENDING');
+                undefined);
             assert.strictEqual(replica.getReplicationStatus(), 'REPLICA');
 
             // If one site is FAILED, the global status should be FAILED
@@ -47,7 +47,7 @@ describe('QueueEntry helper class', () => {
             assert.strictEqual(failed.getReplicationSiteStatus({ site: 'sf' }),
                 'FAILED');
             assert.strictEqual(
-                replica.getReplicationSiteStatus({ site: 'replicationaws' }),
+                failed.getReplicationSiteStatus({ site: 'replicationaws' }),
                 'PENDING');
             assert.strictEqual(failed.getReplicationStatus(), 'FAILED');
 
