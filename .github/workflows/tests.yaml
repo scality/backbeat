@@ -156,7 +156,6 @@ jobs:
     needs: build
     name: ${{ matrix.testsuite }} tests
     runs-on: ubuntu-latest
-    continue-on-error: ${{ matrix.experimental == true }}
     strategy:
       fail-fast: false
       matrix:
@@ -181,20 +180,17 @@ jobs:
             runner: run_ft_tests.bash
           # delivery pool suites (bucket notifications as a service): they need
           # only the kafka, zookeeper and mongo services this job already has.
-          # experimental: they still hit two pre-existing BackbeatConsumer
-          # defects (the start-up assign/revoke wedge and the unguarded
-          # subscription() call in the commit path that throws "Local:
-          # Erroneous state"), so their failures do not fail the workflow yet.
-          # Drop the flag once those fixes land in lib/BackbeatConsumer.js.
+          # They block the workflow like every other entry here. The two
+          # pre-existing BackbeatConsumer defects they run into, the start-up
+          # assign/revoke wedge and the subscription() call in the commit
+          # path, are observed and retried by the suites themselves rather
+          # than left to fail a run.
           - testsuite: notification:deliverypool
             runner: run_ft_tests.bash
-            experimental: true
           - testsuite: notification:workgroups
             runner: run_ft_tests.bash
-            experimental: true
           - testsuite: notification:internal
             runner: run_ft_tests.bash
-            experimental: true
     services:
       redis:
         image: redis:alpine
@@ -407,8 +403,6 @@ jobs:
     name: notification:kerberos tests
     runs-on: ubuntu-latest
     timeout-minutes: 40
-    # experimental, like the other delivery pool suites: see functional-tests
-    continue-on-error: true
     steps:
     - name: Checkout
       uses: actions/checkout@v4

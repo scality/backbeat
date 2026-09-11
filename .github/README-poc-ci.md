@@ -6,16 +6,31 @@ What the bucket-notification delivery pool work runs in GitHub Actions, on
 top of the jobs every branch already has (lint, unit, the functional matrix,
 ballooning, queue populator).
 
-| job | suite | what it proves | needs |
-|---|---|---|---|
-| `notification:deliverypool tests` | `yarn ft_test:notification:deliverypool` | one worker delivering to many destinations, drops counted by reason, the drainer | kafka, zookeeper, mongo (job services) |
-| `notification:workgroups tests` | `yarn ft_test:notification:workgroups` | workgroups as consumer groups with a slice filter, pins, generation changes, seeded offsets | same |
-| `notification:internal tests` | `yarn ft_test:notification:internal` | the worker on today's internal topic: per-destination matching, seeding from processor offsets, per-destination watermarks, a bucket configured after start | same |
-| `notification:kerberos tests` | `yarn ft_test:notification:kerberos` | one worker process authenticating as several Kerberos principals, ACL-checked | a KDC and a kerberised broker, built and started by the job |
+| job | suite | what it proves | needs | status |
+|---|---|---|---|---|
+| `notification:deliverypool tests` | `yarn ft_test:notification:deliverypool` | one worker delivering to many destinations, drops counted by reason, the drainer | kafka, zookeeper, mongo (job services) | blocking |
+| `notification:workgroups tests` | `yarn ft_test:notification:workgroups` | workgroups as consumer groups with a slice filter, pins, generation changes, seeded offsets | same | blocking |
+| `notification:internal tests` | `yarn ft_test:notification:internal` | the worker on today's internal topic: per-destination matching, seeding from processor offsets, per-destination watermarks, a bucket configured after start | same | blocking |
+| `notification:kerberos tests` | `yarn ft_test:notification:kerberos` | one worker process authenticating as several Kerberos principals, ACL-checked | a KDC and a kerberised broker, built and started by the job | blocking |
 
 The unit specs for the same code run in the `unit` job with everything else.
 The demo suite under `tests/functional/demo` is not in CI on purpose: it
 drives a full stack for about an hour and exists to be watched.
+
+## Blocking
+
+All four block the workflow. They were introduced carrying
+`continue-on-error`, so that a red one was visible on the run page without
+failing the run while the last timing and Kerberos races were taken out of
+them, and the flags came off once each had five consecutive green runs on
+this branch. Nothing in the delivery pool work is experimental any more: a
+red POC job now fails the workflow like `replication` or `lifecycle` does.
+
+Two reds seen on this branch come from outside these suites and from outside
+the delivery pool code: `lib tests` failed the BackbeatConsumer shutdown spec
+once and passed on the runs either side of it, and `queue-populator` failed
+once in `yarn install`, building `diskusage` against corrupted node-gyp
+headers on the runner.
 
 ## The first three
 
@@ -67,6 +82,21 @@ KRB_KDC_CONTAINER=krb-kdc
 KRB5_CONFIG=$RUNNER_TEMP/krb/krb5.conf   # poc-demo/krb/krb5.conf plus an empty qualify_shortname
 ```
 
+Locally on a Linux box with docker, the rig script does all of that:
+
+```bash
+.github/scripts/run_krb_rig.bash up
+.github/scripts/run_krb_rig.bash probe
+CONF_DIR=/tmp/krb KRB5_CONFIG=/tmp/krb/krb5.conf KRB_BROKERS=localhost:19095 \
+  KRB_VERIFY_BROKERS=localhost:19096 KRB_KAFKA_CONTAINER=krb-kafka \
+  KRB_KDC_CONTAINER=krb-kdc yarn ft_test:notification:kerberos
+.github/scripts/run_krb_rig.bash down
+```
+
+`KRB_DIR` defaults to `$RUNNER_TEMP/krb` and falls back to `/tmp/krb` off a
+runner. On a Mac there is no host networking, so run the suite in a container
+as `tests/functional/deliverypool/README-kerberos.md` describes.
+
 One line differs from the rig's own `krb5.conf`: `qualify_shortname = ""`.
 MIT krb5 1.18 and later append the machine's DNS domain to a single-label
 hostname before mapping it to a realm, so on a cloud runner `localhost`
@@ -76,11 +106,18 @@ this. The `probe` step (`kinit` from the keytab, then `kvno -S kafka
 localhost`, both with `KRB5_TRACE`) fails fast if the runner's Kerberos
 resolution is wrong, before the 20-minute suite starts.
 
-All four delivery pool jobs are marked experimental (`continue-on-error`):
-they still run into two pre-existing `BackbeatConsumer` defects, the start-up
-assign/revoke wedge and the unguarded `subscription()` call in the commit
-path that throws `Local: Erroneous state`, so a red job is visible on the run
-page but does not fail the workflow. Remove the flags when those fixes land.
+### Arm C, the collision control
+
+Arm C is the control that says what the shipping node-rdkafka producer does
+with two principals in one process: librdkafka passes `GSS_C_NO_CREDENTIAL`,
+so every GSSAPI handshake authenticates as whatever principal the process
+default credential cache holds, and `sasl.kerberos.principal` only renders
+the `kinit` command librdkafka runs per client through `system()`. Two
+clients created back to back therefore race to write that one cache, so the
+arm populates it once and puts a `kinit` that does nothing ahead of the real
+one on `PATH`: both producers then authenticate as `notifa`, and the
+destination that needs `notifb` is denied every record with a topic
+authorization failure.
 
 The rig's container logs are uploaded as the `kerberos-rig-logs` artifact on
 every run. `tests/functional/deliverypool/README-kerberos.md` describes the
