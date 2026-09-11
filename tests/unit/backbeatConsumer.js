@@ -157,6 +157,91 @@ describe('backbeatConsumer', () => {
         });
     });
 
+    describe('reads of the client state that must never throw', () => {
+        let consumer;
+        let warn;
+
+        beforeEach(() => {
+            consumer = new BackbeatConsumerMock({
+                kafka,
+                groupId: 'unittest-group',
+                topic: 'my-test-topic',
+            });
+            warn = sinon.stub(consumer._log, 'warn');
+        });
+
+        afterEach(() => {
+            sinon.restore();
+        });
+
+        function erroneousClient(extra) {
+            const err = new Error('Local: Erroneous state');
+            err.code = -172;
+            return Object.assign({
+                isConnected: () => true,
+                subscription: () => { throw err; },
+                assignments: () => { throw err; },
+                offsetsStore: sinon.stub(),
+                pause: sinon.stub(),
+                resume: sinon.stub(),
+            }, extra || {});
+        }
+
+        it('should report paused, not throw, when subscription() throws', () => {
+            consumer._consumer = erroneousClient();
+            assert.strictEqual(consumer.isPaused(), true);
+            assert.strictEqual(consumer.getServiceStatus(), false);
+            assert(warn.called);
+        });
+
+        it('should report paused when there is no connected client', () => {
+            consumer._consumer = null;
+            assert.strictEqual(consumer.isPaused(), true);
+            consumer._consumer = erroneousClient({ isConnected: () => false });
+            assert.strictEqual(consumer.isPaused(), true);
+            assert(warn.notCalled, 'nothing to warn about, the client is simply down');
+        });
+
+        it('should not store an offset, and not throw, from onEntryCommittable on an erroneous client', () => {
+            const client = erroneousClient();
+            consumer._consumer = client;
+            const entry = { topic: 'my-test-topic', partition: 0, offset: 7 };
+            consumer._offsetLedger.onOffsetConsumed(entry.topic, entry.partition, entry.offset);
+            assert.doesNotThrow(() => consumer.onEntryCommittable(entry));
+            assert(client.offsetsStore.notCalled);
+        });
+
+        it('should swallow and log an offsetsStore() throw instead of taking the process down', () => {
+            const err = new Error('Local: Erroneous state');
+            const client = erroneousClient({
+                subscription: () => ['my-test-topic'],
+                offsetsStore: sinon.stub().throws(err),
+            });
+            consumer._consumer = client;
+            const entry = { topic: 'my-test-topic', partition: 0, offset: 7 };
+            consumer._offsetLedger.onOffsetConsumed(entry.topic, entry.partition, entry.offset);
+            assert.doesNotThrow(() => consumer.onEntryCommittable(entry));
+            assert(client.offsetsStore.calledOnce);
+            assert(warn.calledWithMatch('could not store the committable offset'));
+        });
+
+        it('should not throw from the pause and resume paths when assignments() throws', () => {
+            const client = erroneousClient();
+            consumer._consumer = client;
+            assert.doesNotThrow(() => consumer._pauseAssignments());
+            assert.doesNotThrow(() => consumer._resumePausedPartitions());
+            assert(client.pause.notCalled);
+            assert(client.resume.notCalled);
+        });
+
+        it('should subscribe again on resume when the subscription cannot be read', () => {
+            const client = erroneousClient({ subscribe: sinon.stub() });
+            consumer._consumer = client;
+            assert.doesNotThrow(() => consumer.resume('site'));
+            assert(client.subscribe.calledOnceWith(['my-test-topic']));
+        });
+    });
+
     describe('sequentialy consume from topic', () => {
         let consumer;
 
