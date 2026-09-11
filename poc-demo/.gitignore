@@ -10,3 +10,4 @@ krb/krb5.conf.host
 
 # Rendered from cloudserver/config.json.tmpl by bin/stack-up.sh.
 cloudserver/config.json
+evidence-*/

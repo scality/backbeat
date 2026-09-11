@@ -694,7 +694,33 @@ machine.
 
 ## What has been run, and what has not
 
-**Update, 2026-09-11.** The authoritative record is now `PLAYBOOK.md`: one
+**Update, 2026-09-11 afternoon (today's topic, the decided model).** The
+authoritative record is `PLAYBOOK.md`. One `yarn ft_test:demo` over all eight
+acts from a fresh clone at 75a60958 (11:07:58 to 11:57:16 CEST, 48 min 18 s,
+15 mocha cases passing, zero wedge cures after the consumer fix c27b0f28): 02
+25 of 25 with 0/0/0; 03 every row including the new shared-partition commit
+row (healthy 5 of 5 at t+13 s, lag 0 at t+31 s); 04 the migration as one run,
+0 lost, 0 inversions, 2 duplicates, 21 s pause, 163 records skipped under the
+watermark, the stalled destination's 280 backlog records delivered; 05 0 lost
+on two populator kills (checkpoint window 135 republished) and a worker kill
+(19 of a 42-record window, 45 s failover); 06 mapping, isolation, pin, two
+seeded layout changes at 19 s pause each, 0 lost, 0 inversions, duplicates
+decomposed (356 and 573 across the two generation stops, the contiguous-commit
+window); 07 two Kerberos identities in one process, 8 arms; 08 detach 0 of 20
+on both paths, fan-out yes on both, collision 12 of 12. Act 01's unit row shows
+5 failures that are MongoDB-connection timeouts in `patchConfiguration` and
+`OplogPopulator`, not POC code. The recording cut and its measured time are in
+the PLAYBOOK. The pre-fix samples of the same morning (act 04 429 s, act 06
+1178 s and 941 s with 12 and 13 wedge cures, act 05 424 s) are kept in
+`PLAYBOOK.md` as history.
+
+CI: the four delivery pool suites run on every push (see
+`.github/README-poc-ci.md`); deliverypool and internal are green, workgroups
+and kerberos carry known timing and control failures and are marked
+experimental until the BackbeatConsumer fixes land. Last run:
+<https://github.com/scality/backbeat/actions/runs/34582649670>.
+
+**Update, 2026-09-11 morning (the previous model).** The record then was: one
 uninterrupted `yarn ft_test:demo` over all eight acts from a fresh clone
 (82 min 50 s; acts 01 to 04 green, the rest red for harness or host-pressure
 reasons, none of them loss), followed by fixes and a rehearsal of the recording
