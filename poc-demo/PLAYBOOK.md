@@ -24,7 +24,9 @@ the workers do that themselves at start, so the run is stop, write, start
 with no command in between. `bin/notificationDeliverySeed.js` still exposes
 the same seeding for an operator who would rather run it ahead. No second
 topic, no populator change, no drain, no barrier, no overlap, no return to
-per-destination processors. The
+per-destination processors. The broker is made to say so: since 2026-09-11
+`bin/topics-create.sh` no longer creates `bucket-notification-delivery`, the
+retired destination-keyed topic, and `.env` no longer names it. The
 previous model (a destination-keyed delivery topic, a populator switch, a
 barrier cutover) and its 2026-09-10 numbers are kept under `poc-demo/results/`
 for reference and are not what this playbook records.
@@ -57,6 +59,10 @@ yarn demo:up:krb
 
 # 6. block until broker, mongo PRIMARY, CloudServer and Grafana answer   (11:07:57, ready in 1 s)
 yarn demo:wait
+
+# 6b. remove what earlier functional-suite runs left on the broker, so Kafka UI
+#     shows the demo's topics and nothing else                      (11:36, 90 topics and 44 groups removed)
+yarn demo:clean
 
 # 7. the take; about 38 min (DEMO_PACE=demo is the default)      (11:57:57 to 12:36:14, 38 min 17 s, 12 mocha cases passing)
 DEMO_ACTS=02,03,04,05,06,08 yarn ft_test:demo
@@ -92,6 +98,18 @@ the one to trust on a new machine: it names anything that will block a run.
   at 36 s under that pressure, and what followed (below) cost one workgroup its
   whole act. With the machine to itself the stack can also move to
   `PORT_OFFSET=0`.
+- **Clear the suite leftovers**: `yarn demo:clean`. The functional suites name
+  every topic and consumer group after the run that created it
+  (`ftint-<what>-<epoch>`, `poc-bn-<what>-<epoch>`) so two runs cannot collide,
+  and nothing removes them afterwards. A machine that has run them a few times
+  shows a hundred topics in Kafka UI beside the four that matter, and the first
+  question in the room becomes "so how many topics does this design need?".
+  One. After it, Kafka UI shows `backbeat-bucket-notification`,
+  `backbeat-bucket-notification-failed`, `backbeat-metrics`, the customer
+  topics, plus Kafka's own `__consumer_offsets` and the `backbeat-sanitycheck`
+  topic backbeat creates for itself. `yarn demo:clean --dry-run` lists what it
+  would remove first. It only ever touches those two prefixes, and it refuses
+  the demo's own topics by name on top of that.
 - **Disable system sleep**: `caffeinate -dimsu` in a spare terminal for the
   length of the recording. The containers survive a sleep, the consumer groups
   do not: they rebalance and a long act never recovers its narration.

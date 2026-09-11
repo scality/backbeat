@@ -25,7 +25,6 @@ status() {
         say "populator STOPPED"
     fi
     say "internal topic $INTERNAL_TOPIC head: $(head_total "$INTERNAL_TOPIC" 2>/dev/null || echo '?')"
-    say "delivery topic $DELIVERY_TOPIC head: $(head_total "$DELIVERY_TOPIC" 2>/dev/null || echo '?')"
     say "zookeeper log offset: $(zkget "$ZK_POPULATOR_PATH/logState/mongo_s3-recordlog/logOffset" 2>/dev/null | head -1)"
     say "log: $DEMO_LOG_DIR/populator-*.log"
 }
@@ -48,7 +47,10 @@ start)
     step "starting the populator on the $MODE path"
     say "config:    $CONFFILE"
     say "worktree:  $BACKBEAT_DIR"
-    say "publishes: $([ "$MODE" = pool ] && echo "$DELIVERY_TOPIC (addressed records)" || echo "$INTERNAL_TOPIC (legacy records)")"
+    # both paths publish to the one topic: with deliveryPool.source
+    # 'internal', the decided model, the populator's output is byte for byte
+    # what it is today and it does not know which path consumes it
+    say "publishes: $INTERNAL_TOPIC (one record per event, both paths)"
     say "log:       $LOG"
     tmux_send populator "export PATH=$NODE_BIN:\$PATH; cd $BACKBEAT_DIR && RIG_PIDFILE=$DEMO/run/populator.pid BACKBEAT_CONFIG_FILE=$CONFFILE BACKBEAT_QUEUEPOPULATOR_EXTENSIONS=notification node $SHIMS bin/queuePopulator.js 2>&1 | tee -a $LOG"
     printf '%s\n' "$MODE" > "$DEMO/run/populator.mode"

@@ -87,7 +87,7 @@ start)
     rm -f "$(hf "$N")"
     step "starting worker$N"
     say "config:     $CONFFILE"
-    say "topic:      $DELIVERY_TOPIC   group: ${WG:+${DELIVERY_GROUP}-$WG-gen<G>}${WG:-$DELIVERY_GROUP}"
+    say "topic:      $INTERNAL_TOPIC   group: ${WG:+${DELIVERY_GROUP}-$WG-gen<G>}${WG:-$DELIVERY_GROUP}"
     say "probe:      http://localhost:$(worker_probe_port "$N")/metrics  (/_/live, /_/ready)"
     say "log:        $(lf "$N")"
     say "exits:      $(cf "$N")   (the supervisor restarts it and counts every exit)"

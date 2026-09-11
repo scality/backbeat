@@ -22,7 +22,6 @@ if [ "$OUT" = "--watch" ]; then
         printf '\033[H\033[2J'
         printf 'bnaas demo   %s   offset %s   kafka %s\n\n' "$(now)" "$PORT_OFFSET" "$(kafka_container)"
         printf '%-34s %s\n' "$INTERNAL_TOPIC" "$(heads "$INTERNAL_TOPIC" | tr '\n' ' ')"
-        printf '%-34s %s\n' "$DELIVERY_TOPIC" "$(heads "$DELIVERY_TOPIC" | tr '\n' ' ')"
         for t in $(kbin kafka-topics.sh --bootstrap-server "$(BS)" --list 2>/dev/null | tr -d '\r' | grep '^customer-topic-'); do
             printf '%-34s %s\n' "$t" "$(heads "$t" | tr '\n' ' ')"
         done
@@ -43,7 +42,7 @@ if [ "$OUT" = "--watch" ]; then
     done
 fi
 
-TOPICS="$INTERNAL_TOPIC $DELIVERY_TOPIC $FAILED_TOPIC"
+TOPICS="$INTERNAL_TOPIC $FAILED_TOPIC"
 for t in $(kbin kafka-topics.sh --bootstrap-server "$(BS)" --list 2>/dev/null | tr -d '\r' | grep '^customer-topic-'); do
     TOPICS="$TOPICS $t"
 done

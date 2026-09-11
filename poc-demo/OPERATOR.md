@@ -58,7 +58,11 @@ Four things the role has to get right, and they are the only four:
   removed. Keep it for the life of the deployment; it costs nothing.
 - **`source` is `internal`**. The workers read the topic the populator
   already writes to. The populator is not touched by any of this, and its
-  container is not part of the run.
+  container is not part of the run. There is no second topic: `topic` under
+  `deliveryPool` names the same one, and a deployment that creates a
+  destination-keyed delivery topic is running the model this one replaced.
+  The broker should show one topic the pipeline consumes, its failed topic,
+  and the customers' own.
 - **`workgroups.zookeeperPath`** is the one node that decides the shape.
   The run writes it (see "a layout change" below) and every worker reads it.
 - **`DELIVERY_POOL_WORKGROUP_ID`** in each container's environment names the

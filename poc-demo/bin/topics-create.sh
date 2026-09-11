@@ -67,14 +67,18 @@ wait_leaders() {
 
 wait_for "kafka broker" 120 kafka_cli kafka-topics.sh --list
 
+# One topic the pipeline consumes: the one the populator already writes to.
+# The destination-keyed delivery topic the POC first built is retired and is
+# deliberately not created here, so the broker shows the shape of the
+# decided model. bin/clean-suite-topics.sh removes what the functional
+# suites leave beside it.
 create_topic "$LEGACY_TOPIC"   "$LEGACY_TOPIC_PARTITIONS"
 create_topic "$FAILED_TOPIC"   1
-create_topic "$DELIVERY_TOPIC" "$DELIVERY_TOPIC_PARTITIONS"
 for t in $CUSTOMER_TOPICS; do
     create_topic "$t" "$CUSTOMER_TOPIC_PARTITIONS"
 done
 
-for t in "$LEGACY_TOPIC" "$FAILED_TOPIC" "$DELIVERY_TOPIC" $CUSTOMER_TOPICS; do
+for t in "$LEGACY_TOPIC" "$FAILED_TOPIC" $CUSTOMER_TOPICS; do
     wait_leaders "$t"
 done
 

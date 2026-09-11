@@ -98,17 +98,24 @@ function resetKafka() {
             + 'pre-seed cleanly');
     }
 
-    // The two topics the pipeline CONSUMES are recreated, because leftover
+    // The topics the pipeline CONSUMES are recreated, because leftover
     // records there are read by a fresh consumer and counted as drops, and
     // because a stale committed offset on them reads exactly like a wedge.
     // The customer topics are only ever dumped from an offset each act
     // records for itself, so their history is harmless and keeping it saves
     // a minute of a recording. DEMO_RECREATE_TOPICS=all recreates those too.
+    // The decided model consumes one topic. The destination-keyed delivery
+    // topic belongs to the retired DEMO_SOURCE=delivery path, so it is only
+    // created when that path is the one being run: recreating it on every
+    // run would put a second topic back on the broker that nothing reads,
+    // and the first question in the room is how many topics this needs.
     const pipeline = [
         [env.INTERNAL_TOPIC, env.INTERNAL_PARTITIONS],
         [env.FAILED_TOPIC, 1],
-        [env.DELIVERY_TOPIC, env.DELIVERY_PARTITIONS],
     ];
+    if (env.SOURCE === 'delivery') {
+        pipeline.push([env.DELIVERY_TOPIC, env.DELIVERY_PARTITIONS]);
+    }
     const customer = env.CUSTOMER_TOPICS.map(t => [t, 1]);
     const all = env.knob('DEMO_RECREATE_TOPICS', '') === 'all';
     report.topics = kafka.recreateTopics(all ? pipeline.concat(customer)

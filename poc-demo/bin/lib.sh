@@ -91,7 +91,10 @@ BACKBEAT_API_PORT=${BACKBEAT_API_PORT:-$((8901 + PORT_OFFSET))}
 PROJECT=${COMPOSE_PROJECT_NAME:-bnaasdemo}
 INTERNAL_TOPIC=${INTERNAL_TOPIC:-${LEGACY_TOPIC:-backbeat-bucket-notification}}
 FAILED_TOPIC=${FAILED_TOPIC:-backbeat-bucket-notification-failed}
-DELIVERY_TOPIC=${DELIVERY_TOPIC:-bucket-notification-delivery}
+# No DELIVERY_TOPIC here. The decided model consumes one topic, the one the
+# populator already writes to, and nothing in bin/ names a second one. The
+# retired DEMO_SOURCE=delivery path of the demo suite keeps its own default
+# in tests/functional/demo/lib/env.js.
 DELIVERY_GROUP=${DELIVERY_GROUP:-bucket-notification-delivery-group}
 LEGACY_GROUP_PREFIX=${LEGACY_GROUP_PREFIX:-bnaas-demo-notification-group}
 ZK_POPULATOR_PATH=${ZK_POPULATOR_PATH:-/bnaas-demo/queue-populator}
@@ -220,7 +223,7 @@ group_list()     { kbin kafka-consumer-groups.sh --bootstrap-server "$(BS)" --li
 # reaches zero and reads exactly like a wedge. Every figure is per topic.
 group_topic_of() {
     case "$1" in
-        "$DELIVERY_GROUP"*)      printf '%s\n' "$DELIVERY_TOPIC" ;;
+        "$DELIVERY_GROUP"*)      printf '%s\n' "$INTERNAL_TOPIC" ;;
         "$LEGACY_GROUP_PREFIX"*) printf '%s\n' "$INTERNAL_TOPIC" ;;
         bn-replay-*)             printf '%s\n' "$INTERNAL_TOPIC" ;;
         *)                       printf '' ;;

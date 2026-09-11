@@ -130,9 +130,16 @@ All idempotent, all read `.env`, all print what they do.
   S3, and grafana answers its health endpoint. For the suite's before-hook:
   quiet on success, names the missing piece on failure, exit 1.
 - **`bin/topics-create.sh`** Today's internal topic (P=4), the failed topic
-  (P=1), the customer topics (P=1) and, for reference runs of the previous
-  model, the delivery topic (P=3), then proves every partition has a leader
-  three consecutive times.
+  (P=1) and the customer topics (P=1), then proves every partition has a
+  leader three consecutive times. The decided model consumes one topic, so
+  the destination-keyed `bucket-notification-delivery` of the previous model
+  is no longer created and `.env` no longer names it.
+- **`bin/clean-suite-topics.sh [--dry-run] [--prefix P]`** Delete the per-run
+  topics and consumer groups the functional suites leave behind (`ftint-`,
+  `poc-bn-`), so Kafka UI shows the demo's own topics and nothing else. Also
+  `yarn demo:clean`. It touches those prefixes only, and refuses the demo's
+  own topics by name on top of that. Run it before a take, not during one: a
+  group with a live member is left alone and said so.
 - **`bin/mongo-init.sh`** Initiate replica set `rs0` with the member host
   pinned to the port mongod actually runs on.
 - **`bin/zk-show.sh [znode]`** The workgroups document pretty-printed, the
