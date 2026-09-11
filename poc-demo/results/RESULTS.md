@@ -5,6 +5,12 @@
 
 # BNaaS migration edge-case experiments - results
 
+> The previous model, measured 2026-09-09 and 2026-09-10: a destination-keyed
+> delivery topic, a populator switch and a barrier cutover. On 2026-09-11 the
+> workers moved to today's topic and every change became a seeded container
+> swap; the measurements of that model are in `poc-demo/PLAYBOOK.md`. Kept
+> here because the findings that do not depend on the topic still stand.
+
 Rig: `~/capsule-corp/bnaas-poc/rig` (see `README.md` for how it
 runs). Code under test: worktree
 `~/capsule-corp/scality/backbeat-wg-merge` @ `poc/S3C-11127-workgroups`.

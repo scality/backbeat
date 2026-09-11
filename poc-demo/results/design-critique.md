@@ -4,6 +4,12 @@
 
 # BNaaS design critique and question bank (2026-09-09, draft 2, code-verified)
 
+> The previous model, measured 2026-09-09 and 2026-09-10: a destination-keyed
+> delivery topic, a populator switch and a barrier cutover. On 2026-09-11 the
+> workers moved to today's topic and every change became a seeded container
+> swap; the measurements of that model are in `poc-demo/PLAYBOOK.md`. Kept
+> here because the findings that do not depend on the topic still stand.
+
 Scope: Citadel PR scality/citadel#383 at 68daf530 (Taylor's 2026-09-07 restructure of Anurag's July design), read against the product requirements in PR #373, the Citadel standards folder at b233fd1, the July scale test, and the August/September POC on `poc/S3C-11127-workgroups`. Code facts below were verified line by line on backbeat `development/9.3` @ dd3cb0d4, CloudServer `development/9.3` @ 4628dd2ad (Arsenal 8.4.11 installed), node-rdkafka 2.18.0 / librdkafka 2.3.0. Full verification reports: `scratchpad/verify-backbeat-legacy.md`, `verify-cloudserver-api.md`, `survey-kerberos-e2e.md`, `survey-poc-vs-design.md` (copied to `gw2cto/reports/`).
 
 ## 0. The things to fix before the CTO reads anything

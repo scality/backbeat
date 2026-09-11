@@ -184,9 +184,11 @@ already depends on, so it needs nothing the repository does not install.
    processes were started with has an extensions.notification.deliveryPool
    block. No rebuild, no image change, no repo change.
 
-   ZooKeeper holds two things the demo shows: the populator's log offset,
-   which is its checkpoint, and the workgroups document, which carries the
-   generation, the slices, the pins and the barrier offsets.
+   ZooKeeper holds three things the demo shows: the populator's log offset,
+   which is its checkpoint, the workgroups document, which carries the
+   generation, the slices and the pins, and under it the per-destination
+   watermarks the seed tool writes for each generation (and a copy of each
+   generation's document under history/).
 
    Observability: each worker exposes /metrics, /_/live and /_/ready on its
    own port, bound 0.0.0.0; prometheus scrapes those plus kafka-exporter;
@@ -194,6 +196,17 @@ already depends on, so it needs nothing the repository does not install.
 ```
 
 ## What is proven
+
+**Read this first (2026-09-11).** The model changed on 2026-09-11: the
+workers now read today's topic and every migration or layout change is a
+seeded container swap. The measurements of that model, act by act, are in
+`PLAYBOOK.md` and nowhere else. Everything in this section and in
+`poc-demo/results/` was measured on the previous model (a destination-keyed
+delivery topic, a populator switch, a barrier cutover) on 2026-09-09 and
+2026-09-10. The findings that do not depend on the topic (the ARN collision,
+the shared-consumer defects, the Kerberos gate, the populator checkpoint
+window, the dead-destination stall) carry over unchanged; the migration and
+cutover procedures below do not.
 
 Full write-ups, with procedures and per-key evidence, are in
 `poc-demo/results/RESULTS.md`, which is copied into `poc-demo/`. Two published summaries:
@@ -292,7 +305,8 @@ ordered in `poc-demo/results/design-critique.md` section 5, with the paste-ready
 comments in `~/capsule-corp/bnaas-poc/gw2cto/04-pr383-review-comments.md`. The big three: the engine is
 a backbeat delivery worker in Node and not a Go binary; the workgroups section
 describes a sibling of the mechanism that was built and measured, and the
-built one is now the decided topology; and the first-match-wins requirement
+decided topology (2026-09-11) is workgroups as consumer groups over today's
+topic with layout changes applied as seeded container swaps; and the first-match-wins requirement
 should be dropped in favour of today's fan-out, since shipping it literally
 would be a silent behaviour change.
 
@@ -669,7 +683,8 @@ machine.
 | `tests/functional/demo/lib/procs.js` | the shim list, the three environment variables a worker is handed, the two second auto-restart delay and the six second SIGTERM grace before KILL |
 | `tests/functional/demo/lib/wait.js` | the sixty second stall limit that calls a wedge, and the poll intervals |
 | `tests/functional/demo/acts/03-dead-destination.js` | which destination plays which failure class, the leaderless topic and its `--replica-assignment 99`, and the stall watch default |
-| `tests/functional/demo/acts/06-workgroups.js` | the hashmod modulo and the remainder split, which follow from the md5 of those five destination names: rename a destination and the mapping changes |
+| `tests/functional/demo/acts/06-workgroups.js` | the hashmod modulo and the remainder split, which follow from the md5 of those five destination names: rename a destination and the mapping changes; the three layouts it writes as generations 1, 2 and 3 |
+| `tests/functional/demo/acts/04-switch-and-drain.js` | which destination is frozen, stopped and caught up before the swap, the single-workgroup generation 1 layout, and the duplicate bound (three processors, about 2 operations a second each, a 5 s auto-commit, twice that) |
 | `tests/functional/demo/acts/01-code-and-tests.js` | the file map, the expected suite counts, and that the three gated functional suites need `PORT_OFFSET=0`. The branch names are read off the repository, not hardcoded. |
 | `tests/functional/demo/acts/07-kerberos.js` | the krb container names, the test image, the node_modules volume, and where the keytabs and krb5.conf are |
 | `poc-demo/bin/lib.sh` | the same ports and names again, for the operator scripts |
