@@ -66,6 +66,7 @@ class WorkgroupConfigLoader {
         this._ownsClient = !params.zkClient;
         this._validate = params.validate || null;
         this._doc = null;
+        this._source = null;
         this._watchArmed = false;
         this._boundWatcher = event => this._watcher(event);
     }
@@ -133,6 +134,18 @@ class WorkgroupConfigLoader {
                         this._accept(doc, 'zookeeper', done));
                 });
         });
+    }
+
+    /**
+     * The zookeeper client this loader connected, so a start-up step that
+     * also needs zookeeper does not open a second session. Null unless the
+     * document was really read from zookeeper: a worker that fell back to
+     * its on-disk cache has no usable session.
+     *
+     * @return {Object|null} zookeeper client
+     */
+    getZkClient() {
+        return this._source === 'zookeeper' ? this._zkClient : null;
     }
 
     /**
@@ -205,6 +218,7 @@ class WorkgroupConfigLoader {
      */
     stop(done) {
         this._watchArmed = false;
+        this._source = null;
         if (this._zkClient && this._ownsClient) {
             this._zkClient.close();
         }
@@ -369,6 +383,7 @@ class WorkgroupConfigLoader {
      */
     _accept(doc, source, done) {
         this._doc = doc;
+        this._source = source;
         workgroupGeneration.set({
             workgroup: this._workgroupId,
             source,

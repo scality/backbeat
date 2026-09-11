@@ -71,28 +71,22 @@ function _getPartitions(consumer, topic, done) {
 }
 
 /**
- * Assert that a pre-seeded consumer group still has its offsets
- *
- * An empty group's offsets expire after the broker's
- * offsets.retention.minutes, counted from when the group became empty. A
- * worker joining a group whose pre-seed expired would start from the
- * delivery topic's low watermark, because fromOffset is 'earliest', and
- * replay everything the previous generation already delivered.
+ * Reads what a consumer group has committed on every partition of a topic,
+ * without joining it: the group stays Empty and keeps its offsets.
  *
  * @param {Object} params - params
  * @param {Object} params.kafkaConfig - kafka configuration object
- * @param {String} params.topic - unprefixed delivery topic name
- * @param {String} params.groupId - consumer group the worker will join
- * @param {Object} [params.barriers] - barrier offsets by partition
- * @param {String} [params.seedCommand] - the command to name when the group
- *   is not seeded, defaults to the cutover tool's preseed
- * @param {Logger} params.logger - werelogs logger
+ * @param {String} params.topic - unprefixed topic name
+ * @param {String} params.groupId - consumer group to read
  * @param {Object} [params.consumer] - node-rdkafka consumer, for tests
- * @param {Function} done - callback: done(err)
+ * @param {Logger} params.logger - werelogs logger
+ * @param {Function} done - callback: done(err, { topic, partitions, offsets,
+ *   unseeded }), where unseeded lists the partitions with no usable
+ *   committed offset
  * @return {undefined}
  */
-function assertSeededOffsets(params, done) {
-    const { topic, groupId, barriers, logger } = params;
+function readCommittedState(params, done) {
+    const { topic, groupId } = params;
     const prefixedTopic = withTopicPrefix(topic);
     const doneOnce = jsutil.once(done);
     return _withOffsetReader(params, (consumer, next) =>
@@ -128,6 +122,47 @@ function assertSeededOffsets(params, done) {
             return typeof offset !== 'number' || !Number.isFinite(offset) ||
                 offset < 0;
         });
+        return doneOnce(null, {
+            topic: prefixedTopic,
+            partitions: result.partitions,
+            offsets,
+            unseeded,
+        });
+    });
+}
+
+/**
+ * Assert that a pre-seeded consumer group still has its offsets
+ *
+ * An empty group's offsets expire after the broker's
+ * offsets.retention.minutes, counted from when the group became empty. A
+ * worker joining a group whose pre-seed expired would start from the
+ * delivery topic's low watermark, because fromOffset is 'earliest', and
+ * replay everything the previous generation already delivered.
+ *
+ * @param {Object} params - params
+ * @param {Object} params.kafkaConfig - kafka configuration object
+ * @param {String} params.topic - unprefixed delivery topic name
+ * @param {String} params.groupId - consumer group the worker will join
+ * @param {Object} [params.barriers] - barrier offsets by partition
+ * @param {String} [params.seedCommand] - the command to name when the group
+ *   is not seeded, defaults to the cutover tool's preseed
+ * @param {Logger} params.logger - werelogs logger
+ * @param {Object} [params.consumer] - node-rdkafka consumer, for tests
+ * @param {Function} done - callback: done(err)
+ * @return {undefined}
+ */
+function assertSeededOffsets(params, done) {
+    const { groupId, barriers, logger } = params;
+    const doneOnce = jsutil.once(done);
+    return readCommittedState(params, (err, state) => {
+        if (err) {
+            return doneOnce(err);
+        }
+        const prefixedTopic = state.topic;
+        const offsets = state.offsets;
+        const unseeded = state.unseeded;
+        const result = { partitions: state.partitions };
         if (unseeded.length > 0) {
             return doneOnce(errors.InternalError.customizeDescription(
                 `consumer group ${groupId} has no committed offset on ` +
@@ -168,4 +203,5 @@ function assertSeededOffsets(params, done) {
 
 module.exports = {
     assertSeededOffsets,
+    readCommittedState,
 };

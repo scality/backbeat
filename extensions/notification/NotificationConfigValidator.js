@@ -146,6 +146,16 @@ const joiSchema = joi.object({
         // a rule defined slice of the destinations. Absent means the single
         // pool: no zookeeper connection, no slice filter, and the configured
         // groupId is used as it is.
+        // a worker whose consumer group has no committed offsets seeds it
+        // itself before subscribing, so a deployment is a plain container
+        // replacement with no command between the stop and the start. One
+        // worker of the generation takes a zookeeper lock and seeds every
+        // group of the document; the others wait for the offsets. Only the
+        // internal source, and only with a workgroups document.
+        seedOnStart: joi.boolean().default(true),
+        // how long a worker waits for the worker holding the lock to
+        // publish the offsets before giving up on the start
+        seedOnStartTimeoutMs: joi.number().greater(0).default(300000),
         workgroups: joi.object({
             id: joi.string().pattern(WORKGROUP_ID_PATTERN),
             zookeeperPath: joi.string()

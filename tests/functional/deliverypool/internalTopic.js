@@ -27,10 +27,15 @@ const DeliverySeeder =
     require('../../../extensions/notification/deliveryWorker/DeliverySeeder');
 const WorkgroupConfigLoader =
     require('../../../extensions/notification/deliveryWorker/WorkgroupConfigLoader');
+const SelfSeeder =
+    require('../../../extensions/notification/deliveryWorker/SelfSeeder');
+const { assertSeededOffsets } =
+    require('../../../extensions/notification/deliveryWorker/seededOffsets');
 const messageUtil = require('../../../extensions/notification/utils/message');
 const {
     buildGroupId,
     createSliceFilter,
+    buildWatermarksPath,
 } = require('../../../extensions/notification/utils/workgroups');
 
 const KAFKA_HOSTS = process.env.KAFKA_HOSTS || 'localhost:9092';
@@ -64,10 +69,26 @@ const TOPICS = {
     // a bucket whose configuration shows up after the worker started
     lateInternal: { name: `ftint-late-internal-${RUN_ID}`, partitions: 1 },
     lateCust: { name: `ftint-late-cust-${RUN_ID}`, partitions: 1 },
+    // the self seeding case has its own topics, so its groups start with no
+    // history of any kind
+    selfInternal: { name: `ftint-self-internal-${RUN_ID}`, partitions: PARTITIONS },
+    selfCustA: { name: `ftint-self-cust-a-${RUN_ID}`, partitions: 1 },
+    selfCustB: { name: `ftint-self-cust-b-${RUN_ID}`, partitions: 1 },
 };
 const LATE_BUCKET = 'ftint-late-bucket';
 const LATE_GROUP = `ftint-late-${RUN_ID}`;
 const LATE_RECORDS = 10;
+
+// the self seeding case: no seeding command is run at all, the two workers
+// of the generation seed themselves at start
+const SELF_BUCKET = 'ftint-self-bucket';
+const SELF_GROUP = `ftint-self-${RUN_ID}`;
+const SELF_PROCESSOR_GROUP = `ftint-self-qp-${RUN_ID}`;
+const SELF_ZK_PATH = `/ftint-${RUN_ID}/self-delivery-workgroups`;
+const SELF_DESTS = ['sdest-a', 'sdest-b'];
+// wg-a owns sdest-a by name, wg-b takes everything else
+const SELF_WORKGROUP_OF = { 'sdest-a': 'wg-a', 'sdest-b': 'wg-b' };
+const SELF_DELIVERED_SHARE = { 'sdest-a': 0.75, 'sdest-b': 0.25 };
 
 const log = new werelogs.Logger('Backbeat:Test:InternalTopic');
 werelogs.configure({ level: 'warn', dump: 'error' });
@@ -676,5 +697,303 @@ describe('delivery worker on the internal topic', function internalTopic() {
                     return next();
                 }),
         ], err => stopWorker(worker, () => done(err)));
+    });
+});
+
+/**
+ * The deployment model this proves: an Ansible run stops the per-destination
+ * processors, writes the workgroups document and starts the workers, with no
+ * command of any kind in between. No seeding tool is invoked anywhere in
+ * this block. The two workers of the generation come up together, one of
+ * them takes the zookeeper lock and seeds every group of the document from
+ * the processors' committed offsets, the other waits for its own offsets,
+ * and both then deliver with the watermarks the same seeding wrote.
+ */
+describe('delivery workers that seed themselves at start', function selfSeed() {
+    this.timeout(240000);
+
+    const selfTopics = [TOPICS.selfInternal, TOPICS.selfCustA, TOPICS.selfCustB];
+    const selfProcessorOffsets = { 'sdest-a': {}, 'sdest-b': {} };
+    const partitions = [...Array(PARTITIONS).keys()];
+    let selfInternalRecords = [];
+    let readZk = null;
+
+    const selfDoc = {
+        configVersion: 1,
+        generation: 1,
+        topic: TOPICS.selfInternal.name,
+        workgroups: [
+            { id: 'wg-a', rule: { type: 'static', destinationIds: ['sdest-a'] } },
+            { id: 'wg-b', rule: { type: 'hashmod', modulo: 1, remainders: [0] } },
+        ],
+    };
+
+    function selfNotifConfig() {
+        return {
+            topic: TOPICS.selfInternal.name,
+            queueProcessor: { groupId: SELF_PROCESSOR_GROUP, concurrency: 10 },
+            destinations: [
+                destination('sdest-a', TOPICS.selfCustA.name),
+                destination('sdest-b', TOPICS.selfCustB.name),
+            ],
+            deliveryPool: {
+                enabled: true,
+                source: 'internal',
+                topic: `ftint-self-unused-${RUN_ID}`,
+                groupId: SELF_GROUP,
+                seedOnStart: true,
+                seedOnStartTimeoutMs: 120000,
+                deliveryTimeoutMs: 30000,
+                producerIdleMs: 300000,
+                maxProducers: 50,
+                concurrency: 10,
+                maxQueued: 100,
+                workgroups: {
+                    zookeeperPath: SELF_ZK_PATH,
+                    // per workgroup: the two workers run in one process
+                    // here, so one cache path would have them racing on
+                    // the same temporary file name
+                    cachePath: `/tmp/ftint-self-workgroups-${RUN_ID}.json`,
+                },
+            },
+        };
+    }
+
+    /**
+     * Everything the worker task does before the consumer subscribes, in the
+     * order the task does it: load the document, seed the group when it has
+     * no offsets, read the watermarks the seeding wrote, refuse to start if
+     * the group is still unseeded, and only then join.
+     *
+     * @param {String} workgroupId - the workgroup this worker serves
+     * @param {Function} done - callback: done(err, { worker, loader, outcome })
+     * @return {undefined}
+     */
+    function startSelfSeedingWorker(workgroupId, done) {
+        const notifConfig = selfNotifConfig();
+        const groupId = buildGroupId(SELF_GROUP, workgroupId, 1);
+        const loader = new WorkgroupConfigLoader({
+            zkConfig,
+            workgroupsConfig: Object.assign({ id: workgroupId },
+                notifConfig.deliveryPool.workgroups, {
+                    cachePath: `/tmp/ftint-self-workgroups-${RUN_ID}-` +
+                        `${workgroupId}.json`,
+                }),
+            topic: TOPICS.selfInternal.name,
+            workgroupId,
+            logger: log,
+        });
+        const state = { loader, groupId, worker: null, outcome: null };
+        return async.series([
+            next => loader.load(err => next(err)),
+            next => {
+                const selfSeeder = new SelfSeeder({
+                    kafkaConfig,
+                    zkConfig,
+                    notifConfig,
+                    doc: loader.getConfig(),
+                    groupId,
+                    workgroupId,
+                    zkClient: loader.getZkClient(),
+                    logger: log,
+                });
+                return selfSeeder.seed((err, outcome) => {
+                    state.outcome = outcome;
+                    return next(err);
+                });
+            },
+            next => loader.loadWatermarks((err, watermarks) => {
+                state.watermarks = watermarks;
+                return next(err);
+            }),
+            next => assertSeededOffsets({
+                kafkaConfig,
+                topic: TOPICS.selfInternal.name,
+                groupId,
+                logger: log,
+            }, next),
+            next => {
+                state.worker = new DeliveryWorker(kafkaConfig, notifConfig, {
+                    id: workgroupId,
+                    generation: 1,
+                    groupId,
+                    filter: createSliceFilter({ doc: selfDoc, workgroupId }),
+                }, { configManager, watermarks: state.watermarks });
+                return state.worker.start(null, next);
+            },
+        ], err => done(err, state));
+    }
+
+    function waitForSelfDrain(groupId, done) {
+        return waitFor(`${groupId} to reach the head`, cb =>
+            highWatermarks(TOPICS.selfInternal.name, partitions, (err, highs) => {
+                if (err) {
+                    return cb(err);
+                }
+                return committedOffsets(groupId, TOPICS.selfInternal.name,
+                    partitions, (cErr, committed) => {
+                        if (cErr) {
+                            return cb(cErr);
+                        }
+                        return cb(null, partitions.every(p =>
+                            committed[p] === highs[p]));
+                    });
+            }), 120000, done);
+    }
+
+    before(done => async.series([
+        next => createTopics(selfTopics, next),
+        next => waitForTopics(selfTopics, next),
+        next => {
+            knownConfigs[SELF_BUCKET] = {
+                bucket: SELF_BUCKET,
+                notificationConfiguration: {
+                    queueConfig: SELF_DESTS.map(dest => ({
+                        id: `all-to-${dest}`,
+                        queueArn: `arn:scality:bucketnotif:::${dest}`,
+                        events: ['s3:ObjectCreated:*'],
+                    })),
+                },
+            };
+            return next();
+        },
+        next => produceRecords(TOPICS.selfInternal.name,
+            [...Array(RECORDS).keys()].map(i => legacyRecord(i, SELF_BUCKET)),
+            next),
+        next => readTopic(TOPICS.selfInternal.name, RECORDS, 60000,
+            (err, records) => {
+                if (err) {
+                    return next(err);
+                }
+                selfInternalRecords = records;
+                return next();
+            }),
+        // the processors this run replaces: each delivered a prefix of every
+        // partition and committed there, and they are stopped before the
+        // workers start, exactly as an Ansible run leaves them
+        next => async.eachSeries(SELF_DESTS, (dest, cb) => {
+            const share = SELF_DELIVERED_SHARE[dest];
+            const delivered = [];
+            partitions.forEach(partition => {
+                const inPartition = selfInternalRecords
+                    .filter(r => r.partition === partition)
+                    .sort((a, b) => a.offset - b.offset);
+                const count = Math.floor(inPartition.length * share);
+                selfProcessorOffsets[dest][partition] = count;
+                delivered.push(...inPartition.slice(0, count));
+            });
+            const topic = dest === 'sdest-a' ?
+                TOPICS.selfCustA.name : TOPICS.selfCustB.name;
+            return async.series([
+                n => produceRecords(topic, delivered.map(r =>
+                    processorDelivery(r, `all-to-${dest}`)), n),
+                n => commitOffsets(`${SELF_PROCESSOR_GROUP}-${dest}`,
+                    partitions.map(partition => ({
+                        topic: TOPICS.selfInternal.name,
+                        partition,
+                        offset: selfProcessorOffsets[dest][partition],
+                    })), n),
+            ], cb);
+        }, next),
+        // the run's own write: the layout, and nothing else
+        next => {
+            readZk = new ZookeeperManager(ZOOKEEPER_HOSTS, {
+                autoCreateNamespace: true,
+            }, log);
+            readZk.once('error', next);
+            readZk.once('ready', () => {
+                readZk.removeAllListeners('error');
+                readZk.setOrCreate(SELF_ZK_PATH,
+                    Buffer.from(JSON.stringify(selfDoc)), next);
+            });
+        },
+    ], done));
+
+    after(done => {
+        if (readZk) {
+            readZk.close();
+        }
+        done();
+    });
+
+    it('seeds itself, and both workgroups deliver everything once', done => {
+        let workers = [];
+        return async.waterfall([
+            // started together, the way one run starts every container
+            next => async.map(['wg-a', 'wg-b'],
+                (workgroupId, cb) => startSelfSeedingWorker(workgroupId, cb),
+                next),
+            (started, next) => {
+                workers = started;
+                const seeded = started.filter(s => s.outcome.seeded);
+                const waited = started.filter(s =>
+                    s.outcome.reason === 'already-seeded');
+                assert.strictEqual(seeded.length, 1,
+                    'exactly one worker seeds the generation');
+                assert.strictEqual(waited.length, 1,
+                    'the other finds the offsets the first one committed');
+                started.forEach(s => {
+                    assert.deepStrictEqual(
+                        Object.keys(s.watermarks || {}).sort(), SELF_DESTS,
+                        'both workers read the watermarks the seeding wrote');
+                    SELF_DESTS.forEach(dest => partitions.forEach(partition => {
+                        assert.strictEqual(s.watermarks[dest][partition],
+                            selfProcessorOffsets[dest][partition],
+                            `${dest} p${partition} watermark is its processor's ` +
+                            'committed offset');
+                    }));
+                });
+                return next();
+            },
+            // the groups really hold the offsets, and the seeded one is the
+            // lowest of the destinations its workgroup owns
+            next => async.map(['wg-a', 'wg-b'], (workgroupId, cb) =>
+                committedOffsets(buildGroupId(SELF_GROUP, workgroupId, 1),
+                    TOPICS.selfInternal.name, partitions, cb), next),
+            (committed, next) => {
+                const byWorkgroup = { 'wg-a': committed[0], 'wg-b': committed[1] };
+                SELF_DESTS.forEach(dest => {
+                    const offsets = byWorkgroup[SELF_WORKGROUP_OF[dest]];
+                    partitions.forEach(partition => {
+                        assert.strictEqual(offsets[partition],
+                            selfProcessorOffsets[dest][partition],
+                            `${SELF_WORKGROUP_OF[dest]} p${partition} is seeded ` +
+                            `at ${dest}'s processor offset`);
+                    });
+                });
+                return next();
+            },
+            next => readZk.getData(buildWatermarksPath(SELF_ZK_PATH, 1),
+                undefined, (err, data) => {
+                    if (err) {
+                        return next(err);
+                    }
+                    const written = JSON.parse(data);
+                    assert.deepStrictEqual(Object.keys(written).sort(), SELF_DESTS);
+                    return next();
+                }),
+            next => async.eachSeries(['wg-a', 'wg-b'], (workgroupId, cb) =>
+                waitForSelfDrain(buildGroupId(SELF_GROUP, workgroupId, 1), cb),
+            next),
+            next => readTopic(TOPICS.selfCustA.name, RECORDS, 90000, next),
+            (recordsA, next) => readTopic(TOPICS.selfCustB.name, RECORDS, 90000,
+                (err, recordsB) => next(err, recordsA, recordsB)),
+            (recordsA, recordsB, next) => {
+                const keysA = deliveredKeys(recordsA);
+                const keysB = deliveredKeys(recordsB);
+                assert.strictEqual(new Set(keysA).size, RECORDS,
+                    'sdest-a: every object reached the destination');
+                assert.strictEqual(keysA.length, RECORDS,
+                    'sdest-a: nothing was delivered twice');
+                assert.strictEqual(new Set(keysB).size, RECORDS,
+                    'sdest-b: every object reached the destination');
+                assert.strictEqual(keysB.length, RECORDS,
+                    'sdest-b: nothing was delivered twice');
+                return next();
+            },
+        ], err => async.eachSeries(workers, (state, cb) => {
+            state.loader.stop();
+            return stopWorker(state.worker, cb);
+        }, () => done(err)));
     });
 });

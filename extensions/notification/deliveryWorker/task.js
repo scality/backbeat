@@ -13,6 +13,7 @@ const DeliveryWorker = require('./DeliveryWorker');
 const { resolveProbeServerConfig } = require('./probeConfig');
 const { resolveWorkgroupId } = require('./workgroupConfig');
 const { assertSeededOffsets } = require('./seededOffsets');
+const SelfSeeder = require('./SelfSeeder');
 const { buildGroupId, createSliceFilter } = require('../utils/workgroups');
 const { startProbeServer } = require('../../../lib/util/probe');
 
@@ -115,6 +116,56 @@ function setupWorkgroup(done) {
 }
 
 /**
+ * Seeds this worker's consumer group when it has none, so that replacing
+ * the containers is the whole deployment: no command runs between the run's
+ * stop and its start.
+ *
+ * One worker of the generation takes a zookeeper lock and seeds every group
+ * of the document, including the watermarks this start then reads; the
+ * others wait for their own offsets to appear. A group that already has
+ * committed offsets is left alone, so a restart, a rolling replacement and
+ * an operator who seeded ahead with the CLI all behave the same.
+ *
+ * @param {Function} done - callback
+ * @return {undefined}
+ */
+function seedOnStart(done) {
+    if (!workgroupLoader || !SelfSeeder.isEnabled(notifConfig)) {
+        return process.nextTick(done);
+    }
+    const zkClient = workgroupLoader.getZkClient();
+    if (!zkClient) {
+        // the document came from the on-disk cache, so there is no session
+        // to hold a lock in and no way to tell another worker apart from
+        // this one: leave the group to the assertion below
+        log.warn('the workgroups document was not read from zookeeper, so ' +
+            'this worker cannot seed its own group', {
+            method: 'notification.task.deliveryWorker.seedOnStart',
+        });
+        return process.nextTick(done);
+    }
+    const seeder = new SelfSeeder({
+        kafkaConfig,
+        zkConfig,
+        notifConfig,
+        doc: workgroupLoader.getConfig(),
+        groupId: workgroup.groupId,
+        workgroupId: workgroup.id,
+        zkClient,
+        logger: log,
+    });
+    return seeder.seed((err, outcome) => {
+        log.info('seed on start finished', {
+            method: 'notification.task.deliveryWorker.seedOnStart',
+            groupId: workgroup.groupId,
+            seeded: outcome.seeded,
+            reason: outcome.reason,
+        });
+        return done();
+    });
+}
+
+/**
  * Loads the per destination watermarks of the generation, when the worker
  * reads the internal topic: a matching record below a destination's
  * watermark was already delivered to it before this generation took over
@@ -175,6 +226,8 @@ function assertOffsetsAreSeeded(done) {
 
 async.series([
     next => setupWorkgroup(next),
+    // before the watermarks are read: a self seeding start writes them
+    next => seedOnStart(next),
     next => loadWatermarks(next),
     next => assertOffsetsAreSeeded(next),
     next => {
