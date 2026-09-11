@@ -47,14 +47,14 @@ yarn demo:up          # or: yarn demo:up:krb
 # 6. block until broker, mongo PRIMARY, CloudServer and Grafana answer   (22:49)
 yarn demo:wait
 
-# 7. the whole demo at recording pace (DEMO_PACE=demo is the default)    (23:09:40)
-yarn ft_test:demo
+# 7. the take; about 31 min (DEMO_PACE=demo is the default)            (00:37:11, 30 min 31 s)
+DEMO_ACTS=02,03,04,06 yarn ft_test:demo
 ```
 
 Variants, not extra steps:
 
 ```bash
-DEMO_ACTS=02,03,04,06 yarn ft_test:demo    # the four acts that carry the argument
+yarn ft_test:demo                          # the reference run, all eight acts (82 min 50 s, executed 23:09:40)
 DEMO_ACTS=04 yarn ft_test:demo             # one act, to reshoot it
 DEMO_PACE=slow yarn ft_test:demo           # every wait doubled, for a careful take
 yarn demo:down                             # teardown (see the last section)
