@@ -20,6 +20,7 @@
  */
 
 const fs = require('fs');
+const path = require('path');
 
 const OP_OF_EVENT = {
     's3:ObjectCreated:Put': 'Put',
@@ -285,6 +286,68 @@ function analyse(driverOps, delivered, filter) {
  * @param {Object} params - { events, driver, keyPrefix, bucket, out, label }
  * @return {Object} { totals, perKey, latency, byEvent }
  */
+/**
+ * Decompose the duplicate deliveries in a set of customer-topic dumps by the
+ * moment they happened. The first copy of an operation is the delivery; every
+ * later copy is a duplicate, and the question is who made it: a replacement
+ * after a kill (copy 1 before the kill, copy 2 after), the next generation
+ * after a swap (copy 1 before the stop, copy 2 after), or a restart within
+ * the same generation (both copies between the same two boundaries).
+ *
+ * @param {Array} files - events files
+ * @param {Array} boundaries - [{ label, at }] in time order, `at` in ms epoch;
+ *   labels name what happened at that instant (a kill, a generation stop)
+ * @return {Object} { total, across: { label: n }, within: { segment: n },
+ *   perFile: { file: { total, across, within } } }
+ */
+function decomposeDuplicates(files, boundaries) {
+    const sorted = boundaries.slice().sort((a, b) => a.at - b.at);
+    const segment = t => {
+        let i = 0;
+        while (i < sorted.length && t >= sorted[i].at) {
+            i += 1;
+        }
+        return i;
+    };
+    const out = { total: 0, across: {}, within: {}, perFile: {} };
+    files.forEach(file => {
+        const byOp = new Map();
+        parseEvents(file).filter(r => r.objkey && r.op).forEach(r => {
+            const id = `${r.objkey}|${opid(r.op, r.size)}`;
+            if (!byOp.has(id)) {
+                byOp.set(id, []);
+            }
+            byOp.get(id).push(r.ts);
+        });
+        const mine = { total: 0, across: {}, within: {} };
+        byOp.forEach(times => {
+            times.sort((a, b) => a - b);
+            const first = segment(times[0]);
+            times.slice(1).forEach(t => {
+                const seg = segment(t);
+                mine.total += 1;
+                if (seg === first) {
+                    const k = seg === 0 ? 'before any boundary'
+                        : `after ${sorted[seg - 1].label}`;
+                    mine.within[k] = (mine.within[k] || 0) + 1;
+                } else {
+                    const k = sorted[seg - 1].label;
+                    mine.across[k] = (mine.across[k] || 0) + 1;
+                }
+            });
+        });
+        out.perFile[path.basename(file)] = mine;
+        out.total += mine.total;
+        Object.entries(mine.across).forEach(([k, n]) => {
+            out.across[k] = (out.across[k] || 0) + n;
+        });
+        Object.entries(mine.within).forEach(([k, n]) => {
+            out.within[k] = (out.within[k] || 0) + n;
+        });
+    });
+    return out;
+}
+
 function check(params) {
     const delivered = parseEvents(params.events);
     const driverOps = parseDriver(params.driver);
@@ -320,4 +383,5 @@ function summary(r) {
         + `inversions=${t.inversions} unexpected=${t.unexpected}`;
 }
 
-module.exports = { parseEvents, parseDriver, analyse, check, summary };
+module.exports = {
+    decomposeDuplicates, parseEvents, parseDriver, analyse, check, summary };
