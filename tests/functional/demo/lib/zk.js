@@ -106,7 +106,8 @@ function buildWorkgroupsDoc(spec) {
 }
 
 /**
- * Write the workgroups document, creating the node if needed. zkCli takes
+ * Write the workgroups document, creating the node if needed, and keep a
+ * copy under history/gen<N> for the seed tool. zkCli takes
  * the data as one argument, and docker exec passes argv through untouched,
  * so a JSON string with spaces is fine as long as it has no newline.
  *
@@ -122,6 +123,15 @@ function writeWorkgroupsDoc(doc) {
     const r = cli(['set', env.ZK_WORKGROUPS_PATH, data]);
     if (!r.ok || /Node does not exist/.test(`${r.out}${r.err}`)) {
         cli(['create', env.ZK_WORKGROUPS_PATH, data]);
+    }
+    // the seed tool reads a previous generation's layout from the history
+    // node when it works out which group owned which destination, so every
+    // generation written here is kept there too, as an Ansible run would
+    cli(['create', `${env.ZK_WORKGROUPS_PATH}/history`, '']);
+    const hist = `${env.ZK_WORKGROUPS_PATH}/history/gen${doc.generation}`;
+    if (!cli(['set', hist, data]).ok
+        || !getJson(hist)) {
+        cli(['create', hist, data]);
     }
     const back = workgroupsDoc();
     if (!back || back.generation !== doc.generation) {
