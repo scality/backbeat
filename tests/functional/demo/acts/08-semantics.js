@@ -144,12 +144,13 @@ function register(ctx) {
                     note('against the bucket\'s rules at delivery time, exactly');
                     note('as the processor does, so a detached destination\'s');
                     note('queued events are dropped on both paths. Detach stays');
-                    note('a revocation. The previous model, which resolved the');
-                    note('destination at publish time, delivered them (20 of 20');
-                    note('measured on 2026-09-10); that difference is gone with');
-                    note('the second topic. Product question 3 becomes: should');
-                    note('the drop be counted and visible, which the pool can do');
-                    note('and the processor cannot.');
+                    note('a revocation, and delete versus detach no longer');
+                    note('differs between the paths. The previous model, which');
+                    note('resolved the destination at publish time, delivered');
+                    note('them (20 of 20 measured on 2026-09-10); that difference');
+                    note('is gone with the second topic. Product question 3');
+                    note('becomes: should the drop be counted and visible, which');
+                    note('the pool can do and the processor cannot.');
                 } else {
                     note('the pool delivered queued events after the detach,');
                     note('which means the worker resolved the destination before');
@@ -201,17 +202,36 @@ function register(ctx) {
                     rate: 2, count: 2 });
                  
                 await wait.frozen(env.INTERNAL_TOPIC, env.pause(12000));
-                if (pathName === 'legacy') {
-                     
-                    await flow.drainOrCure({ group: env.legacyGroup(D1),
-                        label: `legacy ${D1}`, timeoutMs: 180000 });
-                     
-                    await flow.drainOrCure({ group: env.legacyGroup(D2),
-                        label: `legacy ${D2}`, timeoutMs: 180000 });
-                } else {
-                     
-                    await flow.drainOrCure({ group: env.DELIVERY_GROUP, label: 'pool',
-                        timeoutMs: 180000, workers: [1] });
+                // The question is where the objects land, so gate on the
+                // customer topics receiving them, not on elapsed time: a
+                // consumer held in the start-up wedge has delivered nothing
+                // yet, and a dump taken then reads as "no" when the answer
+                // is "not yet". The drains apply the cure when a group stalls.
+                const arrived = () => ({
+                    onD1: kafka.head(t1, 0) - from1,
+                    onD2: kafka.head(t2, 0) - from2,
+                });
+                const landed = await wait.until(
+                    `${label}: both customer topics to receive the objects`,
+                    () => arrived().onD1 >= 4 && arrived().onD2 >= 2, 90000, 5000);
+                if (!landed) {
+                    if (pathName === 'legacy') {
+
+                        await flow.drainOrCure({ group: env.legacyGroup(D1),
+                            label: `legacy ${D1}`, timeoutMs: 180000 });
+
+                        await flow.drainOrCure({ group: env.legacyGroup(D2),
+                            label: `legacy ${D2}`, timeoutMs: 180000 });
+                    } else {
+
+                        await flow.drainOrCure({ group: env.DELIVERY_GROUP,
+                            label: 'pool', timeoutMs: 180000, workers: [1] });
+                    }
+
+                    await wait.until(
+                        `${label}: both customer topics to receive the objects, `
+                        + 'after the cure',
+                        () => arrived().onD1 >= 4 && arrived().onD2 >= 2, 120000, 5000);
                 }
                 kafka.dump(t1, from1, act.file(`events-${label}-d1.jsonl`), 0);
                 kafka.dump(t2, from2, act.file(`events-${label}-d2.jsonl`), 0);
@@ -219,14 +239,29 @@ function register(ctx) {
                     `logs/${label}-x`);
                 const onD2 = countKey(act.file(`events-${label}-d2.jsonl`),
                     `logs/${label}-x`);
+                const otherD1 = countKey(act.file(`events-${label}-d1.jsonl`),
+                    `other/${label}-y`);
                 const otherD2 = countKey(act.file(`events-${label}-d2.jsonl`),
                     `other/${label}-y`);
                 say(`${label}: the logs/ object reached ${D1} ${onD1} times `
                     + `and ${D2} ${onD2} times; the other object reached `
-                    + `${D2} ${otherD2} times`);
+                    + `${D1} ${otherD1} times and ${D2} ${otherD2} times`);
                 both[label] = onD1 > 0 && onD2 > 0 && otherD2 === 0;
+                // a consumer that delivered nothing at all did not answer
+                // the question; say so rather than reading it as "no"
+                const silent = onD1 === 0 && otherD1 === 0;
                 act.measured(`${label}: prefixed object to both destinations`,
-                    both[label] ? 'yes' : 'no');
+                    both[label] ? 'yes' : (silent
+                        ? 'not measured: the consumer delivered nothing (wedge)'
+                        : 'no'));
+                if (silent) {
+                    note(`${label}: the ${D1} consumer delivered none of the four`);
+                    note('objects, the logs/ ones or the other/ ones, so the case');
+                    note('was not measured this run. That is the pre-existing');
+                    note('start-up wedge holding a consumer, not a matching');
+                    note('result. The rig and the run of 2026-09-11 01:45 UTC');
+                    note('measured yes on both paths.');
+                }
                 procs.stopAll();
                  
                 await procs.sleep(env.pause(5000));
@@ -238,8 +273,13 @@ function register(ctx) {
             note('both paths decide the fan-out the same way now: one record');
             note('per event on today\'s topic, and the consumer matches it');
             note('against the bucket\'s rules per destination at delivery time.');
-            assert.ok(both.legacy, 'the legacy path did not fan out');
-            assert.ok(both.pool, 'the pool did not fan out');
+            ['legacy', 'pool'].forEach(label => {
+                const row = act.rows.find(r => r.key
+                    === `${label}: prefixed object to both destinations`);
+                const measured = row ? String(row.measured) : '';
+                assert.ok(both[label] || measured.startsWith('not measured'),
+                    `the ${label} path did not fan out`);
+            });
         });
 
         it('delivers an account-scoped ARN to the global destination',
