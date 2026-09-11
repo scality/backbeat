@@ -1811,6 +1811,10 @@ function gateIsolation() {
     const LAG_SAMPLE_MS = 500;
     const WORKER_SETTLE_MS = 1500;
     const MIN_WINDOW_MS = 10000;
+    // a delivery is counted by its tailer before the worker has committed
+    // the offset behind it, so the window stays open a little past the last
+    // one to let the drained group read as caught up rather than as behind
+    const COMMIT_SETTLE_MS = 3000;
     // the pooled producer to an unroutable host gives up on the thirty
     // second node-rdkafka connect timeout, so the window ends well inside it
     const MAX_DRAIN_WAIT_MS = 20000;
@@ -1884,6 +1888,7 @@ function gateIsolation() {
     let blockedSampler = null;
     let drainedSampler = null;
     let trace = null;
+    let drainedTrace = null;
 
     function tailerOf(destination) {
         return tailers.get(destination.topic);
@@ -1954,6 +1959,7 @@ function gateIsolation() {
 
     after(done => async.series([
         next => (trace ? trace.stop(next) : next()),
+        next => (drainedTrace ? drainedTrace.stop(next) : next()),
         next => (blockedSampler ? blockedSampler.stop(next) : next()),
         next => (drainedSampler ? drainedSampler.stop(next) : next()),
         next => stopWorkgroup(zeroRuntime, next),
@@ -2020,6 +2026,7 @@ function gateIsolation() {
         run: (attempt, cb) => {
             const zkPath = `${zkBase}/attempt-1`;
             let windowStart = 0;
+            let drainedAt = 0;
             return async.waterfall([
                 // the delivery topic was created and verified in the root
                 // hook, a minute of wall clock before these workers join.
@@ -2030,6 +2037,26 @@ function gateIsolation() {
                 // confirmed stable again immediately before the join
                 next => waitForTopics([TOPICS.bDelivery], err => next(err)),
                 next => writeDocument(zkPath, err => next(err)),
+                // both samplers are connected before any worker joins. The
+                // gate produced everything it will ever produce in its
+                // before hook, so the end of each partition is already
+                // final, and the group id of a workgroup is derived, not
+                // discovered, so neither sampler needs a running worker. A
+                // connect that lands after the workers have started instead
+                // spends the blocked destination's thirty second producer
+                // connect, which is the whole budget this gate observes in
+                next => {
+                    blockedSampler = new LagSampler(
+                        buildGroupId(baseGroupId, activeIds.zero, 1),
+                        deliveryTopic, deliveryPartitions);
+                    return blockedSampler.start(err => next(err));
+                },
+                next => {
+                    drainedSampler = new LagSampler(
+                        buildGroupId(baseGroupId, activeIds.one, 1),
+                        deliveryTopic, deliveryPartitions);
+                    return drainedSampler.start(err => next(err));
+                },
                 next => startWorkgroup({
                     zkPath,
                     workgroupId: activeIds.zero,
@@ -2068,19 +2095,18 @@ function gateIsolation() {
                     // the blocked destination holds its offsets only while
                     // its producer connect is outstanding, about thirty
                     // seconds from when the blocked worker started, so the
-                    // window has to open promptly and stay short. The
-                    // sampler is connected before the clock starts: its
-                    // startup reads are slow enough to matter
-                    next => {
-                        blockedSampler = new LagSampler(
-                            zeroRuntime.workgroup.groupId, deliveryTopic,
-                            deliveryPartitions);
-                        return blockedSampler.start(next);
-                    },
+                    // window has to open promptly and stay short. Both
+                    // groups are traced across the same window, on their own
+                    // client each, so the chosen moment can be read off the
+                    // samples instead of costing two more round trips after
+                    // the window has closed
                     next => {
                         trace = new LagTrace(blockedSampler, LAG_SAMPLE_MS);
+                        drainedTrace = new LagTrace(drainedSampler,
+                            LAG_SAMPLE_MS);
                         windowStart = Date.now();
                         trace.start();
+                        drainedTrace.start();
                         return next();
                     },
                     next => waitFor(() => 'the unblocked workgroups to ' +
@@ -2106,35 +2132,39 @@ function gateIsolation() {
                                     next);
                             });
                         }),
+                    next => {
+                        drainedAt = Date.now();
+                        return next();
+                    },
                     // the guarantee is about the whole window, not about one
-                    // lucky look, so the window has a floor of its own
+                    // lucky look, so the window has a floor of its own. It
+                    // also has to outlast the commit that follows the last
+                    // delivery, or the drained group still reads as behind
                     next => setTimeout(next, Math.max(0,
-                        MIN_WINDOW_MS - (Date.now() - windowStart))),
+                        MIN_WINDOW_MS - (Date.now() - windowStart),
+                        COMMIT_SETTLE_MS - (Date.now() - drainedAt))),
                     next => {
                         record('W-B.window.ms', Date.now() - windowStart);
-                        // the chosen-moment reads use the same clients, so
-                        // the trace has to be off and idle first
                         return trace.stop(next);
                     },
-                    // connected only now: its startup reads would otherwise
-                    // sit inside the window and push it past the hold
-                    next => {
-                        drainedSampler = new LagSampler(
-                            oneRuntime.workgroup.groupId, deliveryTopic,
-                            deliveryPartitions);
-                        return drainedSampler.start(next);
-                    },
+                    next => drainedTrace.stop(next),
                     // both groups read at the same moment, which is what
-                    // makes per-workgroup lag independently readable
-                    next => blockedSampler.sample((sampleErr, lag) => {
-                        record('W-B.lag.blockedAtChosenMoment', lag);
-                        return next(sampleErr);
-                    }),
-                    next => drainedSampler.sample((sampleErr, lag) => {
-                        record('W-B.lag.drainedAtChosenMoment', lag);
-                        return next(sampleErr);
-                    }),
-                ], seriesErr => trace.stop(() => cb(seriesErr)));
+                    // makes per-workgroup lag independently readable: the
+                    // last sample of each trace, one sampling interval apart
+                    // at most, and both taken while the blocked destination
+                    // still held its offsets
+                    next => {
+                        record('W-B.lag.drainedTrajectory',
+                            drainedTrace.samples);
+                        record('W-B.lag.blockedAtChosenMoment',
+                            trace.samples[trace.samples.length - 1]);
+                        record('W-B.lag.drainedAtChosenMoment',
+                            drainedTrace.samples[
+                                drainedTrace.samples.length - 1]);
+                        return next();
+                    },
+                ], seriesErr => trace.stop(
+                    () => drainedTrace.stop(() => cb(seriesErr))));
             });
         },
         // the blocked workgroup is meant not to drain, so only the two
@@ -2144,6 +2174,7 @@ function gateIsolation() {
                 attemptId(baseIds.whale, attempt)], cb),
         cleanup: (attempt, cb) => async.series([
                 next => (trace ? trace.stop(next) : next()),
+                next => (drainedTrace ? drainedTrace.stop(next) : next()),
                 next => (blockedSampler ? blockedSampler.stop(next) : next()),
                 next => (drainedSampler ? drainedSampler.stop(next) : next()),
                 next => stopWorkgroup(zeroRuntime, () => {
@@ -2162,6 +2193,7 @@ function gateIsolation() {
             blockedSampler = null;
             drainedSampler = null;
             trace = null;
+            drainedTrace = null;
             return cb();
         }),
     }, err => {
