@@ -60,10 +60,14 @@ function poolConfig(act, ctx, opts) {
 async function startPopulator(act, configFile, label) {
     say(`starting the queue populator on the ${label} path`);
     note(`config ${configFile}`);
-    note(label === 'pool'
-        ? `it will publish addressed records to ${env.DELIVERY_TOPIC}, one per `
-          + 'matching destination, keyed by destination'
-        : `it will publish to ${env.INTERNAL_TOPIC}, one record per object`);
+    if (env.SOURCE === 'delivery' && label !== 'legacy') {
+        note(`it will publish addressed records to ${env.DELIVERY_TOPIC}, one `
+            + 'per matching destination, keyed by destination');
+    } else {
+        note(`it will publish to ${env.INTERNAL_TOPIC}, one record per event, `
+            + 'exactly as today; the populator does not know which path '
+            + 'consumes it');
+    }
     const p = procs.populator(act, configFile, label);
     const secs = await procs.waitReady(p, 90000);
     say(`populator up as pid ${p.pid} after ${secs}s`);
@@ -382,7 +386,7 @@ async function progressOrCure(act, proc, what, condition, opts) {
         if (attempt === 2) {
             break;
         }
-        const onTopic = kafka.headTotal(env.DELIVERY_TOPIC);
+        const onTopic = kafka.headTotal(env.POOL_TOPIC);
         // eslint-disable-next-line no-await-in-loop
         const moved = (await wait.counter(n, 'delivered'))
             // eslint-disable-next-line no-await-in-loop
@@ -392,12 +396,12 @@ async function progressOrCure(act, proc, what, condition, opts) {
         const bal = proc.rebalances();
         if (onTopic === 0 || moved > 0) {
             note(`no progress on ${what}, and this is NOT the wedge: `
-                + `${onTopic} records on the delivery topic and ${moved} of `
+                + `${onTopic} records on the pool's topic and ${moved} of `
                 + 'them accounted for by this worker. Something else is '
                 + 'wrong, so nothing is being restarted.');
             return false;
         }
-        note(`WEDGE SUSPECTED: ${onTopic} records on the delivery topic, `
+        note(`WEDGE SUSPECTED: ${onTopic} records on the pool's topic, `
             + `${bal.assign} assigns and ${bal.revoke} revokes on worker `
             + `${n}, and`);
         // eslint-disable-next-line no-await-in-loop
@@ -497,6 +501,129 @@ async function drainOrCure(p) {
     again.cured = true;
     again.restarts = targets.map(t => t.name);
     return again;
+}
+
+const SEED_TOOL = 'bin/notificationDeliverySeed.js';
+
+/**
+ * Run the seed tool and show its table.
+ *
+ * @param {Object} act - the act
+ * @param {String} configFile - the config the workers will run with
+ * @param {Array} args - the tool's arguments
+ * @return {Object} { code, out }
+ */
+function runSeedTool(act, configFile, args) {
+    const r = procs.runTool({ act, name: `seed-${args[0]}`,
+        argv: [SEED_TOOL].concat(args), configFile, timeoutMs: 180000 });
+    const { line } = require('./narrate');
+    line(r.out.split('\n').filter(Boolean).map(l => `      | ${l}`).join('\n'));
+    if (r.code !== 0) {
+        note(`the seed tool exited ${r.code}`);
+    }
+    return r;
+}
+
+/**
+ * Seed a generation's worker groups from the legacy processors they replace:
+ * per partition the lowest committed offset across the processor groups of
+ * the destinations each workgroup owns, plus a per-destination watermark at
+ * each destination's own processor offset, so nothing is delivered twice and
+ * a stalled destination gets its whole backlog. This is the one step an
+ * Ansible run has to do between deleting the processor containers and
+ * starting the worker containers.
+ *
+ * @param {Object} act - the act
+ * @param {String} configFile - the config the workers will run with
+ * @param {Number} generation - the generation being started
+ * @return {Object} { code, out }
+ */
+function seedFromProcessors(act, configFile, generation) {
+    say(`seeding generation ${generation}'s groups from the processors' `
+        + 'committed offsets');
+    note('the lowest offset per partition, so nothing is skipped, and a');
+    note('watermark per destination, so nothing already delivered is sent');
+    note('again. A group with no committed offset would otherwise start at');
+    note('the oldest retained record and replay hours to every customer.');
+    const r = runSeedTool(act, configFile,
+        ['seed-from-processors', '--generation', String(generation)]);
+    act.timeline(`seed-from-processors generation ${generation} exit ${r.code}`);
+    return r;
+}
+
+/**
+ * Seed a generation's worker groups from the previous generation's groups,
+ * the same way, for a layout change.
+ *
+ * @param {Object} act - the act
+ * @param {String} configFile - the config the workers will run with
+ * @param {Number} from - the generation being stopped
+ * @param {Number} to - the generation being started
+ * @return {Object} { code, out }
+ */
+function seedFromGeneration(act, configFile, from, to) {
+    say(`seeding generation ${to}'s groups from generation ${from}'s `
+        + 'committed offsets');
+    const r = runSeedTool(act, configFile,
+        ['seed-from-generation', '--from', String(from), '--to', String(to)]);
+    act.timeline(`seed-from-generation ${from} to ${to} exit ${r.code}`);
+    return r;
+}
+
+/**
+ * Give the plain pool group (no workgroups) a committed offset at the head
+ * of the pool's topic before its first worker starts, the way an Ansible run
+ * would seed it. A fresh group with no committed offset starts at the oldest
+ * retained record, and on today's topic that is every event of every act so
+ * far.
+ *
+ * @param {Object} act - the act
+ * @param {String} [group] - the group, default the base pool group
+ * @return {Array} the partitions that were seeded
+ */
+function seedPoolGroupAtHead(act, group) {
+    const g = group || env.DELIVERY_GROUP;
+    const seeded = kafka.seedGroupAtHead(g, env.POOL_TOPIC);
+    if (seeded.length) {
+        note(`seeded ${g} at the head of ${env.POOL_TOPIC} on partition`
+            + `${seeded.length > 1 ? 's' : ''} ${seeded.join(', ')}: a group`);
+        note('  with no committed offset would start at the oldest retained');
+        note('  record, which on today\'s topic is every event so far.');
+        act.timeline(`pool group ${g} seeded at head on ${seeded.join(',')}`);
+    }
+    return seeded;
+}
+
+/**
+ * Start an act with no pool groups and no workgroups document left over by
+ * an earlier act, so its own generation 1 starts where the act seeds it and
+ * not where a previous act's group of the same name had got to.
+ *
+ * @param {Object} act - the act
+ * @return {Array} the groups deleted
+ */
+function resetPoolGroups(act) {
+    const zk = require('./zk');
+    const mine = kafka.groups().filter(g => g === env.DELIVERY_GROUP
+        || g.startsWith(`${env.DELIVERY_GROUP}-`));
+    const held = kafka.waitForNoMembers(60000);
+    if (held.length) {
+        note(`groups still holding members before the reset: ${held.join(', ')}`);
+    }
+    const deleted = [];
+    mine.forEach(g => {
+        if (kafka.deleteGroup(g).ok) {
+            deleted.push(g);
+        }
+    });
+    if (zk.workgroupsDoc()) {
+        zk.deleteAll(env.ZK_WORKGROUPS_PATH);
+    }
+    if (deleted.length) {
+        note(`pool groups from earlier acts deleted: ${deleted.join(', ')}`);
+        act.timeline(`pool groups reset: ${deleted.join(',')}`);
+    }
+    return deleted;
 }
 
 /**
@@ -664,6 +791,12 @@ function recordChecker(act, result) {
 }
 
 module.exports = {
+    SEED_TOOL,
+    runSeedTool,
+    seedFromProcessors,
+    seedFromGeneration,
+    seedPoolGroupAtHead,
+    resetPoolGroups,
     restartInPlace,
     drainOrCure,
     progressOrCure,

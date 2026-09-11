@@ -49,13 +49,12 @@
       },
       {
         "name": "delivery_topic",
-        "label": "delivery topic",
+        "label": "pool topic (today's topic)",
         "type": "textbox",
-        "query": "bucket-notification-delivery",
+        "query": "backbeat-bucket-notification",
         "current": {
-          "selected": false,
-          "text": "bucket-notification-delivery",
-          "value": "bucket-notification-delivery"
+          "text": "backbeat-bucket-notification",
+          "value": "backbeat-bucket-notification"
         },
         "options": [],
         "hide": 0,
@@ -442,8 +441,8 @@
     {
       "id": 5,
       "type": "timeseries",
-      "title": "Cutover: legacy groups versus the delivery pool group",
-      "description": "The two sides of a migration on one axis. Both must reach and hold zero before the other side is stopped: cutting over before lag 0 costs ordering, and rolling back before lag 0 strands records on the delivery topic. Lag alone is not enough, a wedged consumer holds its partitions with a lag that simply stops falling, so read this next to the delivered rate above.",
+      "title": "Migration: processor groups versus pool groups",
+      "description": "Lag of the per-destination processor groups against lag of the pool groups, both on today's topic. At the swap the processor groups stop moving and the pool groups start; a stalled processor's lag is what the pool inherits.",
       "datasource": {
         "type": "prometheus",
         "uid": "bnaas-prom"
@@ -538,8 +537,8 @@
     {
       "id": 6,
       "type": "timeseries",
-      "title": "Delivery topic, records per partition",
-      "description": "Current minus oldest offset per partition of $delivery_topic. One destination maps to one partition (crc32 of the destination name modulo the partition count), so this shows how evenly the destinations are spread and which lane is filling up.",
+      "title": "Today's topic, records per partition",
+      "description": "Records per partition of the topic the pool consumes, which is today's internal topic: one record per event, partitioned by object.",
       "datasource": {
         "type": "prometheus",
         "uid": "bnaas-prom"
@@ -1237,8 +1236,8 @@
     {
       "id": 12,
       "type": "timeseries",
-      "title": "Cutover barriers seen",
-      "description": "Barrier records consumed, split by whether the barrier belongs to the generation this worker runs. A run of match=false barriers means a worker is behind the current workgroups generation.",
+      "title": "Records skipped under a watermark",
+      "description": "Records a worker committed without delivering because the destination's previous owner had already delivered them: the seed tool's per-destination watermark at work after a migration or a layout change.",
       "datasource": {
         "type": "prometheus",
         "uid": "bnaas-prom"
@@ -1310,8 +1309,8 @@
             "uid": "bnaas-prom"
           },
           "editorMode": "code",
-          "expr": "sum by (workgroup, match) (rate(s3_notification_delivery_worker_barrier_seen_total[5m]))",
-          "legendFormat": "{{workgroup}} match={{match}}",
+          "expr": "sum by (workgroup, destination) (rate(s3_notification_delivery_watermark_skipped_total[1m]))",
+          "legendFormat": "{{workgroup}} {{destination}}",
           "range": true,
           "instant": false,
           "refId": "A"

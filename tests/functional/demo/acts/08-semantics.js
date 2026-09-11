@@ -1,13 +1,14 @@
 'use strict';
 
 /**
- * Act 08, rig scenarios M5, M9, M8 and M6b: the four semantics questions,
- * each short, each ending in a decision somebody has to make.
+ * Act 08, rig scenarios M9, M8 and M6b: the semantics questions, each
+ * short, each ending in a decision somebody has to make. The mixed-window
+ * case is gone with the second topic: there is one path, and every change
+ * is a container swap, so no two consumers are ever alive together.
  *
- *   mixed window       both consumers alive partition the stream, they do
- *                      not duplicate it
- *   detach             queued events for a detached destination are dropped
- *                      today and delivered by the pool
+ *   detach             queued events for a detached destination: what
+ *                      today's processor does with them, and what the pool
+ *                      does, both matching at delivery time on today's topic
  *   overlapping rules  one object matching two rules goes to both
  *                      destinations, on both paths
  *   name collision     an account-scoped ARN naming a global destination is
@@ -35,7 +36,7 @@ function countKey(file, needle) {
 
 function register(ctx) {
     describe('Act 08: the semantics that change', () => {
-        const act = new Act('08', 'semantics', 'M5, M9, M8, M6b',
+        const act = new Act('08', 'semantics', 'M9, M8, M6b',
             'what the migration changes for a customer, and what it keeps');
         let legacy;
         let pool;
@@ -48,10 +49,9 @@ function register(ctx) {
             t2 = ctx.customerTopicOf[D2];
             legacy = flow.legacyConfig(act, ctx);
             pool = flow.poolConfig(act, ctx);
-            act.expect('mixed window gaps (loss)', 0);
-            act.expect('mixed window duplicate extras', 0);
             act.expect('legacy: delivered to the detached destination', '0 of 20');
-            act.expect('pool: delivered to the detached destination', '20 of 20');
+            act.expect('pool: delivered to the detached destination',
+                '(measured: the worker matches at delivery time too)');
             act.expect('legacy: prefixed object to both destinations', 'yes');
             act.expect('pool: prefixed object to both destinations', 'yes');
             act.expect('unknown account-scoped ARN', 'refused');
@@ -62,77 +62,6 @@ function register(ctx) {
         after(() => {
             procs.stopAll();
             act.close();
-        });
-
-        it('partitions the stream when both consumers are alive', async () => {
-            const bucket = 'demo-bucket-mixed';
-            await s3lib.bucketWith(ctx.s3, bucket, [D1]);
-            step(1, 'legacy path under load, then start a worker as well');
-            let populator = await flow.startPopulator(act, legacy, 'legacy');
-            const processor = await flow.startProcessor(act, legacy, D1);
-            await flow.warmLegacyGroup(act, { dest: D1, bucket, count: 8 });
-            const from = kafka.head(t1, 0);
-            const load = flow.startDriver(act, { bucket, 'prefix': 'm5', 'rate': 3,
-                'duration': env.workSecs(150, 75), 'straddle': 3,
-                'straddle-every': 5 });
-            await procs.sleep(env.pause(25000));
-            const internal1 = kafka.headTotal(env.INTERNAL_TOPIC);
-            const delivery1 = kafka.headTotal(env.DELIVERY_TOPIC);
-            const worker = await flow.startWorker(act, pool, 1);
-            note('both consumers are now alive. The worry this kills is that');
-            note('every event would be delivered twice.');
-
-            step(2, 'flip the populator to the pool and hold the mixed window');
-            populator.stop();
-            await procs.sleep(env.pause(6000));
-            populator = await flow.startPopulator(act, pool, 'pool');
-            await procs.sleep(env.pause(45000));
-            const internal2 = kafka.headTotal(env.INTERNAL_TOPIC);
-            const delivery2 = kafka.headTotal(env.DELIVERY_TOPIC);
-            say(`through the legacy topic: ${internal2 - internal1} records`);
-            say(`through the delivery topic: ${delivery2 - delivery1} records`);
-            note('the populator\'s routing is an if/else, so one populator');
-            note('publishes each event to exactly one topic. The two paths');
-            note('PARTITION the stream instead of duplicating it.');
-            act.measured('routed through the legacy topic',
-                `${internal2 - internal1} records`);
-            act.measured('routed through the delivery topic',
-                `${delivery2 - delivery1} records`);
-
-            step(3, 'stop legacy, finish the load, drain and check');
-            processor.stop();
-            load.proc.stop();
-            await wait.until('the driver to stop', () => !load.proc.isRunning(),
-                60000, 1000);
-            await wait.frozen(env.DELIVERY_TOPIC, env.pause(12000));
-            const drain = await flow.drainOrCure({ group: env.DELIVERY_GROUP,
-                label: 'pool', timeoutMs: 240000, workers: [1] });
-            const r = flow.dumpAndCheck({ act, topic: t1, from,
-                driver: load.log, keyPrefix: 'm5', label: 'mixed-window' });
-            act.measured('mixed window gaps (loss)', r.totals.gaps);
-            act.measured('mixed window duplicate extras',
-                r.totals.duplicate_extras);
-            if (r.totals.duplicate_extras > 0) {
-                note('duplicates here have two possible sources, and neither is');
-                note('the mixed window itself. The populator stopped for the');
-                note('switch can die between publishing a batch and saving its');
-                note('checkpoint, and its successor then re-reads that window');
-                note('and publishes it to the OTHER topic, so both paths deliver');
-                note('it: the same cost the mid-batch kill of act 05 shows,');
-                note('landing on the switch. And a worker restarted by the wedge');
-                note(`cure resumes at its group's committed offset${drain.cured
-                    ? ' (one fired in this run)' : ' (none fired in this run)'}.`);
-                note('Both are bounded and both are at-least-once. Loss is the');
-                note('row that must be zero.');
-            }
-            worker.stop();
-            populator.stop();
-            await procs.sleep(env.pause(5000));
-            assert.strictEqual(r.totals.gaps, 0, 'the mixed window lost events');
-            if (!drain.cured) {
-                assert.ok(r.totals.duplicate_extras <= 200,
-                    'the mixed window duplicated more than a checkpoint window');
-            }
         });
 
         it('drops queued events on detach today and delivers them on the pool',
@@ -193,13 +122,13 @@ function register(ctx) {
                 await procs.sleep(env.pause(5000));
                 await s3lib.putNotification(ctx.s3, bucket, [D1, D2]);
                 await flow.startPopulator(act, pool, 'pool');
+                flow.seedPoolGroupAtHead(act);
                 const poolFrom2 = kafka.head(t2, 0);
                 await flow.runDriver(act, { bucket, prefix: 'pool-detach',
                     rate: 6, count: 20 });
-                await wait.frozen(env.DELIVERY_TOPIC, env.pause(12000));
-                say('the populator wrote one addressed record per matching '
-                    + 'destination: delivery topic at '
-                    + `${kafka.headTotal(env.DELIVERY_TOPIC)}`);
+                await wait.frozen(env.POOL_TOPIC, env.pause(12000));
+                say('the populator wrote one record per event to today\'s '
+                    + `topic, as always: ${kafka.headTotal(env.POOL_TOPIC)} records`);
                 await s3lib.putNotification(ctx.s3, bucket, [D1]);
                 say(`${D2} detached again, and only now is a worker started`);
                 const worker = await flow.startWorker(act, pool, 1);
@@ -209,10 +138,23 @@ function register(ctx) {
                 const poolGone = countKey(
                     act.file('events-pool-detached.jsonl'), 'pool-detach');
                 say(`delivered to the detached ${D2}: ${poolGone} of 20`);
-                note('the worker never re-reads the configuration: the');
-                note('destination was resolved at publish time and written');
-                note('into the record. Detach is not a revocation any more.');
-                note('That is release-note material, and product question 3.');
+                if (poolGone === 0) {
+                    note('the worker reads today\'s topic and matches each event');
+                    note('against the bucket\'s rules at delivery time, exactly');
+                    note('as the processor does, so a detached destination\'s');
+                    note('queued events are dropped on both paths. Detach stays');
+                    note('a revocation. The previous model, which resolved the');
+                    note('destination at publish time, delivered them (20 of 20');
+                    note('measured on 2026-09-10); that difference is gone with');
+                    note('the second topic. Product question 3 becomes: should');
+                    note('the drop be counted and visible, which the pool can do');
+                    note('and the processor cannot.');
+                } else {
+                    note('the pool delivered queued events after the detach,');
+                    note('which means the worker resolved the destination before');
+                    note('the configuration changed. Detach is not a revocation');
+                    note('on this path. Release-note material, product question 3.');
+                }
                 act.measured('pool: delivered to the detached destination',
                     `${poolGone} of 20`);
                 worker.stop();
@@ -220,8 +162,6 @@ function register(ctx) {
                 await procs.sleep(env.pause(4000));
                 assert.strictEqual(legacyGone, 0,
                     'the legacy path delivered to a detached destination');
-                assert.ok(poolGone > 0,
-                    'the pool dropped the detached destination\'s queued events');
             });
 
         it('fans out to both destinations when two rules match', async () => {
@@ -246,7 +186,8 @@ function register(ctx) {
                      
                     await flow.warmLegacyGroup(act, { dest: D2, bucket, count: 6 });
                 } else {
-                     
+                    flow.seedPoolGroupAtHead(act);
+
                     await flow.startWorker(act, cfg, 1);
                 }
                 const from1 = kafka.head(t1, 0);
@@ -258,8 +199,7 @@ function register(ctx) {
                 await flow.runDriver(act, { bucket, prefix: `other/${label}-y`,
                     rate: 2, count: 2 });
                  
-                await wait.frozen(pathName === 'legacy'
-                    ? env.INTERNAL_TOPIC : env.DELIVERY_TOPIC, env.pause(12000));
+                await wait.frozen(env.INTERNAL_TOPIC, env.pause(12000));
                 if (pathName === 'legacy') {
                      
                     await flow.drainOrCure({ group: env.legacyGroup(D1),
@@ -294,11 +234,9 @@ function register(ctx) {
             note('what NEITHER implementation does. Shipping it literally');
             note('would silently stop a bucket delivering to its second');
             note('destination. Product question 6.');
-            note('where they differ is WHERE the fan-out is decided: legacy');
-            note('publishes one internal record and each processor re-matches,');
-            note('the pool publishes one addressed record per matching');
-            note('destination at publish time. That is why detach behaves');
-            note('differently, which is the case above.');
+            note('both paths decide the fan-out the same way now: one record');
+            note('per event on today\'s topic, and the consumer matches it');
+            note('against the bucket\'s rules per destination at delivery time.');
             assert.ok(both.legacy, 'the legacy path did not fan out');
             assert.ok(both.pool, 'the pool did not fan out');
         });

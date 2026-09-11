@@ -16,6 +16,13 @@
  *
  * Three failure classes, as on the rig: a refused connection, a blackholed
  * address, and a reachable broker whose topic has no leader.
+ *
+ * The pool reads today's topic, which is partitioned by object, not by
+ * destination, so a dead destination's records sit on the same partitions
+ * as everybody else's. Isolation there rests on the delivery deadline and
+ * the drop, not on partition ownership: the healthy destination is served
+ * while the dead ones time out, and the partitions' committed offsets catch
+ * up once the deadline has passed. That catch-up is measured here.
  */
 
 const assert = require('assert');
@@ -65,6 +72,8 @@ function register(ctx) {
             act.expect(`pool dropped ${NO_LEADER}`, '20, delivery_error');
             act.expect('pool delivery group lag', '0, it commits past the drops');
             act.expect('healthy destination meanwhile', '5 of 5 delivered');
+            act.expect('pool commit progress on shared partitions',
+                'lag 0 once the deadline has passed');
         });
 
         after(() => {
@@ -252,6 +261,7 @@ function register(ctx) {
                     tag: 'dead',
                 });
                 await flow.startPopulator(act, pool, 'pool');
+                flow.seedPoolGroupAtHead(act);
                 const worker = await flow.startWorker(act, pool, 1);
                 const live = await wait.liveness(1);
                 say(`worker liveness ${live}, with four unreachable `
@@ -273,7 +283,40 @@ function register(ctx) {
                     rate: 2, count: 5 });
                 watch('grafana', 'row "Failure", drops per second by reason');
 
-                step(7, 'watch dropped_total{target,reason}');
+                step(7, 'watch dropped_total{target,reason}, and the offsets');
+                note('on today\'s topic the dead destinations\' records share');
+                note('partitions with the healthy one. The healthy deliveries');
+                note('go out at once; the partitions\' committed offsets can');
+                note('only move once the dead records ahead of them have been');
+                note('dropped, so the lag holds for about one delivery deadline');
+                note('and then falls to 0. That is what isolation looks like');
+                note('without partition ownership: bounded by the deadline.');
+                const sampled = { maxLag: 0, lagZeroAt: null, healthyAt: null };
+                const sampleStart = Date.now();
+                while ((Date.now() - sampleStart) < 120000) {
+                    const st = kafka.groupState(env.DELIVERY_GROUP, env.POOL_TOPIC);
+                    const healthy = await wait.counter(1, 'delivered',
+                        { target: HEALTHY });
+                    const t = Math.round((Date.now() - sampleStart) / 1000);
+                    sampled.maxLag = Math.max(sampled.maxLag, st.lag);
+                    if (healthy >= 5 && sampled.healthyAt === null) {
+                        sampled.healthyAt = t;
+                    }
+                    say(`t+${t}s lag ${st.lag} over ${st.partitions} partitions, `
+                        + `healthy delivered ${healthy}`);
+                    if (st.partitions > 0 && st.lag === 0 && st.unknown === 0
+                        && healthy >= 5 && t > 5) {
+                        sampled.lagZeroAt = t;
+                        break;
+                    }
+                    await procs.sleep(5000);
+                }
+                act.measured('pool commit progress on shared partitions',
+                    sampled.lagZeroAt !== null
+                        ? `lag 0 at t+${sampled.lagZeroAt}s, peak lag `
+                          + `${sampled.maxLag}, healthy 5 of 5 at `
+                          + `t+${sampled.healthyAt}s`
+                        : `lag never reached 0 in 120s, peak ${sampled.maxLag}`);
                 const firstDrop = {};
                 const counted = await flow.progressOrCure(act, worker,
                     'every dead destination to be counted',

@@ -185,7 +185,7 @@ function describe(group) {
  */
 function topicOfGroup(group) {
     if (group.startsWith(env.DELIVERY_GROUP)) {
-        return env.DELIVERY_TOPIC;
+        return env.POOL_TOPIC;
     }
     if (group.startsWith(env.LEGACY_GROUP_PREFIX)) {
         return env.INTERNAL_TOPIC;
@@ -243,6 +243,24 @@ function groupState(group, topic) {
 
 function groupLag(group, topic) {
     return groupState(group, topic).lag;
+}
+
+/**
+ * A group's committed offset per partition of one topic, as numbers, with
+ * partitions that have no committed offset left out.
+ *
+ * @param {String} group - consumer group
+ * @param {String} topic - topic
+ * @return {Object} partition number to committed offset
+ */
+function committedByPartition(group, topic) {
+    const out = {};
+    groupState(group, topic).rows.forEach(r => {
+        if (/^\d+$/.test(r.committed)) {
+            out[r.partition] = Number(r.committed);
+        }
+    });
+    return out;
 }
 
 /**
@@ -534,6 +552,7 @@ module.exports = {
     describe,
     groupState,
     groupLag,
+    committedByPartition,
     createTopic,
     deleteTopic,
     deleteGroup,

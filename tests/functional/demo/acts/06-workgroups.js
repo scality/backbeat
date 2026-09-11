@@ -1,31 +1,33 @@
 'use strict';
 
 /**
- * Act 06: workgroups, the mechanism that lets one delivery topic serve a
+ * Act 06: workgroups, the mechanism that lets today's one topic serve a
  * population of destinations without every worker holding a producer for
  * every destination.
  *
- * The topology is decided: ONE internal delivery topic. The populator writes
- * to that one topic, and a workgroup is a consumer group over it with a
- * slice filter, so a worker commits records outside its slice without
- * delivering them. Per-workgroup topics are out.
+ * The topology is decided: the workers read today's topic, and a workgroup
+ * is a consumer group over it with a slice filter, so a worker commits
+ * records outside its slice without delivering them. No second topic, no
+ * populator change.
  *
  * The document in ZooKeeper is the whole contract: a generation, a hashmod
- * rule whose remainders cover the whole modulo, optional static pins, and at
- * a change the barrier offsets. Ownership is a total function, so every
- * record has exactly one owner, which is why a slice filter can commit what
- * it does not deliver without losing anything.
+ * rule whose remainders cover the whole modulo, and optional static pins.
+ * Ownership is a total function, so every record has exactly one owner,
+ * which is why a slice filter can commit what it does not deliver without
+ * losing anything. A layout change is a new generation, applied the way
+ * production applies every change: stop the old generation's containers,
+ * seed the new generation's groups from the old ones, start the new
+ * containers. No barrier, no verify step, no overlap, and a measured pause.
  *
  * Four things happen here, in order:
- *   a  two auto workgroups, six destinations, one worker each
+ *   a  two auto workgroups, five destinations, one worker each
  *   b  one workgroup's worker dies: only its destinations pause
- *   c  a noisy destination is pinned to its own workgroup
- *   d  a live reshard from modulo 2 to modulo 3, through the cutover tool,
- *      with the barrier, the drain report and verify
+ *   c  a noisy destination is pinned to its own workgroup (generation 2)
+ *   d  a reshard from two auto workgroups to three, under load
+ *      (generation 3)
  *
- * Every step uses the repository's own tools: bin/notificationWorkgroupCutover.js
- * for plan, cutover, preseed, show and verify, and the ownership function
- * from extensions/notification/utils/workgroups.js for the mapping.
+ * The seed tool is the repository's own bin/notificationDeliverySeed.js, and
+ * the ownership function is extensions/notification/utils/workgroups.js.
  */
 
 const assert = require('assert');
@@ -47,25 +49,30 @@ const { Act, say, note, watch, step, line } = require('../lib/narrate');
 // they are.
 const DESTS = ['poc-dest-1', 'poc-dest-2', 'poc-dest-3',
     'krb-dest-a', 'krb-dest-b'];
-const MODULO = '4';
-const GEN1 = ['--modulo', MODULO, '--workgroup', 'wg-a:0,1',
-    '--workgroup', 'wg-b:2,3'];
-const GEN2 = GEN1.concat(['--static', 'wg-pin:poc-dest-1']);
-const GEN3 = ['--modulo', MODULO, '--workgroup', 'wg-a:0,1',
-    '--workgroup', 'wg-b:2', '--workgroup', 'wg-c:3',
-    '--static', 'wg-pin:poc-dest-1'];
+const MODULO = 4;
+const LAYOUT = {
+    1: { modulo: MODULO, workgroups: { 'wg-a': [0, 1], 'wg-b': [2, 3] } },
+    2: { modulo: MODULO, workgroups: { 'wg-a': [0, 1], 'wg-b': [2, 3] },
+        statics: { 'wg-pin': ['poc-dest-1'] } },
+    3: { modulo: MODULO, workgroups: { 'wg-a': [0, 1], 'wg-b': [2], 'wg-c': [3] },
+        statics: { 'wg-pin': ['poc-dest-1'] } },
+};
+const IDS = {
+    1: ['wg-a', 'wg-b'],
+    2: ['wg-a', 'wg-b', 'wg-pin'],
+    3: ['wg-a', 'wg-b', 'wg-c', 'wg-pin'],
+};
 const BUCKETS = {};
 DESTS.forEach((d, i) => { BUCKETS[d] = `demo-wg-${i + 1}`; });
-const CUTOVER = 'bin/notificationWorkgroupCutover.js';
-const STOP_EARLY = env.knob('DEMO_WORKGROUPS_STOP_EARLY', '') === '1';
 const LOAD_SECONDS = Number(env.knob('DEMO_ACT06_SECONDS',
     env.workSecs(420, 200)));
 
 function register(ctx) {
     describe('Act 06: workgroups', () => {
         const act = new Act('06', 'workgroups', 'W gates and C5r',
-            'one delivery topic, sliced into workgroups by a document in '
-            + 'ZooKeeper, changed live through a barrier cutover');
+            'today\'s topic, sliced into workgroups by a document in '
+            + 'ZooKeeper, changed by stopping one generation and starting '
+            + 'the next, seeded from the old one');
         let config;
         const workers = {};
         let load;
@@ -75,21 +82,17 @@ function register(ctx) {
         const from = {};
 
         /**
-         * Run the cutover tool.
+         * Write a generation's document and say what it holds.
          *
-         * @param {String} cmd - plan, cutover, preseed, show or verify
-         * @param {Array} args - extra arguments
-         * @return {Object} { code, out }
+         * @param {Number} generation - generation number
+         * @return {Object} the document as read back
          */
-        function tool(cmd, args) {
-            const r = procs.runTool({ act, name: `cutover-${cmd}`,
-                argv: [CUTOVER, cmd].concat(args || []),
-                configFile: config, timeoutMs: 300000 });
-            line(r.out.split('\n').map(l => `      | ${l}`).join('\n'));
-            if (r.code !== 0 && cmd !== 'verify') {
-                note(`the tool exited ${r.code}`);
-            }
-            return r;
+        function writeLayout(generation) {
+            const doc = zk.writeWorkgroupsDoc(zk.buildWorkgroupsDoc(
+                Object.assign({ generation }, LAYOUT[generation])));
+            line(zk.describeDoc(doc).map(l => `      | ${l}`).join('\n'));
+            act.timeline(`workgroups document generation ${generation} written`);
+            return doc;
         }
 
         async function startWorkgroupWorkers(ids, generation) {
@@ -103,83 +106,6 @@ function register(ctx) {
                 say(`  workgroup ${id} joins group `
                     + `${zk.groupIdFor(env.DELIVERY_GROUP, id, generation)}`);
             }
-        }
-
-
-        /**
-         * Wait for the drain report to exit 0, which is the only statement
-         * that the previous generation can be stopped without losing
-         * records.
-         *
-         * A wedged previous-generation worker is what makes this wait
-         * unbounded: it holds its partitions, commits nothing, and its group
-         * therefore never reaches its barriers. That is the design/06 wedge
-         * landing on the one gate a cutover cannot skip, and the cure is the
-         * documented one: restart that one worker.
-         *
-         * @param {Array} prevIds - the previous generation's workgroup ids
-         * @param {Number} prevGen - the previous generation number
-         * @param {Number} budgetMs - how long to keep trying
-         * @return {Promise} resolves true when verify exits 0
-         */
-        async function waitForDrain(prevIds, prevGen, budgetMs) {
-            const deadline = Date.now() + budgetMs;
-            const seen = {};
-            let lastMove = Date.now();
-            let cures = 0;
-            while (Date.now() < deadline) {
-                const v = tool('verify', []);
-                if (v.code === 0) {
-                    say('verify exits 0: every previous group is past every '
-                        + 'barrier, so the old generation can be stopped');
-                    act.measured('wedge cures needed during the drain', cures);
-                    return true;
-                }
-                let moved = false;
-                prevIds.forEach(id => {
-                    const g = zk.groupIdFor(env.DELIVERY_GROUP, id, prevGen);
-                    const c = kafka.groupState(g, env.DELIVERY_TOPIC).committed;
-                    if (seen[id] === undefined || c !== seen[id]) {
-                        moved = true;
-                    }
-                    seen[id] = c;
-                });
-                if (moved) {
-                    lastMove = Date.now();
-                }
-                if (Date.now() - lastMove > 60000) {
-                    for (const id of prevIds) {
-                        const g = zk.groupIdFor(env.DELIVERY_GROUP, id, prevGen);
-                        const st = kafka.groupState(g, env.DELIVERY_TOPIC);
-                        const w = workers[`${id}-gen${prevGen}`];
-                        if (!w || st.lag === 0) {
-                            continue;
-                        }
-                        note(`WEDGE SUSPECTED on workgroup ${id} of generation `
-                            + `${prevGen}: it has committed ${st.committed} and`);
-                        note(`  has not moved, with ${st.lag} still to read. Its`);
-                        note('  liveness probe answers 200 all the same. Curing');
-                        note('  it the documented way: restart that one worker.');
-                        note('  A restart on the same group resumes at that');
-                        note('  group\'s committed offset, so anything it');
-                        note('  delivered without committing arrives twice.');
-                        w.stop();
-                         
-                        await procs.sleep(env.pause(5000));
-                        const idx = prevIds.indexOf(id) + 1 + (prevGen - 1) * 4;
-                         
-                        workers[`${id}-gen${prevGen}`] = await flow.startWorker(
-                            act, config, idx,
-                            { workgroupId: id, autoRestart: true });
-                        cures += 1;
-                        lastMove = Date.now();
-                    }
-                }
-                 
-                await procs.sleep(15000);
-            }
-            act.measured('wedge cures needed during the drain', cures);
-            return false;
         }
 
 
@@ -204,39 +130,43 @@ function register(ctx) {
         }
 
         /**
-         * A generation change with no overlap, the way the cutover tool's own
-         * printed instruction has it: do not stop the old generation, and do
-         * not start the new one, until verify exits 0. The new generation
-         * starts at the barrier and would deliver post-barrier records while
-         * an old generation still behind its barrier delivers earlier ones
-         * for the same keys, which is exactly how the rehearsal of 2026-09-11
-         * produced 4197 same-key inversions. The price of no overlap is a
-         * delivery pause, measured here: from the old generation's stop to
-         * the new one's first delivery.
+         * A generation change the way production does every change: stop
+         * every container of the old generation, write the new layout, seed
+         * the new generation's groups from the old ones (lowest committed
+         * offset per partition, a watermark per destination at its previous
+         * owner's offset), start the new containers. No two generations ever
+         * run together, so nothing can interleave; the price is a delivery
+         * pause, measured from the old generation's stop to the new one's
+         * first delivery.
          *
-         * @param {Object} p - { prevIds, prevGen, newIds, newGen, label }
-         * @return {Promise} resolves with { verified, pauseS }
+         * @param {Object} p - { prevGen, newGen, label }
+         * @return {Promise} resolves with { pauseS }
          */
         async function changeGeneration(p) {
-            const verified = await waitForDrain(p.prevIds, p.prevGen, 600000);
-            act.measured('verify exit code before stopping the old generation',
-                verified ? 0 : 2);
-            assert.ok(verified, `verify never reached 0, so generation ${p.prevGen} `
-                + 'cannot be stopped without losing records');
-            note('every previous group is past every barrier: the old');
-            note('generation can be stopped now, and the new one started');
-            note('now, and neither before. Between the two nothing is');
-            note('delivered, which is the price of a change with no overlap.');
-            stopGeneration(p.prevIds, p.prevGen);
+            note('the operator\'s order, which is Ansible\'s order: stop the');
+            note('old generation, write the new layout, seed, start the new');
+            note('generation. Between the stop and the first delivery nothing');
+            note('is delivered, and that pause is the whole price of a change');
+            note('with no overlap.');
+            stopGeneration(IDS[p.prevGen], p.prevGen);
             const stoppedAt = Date.now();
-            await startWorkgroupWorkers(p.newIds, p.newGen);
-            const delivered = await firstDelivery(p.newIds, p.newGen, 300000);
+            act.timeline(`generation ${p.prevGen} STOPPED`);
+            writeLayout(p.newGen);
+            const seeded = flow.seedFromGeneration(act, config, p.prevGen, p.newGen);
+            act.measured(`seed exit code, generation ${p.newGen}`, seeded.code);
+            assert.strictEqual(seeded.code, 0,
+                `generation ${p.newGen} was not seeded on every partition`);
+            const marks = zk.watermarks(p.newGen) || {};
+            say(`watermarks for generation ${p.newGen}: `
+                + `${Object.keys(marks).length} destinations`);
+            await startWorkgroupWorkers(IDS[p.newGen], p.newGen);
+            const delivered = await firstDelivery(IDS[p.newGen], p.newGen, 300000);
             const pauseS = Math.round((Date.now() - stoppedAt) / 1000);
             say(`generation ${p.newGen} ${delivered ? 'delivering' : 'still silent'} `
                 + `${pauseS}s after generation ${p.prevGen} was stopped`);
             act.measured(`delivery pause at the ${p.label}`, `${pauseS}s`);
-            await ensureDelivering(p.newIds, p.newGen, 240000);
-            return { verified, pauseS };
+            await ensureDelivering(IDS[p.newGen], p.newGen, 240000);
+            return { pauseS };
         }
 
         /**
@@ -260,7 +190,7 @@ function register(ctx) {
         async function partitionStalls(ids, generation, sampleMs) {
             const snap = () => Object.fromEntries(ids.map(id => {
                 const g = zk.groupIdFor(env.DELIVERY_GROUP, id, generation);
-                return [id, kafka.groupState(g, env.DELIVERY_TOPIC)];
+                return [id, kafka.groupState(g, env.POOL_TOPIC)];
             }));
             const first = snap();
             await procs.sleep(sampleMs);
@@ -368,7 +298,7 @@ function register(ctx) {
                     const bal = r.w.rebalances();
                     const group = zk.groupIdFor(env.DELIVERY_GROUP, r.id,
                         generation);
-                    const lag = kafka.groupLag(group, env.DELIVERY_TOPIC);
+                    const lag = kafka.groupLag(group, env.POOL_TOPIC);
                     // an idle worker with nothing to read looks the same in
                     // the log as a wedged one: what tells them apart is
                     // whether there are records waiting for it
@@ -414,16 +344,18 @@ function register(ctx) {
                 'only the dead workgroup\'s destinations pause');
             act.expect('pinned destination', 'served by the pinned workgroup only');
             act.expect('reshard gaps (loss)', 0);
-            act.expect('reshard inversions',
-                '0 with a prompt stop of the old generation');
-            act.expect('reshard duplicates',
-                'the old generation\'s consumption past its barriers');
-            act.expect('verify exit code before stopping the old generation', 0);
+            act.expect('reshard inversions', '0, one generation at a time');
+            act.expect('reshard duplicates', '0 with the watermarks');
+            act.expect('seed exit code, generation 2', 0);
+            act.expect('seed exit code, generation 3', 0);
             config = flow.poolConfig(act, ctx, {
                 only: DESTS,
                 workgroups: true,
                 tag: 'wg',
             });
+            // this act writes its own generation 1, so nothing an earlier act
+            // left in the document or in the workgroup groups may leak in
+            flow.resetPoolGroups(act);
             for (const d of DESTS) {
                  
                 await s3lib.bucketWith(ctx.s3, BUCKETS[d], [d]);
@@ -450,17 +382,18 @@ function register(ctx) {
                 note('whole modulo. That total coverage is what makes');
                 note('ownership a function: every record has exactly one');
                 note('owner, and a worker can commit what it does not own.');
-                tool('plan', GEN1);
-                const first = tool('cutover', GEN1);
-                assert.strictEqual(first.code, 0,
-                    'the generation 1 cutover failed; its own error says why, '
-                    + 'and a group that still has members from an earlier run '
-                    + 'is the usual reason');
-                const doc = zk.workgroupsDoc();
+                const doc = writeLayout(1);
                 assert.ok(doc, 'no workgroups document was written');
-                line(zk.describeDoc(doc).map(l => `      | ${l}`).join('\n'));
-                watch('kafka ui', `tab ZooKeeper, node ${env.ZK_WORKGROUPS_PATH}`);
-                watch('terminal', 'demo/bin/zk-show.sh prints the same thing');
+                note('the first generation on a topic that already has history');
+                note('starts at the head: the processors it replaces are act');
+                note('04\'s story. Here each group is seeded at the head, the');
+                note('way the seed tool would put it.');
+                IDS[1].forEach(id => {
+                    flow.seedPoolGroupAtHead(act,
+                        zk.groupIdFor(env.DELIVERY_GROUP, id, 1));
+                });
+                watch('zoonavigator', `node ${env.ZK_WORKGROUPS_PATH}`);
+                watch('terminal', 'poc-demo/bin/zk-show.sh prints the same thing');
 
                 step(2, 'which workgroup owns which destination');
                 note('the hash is md5 over the encoded destination token, and');
@@ -556,9 +489,9 @@ function register(ctx) {
             };
             const victimGroup = zk.groupIdFor(env.DELIVERY_GROUP, victimId, 1);
             const survivorGroup = zk.groupIdFor(env.DELIVERY_GROUP, survivorId, 1);
-            say(`${victimId} group lag ${kafka.groupLag(victimGroup, env.DELIVERY_TOPIC)}, `
+            say(`${victimId} group lag ${kafka.groupLag(victimGroup, env.POOL_TOPIC)}, `
                 + `${survivorId} group lag `
-                + `${kafka.groupLag(survivorGroup, env.DELIVERY_TOPIC)}`);
+                + `${kafka.groupLag(survivorGroup, env.POOL_TOPIC)}`);
             note('both groups read the whole topic and skip what they do not');
             note('own, so their raw lag is about the same number. The');
             note('isolation is in the DELIVERED counters and in the customer');
@@ -597,26 +530,15 @@ function register(ctx) {
             note('a static rule beats the hashmod one, so the destination is');
             note('carved out of the hash space. This is the lever for a noisy');
             note('or hostile tenant: its own workgroup, its own blast radius.');
-            const r = tool('cutover', GEN2);
-            assert.strictEqual(r.code, 0, 'the pin cutover failed');
-            const doc = zk.workgroupsDoc();
-            line(zk.describeDoc(doc).map(l => `      | ${l}`).join('\n'));
-            const map = zk.mapping(doc, DESTS);
-            say(`${pinned} now belongs to ${map[pinned]}`);
+            const planned = zk.buildWorkgroupsDoc(Object.assign({ generation: 2 },
+                LAYOUT[2]));
+            const map = zk.mapping(planned, DESTS);
+            say(`${pinned} will belong to ${map[pinned]}`);
             assert.strictEqual(map[pinned], 'wg-pin',
-                'the pin did not take effect in the document');
+                'the pin does not take effect in the planned document');
 
-            step(7, 'wait for verify, stop generation 1, then start generation 2');
-            note('the barrier is why this is safe: generation 2 starts at the');
-            note('barrier offsets, generation 1 owns everything before them,');
-            note('and verify says when it has got there. The order matters as');
-            note('much as the barrier: the tool prints "do not start the new');
-            note('generation until verify exits 0", and the rehearsal showed');
-            note('why. Started early, generation 2 delivered post-barrier');
-            note('records while generation 1, still behind its barrier after');
-            note('the kill, was delivering earlier ones for the same keys.');
-            await changeGeneration({ prevIds: ['wg-a', 'wg-b'], prevGen: 1,
-                newIds: ['wg-a', 'wg-b', 'wg-pin'], newGen: 2, label: 'pin cutover' });
+            step(7, 'the layout change: stop generation 1, seed, start generation 2');
+            await changeGeneration({ prevGen: 1, newGen: 2, label: 'pin cutover' });
             await procs.sleep(env.pause(10000));
 
             step(8, 'the pinned destination is now served by the pin only');
@@ -642,7 +564,14 @@ function register(ctx) {
         it('reshards from two workgroups to three under load', async () => {
             step(9, 'plan the reshard: which destinations move, which stay');
             const before = zk.mapping(zk.workgroupsDoc(), DESTS);
-            tool('plan', GEN3);
+            const planned = zk.buildWorkgroupsDoc(Object.assign({ generation: 3 },
+                LAYOUT[3]));
+            const after = zk.mapping(planned, DESTS);
+            const moved = DESTS.filter(d => before[d] !== after[d]);
+            const stayed = DESTS.filter(d => before[d] === after[d]);
+            say(`will move: ${moved.map(d => `${d} ${before[d]}->${after[d]}`)
+                .join(', ')}`);
+            say(`will stay: ${stayed.join(', ')}`);
             // The reshard has to be measured under traffic, and the long load
             // has ended by now, so start a fresh one and let it flow before the
             // cutover. Its operations append to the long load's log.
@@ -661,45 +590,21 @@ function register(ctx) {
                 fromOffsets[d] = kafka.head(ctx.customerTopicOf[d], 0);
             });
 
-            step(10, 'run the cutover with traffic flowing');
-            note('the tool writes a barrier record on every partition, then');
-            note('the document with those barrier offsets, then pre-seeds the');
-            note('new generation\'s groups while they are still empty. The');
-            note('ZooKeeper write is the commit point.');
-            const cut = tool('cutover', GEN3);
-            assert.strictEqual(cut.code, 0, 'the reshard cutover failed');
-            const doc = zk.workgroupsDoc();
-            line(zk.describeDoc(doc).map(l => `      | ${l}`).join('\n'));
-            const after = zk.mapping(doc, DESTS);
-            const moved = DESTS.filter(d => before[d] !== after[d]);
-            const stayed = DESTS.filter(d => before[d] === after[d]);
-            say(`moved: ${moved.map(d => `${d} ${before[d]}->${after[d]}`).join(', ')}`);
-            say(`stayed: ${stayed.join(', ')}`);
+            step(10, 'the reshard, with traffic flowing: stop 2, seed, start 3');
+            note('the seed tool takes, per partition, the lowest committed');
+            note('offset across the generation 2 groups a new group inherits');
+            note('from, and writes a watermark per destination at its previous');
+            note('owner\'s offset. A destination that moves workgroup keeps its');
+            note('place in the stream; nothing is skipped and nothing is sent');
+            note('again. The ZooKeeper write is the commit point.');
+            await changeGeneration({ prevGen: 2, newGen: 3, label: 'reshard' });
             act.measured('destinations that moved',
                 `${moved.length} of ${DESTS.length}`);
-            watch('grafana', 'row "Workgroups": cutover barriers seen (counted '
-                + 'when a worker PROCESSES the barrier record, not when it has '
-                + 'committed up to it, so it is not a drained signal), and the '
-                + 'generation per worker');
-
-            step(11, 'wait for verify, stop generation 2, then start generation 3');
-            if (STOP_EARLY) {
-                note('DEMO_WORKGROUPS_STOP_EARLY is set: generation 2 is being');
-                note('stopped BEFORE verify exits 0, which is the operator');
-                note('error the tool warns about. Expect loss, and expect the');
-                note('drain report to have warned about exactly those records.');
-                const v = tool('verify', []);
-                say(`verify exit code ${v.code} (2 means not drained)`);
-                stopGeneration(['wg-a', 'wg-b', 'wg-pin'], 2);
-                act.measured('verify exit code before stopping the old generation',
-                    v.code);
-                await startWorkgroupWorkers(['wg-a', 'wg-b', 'wg-c', 'wg-pin'], 3);
-                await ensureDelivering(['wg-a', 'wg-b', 'wg-c', 'wg-pin'], 3, 240000);
-            } else {
-                await changeGeneration({ prevIds: ['wg-a', 'wg-b', 'wg-pin'],
-                    prevGen: 2, newIds: ['wg-a', 'wg-b', 'wg-c', 'wg-pin'],
-                    newGen: 3, label: 'reshard' });
-            }
+            watch('grafana', 'row "Workgroups": delivered per second by workgroup, '
+                + 'the generation per worker, and records skipped under a '
+                + 'watermark');
+            watch('kafka ui', 'Consumers: the generation 3 groups appear, the '
+                + 'generation 2 groups go memberless');
             await procs.sleep(env.pause(10000));
 
             step(12, 'stop the load, drain generation 3, check every destination');
@@ -707,11 +612,11 @@ function register(ctx) {
             extraLoads.forEach(x => x.proc.stop());
             await wait.until('the drivers to stop', () => !load.proc.isRunning()
                 && extraLoads.every(x => !x.proc.isRunning()), 90000, 1000);
-            await wait.frozen(env.DELIVERY_TOPIC, env.pause(15000));
-            for (const id of ['wg-a', 'wg-b', 'wg-c', 'wg-pin']) {
+            await wait.frozen(env.POOL_TOPIC, env.pause(15000));
+            for (const id of IDS[3]) {
                 const group = zk.groupIdFor(env.DELIVERY_GROUP, id, 3);
                  
-                await flow.drainOrCure({ group, topic: env.DELIVERY_TOPIC,
+                await flow.drainOrCure({ group, topic: env.POOL_TOPIC,
                     label: `${id} gen3`, timeoutMs: 240000 });
             }
             // Two windows. The whole act, from the offsets recorded before
@@ -749,47 +654,32 @@ function register(ctx) {
             act.measured('reshard gaps (loss)', reshard.gaps);
             act.measured('reshard duplicates', reshard.dups);
             act.measured('reshard inversions', reshard.inversions);
-            note('gaps are impossible once verify has exited 0, which is the');
-            note('property the barrier buys. Duplicates are the old');
-            note('generation\'s consumption past its barriers before it was');
-            note('stopped, and re-deliveries after a kill or a cure restart.');
-            note('inversions across a generation change come from overlap:');
-            note('measured once, in the rehearsal of 2026-09-11, when the new');
-            note('generation was started right after the cutover while the old');
-            note('one was still behind its barrier after the kill of step 4.');
-            note('Every one of the 4197 inverted pairs was an old-generation');
-            note('earlier operation against a new-generation later one, all on');
-            note('krb-dest-b, the only destination with several operations per');
-            note('key (the straddle pairs), so the only place an inversion can');
-            note('show. With no overlap there is nothing to interleave, and the');
-            note('price is the delivery pause measured above.');
-            note('two more things the rehearsal measured, worth saying: the');
-            note('"barrier seen" log line and counter fire when a worker');
-            note('processes the barrier record, not when it has committed up');
-            note('to it, so they are not a drained signal (verify reads the');
-            note('committed offsets and is); and a destination\'s per-object');
+            note('loss is impossible when the new generation is seeded at the');
+            note('lowest offset of the groups it inherits from: every record');
+            note('either was delivered by the old generation or is read by the');
+            note('new one. Duplicates are what the per-destination watermark');
+            note('prevents: without it the new generation would re-deliver the');
+            note('spread between the old groups\' offsets. Inversions need two');
+            note('deliverers of the same key at once, and one generation at a');
+            note('time has none. The rehearsal of 2026-09-11 on the previous');
+            note('model measured 4197 same-key inversions when two generations');
+            note('did run together; that is the case this order removes, at the');
+            note('price of the pause measured above.');
+            note('two facts that still stand: a destination\'s per-object');
             note('ordering lanes deliver one record per producer poll, 2000 ms,');
-            note('so six lanes moved about three records a second. That ceiling');
-            note('is what made the old generation slow to reach its barrier.');
-            note('known gap, from the reshard study: a crashed old-generation');
-            note('worker cannot restart to finish its drain once the document');
-            note('has been overwritten. The proposed amendment is one');
-            note('ZooKeeper node per generation plus a current pointer.');
+            note('so six lanes moved about three records a second; and a kill');
+            note('or a cure restart re-delivers the worker\'s uncommitted');
+            note('window, at-least-once.');
 
-            if (STOP_EARLY) {
-                say(`stopped early on purpose: ${reshard.gaps} records lost in `
-                    + 'the reshard window, and the drain report above had '
-                    + 'already counted them as remaining');
-            } else {
-                assert.strictEqual(gaps, 0,
-                    'the act lost records even though verify exited 0');
-                assert.strictEqual(reshard.gaps, 0,
-                    'the reshard lost records even though verify exited 0');
-                if (reshard.inversions > 0) {
-                    say(`${reshard.inversions} same-key inversions in the reshard `
-                        + 'window: not loss, but not the zero a change with no '
-                        + 'overlap should give; read the evidence before recording');
-                }
+            assert.strictEqual(gaps, 0, 'the act lost records');
+            assert.strictEqual(reshard.gaps, 0, 'the reshard lost records');
+            assert.strictEqual(reshard.inversions, 0,
+                'the reshard reordered same-key events');
+            if (reshard.dups > 0) {
+                say(`${reshard.dups} duplicates in the reshard window: not loss, `
+                    + 'and not the zero the watermark should give; read the '
+                    + 'evidence (a cure restart re-delivers its uncommitted '
+                    + 'window) before recording');
             }
         });
     });

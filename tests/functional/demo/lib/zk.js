@@ -4,9 +4,10 @@
  * What ZooKeeper holds, through zkCli inside the container, so the terminal
  * shows the same thing as the ZooKeeper browser next to it.
  *
- * Two nodes matter to the demo: the populator's log offset, which is its
- * checkpoint, and the delivery pool's workgroups document, which carries the
- * generation, the slices and the barrier offsets a cutover writes.
+ * Three nodes matter to the demo: the populator's log offset, which is its
+ * checkpoint, the delivery pool's workgroups document, which carries the
+ * generation and the slices, and the per-destination watermarks the seed
+ * tool writes for a generation under it.
  */
 
 const env = require('./env');
@@ -67,6 +68,81 @@ function deleteAll(node) {
 
 function workgroupsDoc() {
     return getJson(env.ZK_WORKGROUPS_PATH);
+}
+
+/**
+ * Build a workgroups document, the way an Ansible run would render it from
+ * its configuration groups: a generation, a hashmod rule per auto workgroup
+ * and a static rule per pin. No barriers and no previous groups: a
+ * generation change is a container swap with the new groups seeded from the
+ * old ones, so the document carries only the layout.
+ *
+ * @param {Object} spec - { generation, modulo, workgroups: { id: [remainders] },
+ *   statics: { id: [destinationIds] }, topic }
+ * @return {Object} the document, validated by the repository's own schema
+ */
+function buildWorkgroupsDoc(spec) {
+     
+    const wg = require(`${env.BACKBEAT_DIR}/extensions/notification/utils/workgroups`);
+    const doc = {
+        configVersion: 1,
+        generation: spec.generation,
+        topic: spec.topic || env.POOL_TOPIC,
+        updatedAt: new Date().toISOString(),
+        workgroups: [],
+    };
+    Object.entries(spec.workgroups || {}).forEach(([id, remainders]) => {
+        doc.workgroups.push({ id, rule: { type: 'hashmod',
+            modulo: spec.modulo, remainders } });
+    });
+    Object.entries(spec.statics || {}).forEach(([id, destinationIds]) => {
+        doc.workgroups.push({ id, rule: { type: 'static', destinationIds } });
+    });
+    const checked = wg.validateWorkgroupsDoc(doc);
+    if (checked.error) {
+        throw checked.error;
+    }
+    return doc;
+}
+
+/**
+ * Write the workgroups document, creating the node if needed. zkCli takes
+ * the data as one argument, and docker exec passes argv through untouched,
+ * so a JSON string with spaces is fine as long as it has no newline.
+ *
+ * @param {Object} doc - the document
+ * @return {Object} the document as read back
+ */
+function writeWorkgroupsDoc(doc) {
+    const data = JSON.stringify(doc);
+    const parent = env.ZK_WORKGROUPS_PATH.split('/').slice(0, -1).join('/');
+    if (parent) {
+        cli(['create', parent, '']);
+    }
+    const r = cli(['set', env.ZK_WORKGROUPS_PATH, data]);
+    if (!r.ok || /Node does not exist/.test(`${r.out}${r.err}`)) {
+        cli(['create', env.ZK_WORKGROUPS_PATH, data]);
+    }
+    const back = workgroupsDoc();
+    if (!back || back.generation !== doc.generation) {
+        throw new Error('the workgroups document did not take: read back '
+            + `${JSON.stringify(back)}`);
+    }
+    return back;
+}
+
+/**
+ * The per-destination watermarks the seed tool wrote for a generation.
+ *
+ * @param {Number} generation - generation number
+ * @return {Object|null} { destinationId: { partition: offset } }
+ */
+function watermarks(generation) {
+    return getJson(`${env.ZK_WORKGROUPS_PATH}/watermarks/gen${generation}`);
+}
+
+function deleteWatermarks(generation) {
+    return deleteAll(`${env.ZK_WORKGROUPS_PATH}/watermarks/gen${generation}`);
 }
 
 function populatorOffset() {
@@ -144,6 +220,10 @@ module.exports = {
     ls,
     deleteAll,
     workgroupsDoc,
+    buildWorkgroupsDoc,
+    writeWorkgroupsDoc,
+    watermarks,
+    deleteWatermarks,
     populatorOffset,
     describeDoc,
     mapping,

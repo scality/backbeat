@@ -74,6 +74,7 @@ const COUNTER = {
     dropped: 's3_notification_delivery_worker_dropped_total',
     skipped: 's3_notification_delivery_worker_skipped_total',
     barrier: 's3_notification_delivery_worker_barrier_seen_total',
+    watermark: 's3_notification_delivery_watermark_skipped_total',
 };
 
 /**

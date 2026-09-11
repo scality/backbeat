@@ -57,6 +57,7 @@ function register(ctx) {
             pool = flow.poolConfig(act, ctx);
             await s3lib.bucketWith(ctx.s3, BUCKET, [DEST]);
             populator = await flow.startPopulator(act, pool, 'pool');
+            flow.seedPoolGroupAtHead(act);
             worker = await flow.startWorker(act, pool, 1, { autoRestart: true });
         });
 
@@ -105,7 +106,7 @@ function register(ctx) {
                 step(3, 'let the load finish, then drain and check');
                 await wait.until('the driver to finish',
                     () => !load.proc.isRunning(), 200000, 2000);
-                await wait.frozen(env.DELIVERY_TOPIC, env.pause(12000));
+                await wait.frozen(env.POOL_TOPIC, env.pause(12000));
                 await flow.drainOrCure({ group: env.DELIVERY_GROUP, label: 'pool',
                     timeoutMs: 300000, workers: [1] });
                 const r = flow.dumpAndCheck({ act, topic, from,
@@ -138,7 +139,7 @@ function register(ctx) {
 
             step(4, 'wait for real lag on the delivery topic, then kill -9');
             await procs.sleep(env.pause(45000));
-            const head = kafka.headTotal(env.DELIVERY_TOPIC);
+            const head = kafka.headTotal(env.POOL_TOPIC);
             const state = kafka.groupState(env.DELIVERY_GROUP);
             const window = head - state.committed;
             const deliveredBefore = await wait.counter(1, 'delivered');
@@ -183,7 +184,7 @@ function register(ctx) {
             step(5, 'let the load finish, drain, and check');
             await wait.until('the driver to finish',
                 () => !load.proc.isRunning(), 200000, 2000);
-            await wait.frozen(env.DELIVERY_TOPIC, env.pause(12000));
+            await wait.frozen(env.POOL_TOPIC, env.pause(12000));
             await flow.drainOrCure({ group: env.DELIVERY_GROUP, label: 'pool',
                 timeoutMs: 300000, workers: [1] });
             const r = flow.dumpAndCheck({ act, topic, from, driver: load.log,

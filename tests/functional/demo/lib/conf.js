@@ -7,6 +7,8 @@
  *
  * The path a backbeat process takes is decided by ONE thing: whether
  * extensions.notification.deliveryPool is present. Same code, same tree.
+ * With deliveryPool.source 'internal', the decided model, the populator's
+ * output is identical on both paths: one record per event on today's topic.
  *
  * Every probe server binds 0.0.0.0, not localhost, or prometheus in its
  * container cannot scrape the workers and the populator.
@@ -128,7 +130,14 @@ function backbeat(opts) {
         n.zookeeperPath = env.ZK_POPULATOR_PATH;
         n.deliveryPool = {
             enabled: true,
-            topic: o.deliveryTopic || env.DELIVERY_TOPIC,
+            // 'internal': the worker consumes notification.topic, today's
+            // topic, and matches per destination itself; the populator
+            // keeps publishing exactly as it does today. 'delivery': the
+            // previous model, addressed records on a second topic.
+            source: o.source || env.SOURCE,
+            topic: (o.source || env.SOURCE) === 'delivery'
+                ? (o.deliveryTopic || env.DELIVERY_TOPIC)
+                : (o.internalTopic || env.INTERNAL_TOPIC),
             groupId: o.deliveryGroup || env.DELIVERY_GROUP,
             deliveryTimeoutMs: o.deliveryTimeoutMs || 30000,
             producerIdleMs: 300000,

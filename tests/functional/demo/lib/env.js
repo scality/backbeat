@@ -182,6 +182,12 @@ const env = {
     CUSTOMER_TOPICS: [1, 2, 3, 4, 5, 6].map(n => suffixed(`customer-topic-${n}`)),
     INTERNAL_PARTITIONS: num('LEGACY_TOPIC_PARTITIONS', 4),
     DELIVERY_PARTITIONS: num('DELIVERY_TOPIC_PARTITIONS', 3),
+    // Which topic the pool worker consumes. 'internal' is the decided model:
+    // the workers read today's topic and match per destination themselves,
+    // the populator is untouched, and a migration or a layout change is a
+    // container swap. 'delivery' is the previous model, a destination-keyed
+    // topic the populator addressed records to, kept for reference runs.
+    SOURCE: (knob('DEMO_SOURCE', 'internal') || 'internal').toLowerCase(),
 
     ZK_POPULATOR_PATH: knob('ZK_POPULATOR_PATH', '/bnaas-demo/queue-populator'),
     ZK_WORKGROUPS_PATH: knob('ZK_WORKGROUPS_PATH', '/bnaas-demo/delivery-workgroups'),
@@ -199,6 +205,12 @@ const env = {
 };
 
 env.S3_ENDPOINT = `http://localhost:${env.CLOUDSERVER_PORT}`;
+// the topic the pool consumes, which every drain, freeze and head check on
+// the pool side has to look at
+env.POOL_TOPIC = env.SOURCE === 'delivery' ? env.DELIVERY_TOPIC
+    : env.INTERNAL_TOPIC;
+env.POOL_PARTITIONS = env.SOURCE === 'delivery' ? env.DELIVERY_PARTITIONS
+    : env.INTERNAL_PARTITIONS;
 env.probePort = n => env.PROBE_BASE + n;
 env.legacyGroup = dest => `${env.LEGACY_GROUP_PREFIX}-${dest}`;
 env.customerTopic = n => env.CUSTOMER_TOPICS[n - 1];

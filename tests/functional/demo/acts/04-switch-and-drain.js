@@ -1,61 +1,84 @@
 'use strict';
 
 /**
- * Act 04, rig scenarios M2b and M4b: the migration, and its rollback.
+ * Act 04: the migration, as one Ansible run.
  *
- * Five operator steps, no new tooling, because today's per-destination
- * processor IS the design's single-destination worker of generation v0:
+ * Production applies every change by replacing containers: the playbook
+ * deletes the per-destination processor containers and starts the worker
+ * containers. Nothing runs twice, nothing drains, nothing switches topics:
+ * the populator keeps writing one record per event to today's topic, and
+ * the workers read that same topic and match per destination themselves.
  *
- *   1. start the delivery worker on the quiet delivery topic
- *   2. switch the populator to that topic
- *   3. let the legacy processors drain the legacy topic to lag 0
- *   4. stop the legacy processors
- *   5. carry on
+ * The one thing the run has to get right is where the new consumer groups
+ * start reading. A group with no committed offset starts at the oldest
+ * record still retained, which would re-deliver hours of events to every
+ * customer. So between "delete" and "start" the run seeds each worker group
+ * from the committed offsets of the processors it replaces: the lowest per
+ * partition, so nothing is skipped, plus a watermark per destination at its
+ * own processor's offset, so nothing already delivered is sent again.
  *
- * Starting the worker BEFORE the switch is what removes the 69 duplicates
- * the rig measured: the worker joins a topic with nothing to replay. Waiting
- * for lag 0 before step 4 is what keeps per-key order: doing it early cost
- * 284 same-key inversions on the rig.
+ * To make the offsets differ, as they do on a real platform, one processor
+ * is caught up, one is stopped a little before the swap (a small backlog) and
+ * one is frozen early (a stalled destination with a large backlog). The
+ * measurement is then: nothing lost, nothing doubled, order kept, the pause,
+ * and the stalled destination's backlog finally delivered.
  *
- * Then the mirror rollback: populator back, pool drains to 0, legacy resumes
- * at its own committed offset, stop the worker. It costs nothing, which is
- * the argument for this path over the drainer one.
+ * There is no rollback step. The switch is one way; manual workgroups can
+ * reproduce today's one-process-per-destination isolation if ever needed.
  */
 
 const assert = require('assert');
+const fs = require('fs');
 const env = require('../lib/env');
 const kafka = require('../lib/kafka');
 const procs = require('../lib/procs');
 const wait = require('../lib/wait');
 const flow = require('../lib/flow');
+const zk = require('../lib/zk');
 const s3lib = require('../lib/s3');
-const { Act, say, note, watch, step } = require('../lib/narrate');
+const { Act, say, note, watch, step, line } = require('../lib/narrate');
 
-const DEST = 'poc-dest-1';
-const BUCKET = 'demo-bucket';
-const SECONDS = Number(env.knob('DEMO_ACT04_SECONDS', env.workSecs(240, 90)));
+const CAUGHT_UP = 'poc-dest-1';
+const STOPPED = 'poc-dest-2';
+const STALLED = 'poc-dest-3';
+const DESTS = [CAUGHT_UP, STOPPED, STALLED];
+const BUCKETS = {};
+DESTS.forEach((d, i) => { BUCKETS[d] = `demo-mig-${i + 1}`; });
+const WORKGROUP = 'wg-a';
+const GENERATION = 1;
+const SECONDS = Number(env.knob('DEMO_ACT04_SECONDS', env.workSecs(240, 120)));
+// the second pass: seed, then throw the watermarks away, to measure what the
+// per-destination watermark saves
+const WITHOUT_WATERMARK = env.knob('DEMO_ACT04_WITHOUT_WATERMARK', '') === '1';
 
 function register(ctx) {
-    describe('Act 04: the cutover and its rollback', () => {
-        const act = new Act('04', 'switch-and-drain', 'M2b and M4b',
-            'cut over to the pool under load with no loss, then roll back for '
-            + 'nothing');
-        let topic;
+    describe('Act 04: the migration, one Ansible run', () => {
+        const act = new Act('04', 'switch-and-drain', 'one run',
+            'delete the processors, seed the worker groups from their offsets, '
+            + 'start the workers: nothing lost, nothing doubled, order kept');
+        const from = {};
+        const processors = {};
 
-        before(() => {
+        before(async () => {
             act.open();
-            topic = ctx.customerTopicOf[DEST];
-            act.expect('cutover gaps (loss)', 0);
-            act.expect('cutover duplicate extras',
-                '0 with the worker started first');
-            act.expect('cutover per-key inversions', '0 or 1');
-            act.expect('legacy committed vs internal head', 'equal');
-            act.expect('internal topic after the switch', 'frozen');
-            act.expect('rollback gaps (loss)', 0);
-            act.expect('rollback duplicate extras', 0);
-            act.expect('rollback per-key inversions', 0);
-            act.expect('records of the cutover window re-delivered', 0);
-            act.expect('delivery topic after the rollback', 'frozen');
+            act.expect('gaps (loss)', 0);
+            act.expect(WITHOUT_WATERMARK
+                ? 'duplicates without the watermark'
+                : 'duplicates with the watermark',
+            WITHOUT_WATERMARK
+                ? 'the offset spread between the processors' : 0);
+            act.expect('per-key inversions', 0);
+            act.expect('processor offsets at the swap', '(not predicted)');
+            act.expect('delivery pause', '(not predicted)');
+            act.expect('stalled destination backlog delivered by the pool',
+                'all of it');
+            act.expect('records skipped under the watermark', '(not predicted)');
+            flow.resetPoolGroups(act);
+            for (const d of DESTS) {
+
+                await s3lib.bucketWith(ctx.s3, BUCKETS[d], [d]);
+                from[d] = kafka.head(ctx.customerTopicOf[d], 0);
+            }
         });
 
         after(() => {
@@ -63,172 +86,171 @@ function register(ctx) {
             act.close();
         });
 
-        it('cuts over with no loss and rolls back for nothing', async () => {
-            const legacy = flow.legacyConfig(act, ctx);
-            const pool = flow.poolConfig(act, ctx);
-            await s3lib.bucketWith(ctx.s3, BUCKET, [DEST]);
+        it('replaces the processors with workers in one run, losing nothing',
+            async () => {
+                const legacy = flow.legacyConfig(act, ctx, { only: DESTS });
+                const pool = flow.poolConfig(act, ctx, { only: DESTS,
+                    workgroups: true, tag: 'mig' });
 
-            step(0, 'start on the legacy path, caught up, under load');
-            let populator = await flow.startPopulator(act, legacy, 'legacy');
-            let processor = await flow.startProcessor(act, legacy, DEST);
-            note('the processor builds its consumer with no fromOffset, so a');
-            note('group that has never committed can skip what is already on');
-            note('the topic and its first-join revoke can move it past');
-            note('records published in between. Warming it first is the rig\'s');
-            note('own method note, and it is what makes this window honest.');
-            await flow.warmLegacyGroup(act, { dest: DEST, bucket: BUCKET,
-                count: 8 });
-            const cutFrom = kafka.head(topic, 0);
-            const load = flow.startDriver(act, { 'bucket': BUCKET, 'prefix': 'm2b',
-                'rate': 2, 'duration': SECONDS, 'straddle': 3, 'straddle-every': 5 });
-            watch('grafana', 'row "Cutover": the legacy group versus the pool');
-            note('the switch only means something once the legacy path is');
-            note('actually delivering, so wait for real events first');
-            await wait.until('the legacy path to deliver events',
-                () => kafka.head(topic, 0) >= cutFrom + 10, 180000, 3000);
-            say(`legacy path delivering: ${topic} at `
-                + `${kafka.head(topic, 0)}, internal topic at `
-                + `${kafka.headTotal(env.INTERNAL_TOPIC)}`);
+                step(0, 'today: the populator and one processor per destination');
+                await flow.startPopulator(act, legacy, 'legacy');
+                for (const d of DESTS) {
 
-            step(1, 'start the delivery worker FIRST, on the quiet topic');
-            note('started after the switch it replays whatever accumulated');
-            note('during the switch, which is where the rig\'s 69 duplicates');
-            note('came from. Started first it has nothing to replay.');
-            const worker = await flow.startWorker(act, pool, 1);
-            const bal = worker.rebalances();
-            say(`worker rebalances so far: ${bal.assign} assign, `
-                + `${bal.revoke} revoke`);
+                    processors[d] = await flow.startProcessor(act, legacy, d);
 
-            step(2, 'switch the populator to the delivery topic');
-            const lagAtSwitch = kafka.groupLag(env.legacyGroup(DEST));
-            const internalAtSwitch = kafka.headTotal(env.INTERNAL_TOPIC);
-            say(`legacy lag at the instant of the switch: ${lagAtSwitch}`);
-            populator.stop();
-            await procs.sleep(env.pause(6000));
-            populator = await flow.startPopulator(act, pool, 'pool');
-            act.timeline(`switched to pool, legacy lag ${lagAtSwitch}`);
-            watch('kafka ui', `${env.INTERNAL_TOPIC} freezes, `
-                + `${env.DELIVERY_TOPIC} starts moving`);
-            note('one destination is one delivery key is one partition: the');
-            note('key is the bare destination name, so capacity for a single');
-            note('destination goes through spreadFactor, never through the');
-            note('topic\'s partition count');
+                    await flow.warmLegacyGroup(act, { dest: d, bucket: BUCKETS[d],
+                        count: 6 });
+                }
+                const load = flow.startDriver(act, {
+                    'buckets': Object.values(BUCKETS).join(','),
+                    'prefix': 'mig', 'rate': 6, 'duration': SECONDS,
+                    'straddle': 3, 'straddle-every': 5,
+                });
+                watch('grafana', 'row "Migration": the processor groups versus '
+                    + 'the pool groups, lag per group');
+                await wait.until('the processors to deliver', () => DESTS.every(
+                    d => kafka.head(ctx.customerTopicOf[d], 0) > from[d] + 3),
+                180000, 3000);
 
-            step(3, 'let the legacy processor drain, gating on progress');
-            const drain = await flow.drainOrCure({ group: env.legacyGroup(DEST),
-                label: `legacy ${DEST}`, timeoutMs: 300000,
-                topicAtLeast: { topic: env.INTERNAL_TOPIC, count: 1 } });
-            if (drain.stalled) {
-                say('restarting the legacy processor, the documented cure');
-                processor.stop();
-                await procs.sleep(4000);
-                processor = await flow.startProcessor(act, legacy, DEST);
-                await flow.drainOrCure({ group: env.legacyGroup(DEST),
-                    label: `legacy ${DEST} after the restart`, timeoutMs: 300000 });
-            }
-            const internalNow = kafka.headTotal(env.INTERNAL_TOPIC);
-            await procs.sleep(env.pause(8000));
-            const internalAgain = kafka.headTotal(env.INTERNAL_TOPIC);
-            const committed = kafka.groupState(env.legacyGroup(DEST)).committed;
-            say(`internal head ${internalAtSwitch} at the switch, `
-                + `${internalNow} now, legacy committed ${committed}`);
-            act.measured('internal topic after the switch',
-                internalNow === internalAgain ? 'frozen'
-                    : `still moving (${internalNow} to ${internalAgain})`);
-            act.measured('legacy committed vs internal head',
-                committed === internalNow ? 'equal'
-                    : `committed ${committed} vs head ${internalNow}`);
-            note('this equality is what makes the rollback free: the legacy');
-            note('group resumes exactly at the boundary');
+                step(1, `freeze the processor of ${STALLED}: a stalled destination`);
+                note('SIGSTOP, so it holds its partitions and commits nothing,');
+                note('which is what a destination stuck behind a dead endpoint');
+                note('looks like from the broker. Its backlog now grows for the');
+                note('rest of the load.');
+                processors[STALLED].kill('SIGSTOP');
+                act.timeline(`processor ${STALLED} SIGSTOP pid=${processors[STALLED].pid}`);
+                await procs.sleep(env.pause(Math.round(SECONDS * 1000 * 0.3)));
 
-            step(4, 'stop the legacy processor');
-            processor.stop();
-            await procs.sleep(env.pause(4000));
+                step(2, `stop the processor of ${STOPPED}: a small backlog`);
+                note('a processor that is simply down at the moment of the');
+                note('run, so its group is a few records behind the others.');
+                processors[STOPPED].stop();
+                act.timeline(`processor ${STOPPED} STOP`);
+                await procs.sleep(env.pause(Math.round(SECONDS * 1000 * 0.25)));
 
-            step(5, 'more load on the pool, then stop the driver and drain');
-            await procs.sleep(env.pause(30000));
-            load.proc.stop();
-            await wait.until('the driver to stop', () => !load.proc.isRunning(),
-                60000, 1000);
-            await wait.frozen(env.DELIVERY_TOPIC, env.pause(12000));
-            await flow.drainOrCure({ group: env.DELIVERY_GROUP, label: 'pool',
-                timeoutMs: 300000, workers: [1] });
+                step(3, 'the Ansible run, part one: delete every processor');
+                const offsets = {};
+                DESTS.forEach(d => {
+                    offsets[d] = kafka.committedByPartition(env.legacyGroup(d),
+                        env.INTERNAL_TOPIC);
+                });
+                const ends = kafka.heads(env.INTERNAL_TOPIC);
+                line(`      | partition   ${Object.keys(ends).map(p => `p${p}`.padStart(8))
+                    .join('')}   (topic end ${Object.values(ends).join('/')})`);
+                DESTS.forEach(d => {
+                    line(`      | ${d.padEnd(12)}${Object.keys(ends)
+                        .map(p => String(offsets[d][p] === undefined ? '-'
+                            : offsets[d][p]).padStart(8)).join('')}`);
+                });
+                act.measured('processor offsets at the swap',
+                    DESTS.map(d => `${d} ${Object.values(offsets[d]).join('/')}`)
+                        .join('; '));
+                const headAtSwap = {};
+                DESTS.forEach(d => {
+                    headAtSwap[d] = kafka.head(ctx.customerTopicOf[d], 0);
+                });
+                DESTS.forEach(d => processors[d].stop());
+                const stoppedAt = Date.now();
+                act.timeline('every processor STOPPED');
+                note('the populator is untouched: it keeps writing to the same');
+                note('topic, and does not know or care which path consumes it.');
 
-            step(6, 'check the whole cutover window');
-            const cut = flow.dumpAndCheck({ act, topic, from: cutFrom,
-                driver: load.log, keyPrefix: 'm2b', label: 'cutover' });
-            act.measured('cutover gaps (loss)', cut.totals.gaps);
-            act.measured('cutover duplicate extras', cut.totals.duplicate_extras);
-            act.measured('cutover per-key inversions', cut.totals.inversions);
-            assert.strictEqual(cut.totals.gaps, 0, 'the cutover lost events');
-            assert.ok(cut.totals.expected > 0, 'the driver did nothing');
+                step(4, 'part two: write the layout, seed the worker groups');
+                const doc = zk.buildWorkgroupsDoc({ generation: GENERATION,
+                    modulo: 1, workgroups: { [WORKGROUP]: [0] } });
+                zk.writeWorkgroupsDoc(doc);
+                line(zk.describeDoc(zk.workgroupsDoc()).map(l => `      | ${l}`)
+                    .join('\n'));
+                const seeded = flow.seedFromProcessors(act, pool, GENERATION);
+                assert.strictEqual(seeded.code, 0,
+                    'the seed tool did not seed every partition of every group');
+                const group = zk.groupIdFor(env.DELIVERY_GROUP, WORKGROUP, GENERATION);
+                const seededOffsets = kafka.committedByPartition(group,
+                    env.INTERNAL_TOPIC);
+                say(`${group} seeded at ${JSON.stringify(seededOffsets)}, the lowest `
+                    + 'processor offset per partition');
+                const marks = zk.watermarks(GENERATION);
+                say(`watermarks: ${JSON.stringify(marks)}`);
+                watch('zoonavigator', `${env.ZK_WORKGROUPS_PATH} and its watermarks `
+                    + `child for generation ${GENERATION}`);
+                if (WITHOUT_WATERMARK) {
+                    note('DEMO_ACT04_WITHOUT_WATERMARK=1: the watermarks are');
+                    note('deleted now, so the worker delivers everything from the');
+                    note('lowest offset. What it sends twice is the spread between');
+                    note('the processors\' offsets, and that is the number this');
+                    note('pass measures.');
+                    zk.deleteWatermarks(GENERATION);
+                    act.timeline('watermarks DELETED on purpose');
+                }
 
-            // ---------------------------------------------- the rollback ---
-            step(7, 'the mirror rollback: populator back to the legacy topic');
-            note('state now: pool path, delivery group at lag 0, legacy group');
-            note('committed at the frozen internal head. That is exactly what');
-            note('the rollback needs, and it is what the cutover left behind.');
-            const rbFrom = kafka.head(topic, 0);
-            const rbLoad = flow.startDriver(act, { 'bucket': BUCKET,
-                'prefix': 'm4b', 'rate': 2, 'duration': Math.round(SECONDS / 2),
-                'straddle': 3, 'straddle-every': 5 });
-            await procs.sleep(env.pause(15000));
-            const deliveryAtSwitch = kafka.headTotal(env.DELIVERY_TOPIC);
-            populator.stop();
-            await procs.sleep(env.pause(6000));
-            populator = await flow.startPopulator(act, legacy, 'legacy2');
-            say(`delivery topic at the switch: ${deliveryAtSwitch}`);
+                step(5, 'part three: start the worker container');
+                const worker = await flow.startWorker(act, pool, 1,
+                    { workgroupId: WORKGROUP, autoRestart: true });
+                await wait.until('the pool\'s first delivery',
+                    async () => (await wait.counter(1, 'delivered')) > 0,
+                    240000, 2000);
+                const pauseS = Math.round((Date.now() - stoppedAt) / 1000);
+                say(`first pool delivery ${pauseS}s after the processors were `
+                    + 'stopped');
+                act.measured('delivery pause', `${pauseS}s, processors stopped to `
+                    + 'first pool delivery');
+                note('the pause is the container swap plus the group join. On a');
+                note('real platform the swap is Ansible\'s stop and start, and');
+                note('the join is the consumer session, 45 s by default.');
+                watch('grafana', 'delivered per second by destination: the');
+                watch('grafana', `stalled ${STALLED} comes back first and fastest, `
+                    + 'it has the most to catch up');
 
-            step(8, 'let the pool drain the delivery topic to lag 0');
-            await flow.drainOrCure({ group: env.DELIVERY_GROUP, label: 'pool',
-                timeoutMs: 300000, workers: [1] });
-            const deliveryNow = kafka.headTotal(env.DELIVERY_TOPIC);
-            await procs.sleep(env.pause(8000));
-            act.measured('delivery topic after the rollback',
-                deliveryNow === kafka.headTotal(env.DELIVERY_TOPIC)
-                    ? 'frozen' : 'still moving');
+                step(6, 'let the load finish, drain, and check every destination');
+                await wait.until('the driver to finish', () => !load.proc.isRunning(),
+                    (SECONDS + 120) * 1000, 2000);
+                await wait.frozen(env.INTERNAL_TOPIC, env.pause(12000));
+                const drain = await flow.drainOrCure({ group, topic: env.POOL_TOPIC,
+                    label: 'pool', timeoutMs: 300000, workers: [1] });
+                assert.ok(drain.drained, 'the pool did not drain to lag 0');
+                const skipped = await wait.counter(1, 'watermark');
+                act.measured('records skipped under the watermark',
+                    `${skipped}, already delivered by a processor`);
+                let gaps = 0;
+                let dups = 0;
+                let inversions = 0;
+                const afterSwap = {};
+                DESTS.forEach(d => {
+                    const r = flow.dumpAndCheck({ act, topic: ctx.customerTopicOf[d],
+                        from: from[d], driver: load.log, bucket: BUCKETS[d],
+                        label: d });
+                    gaps += r.totals.gaps;
+                    dups += r.totals.duplicate_extras;
+                    inversions += r.totals.inversions;
+                    afterSwap[d] = kafka.head(ctx.customerTopicOf[d], 0)
+                        - headAtSwap[d];
+                    say(`${d}: ${afterSwap[d]} records delivered after the swap`);
+                });
+                act.measured('gaps (loss)', gaps);
+                act.measured(WITHOUT_WATERMARK ? 'duplicates without the watermark'
+                    : 'duplicates with the watermark', dups);
+                act.measured('per-key inversions', inversions);
+                const stalledOps = fs.readFileSync(load.log, 'utf8')
+                    .split('\n').filter(l => l.includes(BUCKETS[STALLED])
+                        && / ok$/.test(l)).length;
+                act.measured('stalled destination backlog delivered by the pool',
+                    `${afterSwap[STALLED]} records after the swap, of ${stalledOps} `
+                    + 'operations in the whole load');
+                note('what to say on camera: every event the stalled destination');
+                note('was owed arrived once the pool took over. Today that backlog');
+                note('sits behind a frozen offset until someone notices. The');
+                note('caught-up destination got nothing twice, because its');
+                note('watermark told the worker where its processor had got to.');
+                note('order held because only one generation ever ran.');
 
-            step(9, 'start the legacy processor: it resumes at its own offset');
-            const beforeResume = kafka.groupState(env.legacyGroup(DEST));
-            processor = await flow.startProcessor(act, legacy, DEST);
-            await procs.sleep(env.pause(15000));
-            const lagOnResume = kafka.groupLag(env.legacyGroup(DEST));
-            say(`committed ${beforeResume.committed}, internal head `
-                + `${kafka.headTotal(env.INTERNAL_TOPIC)}, so a lag of `
-                + `${lagOnResume}`);
-            act.measured('legacy lag when it resumes',
-                `${lagOnResume}, the records published since the switch`);
-
-            step(10, 'stop the worker, finish the load, drain');
-            worker.stop();
-            await procs.sleep(env.pause(4000));
-            rbLoad.proc.stop();
-            await wait.until('the driver to stop', () => !rbLoad.proc.isRunning(),
-                60000, 1000);
-            await wait.frozen(env.INTERNAL_TOPIC, env.pause(12000));
-            await flow.drainOrCure({ group: env.legacyGroup(DEST),
-                label: `legacy ${DEST}`, timeoutMs: 300000 });
-
-            step(11, 'check the rollback window, and look for re-deliveries');
-            const rb = flow.dumpAndCheck({ act, topic, from: rbFrom,
-                driver: rbLoad.log, keyPrefix: 'm4b', label: 'rollback' });
-            act.measured('rollback gaps (loss)', rb.totals.gaps);
-            act.measured('rollback duplicate extras', rb.totals.duplicate_extras);
-            act.measured('rollback per-key inversions', rb.totals.inversions);
-            const again = flow.dumpAndCheck({ act, topic, from: rbFrom,
-                driver: load.log, keyPrefix: 'm2b', label: 'previous-window' });
-            act.measured('records of the cutover window re-delivered',
-                again.totals.delivered);
-            note('the drainer path\'s rollback re-delivered 106 records and');
-            note('stranded 161 on the delivery topic, with no reverse drainer');
-            note('to recover them. This path creates no divergence at all.');
-
-            assert.strictEqual(rb.totals.gaps, 0, 'the rollback lost events');
-            assert.strictEqual(rb.totals.duplicate_extras, 0,
-                'the rollback duplicated events');
-            assert.strictEqual(again.totals.delivered, 0,
-                'the rollback re-delivered records from before the cutover');
-        });
+                assert.strictEqual(gaps, 0, 'the migration lost events');
+                assert.strictEqual(inversions, 0, 'the migration reordered events');
+                if (!WITHOUT_WATERMARK) {
+                    assert.strictEqual(dups, 0,
+                        'the migration delivered events twice despite the watermark');
+                }
+                worker.stop();
+            });
     });
 }
 
