@@ -727,6 +727,12 @@ function register(ctx) {
             note('committed offset, so it cannot see them. On the previous');
             note('model a slow destination held back only its own partition.');
             note('At-least-once holds; the size of the window is the finding.');
+            note('two mitigations, named and not built: release a lane on the');
+            note('producer\'s delivery report instead of its 2 s poll, so the');
+            note('slow lane stops holding the partition back; and a graceful');
+            note('stop that writes a per-destination "delivered up to" mark,');
+            note('so the next generation\'s watermark is the delivered offset');
+            note('and not the committed one.');
             note('loss is impossible when the new generation is seeded at the');
             note('lowest offset of the groups it inherits from: every record');
             note('either was delivered by the old generation or is read by the');
