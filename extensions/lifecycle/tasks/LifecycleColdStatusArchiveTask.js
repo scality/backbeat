@@ -108,8 +108,14 @@ class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
             next => {
                 const transitionTime = objectMD.getTransitionTime();
 
-                // set new ObjectMDArchive to ObjectMD
-                objectMD.setArchive(new ObjectMDArchive(entry.archiveInfo));
+                // set new ObjectMDArchive to ObjectMD, but make sure to keep any (deferred)
+                // restore request
+                const archive = objectMD.getArchive();
+                objectMD.setArchive(new ObjectMDArchive(
+                    entry.archiveInfo,
+                    archive?.restoreRequestedAt,
+                    archive?.restoreRequestedDays,
+                ));
                 objectMD.setOriginOp('s3:LifecycleTransition:SetArchive');
 
                 if (skipLocationDeletion) {

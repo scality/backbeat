@@ -127,7 +127,12 @@ describe('GarbageCollectorTask', () => {
         mdObj.setLocation(loc)
             .setDataStoreName('old-location')
             .setAmzStorageClass('new-location')
-            .setTransitionInProgress(true);
+            .setTransitionInProgress(true)
+            .setArchive({
+                archiveInfo: { archiveId: 'da80b6dc-280d-4dce-83b5-d5b40276e321' },
+                restoreRequestedAt: '2017-07-11T02:44:25.515Z',
+                restoreRequestedDays: 3,
+            });
         backbeatMetadataProxyClient.setMdObj(mdObj);
 
         gcTask.processActionEntry(entry, err => {
@@ -137,6 +142,11 @@ describe('GarbageCollectorTask', () => {
             assert.strictEqual(updatedMD.getDataStoreName(), 'new-location');
             assert.strictEqual(updatedMD.getTransitionInProgress(), false);
             assert.strictEqual(updatedMD.getOriginOp(), 's3:LifecycleTransition:Direct');
+            assert.deepStrictEqual(updatedMD.getArchive(), {
+                archiveInfo: { archiveId: 'da80b6dc-280d-4dce-83b5-d5b40276e321' },
+                restoreRequestedAt: '2017-07-11T02:44:25.515Z',
+                restoreRequestedDays: 3,
+            });
             done();
         });
     });
