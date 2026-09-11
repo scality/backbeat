@@ -430,8 +430,10 @@ describe('delivery worker on the internal topic', function internalTopic() {
     before(done => async.series([
         next => createTopics(Object.values(TOPICS), next),
         next => waitForTopics(Object.values(TOPICS), next),
+        // map passes the index as a second argument, which legacyRecord
+        // would take for the bucket name
         next => produceRecords(TOPICS.internal.name,
-            [...Array(RECORDS).keys()].map(legacyRecord), next),
+            [...Array(RECORDS).keys()].map(i => legacyRecord(i)), next),
         next => readTopic(TOPICS.internal.name, RECORDS, 60000, (err, records) => {
             if (err) {
                 return next(err);
