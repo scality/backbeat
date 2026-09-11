@@ -65,13 +65,16 @@ yarn demo:wait
 #     shows the demo's topics and nothing else                      (11:36, 90 topics and 44 groups removed)
 yarn demo:clean
 
-# 7. the take; about 38 min (DEMO_PACE=demo is the default)      (11:57:57 to 12:36:14, 38 min 17 s, 12 mocha cases passing)
-DEMO_ACTS=02,03,04,05,06,08 yarn ft_test:demo
+# 7. the take: seven acts, about 45 min (DEMO_PACE=demo is the default). The Kerberos
+#    act needs the krb profile from step 5. Measured pieces: the six-act cut
+#    11:57:57 to 12:36:14 (38 min 17 s, 12 mocha cases) plus act 07 at 7 min 15 s.
+DEMO_ACTS=02,03,04,05,06,07,08 yarn ft_test:demo
 ```
 
 Variants, not extra steps:
 
 ```bash
+DEMO_ACTS=02,03,04,05,06,08 yarn ft_test:demo   # the 38-minute cut without Kerberos (executed 11:57:57)
 yarn ft_test:demo                          # the reference run, all eight acts (48 min 18 s, 15 mocha cases passing, executed 11:07:58 to 11:57:16)
 DEMO_ACTS=04 yarn ft_test:demo             # one act, to reshoot it
 DEMO_ACT04_WITHOUT_WATERMARK=1 DEMO_ACTS=04 yarn ft_test:demo   # the swap without the watermark: what it saves
