@@ -79,7 +79,7 @@ function register(ctx) {
         const act = new Act('06', 'workgroups', 'W gates and C5r',
             'today\'s topic, sliced into workgroups by a document in '
             + 'ZooKeeper, changed by stopping one generation and starting '
-            + 'the next, seeded from the old one');
+            + 'the next, which seeds itself from the old one');
         let config;
         const workers = {};
         let load;

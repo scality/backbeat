@@ -220,13 +220,25 @@ function register(ctx) {
                         'the worker did not seed itself: no watermarks in zookeeper');
                     assert.strictEqual(seeders.length, 1,
                         'exactly one worker should say it did the seeding');
-                    DESTS.forEach(d => {
-                        assert.deepStrictEqual(selfSeed.watermarks[d],
-                            offsets[d],
-                            `${d}'s watermark is its processor's committed offset`);
-                    });
                     say(`watermarks: ${JSON.stringify(selfSeed.watermarks)}, each `
-                        + 'one its own processor\'s committed offset');
+                        + 'one its own processor\'s committed offset when it was '
+                        + 'stopped');
+                    note('the table printed in step 3 was read a moment before');
+                    note('the processors were stopped, so a processor still');
+                    note('running committed a little more before it went down.');
+                    note('Each watermark is therefore at or past the number in');
+                    note('that table, and never behind it: behind would mean the');
+                    note('worker re-delivering what the processor had already');
+                    note('sent.');
+                    DESTS.forEach(d => {
+                        const mark = selfSeed.watermarks[d] || {};
+                        Object.keys(offsets[d]).forEach(partition => {
+                            assert.ok(mark[partition] >= offsets[d][partition],
+                                `${d} p${partition}: the watermark ${mark[partition]} `
+                                + 'is behind the offset its processor had committed '
+                                + `at the swap, ${offsets[d][partition]}`);
+                        });
+                    });
                 } else {
                     act.measured('the seeding',
                         'run ahead with the CLI, seedOnStart off');
