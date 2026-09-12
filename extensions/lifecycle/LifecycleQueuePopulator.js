@@ -380,6 +380,12 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
             return;
         }
 
+        // nothing to retrieve until the object is archived: the recorded request is re-driven by
+        // the completion write
+        if (!value.archive?.archiveInfo) {
+            return;
+        }
+
         const locationName = value.dataStoreName;
         const locationConfig = this.locationConfigs[locationName];
         if (!locationConfig) {
@@ -518,7 +524,7 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
         const value = JSON.parse(entry.value);
 
         // if object is not archived there is nothing to do here
-        if (!value.archive) {
+        if (!value.archive?.archiveInfo) {
             return;
         }
 
@@ -634,10 +640,12 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
         switch (value.originOp) {
         // supporting both 's3:ObjectRestore' and 's3:ObjectRestore:Post' to keep compatibility with
         // older cloudserver versions, the switch to 's3:ObjectRestore:Post' was made to have the
-        // correct event type for bucket notifications
+        // correct event type for bucket notifications.
+        // Also triggered on transition completion, to handle a deferred restore.
         case 's3:ObjectRestore':
         case 's3:ObjectRestore:Post':
         case 's3:ObjectRestore:Retry':
+        case 's3:LifecycleTransition:Direct':
             this._handleRestoreOp(entry, value);
             break;
 
