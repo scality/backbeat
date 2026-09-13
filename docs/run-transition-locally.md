@@ -247,7 +247,7 @@ aws configure --profile management
 
 ### Create the lifecycle service user
 
-NOTE: We could also use `bin/ensureServiceUser` to create the service user.
+NOTE: We could also use `bin/ensureServiceUser.js` to create the service user.
 
 When creating the service user, we can make sure that the lifecycle service user's arn matches the
 `accountSeeds.role.trustPolicy.Statement.Principal.AWS`
@@ -297,7 +297,7 @@ aws iam attach-user-policy --policy-arn arn:aws:iam::000000000000:policy/assume 
 This user will assume its local role with the conductor policy.
 
 ```sh
-AWS_PROFILE=management bin/ensureServiceUser apply backbeat-lifecycle-conductor -p extensions/lifecycle/conductor/policy.json --iam-endpoint http://127.0.0.1:8600 --sts-endpoint http://127.0.0.1:8800
+AWS_PROFILE=management bin/ensureServiceUser.js apply backbeat-lifecycle-conductor -p extensions/lifecycle/conductor/policy.json --iam-endpoint http://127.0.0.1:8600 --sts-endpoint http://127.0.0.1:8800
 ```
 
 ```sh

@@ -124,7 +124,7 @@ class UserHandler extends BaseHandler {
         return res.User;
     }
 
-    async create(allResources) {
+    async create() {
         const command = new CreateUserCommand({
             UserName: this.resourceName,
             Path: systemPrefix,
@@ -153,7 +153,7 @@ class PolicyHandler extends BaseHandler {
         return res.Policies.find(p => p.PolicyName === this.resourceName);
     }
 
-    async create(allResources) {
+    async create() {
         let accountId;
         
         if (!this.options.constrainToThisAccount) {
@@ -163,7 +163,7 @@ class PolicyHandler extends BaseHandler {
                 const command = new GetCallerIdentityCommand({});
                 const res = await this.stsClient.send(command);
                 accountId = res.Account;
-            } catch (err) {
+            } catch {
                 // Workaround a Vault issue on 8.3 branch
                 // https://scality.atlassian.net/browse/VAULT-238
                 // Update : Should be possible to use now, but got TLS errors in Zenko CI, needs further testing
@@ -242,7 +242,7 @@ class PolicyUserAttachmentHandler extends BaseHandler {
         await this.iamClient.send(command);
     }
 
-    conflicts(p) {
+    conflicts() {
         return false;
     }
 }
@@ -269,7 +269,7 @@ class PolicyRoleAttachmentHandler extends BaseHandler {
         await this.iamClient.send(command);
     }
 
-    conflicts(p) {
+    conflicts() {
         return false;
     }
 }
@@ -288,7 +288,7 @@ class AccessKeyHandler extends BaseHandler {
         return res.AccessKeyMetadata;
     }
 
-    async create(allResources) {
+    async create() {
         const command = new CreateAccessKeyCommand({
             UserName: this.resourceName,
         });
@@ -296,7 +296,7 @@ class AccessKeyHandler extends BaseHandler {
         return res.AccessKey;
     }
 
-    conflicts(a) {
+    conflicts() {
         return false;
     }
 }

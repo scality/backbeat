@@ -37,6 +37,21 @@ RUN yarn install --ignore-engines --frozen-lockfile --production --network-concu
     && rm -rf /tmp/yarn-*
 
 ################################################################################
+FROM builder AS compiler
+
+# Install scripts are skipped: the compiler reads sources, it never loads any
+# of them.
+RUN yarn install --ignore-engines --frozen-lockfile --ignore-scripts --network-concurrency 1
+
+COPY . /usr/src/app/
+
+RUN yarn build
+
+# The IAM policy documents are used by ensureServiceUser, never imported, so the
+# compiler leaves them behind.
+RUN find policies extensions -name '*.json' -exec install -D {} dist/{} \;
+
+################################################################################
 FROM node:${NODE_VERSION}
 
 # Kerberos runtime for Kafka destinations: kinit (krb5-user), libsasl2, and
@@ -53,10 +68,14 @@ RUN apt-get update && \
 
 WORKDIR /usr/src/app
 
-# Keep the .git directory in order to properly report version
-COPY . /usr/src/app
+COPY conf/ ./conf/
+COPY --from=compiler /usr/src/app/dist/ ./
 COPY --from=builder /usr/src/app/node_modules ./node_modules/
 COPY --from=builder /usr/local/bin/dockerize /usr/local/bin/
+
+# Expose the script without extension for backwards compatibility
+RUN mv bin/ensureServiceUser.js bin/ensureServiceUser \
+    && chmod +x bin/ensureServiceUser
 
 ENV AWS_SDK_JS_SUPPRESS_MAINTENANCE_MODE_MESSAGE=1
 

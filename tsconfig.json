@@ -10,6 +10,10 @@
         "resolveJsonModule": true,
         "sourceMap": true,
         "strict": true,
+        // Existing modules run in sloppy mode and the test suite exercises the
+        // sources rather than the build output, so emitting the directive would
+        // change their semantics with nothing to catch it.
+        "alwaysStrict": false,
         "noImplicitAny": false,
         "skipLibCheck": true,
         "esModuleInterop": true,

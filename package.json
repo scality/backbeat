@@ -33,6 +33,7 @@
     "lint": "eslint $(git ls-files '*.js' '*.ts')",
     "lint_md": "mdlint $(git ls-files '[^bucket-scanner/]*.md')",
     "typecheck": "tsc --noEmit",
+    "build": "tsc",
     "start": "node bin/backbeat.js",
     "notification_populator": "BACKBEAT_QUEUEPOPULATOR_EXTENSIONS=notification node bin/queuePopulator.js",
     "notification_processor": "node extensions/notification/queueProcessor/task.js"
