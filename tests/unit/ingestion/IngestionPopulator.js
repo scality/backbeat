@@ -1,6 +1,7 @@
 'use strict';
 
 const assert = require('assert');
+const Redis = require('ioredis');
 const sinon = require('sinon');
 const errors = require('arsenal').errors;
 const config = require('../../../lib/Config');
@@ -761,6 +762,35 @@ describe('Ingestion Populator', () => {
             populator._setupProducer(() => {});
 
             assert.strictEqual(capturedProducerParams['queue.buffering.max.messages'], 100000);
+        });
+    });
+
+    describe('_setupRedis', () => {
+        afterEach(() => {
+            ip.close(() => {});
+            sinon.restore();
+        });
+
+        it('should keep a handle on the pause/resume subscriber', () => {
+            sinon.stub(Redis.prototype, 'psubscribe');
+
+            ip._setupRedis({ ...rConfig, lazyConnect: true });
+
+            assert(ip._redis instanceof Redis);
+        });
+    });
+
+    describe('close', () => {
+        it('should disconnect the redis subscriber', done => {
+            const disconnect = sinon.spy();
+            ip._redis = { disconnect };
+
+            ip.close(err => {
+                assert.ifError(err);
+                assert(disconnect.calledOnce);
+                assert.strictEqual(ip._redis, null);
+                done();
+            });
         });
     });
 });
