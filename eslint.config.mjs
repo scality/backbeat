@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import js from "@eslint/js";
 import { FlatCompat } from "@eslint/eslintrc";
+import tseslint from "typescript-eslint";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -63,5 +64,14 @@ export default [...compat.extends("scality"), {
                 paths: ["/backbeat/node_modules", "node_modules"]
             }
         }
+    },
+}, ...tseslint.configs.recommended.map(config => ({
+    ...config,
+    files: ["**/*.ts"],
+})), {
+    files: ["**/*.ts"],
+
+    rules: {
+        "@typescript-eslint/no-require-imports": "off",
     },
 }];

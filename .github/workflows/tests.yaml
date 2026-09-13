@@ -91,6 +91,8 @@ jobs:
       run: yarn run --silent lint_md
     - name: Lint Javascript
       run: yarn run --silent lint
+    - name: Typecheck
+      run: yarn run --silent typecheck
 
   unit:
     needs: build
