@@ -1,0 +1,11 @@
+{
+  "name": "syntheticbucketd",
+  "version": "1.0.0",
+  "description": "Synthetic bucketd used to feed large listings to CI tests",
+  "main": "syntheticbucketd.js",
+  "private": true,
+  "license": "Apache-2.0",
+  "dependencies": {
+    "werelogs": "scality/werelogs#semver:^8.2.4"
+  }
+}

@@ -22,13 +22,10 @@ jobs:
         include:
           - name: ci-kafka
             context: .github/dockerfiles/kafka
-            file: ""
           - name: syntheticbucketd
-            context: .
-            file: .github/dockerfiles/syntheticbucketd/Dockerfile
+            context: tests/utils/syntheticbucketd
           - name: ci-mongodb
             context: .github/dockerfiles/mongodb
-            file: ""
     steps:
     - name: Checkout
       uses: actions/checkout@v4
@@ -48,7 +45,6 @@ jobs:
       with:
         push: true
         context: ${{ matrix.context }}
-        file: ${{ matrix.file || format('{0}/Dockerfile', matrix.context) }}
         tags: ghcr.io/${{ github.repository }}/${{ matrix.name }}:${{ github.sha }}
         cache-from: type=gha,scope=${{ matrix.name }}
         cache-to: type=gha,mode=max,scope=${{ matrix.name }}
