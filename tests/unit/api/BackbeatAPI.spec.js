@@ -25,8 +25,27 @@ describe('BackbeatAPI', () => {
         bbapi = new BackbeatAPI(config, fakeLogger, { timer: true });
     });
 
+    after(() => {
+        bbapi.close();
+    });
+
     afterEach(() => {
         sinon.restore();
+    });
+
+    describe('close', () => {
+        it('should disconnect every redis connection it owns', () => {
+            const api = new BackbeatAPI(config, fakeLogger, { timer: true });
+            const publisher = sinon.spy(api._redisPublisher, 'disconnect');
+            const client = sinon.spy(api._redisClient, 'disconnect');
+            const metrics = sinon.spy(api._metrics, 'disconnect');
+
+            api.close();
+
+            assert(publisher.calledOnce);
+            assert(client.calledOnce);
+            assert(metrics.calledOnce);
+        });
     });
 
     // valid routes

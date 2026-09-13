@@ -217,6 +217,7 @@ class QueueProcessor extends EventEmitter {
         this._consumer = null;
         this._dataMoverConsumer = null;
         this._mProducer = null;
+        this._redis = null;
         this.site = site;
         this.mConfig = mConfig;
         this.serviceName = this.isReplayTopic ?
@@ -467,10 +468,10 @@ class QueueProcessor extends EventEmitter {
      */
     _setupRedis(redisConfig) {
         // redis pub/sub for pause/resume
-        const redis = new Redis(redisConfig);
+        this._redis = new Redis(redisConfig);
         // redis subscribe to site specific channel
         const channelName = `${this.repConfig.topic}-${this.site}`;
-        redis.subscribe(channelName, err => {
+        this._redis.subscribe(channelName, err => {
             if (err) {
                 this.logger.fatal('queue processor failed to subscribe to ' +
                                   `crr redis channel for location ${this.site}`,
@@ -478,7 +479,7 @@ class QueueProcessor extends EventEmitter {
                                     error: err });
                 process.exit(1);
             }
-            redis.on('message', (channel, message) => {
+            this._redis.on('message', (channel, message) => {
                 const validActions = {
                     pauseService: this._pauseService.bind(this),
                     resumeService: this._resumeService.bind(this),
@@ -801,14 +802,28 @@ class QueueProcessor extends EventEmitter {
     }
 
     /**
-     * Stop kafka producer and consumer, commit current consumer offset, and
-     * remove any zookeeper state for this instance
+     * Stop kafka producer and consumer, commit current consumer offset,
+     * release the redis subscriber, and remove any zookeeper state for this
+     * instance
      *
      * @param {function} done - callback
      * @return {undefined}
      */
     stop(done) {
         async.series([
+            next => {
+                // drop the subscriber first so no pause/resume command is
+                // acted upon while we are shutting down
+                if (this._redis) {
+                    this.logger.debug('closing redis subscriber', {
+                        method: 'QueueProcessor.stop',
+                        site: this.site,
+                    });
+                    this._redis.disconnect();
+                    this._redis = null;
+                }
+                return next();
+            },
             next => {
                 if (this.replicationStatusProducer) {
                     this.logger.debug('closing replication status producer', {

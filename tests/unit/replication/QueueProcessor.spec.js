@@ -1,4 +1,5 @@
 const assert = require('assert');
+const Redis = require('ioredis');
 const sinon = require('sinon');
 const constants = require('../../../lib/constants');
 
@@ -52,8 +53,9 @@ describe('Queue Processor', () => {
         qp = new QueueProcessor(...getQueueProcessorConfig());
     });
 
-    afterEach(() => {
+    afterEach(done => {
         sinon.restore();
+        qp.stop(done);
     });
 
     describe('handle liveness', () => {
@@ -70,9 +72,11 @@ describe('Queue Processor', () => {
         it('with ready components', () => {
             const mockConsumer = {
                 isReady: sinon.stub().returns(true),
+                close: sinon.stub().yields(),
             };
             const mockProducer = {
                 isReady: sinon.stub().returns(true),
+                close: sinon.stub().yields(),
             };
 
             qp.replicationStatusProducer = mockProducer;
@@ -111,9 +115,11 @@ describe('Queue Processor', () => {
         it('with not ready components', () => {
             const mockConsumer = {
                 isReady: sinon.stub().returns(false),
+                close: sinon.stub().yields(),
             };
             const mockProducer = {
                 isReady: sinon.stub().returns(false),
+                close: sinon.stub().yields(),
             };
 
             qp.replicationStatusProducer = mockProducer;
@@ -311,7 +317,10 @@ describe('Queue Processor', () => {
             qp.dataMoverTaskScheduler = {
                 push: sinon.stub().callsArgWith(1, null),
             };
-            qp._mProducer = { getProducer: () => null };
+            qp._mProducer = {
+                getProducer: () => null,
+                close: sinon.stub().yields(),
+            };
         });
 
         it('dispatches copyLocation actions to the data mover scheduler',
@@ -343,7 +352,7 @@ describe('Queue Processor', () => {
                 servers: ['site-crr:8000'],
             };
             config[11] = 'site-crr';
-            const qp = new QueueProcessor(...config);
+            qp = new QueueProcessor(...config);
             assert.deepStrictEqual(qp.destHosts.pickHost(), {
                 host: 'site-crr',
                 port: 8000,
@@ -358,7 +367,7 @@ describe('Queue Processor', () => {
             };
             config[11] = 'site-crr';
             const setupEchoStub = sinon.stub(QueueProcessor.prototype, '_setupEcho').returns();
-            const qp = new QueueProcessor(...config);
+            qp = new QueueProcessor(...config);
             assert.deepStrictEqual(qp.destHosts.pickHost(), {
                 host: 'site-crr',
                 port: 8000,
@@ -372,8 +381,33 @@ describe('Queue Processor', () => {
                 type: 's3_aws',
             };
             config[11] = 'site_aws';
-            const qp = new QueueProcessor(...config);
+            qp = new QueueProcessor(...config);
             assert.strictEqual(qp.destHosts, null);
+        });
+
+        it('should keep a handle on the pause/resume redis subscriber', () => {
+            const subscribeStub = sinon.stub(Redis.prototype, 'subscribe');
+            const config = getQueueProcessorConfig();
+            config[7] = { host: 'localhost', port: 6379, lazyConnect: true };
+            qp = new QueueProcessor(...config);
+
+            assert(qp._redis instanceof Redis);
+            assert(subscribeStub.calledOnceWith(
+                'backbeat-func-test-dummy-topic-site-crr'));
+        });
+    });
+
+    describe('stop', () => {
+        it('should disconnect the redis subscriber', done => {
+            const disconnect = sinon.spy();
+            qp._redis = { disconnect };
+
+            qp.stop(err => {
+                assert.ifError(err);
+                assert(disconnect.calledOnce);
+                assert.strictEqual(qp._redis, null);
+                done();
+            });
         });
     });
 });
