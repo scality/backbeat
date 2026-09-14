@@ -8,6 +8,7 @@ const { errors } = require('arsenal');
 
 const { Logger } = require('werelogs');
 
+const config = require('../../../../lib/Config');
 const LogReader = require('../../../../lib/queuePopulator/LogReader');
 const KafkaLogReader = require('../../../../lib/queuePopulator/KafkaLogReader');
 const BucketFileLogReader = require('../../../../lib/queuePopulator/BucketFileLogReader');
@@ -48,6 +49,9 @@ describe('LogReader', () => {
             logConsumer: new MockLogConsumer(),
             logger: new Logger('test:LogReader'),
         });
+    });
+
+    afterEach(() => {
         sinon.restore();
     });
 
@@ -59,20 +63,22 @@ describe('LogReader', () => {
         });
     });
 
-    // TODO the log offset initialization tested here only runs with the
-    // "bucketd" log source, which the unit-test config does not select:
-    // re-enable by forcing config.queuePopulator.logSource to "bucketd".
-    it.skip('should start from offset 1 on log consumer readRecords error', done => {
+    it('should start from offset 1 on log consumer readRecords error', done => {
+        // offset initialization is only attempted on the "bucketd" log source
+        sinon.stub(config.queuePopulator, 'logSource').value('bucketd');
+        const logConsumer = new MockLogConsumer({
+            readRecordsError: errors.InternalError,
+        });
+        const readRecords = sinon.spy(logConsumer, 'readRecords');
         const errorLogReader = new LogReader({
             logId: 'test-log-reader',
             zkClient: zkMock.createClient('localhost:2181'),
-            logConsumer: new MockLogConsumer({
-                readRecordsError: errors.InternalError,
-            }),
+            logConsumer,
             logger: new Logger('test:ErrorLogReader'),
         });
         errorLogReader.setup(err => {
             assert.ifError(err);
+            assert(readRecords.calledOnce);
             assert.strictEqual(errorLogReader.logOffset, 1);
             done();
         });
