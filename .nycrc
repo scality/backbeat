@@ -2,10 +2,14 @@
     "all": true,
     "include": [
         "bin/**/*.js",
+        "bin/**/*.ts",
         "lib/**/*.js",
-        "extensions/**/*.js"
+        "lib/**/*.ts",
+        "extensions/**/*.js",
+        "extensions/**/*.ts"
     ],
     "exclude": [
-        "**/*.spec.js"
+        "**/*.spec.js",
+        "**/*.spec.ts"
     ]
 }

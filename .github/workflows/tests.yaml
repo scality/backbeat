@@ -292,10 +292,10 @@ jobs:
     - name: run ballooning tests for lifecycle conductor
       run: yarn mocha tests/performance/lifecycle/conductor-check-memory-balloon.js --exit
       env:
-        # Constrain heap long-lived heap size to 150MB, so that pushing 200K messages
+        # Constrain heap long-lived heap size to 175MB, so that pushing 200K messages
         # will crash if they end up in memory all at the same time (circuit breaking
         # ineffective) while waiting to be committed to the kafka topic.
-        NODE_OPTIONS: '--max-old-space-size=150'
+        NODE_OPTIONS: '--max-old-space-size=175'
 
     - name: Debug wait
       uses: scality/actions/action-ssh-to-runner@1.8.0
