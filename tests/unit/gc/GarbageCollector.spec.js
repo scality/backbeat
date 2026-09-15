@@ -144,5 +144,35 @@ describe('garbage collector', function garbageCollector() {
                 done();
             });
         });
+
+        it('should close the client manager', done => {
+            const gcToClose = new GarbageCollector({
+                kafkaConfig: {},
+                s3Config: { host: 'localhost', port: 7777 },
+                gcConfig: {
+                    topic: 'backbeat-gc',
+                    auth: { type: 'account', account: 'bart' },
+                    consumer: { groupId: 'backbeat-gc-consumer-group' },
+                },
+            });
+            gcToClose.clientManager.initCredentialsManager();
+            let consumerClosed = false;
+            gcToClose._consumer = {
+                close: cb => {
+                    consumerClosed = true;
+                    cb();
+                },
+            };
+
+            gcToClose.close(err => {
+                assert.ifError(err);
+                assert.strictEqual(
+                    gcToClose.clientManager._deleteInactiveCredentialsInterval, null);
+                done();
+            });
+
+            // the consumer must stop using the clients before they are released
+            assert.strictEqual(consumerClosed, true);
+        });
     });
 });

@@ -230,9 +230,15 @@ class QueueProcessor extends EventEmitter {
         this.logger = new Logger(
             `Backbeat:Replication:QueueProcessor:${this.site}`);
 
-        // clients to read data straight from the sites we replicate to,
-        // keyed by endpoint and role, shared by all copy location tasks
+        // clients to read data straight from the sites we replicate to, keyed
+        // by endpoint and role, shared by all copy location tasks: they assume
+        // their role on the remote site's STS
         this.sourceClientManagers = {};
+
+        // clients to write to the destination site, keyed by host and role,
+        // shared by all replication tasks: they assume their role on the
+        // destination STS, so they cannot be shared with the ones above
+        this.destClientManagers = {};
 
         // global variables
         if (sourceConfig.transport === 'https') {
@@ -704,6 +710,7 @@ class QueueProcessor extends EventEmitter {
             vaultclientCache: this.vaultclientCache,
             accountCredsCache: this.accountCredsCache,
             sourceClientManagers: this.sourceClientManagers,
+            destClientManagers: this.destClientManagers,
             replicationStatusProducer: this.replicationStatusProducer,
             mProducer: this._mProducer,
             logger: this.logger,
@@ -880,7 +887,18 @@ class QueueProcessor extends EventEmitter {
                 });
                 return next();
             },
-        ], done);
+        ], err => {
+            // the tasks hold a reference to these maps, so empty them in place
+            Object.keys(this.sourceClientManagers).forEach(key => {
+                this.sourceClientManagers[key].close();
+                delete this.sourceClientManagers[key];
+            });
+            Object.keys(this.destClientManagers).forEach(key => {
+                this.destClientManagers[key].close();
+                delete this.destClientManagers[key];
+            });
+            return done(err);
+        });
     }
 
     /**
