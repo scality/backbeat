@@ -837,21 +837,26 @@ class ReplicateObject extends BackbeatTask {
         if (this.destConfig.auth.type === authTypeAssumeRole) {
             const accountId = _extractAccountIdFromRole(targetRole);
             const roleName = _extractRoleNameFromRole(targetRole);
-            this.clientManager = new ClientManager({
-                id: accountId,
-                authConfig: {
-                    type: authTypeAssumeRole,
-                    roleName,
-                    sts: this.destConfig.auth.sts,
-                },
-                s3Config: {
-                    host: this.destBackbeatHost.host,
-                    port: this.destBackbeatHost.port,
-                },
-                transport: this.destConfig.transport,
-            }, this.logger);
-            this.clientManager.initSTSConfig();
-            this.clientManager.initCredentialsManager();
+            const { host, port } = this.destBackbeatHost;
+            // one manager per destination host and role, shared by every entry:
+            // it holds the assumed-role credentials and the clients they opened
+            const cacheKey = `${host}:${port}::${targetRole}`;
+            this.clientManager = this.destClientManagers[cacheKey];
+            if (!this.clientManager) {
+                this.clientManager = new ClientManager({
+                    id: accountId,
+                    authConfig: {
+                        type: authTypeAssumeRole,
+                        roleName,
+                        sts: this.destConfig.auth.sts,
+                    },
+                    s3Config: { host, port },
+                    transport: this.destConfig.transport,
+                }, this.logger);
+                this.clientManager.initSTSConfig();
+                this.clientManager.initCredentialsManager();
+                this.destClientManagers[cacheKey] = this.clientManager;
+            }
             this.backbeatDest = this.clientManager.getBackbeatClient(accountId);
             return;
         }
