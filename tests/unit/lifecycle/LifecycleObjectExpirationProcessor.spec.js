@@ -57,13 +57,19 @@ describe('LifecycleObjectExpirationProcessor', () => {
             });
         });
 
-        it('should clear deleteInactiveCredentialsInterval if set', done => {
-            const spy = sinon.spy(global, 'clearInterval');
-            const interval = setInterval(() => {}, 100000);
-            objectProcessor._deleteInactiveCredentialsInterval = interval;
+        it('should close the client manager once the consumers are closed', done => {
+            const spy = sinon.spy(objectProcessor.clientManager, 'close');
+            const consumersClosed = sinon.stub();
+            objectProcessor._consumers = {
+                close: cb => {
+                    consumersClosed();
+                    cb();
+                },
+            };
             objectProcessor.close(err => {
                 assert.ifError(err);
-                assert(spy.calledWith(interval));
+                assert(spy.calledOnce);
+                assert(spy.calledAfter(consumersClosed));
                 spy.restore();
                 done();
             });

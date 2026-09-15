@@ -184,8 +184,12 @@ class GarbageCollector extends EventEmitter {
     close(cb) {
         this._logger.debug('closing garbage collector consumer');
         if (this._consumer) {
-            this._consumer.close(cb);
+            this._consumer.close(err => {
+                this.clientManager.close();
+                cb(err);
+            });
         } else {
+            this.clientManager.close();
             cb();
         }
     }

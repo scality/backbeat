@@ -142,13 +142,13 @@ class LifecycleObjectProcessor extends EventEmitter {
     close(cb) {
         this._log.debug('closing object tasks consumer');
 
-        if (this._deleteInactiveCredentialsInterval) {
-            clearInterval(this._deleteInactiveCredentialsInterval);
-        }
-
         if (this._consumers) {
-            this._consumers.close(cb);
+            this._consumers.close(err => {
+                this.clientManager.close();
+                cb(err);
+            });
         } else {
+            this.clientManager.close();
             cb();
         }
     }

@@ -410,4 +410,42 @@ describe('Queue Processor', () => {
             });
         });
     });
+
+    describe('stop', () => {
+        it('should close the cached source client managers', done => {
+            const close = sinon.stub();
+            qp.sourceClientManagers['http://site:8000::read-role'] = { close };
+
+            qp.stop(() => {
+                assert(close.calledOnce);
+                assert.deepStrictEqual(qp.sourceClientManagers, {});
+                done();
+            });
+        });
+
+        it('should close the client managers once the consumers are closed', done => {
+            const consumerClosed = sinon.stub();
+            const close = sinon.stub();
+            qp._consumer = { close: cb => { consumerClosed(); cb(); } };
+            qp.sourceClientManagers['http://site:8000::read-role'] = { close };
+
+            qp.stop(() => {
+                assert(close.calledOnce);
+                assert(close.calledAfter(consumerClosed));
+                done();
+            });
+        });
+
+        it('should empty the client manager cache in place', done => {
+            // the tasks hold a reference to that same object
+            const cache = qp.sourceClientManagers;
+            cache['http://site:8000::read-role'] = { close: () => {} };
+
+            qp.stop(() => {
+                assert.strictEqual(qp.sourceClientManagers, cache);
+                assert.deepStrictEqual(cache, {});
+                done();
+            });
+        });
+    });
 });
