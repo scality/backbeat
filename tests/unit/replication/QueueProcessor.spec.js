@@ -344,6 +344,15 @@ describe('Queue Processor', () => {
         });
     });
 
+    describe('getStateVars', () => {
+        it('should share the client manager caches with the tasks', () => {
+            const stateVars = qp.getStateVars();
+
+            assert.strictEqual(stateVars.sourceClientManagers, qp.sourceClientManagers);
+            assert.strictEqual(stateVars.destClientManagers, qp.destClientManagers);
+        });
+    });
+
     describe('constructor', () => {
         it('should use s3c site\'s host as a destination host', () => {
             const config = getQueueProcessorConfig();
@@ -412,13 +421,17 @@ describe('Queue Processor', () => {
     });
 
     describe('stop', () => {
-        it('should close the cached source client managers', done => {
-            const close = sinon.stub();
-            qp.sourceClientManagers['http://site:8000::read-role'] = { close };
+        it('should close the cached source and destination client managers', done => {
+            const closeSource = sinon.stub();
+            const closeDest = sinon.stub();
+            qp.sourceClientManagers['http://site:8000::read-role'] = { close: closeSource };
+            qp.destClientManagers['site:8000::write-role'] = { close: closeDest };
 
             qp.stop(() => {
-                assert(close.calledOnce);
+                assert(closeSource.calledOnce);
+                assert(closeDest.calledOnce);
                 assert.deepStrictEqual(qp.sourceClientManagers, {});
+                assert.deepStrictEqual(qp.destClientManagers, {});
                 done();
             });
         });
@@ -427,7 +440,7 @@ describe('Queue Processor', () => {
             const consumerClosed = sinon.stub();
             const close = sinon.stub();
             qp._consumer = { close: cb => { consumerClosed(); cb(); } };
-            qp.sourceClientManagers['http://site:8000::read-role'] = { close };
+            qp.destClientManagers['site:8000::write-role'] = { close };
 
             qp.stop(() => {
                 assert(close.calledOnce);
@@ -436,14 +449,18 @@ describe('Queue Processor', () => {
             });
         });
 
-        it('should empty the client manager cache in place', done => {
-            // the tasks hold a reference to that same object
-            const cache = qp.sourceClientManagers;
-            cache['http://site:8000::read-role'] = { close: () => {} };
+        it('should empty the client manager caches in place', done => {
+            // the tasks hold a reference to those same objects
+            const sourceCache = qp.sourceClientManagers;
+            const destCache = qp.destClientManagers;
+            sourceCache['http://site:8000::read-role'] = { close: () => {} };
+            destCache['site:8000::write-role'] = { close: () => {} };
 
             qp.stop(() => {
-                assert.strictEqual(qp.sourceClientManagers, cache);
-                assert.deepStrictEqual(cache, {});
+                assert.strictEqual(qp.sourceClientManagers, sourceCache);
+                assert.strictEqual(qp.destClientManagers, destCache);
+                assert.deepStrictEqual(sourceCache, {});
+                assert.deepStrictEqual(destCache, {});
                 done();
             });
         });

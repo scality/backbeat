@@ -73,6 +73,7 @@ describe('ReplicateObject', () => {
                         port: 80,
                     }),
                 },
+                destClientManagers: {},
                 logger: fakeLogger,
             }),
         });
@@ -1029,6 +1030,51 @@ describe('ReplicateObject', () => {
                 accessKeyId: 'accessKey1',
                 secretAccessKey: 'verySecretKey1',
             });
+        });
+
+        it('should reuse the client manager across entries for the same host and role', () => {
+            sinon.stub(ClientManager.prototype, 'initCredentialsManager').returns(null);
+            sinon.stub(ClientManager.prototype, 'getBackbeatClient').returns(null);
+            const destClientManagers = task.destClientManagers;
+            const otherEntry = new ReplicateObject({
+                getStateVars: () => ({ ...task, destClientManagers }),
+            });
+
+            task._setupDestClients('arn:aws:iam::123456789012:role/crr-role', fakeLogger);
+            otherEntry._setupDestClients('arn:aws:iam::123456789012:role/crr-role', fakeLogger);
+
+            assert.strictEqual(otherEntry.clientManager, task.clientManager);
+            assert.strictEqual(Object.keys(destClientManagers).length, 1);
+        });
+
+        it('should use a separate client manager per role', () => {
+            sinon.stub(ClientManager.prototype, 'initCredentialsManager').returns(null);
+            sinon.stub(ClientManager.prototype, 'getBackbeatClient').returns(null);
+
+            task._setupDestClients('arn:aws:iam::123456789012:role/crr-role', fakeLogger);
+            const first = task.clientManager;
+            task._setupDestClients('arn:aws:iam::210987654321:role/other-role', fakeLogger);
+
+            assert.notStrictEqual(task.clientManager, first);
+            assert.strictEqual(task.clientManager._id, '210987654321');
+            assert.strictEqual(Object.keys(task.destClientManagers).length, 2);
+        });
+
+        it('should not hand back the manager of the failed host when retrying', () => {
+            sinon.stub(ClientManager.prototype, 'initCredentialsManager').returns(null);
+            sinon.stub(ClientManager.prototype, 'getBackbeatClient').returns(null);
+            const role = 'arn:aws:iam::123456789012:role/crr-role';
+
+            task._setupDestClients(role, fakeLogger);
+            const failedHostManager = task.clientManager;
+
+            // what the retry hooks do: rotate the host, then set the clients up again
+            task.destHosts.pickHost = () => ({ host: 's3-2.zenko.local', port: 80 });
+            task._setupDestClients(role, fakeLogger);
+
+            assert.notStrictEqual(task.clientManager, failedHostManager);
+            assert.deepStrictEqual(task.clientManager._s3Config,
+                { host: 's3-2.zenko.local', port: 80 });
         });
 
         it('should setup destination BackbeatClient with proper creds when not in assumeRole', async () => {

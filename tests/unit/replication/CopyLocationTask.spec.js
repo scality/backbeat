@@ -627,6 +627,24 @@ describe('CopyLocationTask', () => {
             assert(getBackbeatClient.alwaysCalledWith('123456789012'));
         });
 
+        it('should reuse the client manager across tasks', () => {
+            const sourceClientManagers = task.sourceClientManagers;
+            const otherEntry = new CopyLocationTask({
+                getStateVars: () => ({
+                    mProducer: { getProducer: () => {} },
+                    sourceConfig: { transport: 'http' },
+                    logger: fakeLogger,
+                    sourceClientManagers,
+                }),
+            });
+
+            const client1 = task._getAssumedRoleS3Client(siteConfig, roleArn, fakeLogger);
+            const client2 = otherEntry._getAssumedRoleS3Client(siteConfig, roleArn, fakeLogger);
+
+            assert.strictEqual(client1, client2);
+            assert.strictEqual(Object.keys(sourceClientManagers).length, 1);
+        });
+
         it('should default the port when the location carries none', () => {
             task._getAssumedRoleS3Client(
                 { ...siteConfig, endpoint: 'production.example.com' }, roleArn, fakeLogger);
