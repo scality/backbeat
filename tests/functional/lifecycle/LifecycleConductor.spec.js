@@ -3,9 +3,14 @@
 const assert = require('assert');
 const async = require('async');
 const http = require('http');
+const { MongoClient } = require('mongodb');
+const querystring = require('querystring');
 const url = require('url');
+const { promisify } = require('util');
 const werelogs = require('werelogs');
 
+const { indexesForFeature } = require('../../../lib/constants');
+const { mongoConfig } = require('./configObjects');
 const ZookeeperManager = require('../../../lib/clients/ZookeeperManager');
 const BackbeatTestConsumer = require('../../utils/BackbeatTestConsumer');
 const LifecycleConductor = require(
@@ -34,6 +39,10 @@ const s3Config = {
     host: '127.0.0.1',
     port: 8000,
 };
+
+const mongoUrl =
+    `mongodb://${mongoConfig.replicaSetHosts}` +
+    `/db?replicaSet=${mongoConfig.replicaSet}`;
 
 const bucketTasksTopic = 'backbeat-lifecycle-bucket-tasks-spec';
 
@@ -350,19 +359,26 @@ describe('lifecycle conductor', function lifecycleConductor() {
             mockBucketd,
             mockVault,
             setupZookeeper,
-            skip,
+            useMongodb,
         } = opts;
-
-        if (skip) {
-            return describe.skip(`skipped: ${description} ${skip}`, () => {
-            });
-        }
 
         const bucketdPort = 14345;
         const vaultPort = 14346;
+        const stsPort = 14347;
+        const backbeatPort = 14348;
         const maxKeys = 2;
+        // assuming a role goes through STS before vault can be reached
+        const mockSts = lifecycleConfig.auth.type === 'assumeRole';
+        // v2 listing is only granted once the bucket carries the lifecycle
+        // indexes, which the conductor looks up over the backbeat API
+        const mockBackbeat = useMongodb && !lifecycleConfig.forceLegacyListing;
+        // mongodb keeps its listing checkpoints in zookeeper
+        const needsZkPaths = setupZookeeper || useMongodb;
 
+        let sts;
         let vault;
+        let backbeat;
+        let mongoClient;
         let bucketd;
         let bucketdListing;
         let zkClient;
@@ -371,22 +387,69 @@ describe('lifecycle conductor', function lifecycleConductor() {
         let consumer;
         let lcConductor;
 
+        const stsHandler = (req, res) => {
+            req.resume();
+            const expiration = new Date(Date.now() + 3600000).toISOString();
+
+            res.writeHead(200, { 'Content-Type': 'text/xml' });
+            res.end(`<?xml version="1.0" encoding="UTF-8"?>
+<AssumeRoleResponse xmlns="https://sts.amazonaws.com/doc/2011-06-15/">
+  <AssumeRoleResult>
+    <Credentials>
+      <AccessKeyId>accessKey</AccessKeyId>
+      <SecretAccessKey>secretKey</SecretAccessKey>
+      <SessionToken>sessionToken</SessionToken>
+      <Expiration>${expiration}</Expiration>
+    </Credentials>
+    <AssumedRoleUser>
+      <Arn>arn:aws:sts::000000000000:assumed-role/lc/lc</Arn>
+      <AssumedRoleId>ASSUMEDROLEID:lc</AssumedRoleId>
+    </AssumedRoleUser>
+  </AssumeRoleResult>
+</AssumeRoleResponse>`);
+        };
+
         const vaultHandler = (req, res) => {
             const { pathname, query } = url.parse(req.url, true);
 
             assert.strictEqual(pathname, '/');
+
+            const respond = params => {
+                assert.strictEqual(params.Action, 'GetAccounts');
+
+                const canonicalIds = Array.isArray(params.canonicalIds) ?
+                    params.canonicalIds :
+                    [params.canonicalIds];
+                const accountIds = canonicalIds.map(v => ({
+                    id: v.replace('owner', 'account'),
+                    canId: v,
+                }));
+
+                res.end(JSON.stringify(accountIds));
+            };
+
+            // admin routes are queried over POST once IAM authentication is on
+            if (req.method === 'POST') {
+                const chunks = [];
+                req.on('data', chunk => chunks.push(chunk));
+                req.on('end', () => respond(
+                    querystring.parse(Buffer.concat(chunks).toString())));
+                return;
+            }
+
             assert.strictEqual(req.method, 'GET');
-            assert.strictEqual(query.Action, 'GetAccounts');
+            respond(query);
+        };
 
-            const canonicalIds = Array.isArray(query.canonicalIds) ?
-                query.canonicalIds :
-                [query.canonicalIds];
-            const accountIds = canonicalIds.map(v => ({
-                id: v.replace('owner', 'account'),
-                canId: v,
-            }));
+        // buckets are reported as already indexed, so listing stays on v2
+        const backbeatHandler = (req, res) => {
+            const { pathname } = url.parse(req.url, true);
 
-            res.end(JSON.stringify(accountIds));
+            assert.strictEqual(req.method, 'GET');
+            assert.ok(pathname.startsWith('/_/backbeat/index/'), pathname);
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ Indexes: indexesForFeature.lifecycle.v2 }));
         };
 
         const bucketdHandler = (req, res) => {
@@ -424,9 +487,39 @@ describe('lifecycle conductor', function lifecycleConductor() {
             };
         }
 
+        if (useMongodb) {
+            lifecycleConfig.conductor.mongodb = mongoConfig;
+
+            const insertBuckets = buckets => mongoClient
+                .db(mongoConfig.database)
+                .collection('__metastore')
+                .insertMany(buckets.map(([bucketName, owner]) => ({
+                    _id: bucketName,
+                    value: {
+                        owner,
+                        lifecycleConfiguration: { rules: [] },
+                    },
+                })));
+
+            bucketPopulatorStep1 = async () => insertBuckets(
+                [['bucket1', 'owner1'], ['bucket1-2', 'owner1']]);
+
+            bucketPopulatorStep2 = async () => insertBuckets(
+                [['bucket3', 'owner3'], ['bucket4', 'owner4']]);
+        }
+
         if (mockVault) {
             lifecycleConfig.auth.vault.port = vaultPort;
         }
+
+        if (mockSts) {
+            lifecycleConfig.auth.sts.port = stsPort;
+        }
+
+        // the conductor reaches the backbeat index routes through the S3 endpoint
+        const conductorS3Config = mockBackbeat ?
+            { ...s3Config, port: backbeatPort } :
+            s3Config;
 
         lifecycleConfig.conductor.concurrency = maxKeys;
         // make topic unique so that different tests' bootstrap messages don't interfere
@@ -461,9 +554,27 @@ describe('lifecycle conductor', function lifecycleConductor() {
                 bucketdListing = [];
 
                 lcConductor = new LifecycleConductor(zkConfig.zookeeper,
-                    kafkaConfig, validatedLifecycleConfig, repConfig, s3Config);
+                    kafkaConfig, validatedLifecycleConfig, repConfig, conductorS3Config);
 
                 async.series([
+                    async () => {
+                        if (mockSts) {
+                            sts = http.createServer(stsHandler);
+                            await promisify(cb => sts.listen(stsPort, cb))();
+                        }
+                    },
+                    async () => {
+                        if (mockBackbeat) {
+                            backbeat = http.createServer(backbeatHandler);
+                            await promisify(cb => backbeat.listen(backbeatPort, cb))();
+                        }
+                    },
+                    async () => {
+                        if (useMongodb) {
+                            mongoClient = new MongoClient(mongoUrl);
+                            await mongoClient.connect();
+                        }
+                    },
                     next => lcConductor.init(next),
                     next => {
                         consumer = new BackbeatTestConsumer({
@@ -496,7 +607,7 @@ describe('lifecycle conductor', function lifecycleConductor() {
                         }
                     },
                     next => {
-                        if (setupZookeeper) {
+                        if (needsZkPaths) {
                             zkClient = new ZookeeperManager(
                                 zkConfig.zookeeper.connectionString,
                                 zkConfig.zookeeper,
@@ -528,8 +639,26 @@ describe('lifecycle conductor', function lifecycleConductor() {
                             process.nextTick(next);
                         }
                     },
+                    async () => {
+                        if (mockSts) {
+                            await promisify(cb => sts.close(cb))();
+                        }
+                    },
+                    async () => {
+                        if (mockBackbeat) {
+                            await promisify(cb => backbeat.close(cb))();
+                        }
+                    },
+                    async () => {
+                        if (useMongodb) {
+                            await mongoClient.db(mongoConfig.database)
+                                .collection('__metastore')
+                                .deleteMany({});
+                            await mongoClient.close();
+                        }
+                    },
                     next => {
-                        if (setupZookeeper) {
+                        if (needsZkPaths) {
                             zkClient.removeRecur(validatedLifecycleConfig.zookeeperPath, next);
                         } else {
                             process.nextTick(next);
@@ -540,22 +669,24 @@ describe('lifecycle conductor', function lifecycleConductor() {
                 ], done);
             });
 
+            // scans share the conductor's scan id, so letting one start before
+            // the previous has completed makes them clobber each other
+            const runBatch = (expectedMessages, next) => async.parallel([
+                cb => consumer.expectUnorderedMessages(
+                    transformExpectedMessages(expectedMessages),
+                    CONSUMER_TIMEOUT, cb),
+                cb => lcConductor.processBuckets(cb),
+            ], err => next(err));
+
             it('should populate queue', done => {
-                async.waterfall([
+                // series, not waterfall: no step feeds the next one, and
+                // waterfall would pass an async step's result on as the
+                // following step's callback
+                async.series([
                     bucketPopulatorStep1,
-                    next => {
-                        lcConductor.processBuckets();
-                        consumer.expectUnorderedMessages(
-                            transformExpectedMessages(expected2Messages(expectedTaskVersion)),
-                            CONSUMER_TIMEOUT, next);
-                    },
+                    next => runBatch(expected2Messages(expectedTaskVersion), next),
                     bucketPopulatorStep2,
-                    next => {
-                        lcConductor.processBuckets();
-                        consumer.expectUnorderedMessages(
-                            transformExpectedMessages(expected4Messages(expectedTaskVersion)),
-                            CONSUMER_TIMEOUT, next);
-                    },
+                    next => runBatch(expected4Messages(expectedTaskVersion), next),
                 ], err => {
                     assert.ifError(err);
                     done();
@@ -614,34 +745,49 @@ describe('lifecycle conductor', function lifecycleConductor() {
         transformExpectedMessages: identity,
     });
 
+    // `assumeRole` is only used on mongodb deployments, S3C does not support STS
+    const assumeRoleConfig = {
+        type: 'assumeRole',
+        roleName: 'lc',
+        sts: {
+            host: '127.0.0.1',
+            port: 8650,
+            accessKey: 'ak',
+            secretKey: 'sk',
+        },
+        vault: {
+            host: '127.0.0.1',
+        },
+    };
+
     describeConductorSpec({
-        description: 'with auth `assumeRole` and buckets from bucketd',
+        description: 'with auth `assumeRole` and buckets from mongodb',
         lifecycleConfig: {
             ...baseLCConfig,
             conductor: {
                 ...baseLCConfig.conductor,
-                bucketSource: 'bucketd',
-                bucketd: {
-                    host: '127.0.0.1',
-                },
+                bucketSource: 'mongodb',
             },
-            auth: {
-                type: 'assumeRole',
-                roleName: 'lc',
-                sts: {
-                    host: '127.0.0.1',
-                    port: 8650,
-                    accessKey: 'ak',
-                    secretKey: 'sk',
-                },
-                vault: {
-                    host: '127.0.0.1',
-                },
-            },
+            auth: assumeRoleConfig,
         },
-        mockBucketd: true,
+        useMongodb: true,
         mockVault: true,
         transformExpectedMessages: withAccountIds,
-        skip: 'to be reintroduced with https://scality.atlassian.net/browse/BB-126',
+    });
+
+    describeConductorSpec({
+        description: 'with auth `assumeRole` and buckets from mongodb (legacy listing mode)',
+        lifecycleConfig: {
+            ...baseLCConfig,
+            forceLegacyListing: true,
+            conductor: {
+                ...baseLCConfig.conductor,
+                bucketSource: 'mongodb',
+            },
+            auth: assumeRoleConfig,
+        },
+        useMongodb: true,
+        mockVault: true,
+        transformExpectedMessages: withAccountIds,
     });
 });
