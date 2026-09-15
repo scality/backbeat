@@ -1277,4 +1277,19 @@ describe('Lifecycle Conductor', () => {
             });
         });
     });
+
+    describe('stop', () => {
+        it('should close the client manager once the producer is closed', done => {
+            const closeStub = sinon.stub(conductor.clientManager, 'close');
+            const producerClosed = sinon.stub();
+            conductor._producer = { close: cb => { producerClosed(); cb(); } };
+
+            conductor.stop(err => {
+                assert.ifError(err);
+                assert(closeStub.calledOnce);
+                assert(closeStub.calledAfter(producerClosed));
+                done();
+            });
+        });
+    });
 });

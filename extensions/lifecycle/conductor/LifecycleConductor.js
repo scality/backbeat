@@ -1205,6 +1205,7 @@ class LifecycleConductor {
                 });
             },
         ], err => {
+            this.clientManager.close();
             this._circuitBreaker.stop();
             this._started = false;
             return done(err);

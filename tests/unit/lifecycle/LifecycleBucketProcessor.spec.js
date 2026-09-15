@@ -340,4 +340,21 @@ describe('Lifecycle Bucket Processor', () => {
             });
         });
     });
+
+    describe('close', () => {
+        it('should close the client manager once the consumer and producer are closed', done => {
+            const closeStub = sinon.stub(lbp.clientManager, 'close');
+            const consumerClosed = sinon.stub();
+            const producerClosed = sinon.stub();
+            lbp._consumer = { close: cb => { consumerClosed(); cb(); } };
+            lbp._producer = { close: cb => { producerClosed(); cb(); } };
+
+            lbp.close(() => {
+                assert(closeStub.calledOnce);
+                assert(closeStub.calledAfter(consumerClosed));
+                assert(closeStub.calledAfter(producerClosed));
+                done();
+            });
+        });
+    });
 });

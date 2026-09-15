@@ -529,10 +529,6 @@ class LifecycleBucketProcessor {
      * @return {undefined}
      */
     close(cb) {
-        if (this._deleteInactiveCredentialsInterval) {
-            clearInterval(this._deleteInactiveCredentialsInterval);
-        }
-
         async.parallel([
             done => {
                 this._log.debug('closing bucket tasks consumer');
@@ -542,7 +538,10 @@ class LifecycleBucketProcessor {
                 this._log.debug('closing producer');
                 this._producer.close(done);
             },
-        ], () => cb());
+        ], () => {
+            this.clientManager.close();
+            cb();
+        });
     }
 
     isReady() {

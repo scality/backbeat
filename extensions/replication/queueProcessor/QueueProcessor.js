@@ -880,7 +880,14 @@ class QueueProcessor extends EventEmitter {
                 });
                 return next();
             },
-        ], done);
+        ], err => {
+            // the tasks hold a reference to this map, so empty it in place
+            Object.keys(this.sourceClientManagers).forEach(key => {
+                this.sourceClientManagers[key].close();
+                delete this.sourceClientManagers[key];
+            });
+            return done(err);
+        });
     }
 
     /**
