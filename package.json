@@ -67,7 +67,7 @@
     "breakbeat": "scality/breakbeat#v1.0.3",
     "bucketclient": "scality/bucketclient#8.2.4",
     "commander": "^13.0.0",
-    "fcntl": "github:scality/node-fcntl#0.2.2",
+    "fcntl": "github:scality/node-fcntl#0.3.1",
     "httpagent": "git+https://github.com/scality/httpagent#1.0.6",
     "ioredis": "^5.4.2",
     "joi": "^17.13.3",
