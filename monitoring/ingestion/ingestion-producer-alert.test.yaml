@@ -24,8 +24,8 @@ tests:
               severity: warning
             exp_annotations:
               zenko_service: backbeat-ingestion-producer
-              description: "Ingestion producer has been unable to start reading from a source for the last 10 minutes, so the objects of that location are not ingested. Check the producer logs for the bucket it fails to resolve."
-              summary: "Ingestion producer cannot start reading from a source"
+              description: "Ingestion producer has been unable to set up a source for the last 10 minutes, so the objects of that location are not ingested. Check the producer logs for the bucket it fails to resolve."
+              summary: "Ingestion producer cannot set up a source"
       # The same failures are 0.1% of all the source operations, which is why the
       # error ratio alerts cannot report a single source that stopped ingesting.
       - alertname: IngestionProducerSourceErrorRate3Percent
