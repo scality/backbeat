@@ -418,9 +418,7 @@ describe('Queue Processor', () => {
                 done();
             });
         });
-    });
 
-    describe('stop', () => {
         it('should close the cached source and destination client managers', done => {
             const closeSource = sinon.stub();
             const closeDest = sinon.stub();
