@@ -33,6 +33,12 @@ describe('Config', () => {
         assert.doesNotThrow(() => config._parseConfig(testConfig));
     });
 
+    it('should accept a config serving no API, as a D/R sink does', () => {
+        delete testConfig.server;
+        testConfig.extensions = { mongoProcessor: testConfig.extensions.mongoProcessor };
+        assert.doesNotThrow(() => config._parseConfig(testConfig));
+    });
+
     it('should accept a config publishing no metrics', () => {
         delete testConfig.metrics;
         assert.doesNotThrow(() => config._parseConfig(testConfig));
