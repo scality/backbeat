@@ -174,33 +174,36 @@ class OplogPopulator {
      * @returns {undefined}
      */
     async _handleChangeStreamChangeEvent(change) {
-        const isListeningToBucket = this._allocator.has(change.documentKey._id);
-        // no fullDocument field in delete events
-        const isBackbeatEnabled = change.fullDocument ?
-            this._isBucketBackbeatEnabled(change.fullDocument.value) : null;
+        // events such as "drop" or "invalidate" carry no documentKey
+        const bucketName = change.documentKey?._id;
+        const isListeningToBucket = bucketName !== undefined && this._allocator.has(bucketName);
         const eventDate = new Date(change.clusterTime);
         switch (change.operationType) {
             case 'delete':
                 if (isListeningToBucket) {
-                    await this._allocator.stopListeningToBucket(change.documentKey._id);
+                    await this._allocator.stopListeningToBucket(bucketName);
                 }
                 break;
             case 'replace':
             case 'update':
-            case 'insert':
+            case 'insert': {
+                // the updateLookup races with deletion, so the document may be gone
+                const isBackbeatEnabled = change.fullDocument ?
+                    this._isBucketBackbeatEnabled(change.fullDocument.value) : null;
                 // remove bucket if no longer backbeat enabled
                 if (isListeningToBucket && !isBackbeatEnabled) {
-                    await this._allocator.stopListeningToBucket(change.documentKey._id);
+                    await this._allocator.stopListeningToBucket(bucketName);
                 // add bucket if it became backbeat enabled
                 } else if (!isListeningToBucket && isBackbeatEnabled) {
-                    await this._allocator.listenToBucket(change.documentKey._id, eventDate);
+                    await this._allocator.listenToBucket(bucketName, eventDate);
                 }
                 break;
+            }
             default:
                 this._logger.info('Skipping unsupported change stream event', {
                     method: 'OplogPopulator._handleChangeStreamChange',
                     type: change.operationType,
-                    key: change.documentKey._id,
+                    key: bucketName,
                 });
                 break;
         }
@@ -209,7 +212,7 @@ class OplogPopulator {
         this._logger.info('Change stream event processed', {
             method: 'OplogPopulator._handleChangeStreamChange',
             type: change.operationType,
-            key: change.documentKey._id,
+            key: bucketName,
         });
     }
 

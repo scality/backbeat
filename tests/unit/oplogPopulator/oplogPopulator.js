@@ -867,6 +867,27 @@ describe('OplogPopulator', () => {
             assert(startListening.notCalled);
         });
 
+        // awaited, unlike the tests around it: the guarded code path used to reject
+        // rather than throw, so a synchronous call would pass even without the guard
+        it('should skip an event without documentKey but still count it', async () => {
+            const stopListening = sinon.stub().resolves();
+            const startListening = sinon.stub().resolves();
+            oplogPopulator._allocator = {
+                stopListeningToBucket: stopListening,
+                listenToBucket: startListening,
+                has: () => true,
+            };
+            const eventProcessed = sinon.stub(oplogPopulator._metricsHandler, 'onOplogEventProcessed');
+            // "drop" and "invalidate" events carry no documentKey
+            const changeDocument = {
+                operationType: 'drop',
+            };
+            await oplogPopulator._handleChangeStreamChangeEvent(changeDocument);
+            assert(stopListening.notCalled);
+            assert(startListening.notCalled);
+            assert(eventProcessed.calledOnce);
+        });
+
         ['replace', 'insert', 'update'].forEach(opType => {
             it(`should stop listening if bucket becomes invalid (${opType})`, () => {
                 const stopListening = sinon.stub().resolves();
