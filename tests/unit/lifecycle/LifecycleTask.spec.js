@@ -2571,6 +2571,75 @@ describe('lifecycle task helper methods', () => {
                 done();
             });
         });
+
+        describe('logging', () => {
+            let logError;
+            let logDebug;
+
+            beforeEach(() => {
+                logError = sinon.stub(fakeLogger, 'error');
+                logDebug = sinon.stub(fakeLogger, 'debug');
+            });
+
+            [
+                {
+                    desc: 'lifecycle events to the location are paused',
+                    setup: () => { lifecycleTask.pausedLocations = new Set([testParams.site]); },
+                },
+                {
+                    desc: 'the circuit breaker is tripped',
+                    setup: () => { lifecycleTask.circuitBreakers = { tripped: () => true }; },
+                },
+                {
+                    desc: 'replication is in progress',
+                    setup: () => setupObjectMD({ getReplicationStatus: () => 'PENDING' }),
+                },
+                {
+                    desc: 'the object is cold',
+                    setup: () => setupObjectMD({ getDataStoreName: () => 'location-dmf-v1' }),
+                },
+                {
+                    desc: 'the object is declared as cold',
+                    setup: () => setupObjectMD({ getAmzStorageClass: () => 'location-dmf-v1' }),
+                },
+                {
+                    desc: 'the object is still on the source location',
+                    setup: () => setupObjectMD({ getDataStoreName: () => CRR_LOCATION }),
+                },
+                {
+                    desc: 'a transition is already in progress',
+                    setup: () => setupObjectMD({ getTransitionInProgress: () => true }),
+                },
+                {
+                    desc: 'the object is temporarily restored',
+                    setup: () => setupObjectMD({
+                        getArchive: () => ({ restoreCompletedAt: new Date() }),
+                    }),
+                },
+            ].forEach(({ desc, setup }) => {
+                it(`should not log an error when ${desc}`, done => {
+                    setup();
+
+                    lifecycleTask._applyTransitionRule(testParams, fakeLogger, err => {
+                        assert(err);
+                        sinon.assert.notCalled(logError);
+                        sinon.assert.calledWith(logDebug, 'transition rule skipped');
+                        done();
+                    });
+                });
+            });
+
+            it('should log an error when the transition actually fails', done => {
+                setupObjectMD();
+                putObjectMD.callsFake((params, log, cb) => cb(errors.InternalError));
+
+                lifecycleTask._applyTransitionRule(testParams, fakeLogger, err => {
+                    assert(err);
+                    sinon.assert.calledWith(logError, 'could not apply transition rule');
+                    done();
+                });
+            });
+        });
     });
 
     describe('_sendObjectAction', () => {
