@@ -1,4 +1,5 @@
 const assert = require('assert');
+const { EventEmitter } = require('events');
 const Redis = require('ioredis');
 const sinon = require('sinon');
 const constants = require('../../../lib/constants');
@@ -422,14 +423,16 @@ describe('Queue Processor', () => {
         it('should close the cached source and destination client managers', done => {
             const closeSource = sinon.stub();
             const closeDest = sinon.stub();
-            qp.sourceClientManagers['http://site:8000::read-role'] = { close: closeSource };
-            qp.destClientManagers['site:8000::write-role'] = { close: closeDest };
+            qp.sourceClientManagers.getOrCreate('http://site:8000::read-role',
+                () => Object.assign(new EventEmitter(), { close: closeSource }));
+            qp.destClientManagers.getOrCreate('site:8000::write-role',
+                () => Object.assign(new EventEmitter(), { close: closeDest }));
 
             qp.stop(() => {
                 assert(closeSource.calledOnce);
                 assert(closeDest.calledOnce);
-                assert.deepStrictEqual(qp.sourceClientManagers, {});
-                assert.deepStrictEqual(qp.destClientManagers, {});
+                assert.strictEqual(qp.sourceClientManagers.size, 0);
+                assert.strictEqual(qp.destClientManagers.size, 0);
                 done();
             });
         });
@@ -438,7 +441,8 @@ describe('Queue Processor', () => {
             const consumerClosed = sinon.stub();
             const close = sinon.stub();
             qp._consumer = { close: cb => { consumerClosed(); cb(); } };
-            qp.destClientManagers['site:8000::write-role'] = { close };
+            qp.destClientManagers.getOrCreate('site:8000::write-role',
+                () => Object.assign(new EventEmitter(), { close }));
 
             qp.stop(() => {
                 assert(close.calledOnce);
@@ -448,17 +452,19 @@ describe('Queue Processor', () => {
         });
 
         it('should empty the client manager caches in place', done => {
-            // the tasks hold a reference to those same objects
+            // the tasks hold a reference to those same caches
             const sourceCache = qp.sourceClientManagers;
             const destCache = qp.destClientManagers;
-            sourceCache['http://site:8000::read-role'] = { close: () => {} };
-            destCache['site:8000::write-role'] = { close: () => {} };
+            sourceCache.getOrCreate('http://site:8000::read-role',
+                () => Object.assign(new EventEmitter(), { close: () => {} }));
+            destCache.getOrCreate('site:8000::write-role',
+                () => Object.assign(new EventEmitter(), { close: () => {} }));
 
             qp.stop(() => {
                 assert.strictEqual(qp.sourceClientManagers, sourceCache);
                 assert.strictEqual(qp.destClientManagers, destCache);
-                assert.deepStrictEqual(sourceCache, {});
-                assert.deepStrictEqual(destCache, {});
+                assert.strictEqual(sourceCache.size, 0);
+                assert.strictEqual(destCache.size, 0);
                 done();
             });
         });

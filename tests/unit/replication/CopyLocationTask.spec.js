@@ -3,12 +3,17 @@ const sinon = require('sinon');
 
 const CopyLocationTask = require('../../../extensions/replication/tasks/CopyLocationTask');
 const ClientManager = require('../../../lib/clients/ClientManager');
+const ClientManagerCache = require('../../../lib/clients/ClientManagerCache');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const { errors } = require('arsenal');
 const { ObjectMD } = require('arsenal').models;
 const locationConfig = require('../../../conf/locationConfig.json');
 
 const fakeLogger = require('../../utils/fakeLogger');
+
+function firstManager(cache) {
+    return [...cache._managers.values()][0];
+}
 
 describe('CopyLocationTask', () => {
     describe('_checkObjectState', () => {
@@ -604,7 +609,7 @@ describe('CopyLocationTask', () => {
                     mProducer: { getProducer: () => {} },
                     sourceConfig: { transport: 'http' },
                     logger: fakeLogger,
-                    sourceClientManagers: {},
+                    sourceClientManagers: new ClientManagerCache(),
                 }),
             });
         });
@@ -618,8 +623,8 @@ describe('CopyLocationTask', () => {
             const client2 = task._getAssumedRoleS3Client(siteConfig, roleArn, fakeLogger);
 
             assert.strictEqual(client1, client2);
-            assert.strictEqual(Object.keys(task.sourceClientManagers).length, 1);
-            const clientManager = Object.values(task.sourceClientManagers)[0];
+            assert.strictEqual(task.sourceClientManagers.size, 1);
+            const clientManager = firstManager(task.sourceClientManagers);
             assert.strictEqual(clientManager._transport, 'https');
             assert.deepStrictEqual(clientManager._s3Config,
                 { host: 'production.example.com', port: '443' });
@@ -642,14 +647,14 @@ describe('CopyLocationTask', () => {
             const client2 = otherEntry._getAssumedRoleS3Client(siteConfig, roleArn, fakeLogger);
 
             assert.strictEqual(client1, client2);
-            assert.strictEqual(Object.keys(sourceClientManagers).length, 1);
+            assert.strictEqual(sourceClientManagers.size, 1);
         });
 
         it('should default the port when the location carries none', () => {
             task._getAssumedRoleS3Client(
                 { ...siteConfig, endpoint: 'production.example.com' }, roleArn, fakeLogger);
 
-            const clientManager = Object.values(task.sourceClientManagers)[0];
+            const clientManager = firstManager(task.sourceClientManagers);
             assert.deepStrictEqual(clientManager._s3Config,
                 { host: 'production.example.com', port: 443 });
         });
@@ -669,7 +674,7 @@ describe('CopyLocationTask', () => {
 
             task._getAssumedRoleS3Client(siteConfig, pathedRoleArn, fakeLogger);
 
-            const clientManager = Object.values(task.sourceClientManagers)[0];
+            const clientManager = firstManager(task.sourceClientManagers);
             assert.strictEqual(clientManager._authConfig.roleName, 'service-role/clean-room-read');
         });
     });

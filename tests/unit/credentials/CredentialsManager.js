@@ -200,6 +200,24 @@ describe('CredentialsManager', () => {
                 done();
             });
         });
+
+        it('should report how many credentials are left', done => {
+            const mgr = new CredentialsManager(extension, log);
+
+            async.timesSeries(3, (n, next) => {
+                const client = mgr.getCredentials({
+                    id: `id${n}`,
+                    accountId: `account${n}`,
+                    stsConfig,
+                    authConfig: assumeRoleAuth,
+                });
+                client.get(next);
+            }, () => {
+                assert.strictEqual(mgr.removeInactiveCredentials(5000), 2);
+                assert.strictEqual(mgr.removeInactiveCredentials(100), 1);
+                done();
+            });
+        });
     });
 
     describe('::resolveExternalFileSync', () => {

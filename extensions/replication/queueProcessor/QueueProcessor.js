@@ -15,6 +15,7 @@ const RoundRobin = require('arsenal').network.RoundRobin;
 const BackbeatProducer = require('../../../lib/BackbeatProducer');
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 const VaultClientCache = require('../../../lib/clients/VaultClientCache');
+const ClientManagerCache = require('../../../lib/clients/ClientManagerCache');
 const QueueEntry = require('../../../lib/models/QueueEntry');
 const TaskScheduler = require('../../../lib/tasks/TaskScheduler');
 const { getTaskSchedulerQueueKey,
@@ -233,12 +234,12 @@ class QueueProcessor extends EventEmitter {
         // clients to read data straight from the sites we replicate to, keyed
         // by endpoint and role, shared by all copy location tasks: they assume
         // their role on the remote site's STS
-        this.sourceClientManagers = {};
+        this.sourceClientManagers = new ClientManagerCache();
 
         // clients to write to the destination site, keyed by host and role,
         // shared by all replication tasks: they assume their role on the
         // destination STS, so they cannot be shared with the ones above
-        this.destClientManagers = {};
+        this.destClientManagers = new ClientManagerCache();
 
         // global variables
         if (sourceConfig.transport === 'https') {
@@ -888,15 +889,9 @@ class QueueProcessor extends EventEmitter {
                 return next();
             },
         ], err => {
-            // the tasks hold a reference to these maps, so empty them in place
-            Object.keys(this.sourceClientManagers).forEach(key => {
-                this.sourceClientManagers[key].close();
-                delete this.sourceClientManagers[key];
-            });
-            Object.keys(this.destClientManagers).forEach(key => {
-                this.destClientManagers[key].close();
-                delete this.destClientManagers[key];
-            });
+            // the tasks hold a reference to these caches, so empty them in place
+            this.sourceClientManagers.close();
+            this.destClientManagers.close();
             return done(err);
         });
     }

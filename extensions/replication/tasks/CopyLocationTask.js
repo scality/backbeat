@@ -124,9 +124,8 @@ class CopyLocationTask extends BackbeatTask {
         // one manager per endpoint and role: it holds the credentials and
         // clients of every account we assume that role on, and expires them
         const cacheKey = `${s3Endpoint}::${roleName}`;
-        let clientManager = this.sourceClientManagers[cacheKey];
-        if (!clientManager) {
-            clientManager = new ClientManager({
+        const clientManager = this.sourceClientManagers.getOrCreate(cacheKey, () => {
+            const manager = new ClientManager({
                 id: 'replication-copy-location',
                 authConfig: {
                     type: authTypeAssumeRole,
@@ -136,10 +135,10 @@ class CopyLocationTask extends BackbeatTask {
                 s3Config: { host, port },
                 transport,
             }, this.logger);
-            clientManager.initSTSConfig();
-            clientManager.initCredentialsManager();
-            this.sourceClientManagers[cacheKey] = clientManager;
-        }
+            manager.initSTSConfig();
+            manager.initCredentialsManager();
+            return manager;
+        });
         const client = clientManager.getBackbeatClient(accountId);
         if (!client) {
             log.error('unable to obtain assumed-role credentials for source location', {

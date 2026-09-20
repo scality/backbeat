@@ -1,4 +1,5 @@
 const assert = require('assert');
+const sinon = require('sinon');
 
 const ClientManager = require('../../../lib/clients/ClientManager');
 
@@ -44,6 +45,67 @@ describe('ClientManager', () => {
         });
     });
 
+    describe('idle detection', () => {
+        let clock;
+
+        beforeEach(() => {
+            clock = sinon.useFakeTimers();
+        });
+
+        afterEach(() => {
+            clock.restore();
+            sinon.restore();
+        });
+
+        function sweep() {
+            clock.tick(1000 * 60 * 30);
+        }
+
+        it('should report itself idle once the sweep left nothing behind', () => {
+            const idle = sinon.stub();
+            clientManager.initCredentialsManager();
+            clientManager.on('idle', idle);
+
+            sweep();
+
+            assert(idle.calledOnce);
+        });
+
+        it('should stay silent while credentials are still cached', () => {
+            const idle = sinon.stub();
+            sinon.stub(clientManager.credentialsManager, 'removeInactiveCredentials')
+                .returns(1);
+            clientManager.initCredentialsManager();
+            clientManager.on('idle', idle);
+
+            sweep();
+
+            assert(idle.notCalled);
+        });
+
+        it('should stay silent while clients are still held', () => {
+            const idle = sinon.stub();
+            clientManager.initCredentialsManager();
+            clientManager.on('idle', idle);
+            clientManager.backbeatClients['123456789012'] = {};
+
+            sweep();
+
+            assert(idle.notCalled);
+        });
+
+        it('should stop reporting once closed', () => {
+            const idle = sinon.stub();
+            clientManager.initCredentialsManager();
+            clientManager.on('idle', idle);
+
+            clientManager.close();
+            sweep();
+
+            assert(idle.notCalled);
+        });
+    });
+
     describe('close', () => {
         it('should clear the credentials sweep', () => {
             clientManager.initCredentialsManager();
@@ -72,6 +134,17 @@ describe('ClientManager', () => {
 
             clientManager.close();
             assert.doesNotThrow(() => clientManager.close());
+        });
+
+        it('should drop the idle sockets of its agents', () => {
+            const s3Agent = sinon.spy(clientManager.s3Agent, 'destroy');
+            const stsAgent = sinon.spy(clientManager.stsAgent, 'destroy');
+
+            clientManager.close();
+
+            assert(s3Agent.calledOnce);
+            assert(stsAgent.calledOnce);
+            sinon.restore();
         });
     });
 });

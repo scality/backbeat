@@ -5,6 +5,7 @@ const { Readable } = require('stream');
 const QueueEntry = require('../../../lib/models/QueueEntry');
 const ReplicateObject = require('../../../extensions/replication/tasks/ReplicateObject');
 const ClientManager = require('../../../lib/clients/ClientManager');
+const ClientManagerCache = require('../../../lib/clients/ClientManagerCache');
 const locations = require('../../../conf/locationConfig.json');
 const { versioning } = require('arsenal');
 const { generateVersionId, encode } = versioning.VersionID;
@@ -73,7 +74,7 @@ describe('ReplicateObject', () => {
                         port: 80,
                     }),
                 },
-                destClientManagers: {},
+                destClientManagers: new ClientManagerCache(),
                 logger: fakeLogger,
             }),
         });
@@ -1044,7 +1045,7 @@ describe('ReplicateObject', () => {
             otherEntry._setupDestClients('arn:aws:iam::123456789012:role/crr-role', fakeLogger);
 
             assert.strictEqual(otherEntry.clientManager, task.clientManager);
-            assert.strictEqual(Object.keys(destClientManagers).length, 1);
+            assert.strictEqual(destClientManagers.size, 1);
         });
 
         it('should use a separate client manager per role', () => {
@@ -1057,7 +1058,7 @@ describe('ReplicateObject', () => {
 
             assert.notStrictEqual(task.clientManager, first);
             assert.strictEqual(task.clientManager._id, '210987654321');
-            assert.strictEqual(Object.keys(task.destClientManagers).length, 2);
+            assert.strictEqual(task.destClientManagers.size, 2);
         });
 
         it('should not hand back the manager of the failed host when retrying', () => {
