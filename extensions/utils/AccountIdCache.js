@@ -1,4 +1,4 @@
-'user strict';
+'use strict';
 
 // Canonical ids which failed to resolve are only remembered for a short
 // while: an account may be (re)created at any time, e.g. when data arrives
