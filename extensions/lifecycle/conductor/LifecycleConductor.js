@@ -585,13 +585,13 @@ class LifecycleConductor {
             this.activeIndexingJobsRetrieved = false;
             this.activeIndexingJobs = [];
             this._batchInProgress = false;
-            const unknownCanonicalIds = this._accountIdCache.getMisses();
+            const unknownCanonicalIdCount = this._accountIdCache.missCount;
             const fullScanElapsedMs = Date.now() - this._currentScanStartTimestamp;
 
             if (err) {
                 log.error('lifecycle batch failed', {
                     error: err,
-                    unknownCanonicalIdCount: unknownCanonicalIds.length,
+                    unknownCanonicalIdCount,
                     fullScanElapsedMs,
                     nBucketsListed,
                     nBucketsQueued,
@@ -605,7 +605,7 @@ class LifecycleConductor {
 
             log.info('finished pushing lifecycle batch', {
                 nBucketsQueued,
-                unknownCanonicalIdCount: unknownCanonicalIds.length,
+                unknownCanonicalIdCount,
                 fullScanElapsedMs,
                 nBucketsListed,
             });

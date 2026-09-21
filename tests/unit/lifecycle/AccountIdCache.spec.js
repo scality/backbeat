@@ -88,13 +88,13 @@ describe('accound id cache', () => {
         assert.deepStrictEqual(cache.isKnown('a'), false);
     });
 
-    it('should dump misses', () => {
+    it('should count misses', () => {
         const cache = new AccountIdCache(2);
 
         cache.miss('def');
         cache.miss('abc');
 
-        assert.deepStrictEqual(cache.getMisses(), ['abc', 'def']);
+        assert.deepStrictEqual(cache.missCount, 2);
     });
 
     describe('miss expiration', () => {
@@ -116,7 +116,7 @@ describe('accound id cache', () => {
 
             assert.deepStrictEqual(cache.isMiss('abc'), false);
             assert.deepStrictEqual(cache.isKnown('abc'), false);
-            assert.deepStrictEqual(cache.getMisses(), []);
+            assert.deepStrictEqual(cache.missCount, 0);
         });
 
         it('should keep misses until the TTL', () => {
@@ -126,7 +126,7 @@ describe('accound id cache', () => {
             clock.tick(999);
 
             assert.deepStrictEqual(cache.isMiss('abc'), true);
-            assert.deepStrictEqual(cache.getMisses(), ['abc']);
+            assert.deepStrictEqual(cache.missCount, 1);
         });
 
         it('should refresh the TTL on a new miss', () => {
