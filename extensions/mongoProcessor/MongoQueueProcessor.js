@@ -238,6 +238,14 @@ class MongoQueueProcessor {
         log.debug('getting zenko object metadata', { bucket, key, versionId, params });
 
         return this._mongoClient.getObject(bucket, key, params, log, (err, data) => {
+            if (err?.is.NoSuchKey) {
+                log.debug('no object metadata stored yet', {
+                    method: 'MongoQueueProcessor._getZenkoObjectMetadata',
+                    entry: entry.getLogInfo(),
+                });
+                return done(err);
+            }
+
             if (err) {
                 log.error('error getting zenko object metadata', {
                     method: 'MongoQueueProcessor._getZenkoObjectMetadata',
@@ -499,7 +507,7 @@ class MongoQueueProcessor {
         };
 
         maybeGetZenkoObjectMetadata((err, zenkoObjMd) => {
-            if (err && !err.NoSuchKey) {
+            if (err && !err.is.NoSuchKey) {
                 this._normalizePendingMetric(location);
                 log.end().error('error processing object queue entry', {
                     method: 'MongoQueueProcessor._processObjectQueueEntry',
