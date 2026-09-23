@@ -8,7 +8,7 @@ const { metrics } = require('arsenal');
 const ZookeeperManager = require('../../../lib/clients/ZookeeperManager');
 const BackbeatProducer = require('../../../lib/BackbeatProducer');
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
-const { BreakerState, CircuitBreaker } = require('breakbeat').CircuitBreaker;
+const { BreakerState, CircuitBreaker } = require('@scality/breakbeat').CircuitBreaker;
 const { promMetricNames } =
       require('../../../lib/constants').kafkaBacklogMetrics;
 const zookeeperConf = { connectionString: 'localhost:2181' };

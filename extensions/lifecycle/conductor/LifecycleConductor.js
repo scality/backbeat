@@ -27,7 +27,7 @@ const {
 
 const { LifecycleMetrics } = require('../LifecycleMetrics');
 const { hasMassExpirationRule } = require('../util/mongoRules');
-const { BreakerState, CircuitBreaker } = require('breakbeat').CircuitBreaker;
+const { BreakerState, CircuitBreaker } = require('@scality/breakbeat').CircuitBreaker;
 const {
     startCircuitBreakerMetricsExport,
     updateCircuitBreakerConfigForImplicitOutputQueue,

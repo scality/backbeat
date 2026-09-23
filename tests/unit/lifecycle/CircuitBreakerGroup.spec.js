@@ -7,7 +7,7 @@ const {
 const config = require('../../config.json');
 const locations = require('../../../conf/locationConfig.json');
 const logger = require('../../utils/fakeLogger');
-const { BreakerState } = require('breakbeat').CircuitBreaker;
+const { BreakerState } = require('@scality/breakbeat').CircuitBreaker;
 
 describe('extractBucketProcessorCircuitBreakerConfigs', () => {
     function formatProbeConfig(probe, template, value) {
