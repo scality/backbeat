@@ -1,6 +1,7 @@
 'use strict';
 
 const assert = require('assert');
+const sinon = require('sinon');
 const { AccountIdCache } = require('../../../extensions/utils/AccountIdCache');
 
 describe('accound id cache', () => {
@@ -87,12 +88,77 @@ describe('accound id cache', () => {
         assert.deepStrictEqual(cache.isKnown('a'), false);
     });
 
-    it('should dump misses', () => {
-        const cache = new AccountIdCache(1);
+    it('should count misses', () => {
+        const cache = new AccountIdCache(2);
 
         cache.miss('def');
         cache.miss('abc');
 
-        assert.deepStrictEqual(cache.getMisses(), ['abc', 'def']);
+        assert.deepStrictEqual(cache.missCount, 2);
+    });
+
+    describe('miss expiration', () => {
+        let clock;
+
+        beforeEach(() => {
+            clock = sinon.useFakeTimers();
+        });
+
+        afterEach(() => {
+            clock.restore();
+        });
+
+        it('should forget misses after the TTL', () => {
+            const cache = new AccountIdCache(1, 1000);
+
+            cache.miss('abc');
+            clock.tick(1001);
+
+            assert.deepStrictEqual(cache.isMiss('abc'), false);
+            assert.deepStrictEqual(cache.isKnown('abc'), false);
+            assert.deepStrictEqual(cache.missCount, 0);
+        });
+
+        it('should keep misses until the TTL', () => {
+            const cache = new AccountIdCache(1, 1000);
+
+            cache.miss('abc');
+            clock.tick(999);
+
+            assert.deepStrictEqual(cache.isMiss('abc'), true);
+            assert.deepStrictEqual(cache.missCount, 1);
+        });
+
+        it('should refresh the TTL on a new miss', () => {
+            const cache = new AccountIdCache(1, 1000);
+
+            cache.miss('abc');
+            clock.tick(999);
+            cache.miss('abc');
+            clock.tick(999);
+
+            assert.deepStrictEqual(cache.isMiss('abc'), true);
+        });
+
+        it('should drop expired misses on expireOldest', () => {
+            const cache = new AccountIdCache(1, 1000);
+
+            cache.miss('abc');
+            clock.tick(1001);
+            cache.miss('def');
+            cache.expireOldest();
+
+            assert.deepStrictEqual([...cache.misses.keys()], ['def']);
+        });
+
+        it('should bound the number of misses kept', () => {
+            const cache = new AccountIdCache(1, 1000, 2);
+
+            cache.miss('abc');
+            cache.miss('def');
+            cache.miss('ghi');
+
+            assert.deepStrictEqual([...cache.misses.keys()], ['def', 'ghi']);
+        });
     });
 });
