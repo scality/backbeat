@@ -1,4 +1,4 @@
-ARG NODE_VERSION=22.14.0-bookworm-slim
+ARG NODE_VERSION=24.21.0-bookworm-slim
 
 FROM node:${NODE_VERSION} AS builder
 
@@ -31,7 +31,7 @@ RUN wget https://github.com/jwilder/dockerize/releases/download/$DOCKERIZE_VERSI
     && rm dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz
 
 COPY package.json yarn.lock /usr/src/app/
-RUN yarn install --ignore-engines --frozen-lockfile --production --network-concurrency 1 \
+RUN yarn install --frozen-lockfile --production --network-concurrency 1 \
     && rm -rf /var/lib/apt/lists/* \
     && rm -rf ~/.node-gyp \
     && rm -rf /tmp/yarn-*
@@ -41,7 +41,7 @@ FROM builder AS compiler
 
 # Install scripts are skipped: the compiler reads sources, it never loads any
 # of them.
-RUN yarn install --ignore-engines --frozen-lockfile --ignore-scripts --network-concurrency 1
+RUN yarn install --frozen-lockfile --ignore-scripts --network-concurrency 1
 
 COPY . /usr/src/app/
 
