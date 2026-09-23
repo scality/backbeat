@@ -1,7 +1,7 @@
 'use-strict';
 /* eslint no-template-curly-in-string: 0 */
 
-const { CircuitBreaker, BreakerState } = require('breakbeat').CircuitBreaker;
+const { CircuitBreaker, BreakerState } = require('@scality/breakbeat').CircuitBreaker;
 const { startCircuitBreakerMetricsExport } = require('../../lib/CircuitBreaker');
 
 /**

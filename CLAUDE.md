@@ -9,7 +9,8 @@ This is a **Node.js asynchronous queue and job manager** for Scality's S3C and A
 - Queue population from MongoDB oplog and Metadata (raft) oplog (`lib/queuePopulator/`)
 - Management API and routes (`lib/api/`)
 - Configuration management with Joi validation (`lib/Config.js`)
-- Git-based internal deps: arsenal, vaultclient, bucketclient, werelogs, breakbeat, httpagent
+- Internal deps from the npm registry: `@scality/arsenal` (aliased to `arsenal`), `@scality/breakbeat`
+- Git-based internal deps: vaultclient, bucketclient, werelogs, httpagent
 - CommonJS modules; legacy code is callback-based, migrating to async/await (see below)
 - Mocha + Sinon test suites (`tests/unit/`, `tests/functional/`, `tests/behavior/`)
 

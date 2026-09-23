@@ -5,7 +5,7 @@ const BackbeatConsumer = require('../../lib/BackbeatConsumer');
 const { CODES } = require('node-rdkafka');
 
 const { kafka } = require('../config.json');
-const { BreakerState } = require('breakbeat').CircuitBreaker;
+const { BreakerState } = require('@scality/breakbeat').CircuitBreaker;
 
 class BackbeatConsumerMock extends BackbeatConsumer {
     _init() {}
