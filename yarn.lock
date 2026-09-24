@@ -7724,7 +7724,6 @@ http-signature@~1.2.0:
 
 "httpagent@github:scality/httpagent#1.1.0", httpagent@scality/httpagent#1.1.0:
   version "1.1.0"
-  uid "8f9958eb9cde086db7819a86582fba640a5f8876"
   resolved "https://codeload.github.com/scality/httpagent/tar.gz/8f9958eb9cde086db7819a86582fba640a5f8876"
   dependencies:
     agentkeepalive "^4.5.0"
