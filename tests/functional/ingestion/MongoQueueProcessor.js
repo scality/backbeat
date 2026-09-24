@@ -299,7 +299,8 @@ describe('MongoQueueProcessor', function mqp() {
                 .setNullVersionId(NEW_VERSION_ID)
                 .setIsNull(true);
             const entry = new ObjectQueueEntry(BUCKET, versionKey, objmd);
-            mqp._getZenkoObjectMetadata(fakeLogger, entry, NEW_VERSION_ID, (err, res) => {
+            const versionId = mqp._policy.targetVersionId(entry);
+            mqp._getZenkoObjectMetadata(fakeLogger, entry, versionId, (err, res) => {
                 assert.ifError(err);
 
                 assert(res);
