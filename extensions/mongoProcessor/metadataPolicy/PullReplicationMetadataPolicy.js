@@ -1,5 +1,7 @@
 'use strict';
 
+const { isDeepStrictEqual } = require('util');
+
 const { ObjectMD } = require('arsenal').models;
 
 const MetadataPolicy = require('./MetadataPolicy');
@@ -36,7 +38,7 @@ class PullReplicationMetadataPolicy extends MetadataPolicy {
     }
 
     apply(entry, objMD) {
-        if (objMD) {
+        if (objMD && this._describesStoredObject(entry, objMD)) {
             // the shared diff only covers tags, while a replicated object can
             // also change its object-lock state and, until localized, its
             // placement
@@ -54,13 +56,48 @@ class PullReplicationMetadataPolicy extends MetadataPolicy {
             };
         }
 
-        // the source-side pipeline shaped everything else this object keeps;
-        // ACLs are not replicated, so they reset as for an ingested object
+        // a first write, or an object overwritten in place: the source-side
+        // pipeline shaped everything else this object keeps; ACLs are not
+        // replicated, so they reset as for an ingested object
         entry.setAcl(new ObjectMD().getAcl());
         return {
             content: getContentType(entry),
             versionId: this.targetVersionId(entry),
         };
+    }
+
+    /**
+     * Whether the entry describes the object already stored, rather than one
+     * that replaced it.
+     *
+     * A version is immutable, so an entry for one always does, a null version
+     * included. An object with no version of its own is rewritten in place,
+     * and so is the master a versioning suspended bucket marks null. Only cold
+     * objects replicate, and an overwrite is not one until its data is
+     * archived anew, so it comes with an archive of its own. The archive alone
+     * does not tell: the archival of an overwritten object can still complete,
+     * and stamp its archive onto the object that replaced it. An overwrite
+     * also moves the modification date, which nothing else that replicates
+     * does.
+     *
+     * Nothing of a replaced document is kept. Placement is the one field this
+     * site could own, and cannot here: a cold object holds what the source
+     * pipeline derives from its storage class, and clean room -- which
+     * localizes placement -- replicates versioned buckets only. A guard would
+     * go here if that changed.
+     *
+     * @param {ObjectQueueEntry} entry - object queue entry object
+     * @param {Object} objMD - metadata fetched from mongo
+     * @return {boolean} true if the entry describes the stored object
+     */
+    _describesStoredObject(entry, objMD) {
+        if (this.targetVersionId(entry)) {
+            return true;
+        }
+
+        return isDeepStrictEqual(entry.getArchive()?.archiveInfo,
+            objMD.archive?.archiveInfo) &&
+            entry.getLastModified() === objMD['last-modified'];
     }
 
     /**

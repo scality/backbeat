@@ -1304,6 +1304,8 @@ describe('MongoQueueProcessor in dr mode', function drMode() {
     // a cold object with no version of its own, restored on this site
     const STORED_ARCHIVE = { archiveInfo: { archiveId: 'stored-archive', archiveVersion: 1 } };
     const STORED_LAST_MODIFIED = '2026-09-01T10:00:00.000Z';
+    const REWRITE_ARCHIVE = { archiveInfo: { archiveId: 'rewrite-archive', archiveVersion: 2 } };
+    const REWRITE_LAST_MODIFIED = '2026-09-02T10:00:00.000Z';
 
     function storeUnversioned() {
         sinon.stub(mongoClient, 'getObject').callsFake((b, k, p, l, cb) =>
@@ -1318,6 +1320,109 @@ describe('MongoQueueProcessor in dr mode', function drMode() {
                 .setAmzRestore({ 'ongoing-request': false })
                 ._data));
     }
+
+    it('should take every field of an object rewritten in place', done => {
+        storeUnversioned();
+        const objmd = new ObjectMD()
+            .setKey(KEY)
+            .setContentMd5('9e107d9d372bb6826bd81d3542a419d6')
+            .setContentType('application/json')
+            .setUserMetadata({ 'x-amz-meta-colour': 'blue' })
+            .setDataStoreName(LOCATION)
+            .setArchive(REWRITE_ARCHIVE)
+            .setLastModified(REWRITE_LAST_MODIFIED);
+        const entry = new ObjectQueueEntry(BUCKET, KEY, objmd);
+
+        processEntry(entry, err => {
+            assert.ifError(err);
+
+            const added = mqp.getAdded();
+            assert.strictEqual(added.length, 1);
+            // written in place, under the object key alone
+            assert.strictEqual(added[0].key, KEY);
+            const { objVal } = added[0];
+            assert.strictEqual(objVal['content-md5'], '9e107d9d372bb6826bd81d3542a419d6');
+            assert.strictEqual(objVal['content-type'], 'application/json');
+            assert.strictEqual(objVal['x-amz-meta-colour'], 'blue');
+            assert.deepStrictEqual(objVal.archive, REWRITE_ARCHIVE);
+            // a restore this site holds describes bytes that are gone
+            assert.strictEqual(objVal['x-amz-restore'], undefined);
+            assert.deepStrictEqual(objVal.acl, new ObjectMD().getAcl());
+            done();
+        });
+    });
+
+    it('should take a rewrite that kept the same bytes', done => {
+        storeUnversioned();
+        // a PUT replaces the whole metadata whatever the content does, so the
+        // content md5 cannot tell a rewrite from an untouched object
+        const objmd = new ObjectMD()
+            .setKey(KEY)
+            .setContentMd5('7d793037a0760186574b0282f2f435e7')
+            .setContentType('application/json')
+            .setUserMetadata({ 'x-amz-meta-colour': 'red' })
+            .setDataStoreName(LOCATION)
+            .setArchive(REWRITE_ARCHIVE)
+            .setLastModified(REWRITE_LAST_MODIFIED);
+        const entry = new ObjectQueueEntry(BUCKET, KEY, objmd);
+
+        processEntry(entry, err => {
+            assert.ifError(err);
+
+            const added = mqp.getAdded();
+            assert.strictEqual(added.length, 1);
+            assert.strictEqual(added[0].objVal['content-type'], 'application/json');
+            done();
+        });
+    });
+
+    it('should take a rewrite stamped with the archive of the object it replaced', done => {
+        storeUnversioned();
+        // the archival of the overwritten object completed after the
+        // overwrite, and stamped its archive onto the new object
+        const objmd = new ObjectMD()
+            .setKey(KEY)
+            .setContentMd5('9e107d9d372bb6826bd81d3542a419d6')
+            .setContentType('application/json')
+            .setDataStoreName(LOCATION)
+            .setArchive(STORED_ARCHIVE)
+            .setLastModified(REWRITE_LAST_MODIFIED);
+        const entry = new ObjectQueueEntry(BUCKET, KEY, objmd);
+
+        processEntry(entry, err => {
+            assert.ifError(err);
+
+            const added = mqp.getAdded();
+            assert.strictEqual(added.length, 1);
+            assert.strictEqual(added[0].objVal['content-type'], 'application/json');
+            done();
+        });
+    });
+
+    it('should take the null version a suspended bucket rewrites', done => {
+        storeUnversioned();
+        // versioning suspended: the master carries a version id and is marked
+        // null, and it is still the document that gets rewritten in place
+        const objmd = new ObjectMD()
+            .setKey(KEY)
+            .setVersionId(VERSION_ID)
+            .setIsNull(true)
+            .setContentMd5('9e107d9d372bb6826bd81d3542a419d6')
+            .setDataStoreName(LOCATION)
+            .setArchive(REWRITE_ARCHIVE)
+            .setLastModified(REWRITE_LAST_MODIFIED);
+        const entry = new ObjectQueueEntry(BUCKET, KEY, objmd);
+
+        processEntry(entry, err => {
+            assert.ifError(err);
+
+            const added = mqp.getAdded();
+            assert.strictEqual(added.length, 1);
+            assert.strictEqual(added[0].key, KEY);
+            assert.strictEqual(added[0].objVal['content-md5'], '9e107d9d372bb6826bd81d3542a419d6');
+            done();
+        });
+    });
 
     it('should merge an update to an object with no version of its own', done => {
         storeUnversioned();
