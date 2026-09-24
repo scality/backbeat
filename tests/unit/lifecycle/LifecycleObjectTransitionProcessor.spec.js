@@ -1,6 +1,6 @@
 const assert = require('assert');
 const sinon = require('sinon');
-const { errors } = require('arsenal');
+const { errors } = require('@scality/arsenal');
 const config = require('../../config.json');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const LifecycleObjectTransitionProcessor =

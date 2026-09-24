@@ -1,8 +1,8 @@
 const async = require('async');
-const { constants } = require('arsenal');
-const { scaleMsPerDay } = require('arsenal').s3middleware.objectUtils;
-const { encode } = require('arsenal').versioning.VersionID;
-const { isMasterKey } = require('arsenal').versioning;
+const { constants } = require('@scality/arsenal');
+const { scaleMsPerDay } = require('@scality/arsenal').s3middleware.objectUtils;
+const { encode } = require('@scality/arsenal').versioning.VersionID;
+const { isMasterKey } = require('@scality/arsenal').versioning;
 const { mpuBucketPrefix } = constants;
 const QueuePopulatorExtension =
     require('../../lib/queuePopulator/QueuePopulatorExtension');

@@ -2,7 +2,7 @@
 
 const assert = require('assert');
 
-const { RedisClient } = require('arsenal').metrics;
+const { RedisClient } = require('@scality/arsenal').metrics;
 const Metrics = require('../../../lib/api/Metrics');
 const apiRoutes = require('../../../lib/api/routes');
 

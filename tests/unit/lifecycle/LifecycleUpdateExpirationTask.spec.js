@@ -2,7 +2,7 @@ const assert = require('assert');
 const sinon = require('sinon');
 const werelogs = require('werelogs');
 
-const { ObjectMD } = require('arsenal').models;
+const { ObjectMD } = require('@scality/arsenal').models;
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const LifecycleUpdateExpirationTask = require(
     '../../../extensions/lifecycle/tasks/LifecycleUpdateExpirationTask');

@@ -1,7 +1,7 @@
 'use strict';
 
 const assert = require('assert');
-const { errors } = require('arsenal');
+const { errors } = require('@scality/arsenal');
 
 class BackbeatClientMock {
     constructor(failures) {

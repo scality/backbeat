@@ -1,7 +1,7 @@
 const async = require('async');
 
-const { errors } = require('arsenal');
-const ObjectMD = require('arsenal').models.ObjectMD;
+const { errors } = require('@scality/arsenal');
+const ObjectMD = require('@scality/arsenal').models.ObjectMD;
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const { LifecycleMetrics } = require('../LifecycleMetrics');

@@ -1,7 +1,7 @@
 const assert = require('assert');
 const sinon = require('sinon');
 const werelogs = require('werelogs');
-const { encode } = require('arsenal').versioning.VersionID;
+const { encode } = require('@scality/arsenal').versioning.VersionID;
 
 const config = require('../../../lib/Config');
 const {
@@ -12,7 +12,7 @@ const {
 } = config.extensions.lifecycle;
 
 const LifecycleQueuePopulator = require('../../../extensions/lifecycle/LifecycleQueuePopulator');
-const { errors } = require('arsenal');
+const { errors } = require('@scality/arsenal');
 
 const logger = new werelogs.Logger('test:LifecycleQueuePopulator');
 

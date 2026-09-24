@@ -1,5 +1,5 @@
 const joi = require('joi');
-const { errors } = require('arsenal');
+const { errors } = require('@scality/arsenal');
 
 const OplogPopulatorMetrics = require('../OplogPopulatorMetrics');
 const AllocationStrategy = require('../allocationStrategy/AllocationStrategy');

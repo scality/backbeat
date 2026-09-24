@@ -7,7 +7,7 @@ const ReplicateObject = require('../../../extensions/replication/tasks/Replicate
 const ClientManager = require('../../../lib/clients/ClientManager');
 const ClientManagerCache = require('../../../lib/clients/ClientManagerCache');
 const locations = require('../../../conf/locationConfig.json');
-const { versioning } = require('arsenal');
+const { versioning } = require('@scality/arsenal');
 const { generateVersionId, encode } = versioning.VersionID;
 const {
     VersionIdCollisionException,

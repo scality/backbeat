@@ -1,8 +1,8 @@
-const { zenkoIDHeader } = require('arsenal').constants;
+const { zenkoIDHeader } = require('@scality/arsenal').constants;
 
 const QueuePopulatorExtension =
           require('../../lib/queuePopulator/QueuePopulatorExtension');
-const { isMasterKey } = require('arsenal').versioning;
+const { isMasterKey } = require('@scality/arsenal').versioning;
 const ObjectQueueEntry = require('../../lib/models/ObjectQueueEntry');
 const safeJsonParse = require('../../lib/util/safeJsonParse');
 

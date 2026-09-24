@@ -3,15 +3,15 @@ const tracing = require('../../../lib/tracing');
 tracing.init();
 
 const assert = require('assert');
-const { errors } = require('arsenal');
+const { errors } = require('@scality/arsenal');
 const async = require('async');
 const werelogs = require('werelogs');
 const {
     DEFAULT_LIVE_ROUTE,
     DEFAULT_READY_ROUTE,
     DEFAULT_METRICS_ROUTE,
-} = require('arsenal').network.probe.ProbeServer;
-const { sendSuccess, sendError } = require('arsenal').network.probe.Utils;
+} = require('@scality/arsenal').network.probe.ProbeServer;
+const { sendSuccess, sendError } = require('@scality/arsenal').network.probe.Utils;
 const QueueProcessor = require('./QueueProcessor');
 const { startProbeServer } = require('../../../lib/util/probe');
 

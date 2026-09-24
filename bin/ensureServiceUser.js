@@ -5,7 +5,7 @@
 // - add permission boundaries to user when https://scality.atlassian.net/browse/VAULT-4 is implemented
 const fs = require('fs');
 
-const { errors, errorUtils } = require('arsenal');
+const { errors, errorUtils } = require('@scality/arsenal');
 const { program } = require('commander');
 const werelogs = require('werelogs');
 const version = require('../package.json').version;

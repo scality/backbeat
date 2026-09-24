@@ -3,7 +3,7 @@ const { fromIni } = require('@aws-sdk/credential-providers');
 
 const werelogs = require('werelogs');
 const Logger = werelogs.Logger;
-const { RoundRobin } = require('arsenal').network;
+const { RoundRobin } = require('@scality/arsenal').network;
 
 const config = require('../lib/Config');
 const SetupReplication =

@@ -2,7 +2,7 @@
 
 const assert = require('assert');
 const werelogs = require('werelogs');
-const { errors } = require('arsenal');
+const { errors } = require('@scality/arsenal');
 
 const LifecycleBucketProcessor = require(
     '../../../extensions/lifecycle/bucketProcessor/LifecycleBucketProcessor');

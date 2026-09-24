@@ -1,7 +1,7 @@
 'use strict';
 
 const werelogs = require('werelogs');
-const { ObjectMD } = require('arsenal').models;
+const { ObjectMD } = require('@scality/arsenal').models;
 
 const LifecycleObjectExpirationProcessor = require(
     '../../../extensions/lifecycle/objectProcessor/LifecycleObjectExpirationProcessor');

@@ -5,9 +5,9 @@ const http = require('http');
 const URL = require('url');
 const querystring = require('querystring');
 
-const VersionIDUtils = require('arsenal').versioning.VersionID;
-const routesUtils = require('arsenal').s3routes.routesUtils;
-const errors = require('arsenal').errors;
+const VersionIDUtils = require('@scality/arsenal').versioning.VersionID;
+const routesUtils = require('@scality/arsenal').s3routes.routesUtils;
+const errors = require('@scality/arsenal').errors;
 
 const werelogs = require('werelogs');
 const Logger = werelogs.Logger;

@@ -10,7 +10,7 @@ const {
 const { extensionConfigValidator } = require('../../lib/config/extensionConfigValidator');
 
 const { backbeatConsumer: { MAX_QUEUED_DEFAULT } } = require('../../lib/constants');
-const { ValidLifecycleRules: supportedLifecycleRules } = require('arsenal').models;
+const { ValidLifecycleRules: supportedLifecycleRules } = require('@scality/arsenal').models;
 
 const joiSchema = joi.object({
     zookeeperPath: joi.string().required(),

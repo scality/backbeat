@@ -1,6 +1,6 @@
 const async = require('async');
-const { errors } = require('arsenal');
-const ObjectMD = require('arsenal').models.ObjectMD;
+const { errors } = require('@scality/arsenal');
+const ObjectMD = require('@scality/arsenal').models.ObjectMD;
 const { HeadObjectCommand, AbortMultipartUploadCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
 
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');

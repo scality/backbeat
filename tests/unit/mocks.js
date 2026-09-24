@@ -1,6 +1,6 @@
 const assert = require('assert');
-const { errors } = require('arsenal');
-const { ObjectMD } = require('arsenal').models;
+const { errors } = require('@scality/arsenal');
+const { ObjectMD } = require('@scality/arsenal').models;
 
 class GarbageCollectorProducerMock {
     constructor() {

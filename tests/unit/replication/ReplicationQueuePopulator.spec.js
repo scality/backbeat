@@ -1,7 +1,7 @@
 const assert = require('assert');
 const sinon = require('sinon');
 
-const { encode } = require('arsenal').versioning.VersionID;
+const { encode } = require('@scality/arsenal').versioning.VersionID;
 
 const ReplicationQueuePopulator =
     require('../../../extensions/replication/ReplicationQueuePopulator');

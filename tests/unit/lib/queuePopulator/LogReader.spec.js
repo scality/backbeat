@@ -4,7 +4,7 @@ const stream = require('stream');
 
 const ZookeeperMock = require('zookeeper-mock');
 
-const { errors } = require('arsenal');
+const { errors } = require('@scality/arsenal');
 
 const { Logger } = require('werelogs');
 

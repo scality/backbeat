@@ -21,8 +21,8 @@ const {
 } = require('@aws-sdk/client-s3');
 
 const Logger = require('werelogs').Logger;
-const LifecycleRule = require('arsenal').models.LifecycleRule;
-const ObjectMD = require('arsenal').models.ObjectMD;
+const LifecycleRule = require('@scality/arsenal').models.LifecycleRule;
+const ObjectMD = require('@scality/arsenal').models.ObjectMD;
 
 const LifecycleTask = require('../../../extensions/lifecycle/tasks/LifecycleTask');
 const testConfig = require('../../config.json');

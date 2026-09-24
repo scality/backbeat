@@ -1,7 +1,7 @@
 const assert = require('assert');
 const werelogs = require('werelogs');
 const sinon = require('sinon');
-const { ObjectMD } = require('arsenal').models;
+const { ObjectMD } = require('@scality/arsenal').models;
 
 const GarbageCollectorTask = require('../../../extensions/gc/tasks/GarbageCollectorTask');
 const { GarbageCollectorMetrics } = require('../../../extensions/gc/GarbageCollectorMetrics');

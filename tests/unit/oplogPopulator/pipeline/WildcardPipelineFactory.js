@@ -1,6 +1,6 @@
 const assert = require('assert');
 const WildcardPipelineFactory = require('../../../../extensions/oplogPopulator/pipeline/WildcardPipelineFactory');
-const { constants } = require('arsenal');
+const { constants } = require('@scality/arsenal');
 
 describe('WildcardPipelineFactory', () => {
     const thresholdBytes = 100 * 1000000;

@@ -3,12 +3,12 @@
 const async = require('async');
 
 const Logger = require('werelogs').Logger;
-const errors = require('arsenal').errors;
-const { replicationBackends, emptyFileMd5 } = require('arsenal').constants;
-const MongoClient = require('arsenal').storage
+const errors = require('@scality/arsenal').errors;
+const { replicationBackends, emptyFileMd5 } = require('@scality/arsenal').constants;
+const MongoClient = require('@scality/arsenal').storage
     .metadata.mongoclient.MongoClientInterface;
-const { ObjectMD, ReplicationConfiguration } = require('arsenal').models;
-const { VersionID } = require('arsenal').versioning;
+const { ObjectMD, ReplicationConfiguration } = require('@scality/arsenal').models;
+const { VersionID } = require('@scality/arsenal').versioning;
 const { extractVersionId } = require('../../lib/util/versioning');
 
 const Config = require('../../lib/Config');

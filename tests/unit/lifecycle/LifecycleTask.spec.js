@@ -3,8 +3,8 @@
 const assert = require('assert');
 const async = require('async');
 const sinon = require('sinon');
-const { errors } = require('arsenal');
-const { ValidLifecycleRules } = require('arsenal').models;
+const { errors } = require('@scality/arsenal');
+const { ValidLifecycleRules } = require('@scality/arsenal').models;
 
 const LifecycleTask = require(
     '../../../extensions/lifecycle/tasks/LifecycleTask');

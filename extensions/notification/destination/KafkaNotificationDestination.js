@@ -1,6 +1,6 @@
 const NotificationDestination = require('./NotificationDestination');
 const KafkaProducer = require('./KafkaProducer');
-const { ZenkoMetrics } = require('arsenal').metrics;
+const { ZenkoMetrics } = require('@scality/arsenal').metrics;
 
 const notificationSize = ZenkoMetrics.createCounter({
     name: 's3_notification_queue_processor_notification_size_total',

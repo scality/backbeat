@@ -1,4 +1,4 @@
-const { constants } = require('arsenal');
+const { constants } = require('@scality/arsenal');
 const { wildCardForAllBuckets } = require('../constants');
 const PipelineFactory = require('./PipelineFactory');
 

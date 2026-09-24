@@ -9,7 +9,7 @@ const LifecycleBucketProcessor = require(
     '../../../extensions/lifecycle/bucketProcessor/LifecycleBucketProcessor');
 const { formatSupportedLifecycleRules } = require('../../../extensions/lifecycle/util/rules.js');
 
-const { ValidLifecycleRules } = require('arsenal').models;
+const { ValidLifecycleRules } = require('@scality/arsenal').models;
 
 const {
     zkConfig,

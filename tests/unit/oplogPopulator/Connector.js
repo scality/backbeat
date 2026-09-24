@@ -4,7 +4,7 @@ const werelogs = require('werelogs');
 
 const Connector =
     require('../../../extensions/oplogPopulator/modules/Connector');
-const { errors } = require('arsenal');
+const { errors } = require('@scality/arsenal');
 const MultipleBucketsPipelineFactory =
     require('../../../extensions/oplogPopulator/pipeline/MultipleBucketsPipelineFactory');
 

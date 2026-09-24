@@ -4,7 +4,7 @@ const sinon = require('sinon');
 const zookeeper = require('node-zookeeper-client');
 const QueuePopulator = require('../../lib/queuePopulator/QueuePopulator');
 const constants = require('../../lib/constants');
-const { errors } = require('arsenal');
+const { errors } = require('@scality/arsenal');
 
 describe('QueuePopulator', () => {
     let qp;

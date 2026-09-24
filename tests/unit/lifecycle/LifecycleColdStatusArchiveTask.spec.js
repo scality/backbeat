@@ -1,6 +1,6 @@
 const assert = require('assert');
 const werelogs = require('werelogs');
-const { ObjectMD } = require('arsenal').models;
+const { ObjectMD } = require('@scality/arsenal').models;
 const sinon = require('sinon');
 const config = require('../../config.json');
 

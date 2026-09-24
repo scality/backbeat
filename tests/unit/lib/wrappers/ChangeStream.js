@@ -1,6 +1,6 @@
 const assert = require('assert');
 const sinon = require('sinon');
-const errors = require('arsenal').errors;
+const errors = require('@scality/arsenal').errors;
 const werelogs = require('werelogs');
 const events = require('events');
 

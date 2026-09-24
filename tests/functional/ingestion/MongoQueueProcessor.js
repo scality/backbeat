@@ -3,10 +3,10 @@
 const assert = require('assert');
 const async = require('async');
 const sinon = require('sinon');
-const { ObjectMD, BucketInfo } = require('arsenal').models;
-const { decode, encode } = require('arsenal').versioning.VersionID;
-const errors = require('arsenal').errors;
-const VID_SEP = require('arsenal').versioning.VersioningConstants
+const { ObjectMD, BucketInfo } = require('@scality/arsenal').models;
+const { decode, encode } = require('@scality/arsenal').versioning.VersionID;
+const errors = require('@scality/arsenal').errors;
+const VID_SEP = require('@scality/arsenal').versioning.VersioningConstants
           .VersionId.Separator;
 
 const config = require('../../config.json');
@@ -16,7 +16,8 @@ const authdata = require('../../../conf/authdata.json');
 const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
 const DeleteOpQueueEntry = require('../../../lib/models/DeleteOpQueueEntry');
 const fakeLogger = require('../../utils/fakeLogger');
-const { ObjectMDArchive, LifecycleConfiguration, NotificationConfiguration } = require('arsenal/build/lib/models');
+const { ObjectMDArchive, LifecycleConfiguration, NotificationConfiguration } =
+    require('@scality/arsenal/build/lib/models');
 
 const kafkaConfig = config.kafka;
 const mongoProcessorConfig = config.extensions.mongoProcessor;

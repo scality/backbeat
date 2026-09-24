@@ -10,7 +10,7 @@ const QueueProcessor = require('./QueueProcessor');
 const config = require('../../../lib/Config');
 const { initManagement } = require('../../../lib/management/index');
 const { applyBucketReplicationWorkflows } = require('../management');
-const { reshapeExceptionError } = require('arsenal').errorUtils;
+const { reshapeExceptionError } = require('@scality/arsenal').errorUtils;
 const ZookeeperManager = require('../../../lib/clients/ZookeeperManager');
 const { zookeeperNamespace, zkStatePath, zkReplayStatePath } =
     require('../constants');
@@ -27,8 +27,8 @@ const { connectionString, autoCreateNamespace, retries } = zkConfig;
 const RESUME_NODE = 'scheduledResume';
 const { startProbeServer, getReplicationProbeConfig } = require('../../../lib/util/probe');
 const { DEFAULT_LIVE_ROUTE, DEFAULT_METRICS_ROUTE, DEFAULT_READY_ROUTE } =
-    require('arsenal').network.probe.ProbeServer;
-const { sendSuccess } = require('arsenal').network.probe.Utils;
+    require('@scality/arsenal').network.probe.ProbeServer;
+const { sendSuccess } = require('@scality/arsenal').network.probe.Utils;
 
 const log = new werelogs.Logger('Backbeat:QueueProcessor:task');
 werelogs.configure({

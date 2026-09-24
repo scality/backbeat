@@ -2,7 +2,7 @@ const assert = require('assert');
 
 const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
-const { ObjectMD } = require('arsenal').models;
+const { ObjectMD } = require('@scality/arsenal').models;
 
 const { getTaskSchedulerQueueKey, getTaskSchedulerDedupeKey } = require(
     '../../../extensions/replication/queueProcessor/taskSchedulerHelpers');

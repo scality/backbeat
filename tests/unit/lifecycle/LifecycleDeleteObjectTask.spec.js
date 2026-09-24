@@ -1,8 +1,8 @@
 const assert = require('assert');
 const sinon = require('sinon');
-const { errors } = require('arsenal');
+const { errors } = require('@scality/arsenal');
 const werelogs = require('werelogs');
-const { ObjectMD } = require('arsenal').models;
+const { ObjectMD } = require('@scality/arsenal').models;
 
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const LifecycleDeleteObjectTask = require(

@@ -1,6 +1,6 @@
 'use strict';
 
-const { StatsModel } = require('arsenal').metrics;
+const { StatsModel } = require('@scality/arsenal').metrics;
 const Logger = require('werelogs').Logger;
 const redisClient = require('../../replication/utils/getRedisClient')();
 

@@ -1,10 +1,10 @@
 const joi = require('joi');
 const semver = require('semver');
 
-const { ZenkoMetrics } = require('arsenal').metrics;
-const LRUCache = require('arsenal').algorithms
+const { ZenkoMetrics } = require('@scality/arsenal').metrics;
+const LRUCache = require('@scality/arsenal').algorithms
     .cache.LRUCache;
-const { errors } = require('arsenal');
+const { errors } = require('@scality/arsenal');
 
 const MongoClient = require('mongodb').MongoClient;
 

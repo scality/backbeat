@@ -1,6 +1,6 @@
 const http = require('http');
 const assert = require('assert');
-const BucketInfo = require('arsenal').models.BucketInfo;
+const BucketInfo = require('@scality/arsenal').models.BucketInfo;
 const { getAccountCredentials } =
     require('../../../lib/credentials/AccountCredentials');
 const { MetadataMock, mockLogs, objectList, dummyBucketMD, objectMD } =

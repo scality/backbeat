@@ -3,7 +3,7 @@
 const assert = require('assert');
 const Redis = require('ioredis');
 const sinon = require('sinon');
-const errors = require('arsenal').errors;
+const errors = require('@scality/arsenal').errors;
 const config = require('../../../lib/Config');
 const IngestionPopulator =
     require('../../../lib/queuePopulator/IngestionPopulator');

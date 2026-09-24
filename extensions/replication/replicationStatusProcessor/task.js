@@ -7,7 +7,7 @@ const werelogs = require('werelogs');
 const ReplicationStatusProcessor = require('./ReplicationStatusProcessor');
 const { startProbeServer } = require('../../../lib/util/probe');
 const { DEFAULT_LIVE_ROUTE, DEFAULT_METRICS_ROUTE, DEFAULT_READY_ROUTE } =
-    require('arsenal').network.probe.ProbeServer;
+    require('@scality/arsenal').network.probe.ProbeServer;
 
 const config = require('../../../lib/Config');
 const kafkaConfig = config.kafka;

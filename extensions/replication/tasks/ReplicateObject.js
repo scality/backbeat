@@ -1,8 +1,8 @@
 const { promisify } = require('util');
 const { S3Client, GetBucketReplicationCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
 
-const { errors, versioning } = require('arsenal');
-const { ObjectMDLocation, ReplicationConfiguration } = require('arsenal').models;
+const { errors, versioning } = require('@scality/arsenal');
+const { ObjectMDLocation, ReplicationConfiguration } = require('@scality/arsenal').models;
 const {
     encode: encodeMicroVersionId,
     decode: decodeMicroVersionId,

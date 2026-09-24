@@ -1,7 +1,7 @@
 const { RulesReducer } = require('./RulesReducer');
 const { lifecycleListing: { NON_CURRENT_TYPE, CURRENT_TYPE, ORPHAN_DM_TYPE } } = require('../../../lib/constants');
 
-const { s3middleware } = require('arsenal');
+const { s3middleware } = require('@scality/arsenal');
 const { scaleMsPerDay } = s3middleware.objectUtils;
 
 // Default max AWS limit is 1000 for both list objects and list object versions

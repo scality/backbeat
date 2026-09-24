@@ -1,6 +1,6 @@
 const joi = require('joi');
 const { v4: uuid } = require('uuid');
-const { errors } = require('arsenal');
+const { errors } = require('@scality/arsenal');
 const { EventEmitter } = require('stream');
 const KafkaConnectWrapper = require('../../../lib/wrappers/KafkaConnectWrapper');
 const constants = require('../constants');

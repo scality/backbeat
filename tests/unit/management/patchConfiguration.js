@@ -1,7 +1,7 @@
 const assert = require('assert');
 const async = require('async');
-const Metadata = require('arsenal').storage.metadata.MetadataWrapper;
-const BucketInfo = require('arsenal').models.BucketInfo;
+const Metadata = require('@scality/arsenal').storage.metadata.MetadataWrapper;
+const BucketInfo = require('@scality/arsenal').models.BucketInfo;
 
 const { patchConfiguration } =
     require('../../../lib/management/patchConfiguration');

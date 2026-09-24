@@ -1,10 +1,10 @@
 const async = require('async');
 const assert = require('assert');
 
-const errors = require('arsenal').errors;
+const errors = require('@scality/arsenal').errors;
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
-const ObjectMD = require('arsenal').models.ObjectMD;
+const ObjectMD = require('@scality/arsenal').models.ObjectMD;
 const { LifecycleMetrics, getCopyLocationMetricsType } = require('../LifecycleMetrics');
 const {
     TRANSITION_ATTEMPT_MD,

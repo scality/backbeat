@@ -2,7 +2,7 @@ const assert = require('assert');
 const http = require('http');
 const { Client } = require('vaultclient');
 const { Logger } = require('werelogs');
-const { errors, ArsenalError } = require('arsenal');
+const { errors, ArsenalError } = require('@scality/arsenal');
 const { proxyPath } = require('../../extensions/replication/constants');
 const RoleCredentials = require('../../lib/credentials/RoleCredentials');
 

@@ -1,13 +1,13 @@
 const joi = require('joi');
 const semver = require('semver');
-const { errors } = require('arsenal');
+const { errors } = require('@scality/arsenal');
 const { MongoClient } = require('mongodb');
 const constants = require('./constants');
 const { constructConnectionString, getMongoVersion } = require('../utils/MongoUtils');
 const ChangeStream = require('../../lib/wrappers/ChangeStream');
 const Allocator = require('./modules/Allocator');
 const ConnectorsManager = require('./modules/ConnectorsManager');
-const { ZenkoMetrics } = require('arsenal').metrics;
+const { ZenkoMetrics } = require('@scality/arsenal').metrics;
 const OplogPopulatorMetrics = require('./OplogPopulatorMetrics');
 const { OplogPopulatorConfigJoiSchema } = require('./OplogPopulatorConfigValidator');
 const { mongoJoi } = require('../../lib/config/configItems.joi');

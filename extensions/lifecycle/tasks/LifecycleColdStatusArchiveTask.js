@@ -1,6 +1,6 @@
 const async = require('async');
 
-const ObjectMDArchive = require('arsenal').models.ObjectMDArchive;
+const ObjectMDArchive = require('@scality/arsenal').models.ObjectMDArchive;
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const LifecycleUpdateTransitionTask = require('./LifecycleUpdateTransitionTask');
 const { LifecycleMetrics } = require('../LifecycleMetrics');

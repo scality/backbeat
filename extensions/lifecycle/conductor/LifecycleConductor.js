@@ -5,10 +5,10 @@ const schedule = require('node-schedule');
 const zookeeper = require('node-zookeeper-client');
 const { v7: uuid } = require('uuid');
 
-const { constants, errors } = require('arsenal');
+const { constants, errors } = require('@scality/arsenal');
 const Logger = require('werelogs').Logger;
 const BucketClient = require('bucketclient').RESTClient;
-const MongoClient = require('arsenal').storage
+const MongoClient = require('@scality/arsenal').storage
     .metadata.mongoclient.MongoClientInterface;
 
 const config = require('../../../lib/Config');
@@ -34,7 +34,7 @@ const {
 } = require('../../../lib/CircuitBreaker');
 const { context: otelContext, trace, SpanKind, ROOT_CONTEXT } =
     require('@opentelemetry/api');
-const { stampTraceHeaders } = require('arsenal/build/lib/tracing').kafka;
+const { stampTraceHeaders } = require('@scality/arsenal/build/lib/tracing').kafka;
 const tracing = require('../../../lib/tracing');
 
 const DEFAULT_CRON_RULE = '* * * * *';

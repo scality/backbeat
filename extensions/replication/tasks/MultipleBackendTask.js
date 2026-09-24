@@ -3,9 +3,9 @@ const async = require('async');
 const { v4: uuid } = require('uuid');
 const { GetBucketReplicationCommand } = require('@aws-sdk/client-s3');
 
-const errors = require('arsenal').errors;
-const jsutil = require('arsenal').jsutil;
-const ObjectMD = require('arsenal').models.ObjectMD;
+const errors = require('@scality/arsenal').errors;
+const jsutil = require('@scality/arsenal').jsutil;
+const ObjectMD = require('@scality/arsenal').models.ObjectMD;
 const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
 const BackbeatMetadataProxy = require('../../../lib/BackbeatMetadataProxy');
 

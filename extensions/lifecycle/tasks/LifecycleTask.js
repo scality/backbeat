@@ -1,13 +1,13 @@
 'use strict';
 
 const async = require('async');
-const { errors, versioning } = require('arsenal');
-const { ObjectMD } = require('arsenal').models;
+const { errors, versioning } = require('@scality/arsenal');
+const { ObjectMD } = require('@scality/arsenal').models;
 const {
     LifecycleDateTime,
     LifecycleUtils,
-} = require('arsenal').s3middleware.lifecycleHelpers;
-const { CompareResult, MinHeap } = require('arsenal').algorithms.Heap;
+} = require('@scality/arsenal').s3middleware.lifecycleHelpers;
+const { CompareResult, MinHeap } = require('@scality/arsenal').algorithms.Heap;
 const {
     ListObjectsCommand,
     ListObjectVersionsCommand,
@@ -25,7 +25,7 @@ const { LifecycleMetrics, LIFECYCLE_MARKER_METRICS_LOCATION } = require('../Life
 const locationsConfig = require('../../../conf/locationConfig.json') || {};
 const { rulesSupportTransition } = require('../util/rules');
 const { getTransitionAttempt } = require('../../../lib/util/transitionAttempt');
-const { stampTraceHeaders } = require('arsenal/build/lib/tracing').kafka;
+const { stampTraceHeaders } = require('@scality/arsenal/build/lib/tracing').kafka;
 const { decode } = versioning.VersionID;
 
 const errorTransitionInProgress = errors.InternalError.

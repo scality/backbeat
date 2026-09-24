@@ -1,7 +1,7 @@
 const assert = require('assert');
 const http = require('http');
 const { MetadataMock } = require('../utils/MetadataMock');
-const VID_SEP = require('arsenal').versioning.VersioningConstants
+const VID_SEP = require('@scality/arsenal').versioning.VersioningConstants
           .VersionId.Separator;
 
 const QueuePopulator = require('../../../lib/queuePopulator/QueuePopulator');

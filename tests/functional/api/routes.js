@@ -4,8 +4,8 @@ const http = require('http');
 const Redis = require('ioredis');
 const { Producer } = require('node-rdkafka');
 const zookeeper = require('node-zookeeper-client');
-const { RedisClient } = require('arsenal').metrics;
-const { StatsModel } = require('arsenal').metrics;
+const { RedisClient } = require('@scality/arsenal').metrics;
+const { StatsModel } = require('@scality/arsenal').metrics;
 
 const config = require('../../../lib/Config');
 const { makeRequest, getRequest, getResponseBody } =

@@ -4,8 +4,8 @@ const { EventEmitter } = require('events');
 const Logger = require('werelogs').Logger;
 const async = require('async');
 const assert = require('assert');
-const { ZenkoMetrics } = require('arsenal').metrics;
-const errors = require('arsenal').errors;
+const { ZenkoMetrics } = require('@scality/arsenal').metrics;
+const errors = require('@scality/arsenal').errors;
 
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 const NotificationDestination = require('../destination');

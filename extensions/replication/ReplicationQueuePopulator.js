@@ -1,5 +1,5 @@
-const { isMasterKey } = require('arsenal').versioning;
-const { usersBucket, mpuBucketPrefix, externalBackends } = require('arsenal').constants;
+const { isMasterKey } = require('@scality/arsenal').versioning;
+const { usersBucket, mpuBucketPrefix, externalBackends } = require('@scality/arsenal').constants;
 
 const QueuePopulatorExtension =
           require('../../lib/queuePopulator/QueuePopulatorExtension');
@@ -11,7 +11,7 @@ const config = require('../../lib/Config');
 const locationsConfig = require('../../conf/locationConfig.json') || {};
 const safeJsonParse = require('../../lib/util/safeJsonParse');
 const { getTransitionAttempt } = require('../../lib/util/transitionAttempt');
-const { traceHeadersFromEntry } = require('arsenal/build/lib/tracing').kafka;
+const { traceHeadersFromEntry } = require('@scality/arsenal/build/lib/tracing').kafka;
 const { replicationDirections } = require('./constants');
 
 class ReplicationQueuePopulator extends QueuePopulatorExtension {

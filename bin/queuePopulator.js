@@ -18,7 +18,7 @@ const vConfig = config.vaultAdmin;
 const QueuePopulator = require('../lib/queuePopulator/QueuePopulator');
 const { startProbeServer } = require('../lib/util/probe');
 const { DEFAULT_LIVE_ROUTE, DEFAULT_METRICS_ROUTE, DEFAULT_READY_ROUTE } =
-    require('arsenal').network.probe.ProbeServer;
+    require('@scality/arsenal').network.probe.ProbeServer;
 const log = new werelogs.Logger('Backbeat:QueuePopulator');
 
 werelogs.configure({ level: config.log.logLevel,

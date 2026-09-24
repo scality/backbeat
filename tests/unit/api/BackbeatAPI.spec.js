@@ -9,7 +9,7 @@ const config = require('../../../lib/Config');
 const fakeLogger = require('../../utils/fakeLogger');
 const setupIngestionSiteMock = require('../../utils/mockIngestionSite');
 const locationConfig = require('../../../conf/locationConfig.json');
-const { errors } = require('arsenal');
+const { errors } = require('@scality/arsenal');
 
 describe('BackbeatAPI', () => {
     let bbapi;

@@ -1,7 +1,7 @@
 'use strict';
 
 const async = require('async');
-const { errors } = require('arsenal');
+const { errors } = require('@scality/arsenal');
 
 const LifecycleTask = require('./LifecycleTask');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');

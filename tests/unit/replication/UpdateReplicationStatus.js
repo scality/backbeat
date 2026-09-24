@@ -14,7 +14,7 @@ const log = new Logger('test:UpdateReplicationStatus');
 
 const config = require('../../config.json');
 const fakeLogger = require('../../utils/fakeLogger');
-const { ObjectMD } = require('arsenal/build/lib/models');
+const { ObjectMD } = require('@scality/arsenal/build/lib/models');
 
 function getCompletedEntry() {
     return QueueEntry.createFromKafkaEntry(replicationEntry)

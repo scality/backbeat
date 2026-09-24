@@ -4,7 +4,7 @@ const assert = require('assert');
 const werelogs = require('werelogs');
 const Logger = werelogs.Logger;
 
-const { ObjectMD } = require('arsenal').models;
+const { ObjectMD } = require('@scality/arsenal').models;
 
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 

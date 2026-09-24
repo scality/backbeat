@@ -1,4 +1,4 @@
-const errors = require('arsenal').errors;
+const errors = require('@scality/arsenal').errors;
 const assert = require('assert');
 
 const config = require('../../../lib/Config');

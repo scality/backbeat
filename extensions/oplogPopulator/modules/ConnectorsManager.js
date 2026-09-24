@@ -3,7 +3,7 @@ const async = require('async');
 const { v4: uuid } = require('uuid');
 const util = require('util');
 const schedule = require('node-schedule');
-const { errors } = require('arsenal');
+const { errors } = require('@scality/arsenal');
 
 const constants = require('../constants');
 const KafkaConnectWrapper = require('../../../lib/wrappers/KafkaConnectWrapper');

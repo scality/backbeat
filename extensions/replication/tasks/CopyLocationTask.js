@@ -1,7 +1,7 @@
 const async = require('async');
 const { v4: uuid } = require('uuid');
 
-const { errors, jsutil, models } = require('arsenal');
+const { errors, jsutil, models } = require('@scality/arsenal');
 const { ObjectMD } = models;
 
 const BackbeatMetadataProxy = require('../../../lib/BackbeatMetadataProxy');

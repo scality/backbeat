@@ -6,7 +6,7 @@ const {
     resetLifecycleScanMetricCleanupTimers,
 } = require('../../../extensions/lifecycle/LifecycleMetrics');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
-const { ZenkoMetrics } = require('arsenal').metrics;
+const { ZenkoMetrics } = require('@scality/arsenal').metrics;
 
 describe('LifecycleMetrics', () => {
     let log;

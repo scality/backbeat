@@ -1,7 +1,7 @@
 const assert = require('assert');
 const MultipleBucketsPipelineFactory =
     require('../../../../extensions/oplogPopulator/pipeline/MultipleBucketsPipelineFactory');
-const { constants } = require('arsenal');
+const { constants } = require('@scality/arsenal');
 
 describe('MultipleBucketsPipelineFactory', () => {
     const thresholdBytes = 100 * 1000000;

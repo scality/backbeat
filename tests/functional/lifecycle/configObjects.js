@@ -1,4 +1,4 @@
-const { ValidLifecycleRules } = require('arsenal').models;
+const { ValidLifecycleRules } = require('@scality/arsenal').models;
 
 const bucketTasksTopic = 'bucket-tasks';
 const objectTasksTopic = 'object-tasks';

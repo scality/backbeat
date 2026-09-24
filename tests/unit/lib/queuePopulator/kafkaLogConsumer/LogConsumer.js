@@ -1,7 +1,7 @@
 const assert = require('assert');
 const sinon = require('sinon');
 const werelogs = require('werelogs');
-const { errors } = require('arsenal');
+const { errors } = require('@scality/arsenal');
 const kafka = require('node-rdkafka');
 const logger = new werelogs.Logger('KafkaLogConsumer');
 const ListRecordStream =

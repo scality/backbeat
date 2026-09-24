@@ -1,5 +1,5 @@
-const errors = require('arsenal').errors;
-const { decode } = require('arsenal').versioning.VersionID;
+const errors = require('@scality/arsenal').errors;
+const { decode } = require('@scality/arsenal').versioning.VersionID;
 const mockRes = require('./mockRes.json');
 
 const mockLogs = mockRes.raftLogs['1'];

@@ -5,12 +5,12 @@ const { callbackify } = require('util');
 const { EventEmitter } = require('events');
 const Redis = require('ioredis');
 const schedule = require('node-schedule');
-const { ZenkoMetrics } = require('arsenal').metrics;
+const { ZenkoMetrics } = require('@scality/arsenal').metrics;
 
 const Logger = require('werelogs').Logger;
 
-const errors = require('arsenal').errors;
-const RoundRobin = require('arsenal').network.RoundRobin;
+const errors = require('@scality/arsenal').errors;
+const RoundRobin = require('@scality/arsenal').network.RoundRobin;
 
 const BackbeatProducer = require('../../../lib/BackbeatProducer');
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');

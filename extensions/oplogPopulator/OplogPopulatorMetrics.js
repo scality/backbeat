@@ -1,4 +1,4 @@
-const { ZenkoMetrics } = require('arsenal').metrics;
+const { ZenkoMetrics } = require('@scality/arsenal').metrics;
 
 const { getStringSizeInBytes } = require('../../lib/util/buffer');
 

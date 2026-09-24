@@ -3,8 +3,8 @@
 const assert = require('assert');
 const sinon = require('sinon');
 const fakeLogger = require('../../utils/fakeLogger');
-const { errors } = require('arsenal');
-const { splitter } = require('arsenal').constants;
+const { errors } = require('@scality/arsenal');
+const { splitter } = require('@scality/arsenal').constants;
 
 const LifecycleConductor = require(
     '../../../extensions/lifecycle/conductor/LifecycleConductor');

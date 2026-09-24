@@ -5,8 +5,8 @@ const CopyLocationTask = require('../../../extensions/replication/tasks/CopyLoca
 const ClientManager = require('../../../lib/clients/ClientManager');
 const ClientManagerCache = require('../../../lib/clients/ClientManagerCache');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
-const { errors } = require('arsenal');
-const { ObjectMD } = require('arsenal').models;
+const { errors } = require('@scality/arsenal');
+const { ObjectMD } = require('@scality/arsenal').models;
 const locationConfig = require('../../../conf/locationConfig.json');
 
 const fakeLogger = require('../../utils/fakeLogger');

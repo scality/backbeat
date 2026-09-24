@@ -7,7 +7,7 @@ const MongoClient = require('mongodb').MongoClient;
 const ChangeStream = require('../../../../lib/wrappers/ChangeStream');
 const MongoConfigManager
     = require('../../../../extensions/notification/configManager/MongoConfigManager');
-const { errors } = require('arsenal');
+const { errors } = require('@scality/arsenal');
 const mongoConfig
     = require('../../../config.json').queuePopulator.mongo;
 

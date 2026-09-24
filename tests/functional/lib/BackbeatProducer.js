@@ -1,5 +1,5 @@
 const assert = require('assert');
-const { errors, metrics } = require('arsenal');
+const { errors, metrics } = require('@scality/arsenal');
 const BackbeatProducer = require('../../../lib/BackbeatProducer');
 const { promMetricNames } =
       require('../../../lib/constants').kafkaBacklogMetrics;

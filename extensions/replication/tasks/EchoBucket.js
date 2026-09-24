@@ -1,6 +1,6 @@
 const async = require('async');
 
-const errors = require('arsenal').errors;
+const errors = require('@scality/arsenal').errors;
 
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const SetupReplication = require('../utils/SetupReplication');

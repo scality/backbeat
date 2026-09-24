@@ -1,7 +1,7 @@
 const assert = require('assert');
 const werelogs = require('werelogs');
 
-const { ObjectMD } = require('arsenal').models;
+const { ObjectMD } = require('@scality/arsenal').models;
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const { LifecycleResetTransitionInProgressTask } = require(
     '../../../extensions/lifecycle/tasks/LifecycleResetTransitionInProgressTask');

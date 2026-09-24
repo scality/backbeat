@@ -2,7 +2,7 @@
 
 const async = require('async');
 const { Logger } = require('werelogs');
-const { errors } = require('arsenal');
+const { errors } = require('@scality/arsenal');
 const { GetBucketLifecycleConfigurationCommand } = require('@aws-sdk/client-s3');
 
 const BackbeatProducer = require('../../../lib/BackbeatProducer');

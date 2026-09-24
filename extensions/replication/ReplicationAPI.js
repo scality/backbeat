@@ -3,7 +3,7 @@ const locations = require('../../conf/locationConfig.json') || {};
 
 const ActionQueueEntry = require('../../lib/models/ActionQueueEntry');
 const ReplicationMetrics = require('./ReplicationMetrics');
-const { stampTraceHeaders } = require('arsenal/build/lib/tracing').kafka;
+const { stampTraceHeaders } = require('@scality/arsenal/build/lib/tracing').kafka;
 
 let { dataMoverTopic } = config.extensions.replication;
 const { coldStorageArchiveTopicPrefix } = config.extensions.lifecycle;

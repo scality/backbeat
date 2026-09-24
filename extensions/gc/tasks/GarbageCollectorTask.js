@@ -1,6 +1,6 @@
 const async = require('async');
-const errors = require('arsenal').errors;
-const { ObjectMD } = require('arsenal').models;
+const errors = require('@scality/arsenal').errors;
+const { ObjectMD } = require('@scality/arsenal').models;
 
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const { BatchDeleteCommand } = require('@scality/cloudserverclient');

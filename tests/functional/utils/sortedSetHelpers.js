@@ -1,4 +1,4 @@
-const { StatsModel } = require('arsenal').metrics;
+const { StatsModel } = require('@scality/arsenal').metrics;
 
 const TEST_REDIS_KEY_FAILED_CRR = 'test:bb:crr:failed';
 

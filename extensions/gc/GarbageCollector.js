@@ -2,7 +2,7 @@
 
 const { EventEmitter } = require('events');
 
-const errors = require('arsenal').errors;
+const errors = require('@scality/arsenal').errors;
 const Logger = require('werelogs').Logger;
 
 const BackbeatConsumer = require('../../lib/BackbeatConsumer');

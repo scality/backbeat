@@ -1,5 +1,5 @@
 const { fromTemporaryCredentials } = require('@aws-sdk/credential-providers');
-const { errorUtils } = require('arsenal');
+const { errorUtils } = require('@scality/arsenal');
 
 const { authTypeAssumeRole, authTypeNone } = require('../../lib/constants');
 const VaultClientCache = require('../../lib/clients/VaultClientCache');

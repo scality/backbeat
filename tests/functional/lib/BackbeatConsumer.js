@@ -3,7 +3,7 @@ const async = require('async');
 const sinon = require('sinon');
 const werelogs = require('werelogs');
 
-const { metrics } = require('arsenal');
+const { metrics } = require('@scality/arsenal');
 
 const ZookeeperManager = require('../../../lib/clients/ZookeeperManager');
 const BackbeatProducer = require('../../../lib/BackbeatProducer');

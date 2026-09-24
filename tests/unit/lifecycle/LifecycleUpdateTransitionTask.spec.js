@@ -1,7 +1,7 @@
 const assert = require('assert');
 const werelogs = require('werelogs');
 
-const { ObjectMD } = require('arsenal').models;
+const { ObjectMD } = require('@scality/arsenal').models;
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const LifecycleUpdateTransitionTask = require(
     '../../../extensions/lifecycle/tasks/LifecycleUpdateTransitionTask');
@@ -11,7 +11,7 @@ const {
     BackbeatMetadataProxyMock,
     ProcessorMock,
 } = require('../mocks');
-const { errors } = require('arsenal');
+const { errors } = require('@scality/arsenal');
 
 describe('LifecycleUpdateTransitionTask', () => {
     let backbeatMetadataProxyClient;

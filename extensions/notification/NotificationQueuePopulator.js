@@ -1,16 +1,16 @@
 const assert = require('assert');
 const util = require('util');
 
-const { isMasterKey } = require('arsenal').versioning;
-const { mpuBucketPrefix, supportedNotificationEvents } = require('arsenal').constants;
-const VID_SEPERATOR = require('arsenal').versioning.VersioningConstants.VersionId.Separator;
+const { isMasterKey } = require('@scality/arsenal').versioning;
+const { mpuBucketPrefix, supportedNotificationEvents } = require('@scality/arsenal').constants;
+const VID_SEPERATOR = require('@scality/arsenal').versioning.VersioningConstants.VersionId.Separator;
 const configUtil = require('./utils/config');
 const safeJsonParse = require('../../lib/util/safeJsonParse');
 const messageUtil = require('./utils/message');
 const notifConstants = require('./constants');
 const QueuePopulatorExtension =
     require('../../lib/queuePopulator/QueuePopulatorExtension');
-const { traceHeadersFromEntry } = require('arsenal/build/lib/tracing').kafka;
+const { traceHeadersFromEntry } = require('@scality/arsenal/build/lib/tracing').kafka;
 
 class NotificationQueuePopulator extends QueuePopulatorExtension {
     /**

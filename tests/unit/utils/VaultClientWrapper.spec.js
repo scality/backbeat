@@ -5,7 +5,7 @@ const sinon = require('sinon');
 
 const FakeLogger = require('../../utils/fakeLogger');
 const VaultClientWrapper = require('../../../extensions/utils/VaultClientWrapper');
-const { errors } = require('arsenal');
+const { errors } = require('@scality/arsenal');
 
 describe('VaultClientWrapper', () => {
     afterEach(() => {

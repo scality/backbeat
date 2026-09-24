@@ -3,9 +3,9 @@
 const async = require('async');
 
 const Logger = require('werelogs').Logger;
-const { errors, jsutil } = require('arsenal');
-const { StatsModel, ZenkoMetrics } = require('arsenal').metrics;
-const { sendSuccess } = require('arsenal').network.probe.Utils;
+const { errors, jsutil } = require('@scality/arsenal');
+const { StatsModel, ZenkoMetrics } = require('@scality/arsenal').metrics;
+const { sendSuccess } = require('@scality/arsenal').network.probe.Utils;
 
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 const GarbageCollectorProducer = require('../../gc/GarbageCollectorProducer');

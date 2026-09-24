@@ -1,13 +1,13 @@
 const assert = require('assert');
 const Logger = require('werelogs').Logger;
-const { ObjectMD } = require('arsenal').models;
+const { ObjectMD } = require('@scality/arsenal').models;
 const { S3ClientMock } = require('../../utils/S3ClientMock');
 const { timeOptions } = require('./configObjects');
 
 const { BackbeatMetadataProxyMock, expectNominalListingParams, KeyMock, TestKafkaEntry } = require('./utils');
 const LifecycleTaskV2 = require('../../../extensions/lifecycle/tasks/LifecycleTaskV2');
 
-const { ValidLifecycleRules } = require('arsenal').models;
+const { ValidLifecycleRules } = require('@scality/arsenal').models;
 
 const log = new Logger('LifecycleTaskV2:test:versioned');
 

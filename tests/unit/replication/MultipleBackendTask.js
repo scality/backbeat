@@ -1,5 +1,5 @@
 const assert = require('assert');
-const jsutil = require('arsenal').jsutil;
+const jsutil = require('@scality/arsenal').jsutil;
 const sinon = require('sinon');
 
 const config = require('../../config.json');

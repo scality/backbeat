@@ -1,6 +1,6 @@
 const assert = require('assert');
 
-const { ZenkoMetrics } = require('arsenal').metrics;
+const { ZenkoMetrics } = require('@scality/arsenal').metrics;
 const ReplicationMetrics =
       require('../../../extensions/replication/ReplicationMetrics');
 const { promMetricNames } =

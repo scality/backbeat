@@ -1,6 +1,6 @@
 const assert = require('assert');
 const PipelineFactory = require('../../../../extensions/oplogPopulator/pipeline/PipelineFactory');
-const { constants } = require('arsenal');
+const { constants } = require('@scality/arsenal');
 
 describe('PipelineFactory', () => {
     const pipelineFactory = new PipelineFactory();

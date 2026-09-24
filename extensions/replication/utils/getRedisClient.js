@@ -1,4 +1,4 @@
-const { RedisClient } = require('arsenal').metrics;
+const { RedisClient } = require('@scality/arsenal').metrics;
 const config = require('../../../lib/Config');
 const werelogs = require('werelogs');
 

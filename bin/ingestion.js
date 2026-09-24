@@ -3,15 +3,15 @@ const schedule = require('node-schedule');
 const zookeeper = require('node-zookeeper-client');
 
 const werelogs = require('werelogs');
-const { errors } = require('arsenal');
+const { errors } = require('@scality/arsenal');
 const {
     DEFAULT_LIVE_ROUTE,
     DEFAULT_METRICS_ROUTE,
     DEFAULT_READY_ROUTE,
-} = require('arsenal').network.probe.ProbeServer;
-const { ZenkoMetrics } = require('arsenal').metrics;
-const { sendSuccess, sendError } = require('arsenal').network.probe.Utils;
-const { reshapeExceptionError } = require('arsenal').errorUtils;
+} = require('@scality/arsenal').network.probe.ProbeServer;
+const { ZenkoMetrics } = require('@scality/arsenal').metrics;
+const { sendSuccess, sendError } = require('@scality/arsenal').network.probe.Utils;
+const { reshapeExceptionError } = require('@scality/arsenal').errorUtils;
 
 const IngestionPopulator = require('../lib/queuePopulator/IngestionPopulator');
 const config = require('../lib/Config');
