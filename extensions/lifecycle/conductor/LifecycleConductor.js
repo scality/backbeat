@@ -7,7 +7,7 @@ const { v7: uuid } = require('uuid');
 
 const { constants, errors } = require('@scality/arsenal');
 const Logger = require('werelogs').Logger;
-const BucketClient = require('bucketclient').RESTClient;
+const BucketClient = require('@scality/bucketclient').RESTClient;
 const MongoClient = require('@scality/arsenal').storage
     .metadata.mongoclient.MongoClientInterface;
 

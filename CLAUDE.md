@@ -10,7 +10,7 @@ This is a **Node.js asynchronous queue and job manager** for Scality's S3C and A
 - Management API and routes (`lib/api/`)
 - Configuration management with Joi validation (`lib/Config.js`)
 - Internal deps from the npm registry: `@scality/arsenal`, `@scality/breakbeat`
-- Git-based internal deps: vaultclient, bucketclient, werelogs, httpagent
+- Git-based internal deps: `@scality/bucketclient`, vaultclient, werelogs, httpagent
 - CommonJS modules; legacy code is callback-based, migrating to async/await (see below)
 - Mocha + Sinon test suites (`tests/unit/`, `tests/functional/`, `tests/behavior/`)
 
