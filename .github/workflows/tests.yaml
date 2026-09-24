@@ -28,20 +28,20 @@ jobs:
             context: .github/dockerfiles/mongodb
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
 
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+      uses: docker/setup-buildx-action@v4
 
     - name: Login to Registry
-      uses: docker/login-action@v3
+      uses: docker/login-action@v4
       with:
         registry: ghcr.io
         username: ${{ github.repository_owner }}
         password: ${{ github.token }}
 
     - name: Build and push ${{ matrix.name }}
-      uses: docker/build-push-action@v6
+      uses: docker/build-push-action@v7
       with:
         push: true
         context: ${{ matrix.context }}
@@ -53,9 +53,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
 
-    - uses: actions/setup-go@v5
+    - uses: actions/setup-go@v7
       with:
         go-version: '1.16.2'
         cache-dependency-path: bucket-scanner/go.sum
@@ -70,7 +70,7 @@ jobs:
                -nodes 1 -stream -timeout 5m -slowSpecThreshold 60
       working-directory: bucket-scanner
 
-    - uses: codecov/codecov-action@v5
+    - uses: codecov/codecov-action@v7
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         directory: bucket-scanner
@@ -80,8 +80,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
-    - uses: actions/setup-node@v6
+      uses: actions/checkout@v7
+    - uses: actions/setup-node@v7
       with:
         node-version: '24'
         cache: yarn
@@ -130,8 +130,8 @@ jobs:
         - 27019:27019
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
-    - uses: actions/setup-node@v6
+      uses: actions/checkout@v7
+    - uses: actions/setup-node@v7
       with:
         node-version: '24'
         cache: yarn
@@ -144,7 +144,7 @@ jobs:
         BACKBEAT_CONFIG_FILE: tests/config.json
         TEST_SUITE: test
 
-    - uses: codecov/codecov-action@v5
+    - uses: codecov/codecov-action@v7
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         directory: ./coverage/test
@@ -213,8 +213,8 @@ jobs:
         - 27019:27019
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
-    - uses: actions/setup-node@v6
+      uses: actions/checkout@v7
+    - uses: actions/setup-node@v7
       with:
         node-version: '24'
         cache: yarn
@@ -281,8 +281,8 @@ jobs:
         - 27019:27019
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
-    - uses: actions/setup-node@v6
+      uses: actions/checkout@v7
+    - uses: actions/setup-node@v7
       with:
         node-version: '24'
         cache: yarn
@@ -298,7 +298,7 @@ jobs:
         NODE_OPTIONS: '--max-old-space-size=175'
 
     - name: Debug wait
-      uses: scality/actions/action-ssh-to-runner@1.8.0
+      uses: scality/actions/action-ssh-to-runner@1.18.0
       with:
         tmate-server-host: ${{ secrets.TMATE_SERVER_HOST }}
         tmate-server-port: ${{ secrets.TMATE_SERVER_PORT }}
@@ -318,15 +318,15 @@ jobs:
         cloudserver_tag: [ '9.0.19' ]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
-      - uses: actions/setup-node@v6
+        uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: '24'
           cache: yarn
       - name: Install node dependencies
         run: yarn install --frozen-lockfile --network-concurrency 1
       - name: Login to Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
@@ -361,13 +361,13 @@ jobs:
           PROFILE: ${{ matrix.profile }}
           TEST_SUITE: ft_test:queuepopulator
         run: yarn run cover
-      - uses: codecov/codecov-action@v4
+      - uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           directory: ./coverage/ft_test:queuepopulator
           flags: ft_test:queuepopulator
       - name: Debug wait
-        uses: scality/actions/action-ssh-to-runner@1.8.0
+        uses: scality/actions/action-ssh-to-runner@1.18.0
         with:
           tmate-server-host: ${{ secrets.TMATE_SERVER_HOST }}
           tmate-server-port: ${{ secrets.TMATE_SERVER_PORT }}
