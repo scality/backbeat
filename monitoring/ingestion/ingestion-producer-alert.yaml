@@ -70,11 +70,13 @@ groups:
       description: "Ingestion producer has not queued any messages in the last 5 minutes"
       summary: "Ingestion producer has not queued messages"
 
+  # Ratio per source op so a stuck getRaftId is not hidden by getRaftLog
+  # volume, and a later getRaftLog failure is the same alert on that op.
   - alert: IngestionProducerSourceErrorRate3Percent
     Expr: |
-      sum(rate(s3_ingestion_source_operations_total{status="error", namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
+      sum by (op) (rate(s3_ingestion_source_operations_total{status="error", namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
         /
-      sum(rate(s3_ingestion_source_operations_total{namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
+      sum by (op) (rate(s3_ingestion_source_operations_total{namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
       > 0.03
     For:   "5m"
     Labels:
@@ -86,9 +88,9 @@ groups:
 
   - alert: IngestionProducerSourceErrorRate3Percent
     Expr: |
-      sum(rate(s3_ingestion_source_operations_total{status="error", namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
+      sum by (op) (rate(s3_ingestion_source_operations_total{status="error", namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
         /
-      sum(rate(s3_ingestion_source_operations_total{namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
+      sum by (op) (rate(s3_ingestion_source_operations_total{namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
       > 0.05
     For:   "5m"
     Labels:
