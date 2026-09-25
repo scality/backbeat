@@ -330,7 +330,8 @@ describe('CopyLocationTask', () => {
             dataStoreName: 'source-site',
             dataStoreType: 'aws_s3',
             dataStoreETag: '1:9b2cf535f27731c974343645a3985328',
-            dataStoreVersionId: 'aJdO95zrzY5BKLXf9GHFItC0d1CkQ0Ei',
+            // as the source stores it, not as its S3 API takes it
+            dataStoreVersionId: '98501018544962999999RG001  ',
             bucket: 'backup-repo-01',
             role: 'arn:aws:iam::123456789012:role/clean-room-read',
         };
@@ -405,15 +406,30 @@ describe('CopyLocationTask', () => {
                     assert(remoteClient.send.calledOnce);
                     const command = remoteClient.send.firstCall.args[0];
                     // bucket, key and version all describe the data on the
-                    // source site, not the object we are copying
+                    // source site, not the object we are copying: the
+                    // version encoded, as the S3 API takes it
                     assert.strictEqual(command.input.Bucket, 'backup-repo-01');
                     assert.strictEqual(command.input.Key, 'backups/vm001.vbk');
-                    assert.strictEqual(command.input.VersionId, 'aJdO95zrzY5BKLXf9GHFItC0d1CkQ0Ei');
+                    assert.strictEqual(command.input.VersionId, 'aKC1sy5pSf1500000000001I4j3QKItW');
                     // the source site is Scality too: same command, and the
                     // request uids let us follow the read across both sites
                     assert.strictEqual(command.input.RequestUids, 'req-uid-1');
                     // the data is native there, it must not be redirected
                     assert.strictEqual(command.input.LocationConstraint, undefined);
+                });
+        });
+
+        it('should read the null version when the part carries no version id', () => {
+            const remoteClient = { send: sinon.stub().resolves({}) };
+            sinon.stub(task, '_getAssumedRoleS3Client').returns(remoteClient);
+
+            const entry = new ActionQueueEntry({ target: {} });
+            const objMd = sourceObjectMD([{ ...sourcePart, dataStoreVersionId: undefined }]);
+
+            return task._sendGetObject(entry, objMd, undefined, fakeLogger, new AbortController())
+                .then(() => {
+                    const command = remoteClient.send.firstCall.args[0];
+                    assert.strictEqual(command.input.VersionId, 'null');
                 });
         });
 

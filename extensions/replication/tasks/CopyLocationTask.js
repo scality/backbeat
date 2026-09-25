@@ -1,8 +1,9 @@
 const async = require('async');
 const { v4: uuid } = require('uuid');
 
-const { errors, jsutil, models } = require('@scality/arsenal');
+const { errors, jsutil, models, versioning } = require('@scality/arsenal');
 const { ObjectMD } = models;
+const { VersionID } = versioning;
 
 const BackbeatMetadataProxy = require('../../../lib/BackbeatMetadataProxy');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
@@ -208,7 +209,9 @@ class CopyLocationTask extends BackbeatTask {
         }
         const client = this._getAssumedRoleS3Client(
             { transport, endpoint: servers[0], sts }, part.role, log);
-        const { bucket, key, dataStoreVersionId: version } = part;
+        const { bucket, key, dataStoreVersionId } = part;
+        // the part carries the raw/decoded version id, the task needs the encoded form for S3 Api
+        const version = dataStoreVersionId ? VersionID.encode(dataStoreVersionId) : 'null';
         return { client, target: { bucket, key, version }, dataStoreName: undefined };
     }
 
