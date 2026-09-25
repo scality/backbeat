@@ -22,7 +22,7 @@ describe('MongoProcessorConfigValidator log override', () => {
     });
 
     it('should leave log undefined when not set, deferring to global config.log', () => {
-        const validated = configValidator(globalConfig, baseExtConfig);
+        const validated = configValidator(globalConfig, { ...baseExtConfig });
         assert.strictEqual(validated.log, undefined);
     });
 
@@ -39,5 +39,38 @@ describe('MongoProcessorConfigValidator log override', () => {
         } finally {
             delete process.env.EXTENSIONS_MONGO_PROCESSOR_LOG_LEVEL;
         }
+    });
+});
+
+describe('MongoProcessorConfigValidator mode', () => {
+    it('should default to ingestion so an existing config is unchanged', () => {
+        const validated = configValidator(globalConfig, { ...baseExtConfig });
+        assert.strictEqual(validated.mode, 'ingestion');
+    });
+
+    it('should accept the dr mode', () => {
+        const validated = configValidator(globalConfig, { ...baseExtConfig, mode: 'dr' });
+        assert.strictEqual(validated.mode, 'dr');
+    });
+
+    it('should accept the mode from the environment', () => {
+        process.env.EXTENSIONS_MONGO_PROCESSOR_MODE = 'dr';
+        try {
+            const validated = configValidator(globalConfig, { ...baseExtConfig });
+            assert.strictEqual(validated.mode, 'dr');
+        } finally {
+            delete process.env.EXTENSIONS_MONGO_PROCESSOR_MODE;
+        }
+    });
+
+    it('should reject a mode with no implementation', () => {
+        let err;
+        try {
+            configValidator(globalConfig, { ...baseExtConfig, mode: 'sideways' });
+        } catch (e) {
+            err = e;
+        }
+        assert(err, 'expected configValidator to throw on an unknown mode');
+        assert.match(err.message, /mode/);
     });
 });

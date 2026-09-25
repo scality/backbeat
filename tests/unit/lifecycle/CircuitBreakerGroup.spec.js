@@ -10,6 +10,18 @@ const logger = require('../../utils/fakeLogger');
 const { BreakerState } = require('breakbeat').CircuitBreaker;
 
 describe('extractBucketProcessorCircuitBreakerConfigs', () => {
+    // every location in the config gets the templated probe, so the
+    // expectation follows the config rather than restating it
+    function formatLocationProbeConfigList(probe) {
+        return Object.keys(locations).map(location =>
+            formatProbeConfig(probe, '${location}', location));
+    }
+
+    function formatLocationProbeConfigs(probe) {
+        return Object.fromEntries(Object.keys(locations).map(location =>
+            [location, [formatProbeConfig(probe, '${location}', location)]]));
+    }
+
     function formatProbeConfig(probe, template, value) {
         const withClause = probe.query.match(/^when\s?\(\{(.*?)\}\)\sand\s/);
         let query = withClause ? probe.query.replace(withClause[0], '') : probe.query;
@@ -384,126 +396,18 @@ describe('extractBucketProcessorCircuitBreakerConfigs', () => {
                 },
                 circuitBreakers: {
                     transition: {
-                        location: {
-                            'us-east-1': [
-                                formatProbeConfig(
-                                    topicSpecificLocationTemplateProbe,
-                                    '${location}',
-                                    'us-east-1',
-                                ),
-                            ],
-                            'us-east-2': [
-                                formatProbeConfig(
-                                    topicSpecificLocationTemplateProbe,
-                                    '${location}',
-                                    'us-east-2',
-                                ),
-                            ],
-                            'wontwork-location': [
-                                formatProbeConfig(
-                                    topicSpecificLocationTemplateProbe,
-                                    '${location}',
-                                    'wontwork-location',
-                                ),
-                            ],
-                            'location-dmf-v1': [
-                                formatProbeConfig(
-                                    topicSpecificLocationTemplateProbe,
-                                    '${location}',
-                                    'location-dmf-v1',
-                                ),
-                            ],
-                        },
+                        location: formatLocationProbeConfigs(topicSpecificLocationTemplateProbe),
                         topic: {
-                            'cold-archive-req-location-dmf-v1': [
-                                formatProbeConfig(
-                                    topicSpecificLocationTemplateProbe,
-                                    '${location}',
-                                    'us-east-1',
-                                ),
-                                formatProbeConfig(
-                                    topicSpecificLocationTemplateProbe,
-                                    '${location}',
-                                    'us-east-2',
-                                ),
-                                formatProbeConfig(
-                                    topicSpecificLocationTemplateProbe,
-                                    '${location}',
-                                    'wontwork-location',
-                                ),
-                                formatProbeConfig(
-                                    topicSpecificLocationTemplateProbe,
-                                    '${location}',
-                                    'location-dmf-v1',
-                                ),
-                                formatProbeConfig(
-                                    topicSpecificLocationTemplateProbe,
-                                    '${location}',
-                                    'location-crr-source',
-                                ),
-                            ],
+                            'cold-archive-req-location-dmf-v1':
+                                formatLocationProbeConfigList(topicSpecificLocationTemplateProbe),
                         },
                         global: [],
                     },
                     expiration: {
-                        location: {
-                            'us-east-1': [
-                                formatProbeConfig(
-                                    topicSpecificLocationTemplateProbe,
-                                    '${location}',
-                                    'us-east-1',
-                                ),
-                            ],
-                            'us-east-2': [
-                                formatProbeConfig(
-                                    topicSpecificLocationTemplateProbe,
-                                    '${location}',
-                                    'us-east-2',
-                                ),
-                            ],
-                            'wontwork-location': [
-                                formatProbeConfig(
-                                    topicSpecificLocationTemplateProbe,
-                                    '${location}',
-                                    'wontwork-location',
-                                ),
-                            ],
-                            'location-dmf-v1': [
-                                formatProbeConfig(
-                                    topicSpecificLocationTemplateProbe,
-                                    '${location}',
-                                    'location-dmf-v1',
-                                ),
-                            ],
-                        },
+                        location: formatLocationProbeConfigs(topicSpecificLocationTemplateProbe),
                         topic: {
-                            'cold-archive-req-location-dmf-v1': [
-                                formatProbeConfig(
-                                    topicSpecificLocationTemplateProbe,
-                                    '${location}',
-                                    'us-east-1',
-                                ),
-                                formatProbeConfig(
-                                    topicSpecificLocationTemplateProbe,
-                                    '${location}',
-                                    'us-east-2',
-                                ),
-                                formatProbeConfig(
-                                    topicSpecificLocationTemplateProbe,
-                                    '${location}',
-                                    'wontwork-location',
-                                ),
-                                formatProbeConfig(
-                                    topicSpecificLocationTemplateProbe,
-                                    '${location}',
-                                    'location-dmf-v1',
-                                ),
-                                formatProbeConfig(
-                                    topicSpecificLocationTemplateProbe,
-                                    '${location}',
-                                    'location-crr-source',
-                                ),
-                            ],
+                            'cold-archive-req-location-dmf-v1':
+                                formatLocationProbeConfigList(topicSpecificLocationTemplateProbe),
                         },
                         global: [],
                     },
@@ -524,70 +428,12 @@ describe('extractBucketProcessorCircuitBreakerConfigs', () => {
                 },
                 circuitBreakers: {
                     transition: {
-                        location: {
-                            'us-east-1': [
-                                formatProbeConfig(
-                                    locationTemplatedProbe,
-                                    '${location}',
-                                    'us-east-1',
-                                ),
-                            ],
-                            'us-east-2': [
-                                formatProbeConfig(
-                                    locationTemplatedProbe,
-                                    '${location}',
-                                    'us-east-2',
-                                ),
-                            ],
-                            'wontwork-location': [
-                                formatProbeConfig(
-                                    locationTemplatedProbe,
-                                    '${location}',
-                                    'wontwork-location',
-                                ),
-                            ],
-                            'location-dmf-v1': [
-                                formatProbeConfig(
-                                    locationTemplatedProbe,
-                                    '${location}',
-                                    'location-dmf-v1',
-                                ),
-                            ],
-                        },
+                        location: formatLocationProbeConfigs(locationTemplatedProbe),
                         topic: {},
                         global: [],
                     },
                     expiration: {
-                        location: {
-                            'us-east-1': [
-                                formatProbeConfig(
-                                    locationTemplatedProbe,
-                                    '${location}',
-                                    'us-east-1',
-                                ),
-                            ],
-                            'us-east-2': [
-                                formatProbeConfig(
-                                    locationTemplatedProbe,
-                                    '${location}',
-                                    'us-east-2',
-                                ),
-                            ],
-                            'wontwork-location': [
-                                formatProbeConfig(
-                                    locationTemplatedProbe,
-                                    '${location}',
-                                    'wontwork-location',
-                                ),
-                            ],
-                            'location-dmf-v1': [
-                                formatProbeConfig(
-                                    locationTemplatedProbe,
-                                    '${location}',
-                                    'location-dmf-v1',
-                                ),
-                            ],
-                        },
+                        location: formatLocationProbeConfigs(locationTemplatedProbe),
                         topic: {},
                         global: [],
                     },
