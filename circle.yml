@@ -18,7 +18,7 @@ dependencies:
         - rm -rf node_modules
         - yarn install --frozen-lockfile
     post:
-        - cd node_modules/@zenko/cloudserver && yarn run mem_backend: {background: true}
+        - cd node_modules/@scality/cloudserver && yarn run mem_backend: {background: true}
 
 test:
     override:
