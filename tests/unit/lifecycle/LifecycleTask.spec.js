@@ -1488,6 +1488,75 @@ describe('lifecycle task helper methods', () => {
         });
     });
 
+    describe('transitions with transitionOneDayEarlier', () => {
+        const bucketData = { target: { owner: 'o', accountId: 'a', bucket: 'b' } };
+        const transitionRules = [{
+            ID: 'id1',
+            Prefix: '',
+            Status: 'Enabled',
+            Transitions: [{ Days: 1, StorageClass: 'cold' }],
+            NoncurrentVersionTransitions: [],
+        }];
+        const ncvTransitionRules = [{
+            ID: 'id1',
+            Prefix: '',
+            Status: 'Enabled',
+            Transitions: [],
+            NoncurrentVersionTransitions: [{ NoncurrentDays: 1, StorageClass: 'cold' }],
+        }];
+        const applicableNCVRules = {
+            NoncurrentVersionTransition: { NoncurrentDays: 1, StorageClass: 'cold' },
+        };
+
+        const makeTask = flags => new LifecycleTask({
+            getStateVars: () => ({
+                ncvHeap: new Map(),
+                lcOptions: { ...timeOptions, ...flags },
+                log: fakeLogger,
+                supportedRules: ValidLifecycleRules,
+            }),
+        });
+
+        const isNCVTransitionApplied = (task, version) => {
+            const applyStub = sinon.stub(task, '_applyTransitionRule').callsFake((params, log, cb) => cb());
+            task._checkAndApplyNCVTransitionRule(bucketData, version, applicableNCVRules, fakeLogger, () => {});
+            return applyStub.calledOnce;
+        };
+
+        [
+            { flags: {}, expected: false },
+            { flags: { transitionOneDayEarlier: true }, expected: true },
+        ].forEach(({ flags, expected }) => {
+            const desc = JSON.stringify(flags);
+
+            it(`should ${expected ? '' : 'not '}find 1 day transition eligible on 1 hour old object with ${desc}`,
+            () => {
+                const object = { ...OBJECT, LastModified: new Date(Date.now() - HOUR).toISOString() };
+                assert.strictEqual(makeTask(flags)._isEntityEligible(transitionRules, object, 'Disabled'), expected);
+            });
+
+            it(`should ${expected ? '' : 'not '}find 1 day ncv transition eligible on 1 hour old version with ${desc}`,
+            () => {
+                const version = {
+                    ...NON_CURRENT_VERSION,
+                    LastModified: new Date(Date.now() - 2 * DAY).toISOString(),
+                    staleDate: new Date(Date.now() - HOUR).toISOString(),
+                };
+                assert.strictEqual(makeTask(flags)._isEntityEligible(ncvTransitionRules, version, 'Enabled'), expected);
+            });
+
+            it(`should ${expected ? '' : 'not '}apply 1 day ncv transition on 1 hour stale version with ${desc}`,
+            () => {
+                const version = {
+                    ...NON_CURRENT_VERSION,
+                    LastModified: new Date(Date.now() - 2 * DAY).toISOString(),
+                    staleDate: new Date(Date.now() - HOUR).toISOString(),
+                };
+                assert.strictEqual(isNCVTransitionApplied(makeTask(flags), version), expected);
+            });
+        });
+    });
+
     describe('_checkAndApplyNCVExpirationRule', () => {
         let lct2;
 
