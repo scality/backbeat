@@ -29,6 +29,9 @@ const bootstrapList = config.extensions.replication.destination.bootstrapList;
 const BUCKET = 'mqp-test-bucket';
 const KEY = 'testkey1';
 const LOCATION = 'us-east-1';
+// a location holding data owned by the remote site, as the source one is
+// until the copy engine pulls the version's data
+const CRR_LOCATION = 'location-crr-source';
 const VERSION_ID = '98445230573829999999RG001  15.144.0';
 // new version id > existing version id
 const NEW_VERSION_ID = '98445235075994999999RG001  14.90.2';
@@ -1068,6 +1071,376 @@ describe('MongoQueueProcessor', function mqp() {
                 assert.deepStrictEqual(repConfig, mockReplicationInfo);
                 done();
             });
+        });
+    });
+});
+
+describe('MongoQueueProcessor in dr mode', function drMode() {
+    this.timeout(5000);
+
+    let mqp;
+    let mongoClient;
+
+    before(() => {
+        mqp = new MongoQueueProcessorMock(kafkaConfig,
+            { ...mongoProcessorConfig, mode: 'dr' }, mongoClientConfig, mConfig);
+        mqp.start();
+
+        mongoClient = mqp._mongoClient;
+    });
+
+    afterEach(() => {
+        mqp.reset();
+        sinon.restore();
+    });
+
+    function processEntry(entry, next) {
+        return async.waterfall([
+            cb => mongoClient.getBucketAttributes(BUCKET, fakeLogger, cb),
+            (bucketInfo, cb) => mqp._processObjectQueueEntry(fakeLogger, entry, LOCATION, bucketInfo, cb),
+        ], next);
+    }
+
+    it('should apply a new object as the source describes it', done => {
+        const key = 'dr-new-key';
+        const versionKey = `${key}${VID_SEP}${VERSION_ID}`;
+        const objmd = new ObjectMD()
+            .setKey(key)
+            .setVersionId(VERSION_ID)
+            .setOwnerId('source-owner-id')
+            .setOwnerDisplayName('source-owner')
+            .setDataStoreName('cold-location')
+            // ACLs are not replicated: the matrix in the design resets them
+            .setAcl({ Canned: '', FULL_CONTROL: ['source-grantee'], WRITE_ACP: [], READ: [], READ_ACP: [] });
+        const entry = new ObjectQueueEntry(BUCKET, versionKey, objmd);
+
+        processEntry(entry, err => {
+            assert.ifError(err);
+
+            const added = mqp.getAdded();
+            assert.strictEqual(added.length, 1);
+            const { objVal } = added[0];
+            assert.strictEqual(objVal['owner-id'], 'source-owner-id');
+            assert.strictEqual(objVal['owner-display-name'], 'source-owner');
+            assert.strictEqual(objVal.dataStoreName, 'cold-location');
+            assert.deepStrictEqual(objVal.acl, new ObjectMD().getAcl());
+            done();
+        });
+    });
+
+    it('should keep the stored placement when updating an object whose data was pulled', done => {
+        const versionKey = `${KEY}${VID_SEP}${VERSION_ID}`;
+        // the copy engine has since moved the object to a local location, so
+        // the entry's own placement must not be written back
+        const objmd = new ObjectMD()
+            .setKey(KEY)
+            .setVersionId(VERSION_ID)
+            .setTags({ mytag: 'mytags-value' })
+            .setDataStoreName('source-site')
+            .setLocation([{ key: KEY, dataStoreName: 'source-site' }])
+            .setLegalHold(true);
+        const entry = new ObjectQueueEntry(BUCKET, versionKey, objmd);
+
+        processEntry(entry, err => {
+            assert.ifError(err);
+
+            const added = mqp.getAdded();
+            assert.strictEqual(added.length, 1);
+            const { objVal } = added[0];
+            // placement from the stored document
+            assert.strictEqual(objVal.dataStoreName, LOCATION);
+            assert.strictEqual(objVal.location[0].dataStoreName, LOCATION);
+            // mutable metadata from the entry
+            assert.strictEqual(objVal.legalHold, true);
+            done();
+        });
+    });
+
+    it('should rewrite a replayed entry as it stands', done => {
+        // at-least-once delivery means the same entry arrives twice; the second
+        // writes the document back unchanged
+        const versionKey = `${KEY}${VID_SEP}${VERSION_ID}`;
+        const objmd = new ObjectMD()
+            .setKey(KEY)
+            .setVersionId(VERSION_ID)
+            .setTags({ mytag: 'mytags-value' })
+            .setDataStoreName(LOCATION);
+        const entry = new ObjectQueueEntry(BUCKET, versionKey, objmd);
+
+        processEntry(entry, err => {
+            assert.ifError(err);
+            const added = mqp.getAdded();
+            assert.strictEqual(added.length, 1);
+            assert.deepStrictEqual(added[0].objVal.tags, { mytag: 'mytags-value' });
+            done();
+        });
+    });
+
+    it('should take the entry placement for a version still on the source', done => {
+        // data not pulled yet, so the source still describes where it is:
+        // this is the production-side archive of an already-replicated version
+        sinon.stub(mongoClient, 'getObject').callsFake((b, k, p, l, cb) => cb(null, new ObjectMD()
+            .setKey(KEY)
+            .setVersionId(VERSION_ID)
+            .setTags({ mytag: 'mytags-value' })
+            .setDataStoreName(CRR_LOCATION)
+            ._data));
+        const versionKey = `${KEY}${VID_SEP}${VERSION_ID}`;
+        const objmd = new ObjectMD()
+            .setKey(KEY)
+            .setVersionId(VERSION_ID)
+            .setTags({ mytag: 'mytags-value' })
+            .setDataStoreName('cold-location');
+        const entry = new ObjectQueueEntry(BUCKET, versionKey, objmd);
+
+        processEntry(entry, err => {
+            assert.ifError(err);
+
+            const added = mqp.getAdded();
+            assert.strictEqual(added.length, 1);
+            assert.strictEqual(added[0].objVal.dataStoreName, 'cold-location');
+            done();
+        });
+    });
+
+    it('should not skip an update that only changes the object lock', done => {
+        const versionKey = `${KEY}${VID_SEP}${VERSION_ID}`;
+        // same tags as the stored object: the ingestion diff would call this a
+        // duplicate and drop the retention with it
+        const objmd = new ObjectMD()
+            .setKey(KEY)
+            .setVersionId(VERSION_ID)
+            .setTags({ mytag: 'mytags-value' })
+            .setRetentionMode('GOVERNANCE')
+            .setRetentionDate('2099-01-01T00:00:00.000Z');
+        const entry = new ObjectQueueEntry(BUCKET, versionKey, objmd);
+
+        processEntry(entry, err => {
+            assert.ifError(err);
+
+            const added = mqp.getAdded();
+            assert.strictEqual(added.length, 1);
+            assert.strictEqual(added[0].objVal.retentionMode, 'GOVERNANCE');
+            assert.strictEqual(added[0].objVal.retentionDate, '2099-01-01T00:00:00.000Z');
+            done();
+        });
+    });
+
+    it('should read the stored object even when the bucket has no replication configuration', done => {
+        const getObject = sinon.spy(mongoClient, 'getObject');
+        const versionKey = `${KEY}${VID_SEP}${VERSION_ID}`;
+        const objmd = new ObjectMD()
+            .setKey(KEY)
+            .setVersionId(VERSION_ID)
+            .setTags({ mytag: 'mytags-value' })
+            .setLegalHold(true);
+        const entry = new ObjectQueueEntry(BUCKET, versionKey, objmd);
+
+        async.waterfall([
+            cb => mongoClient.getBucketAttributes(BUCKET, fakeLogger, cb),
+            (bucketInfo, cb) => {
+                sinon.stub(bucketInfo, 'getReplicationConfiguration').returns(null);
+                return mqp._processObjectQueueEntry(fakeLogger, entry, LOCATION, bucketInfo, cb);
+            },
+        ], err => {
+            assert.ifError(err);
+
+            sinon.assert.called(getObject);
+            // the merge happened, so the entry was recognised as an update
+            assert.strictEqual(mqp.getAdded()[0].objVal.dataStoreName, LOCATION);
+            done();
+        });
+    });
+
+    it('should ignore a scal version id the source object carries', done => {
+        // production may itself have ingested or cold-restored this object, so
+        // it can carry a scal version id of its own; it names a version of the
+        // system production ingested from, not anything here
+        const versionKey = `${KEY}${VID_SEP}${VERSION_ID}`;
+        const objmd = new ObjectMD()
+            .setKey(KEY)
+            .setVersionId(VERSION_ID)
+            .setTags({ mytag: 'mytags-value' })
+            .setLegalHold(true)
+            .setUserMetadata({
+                'x-amz-meta-scal-version-id': encode(NEW_VERSION_ID),
+            });
+        const entry = new ObjectQueueEntry(BUCKET, versionKey, objmd);
+        const getObject = sinon.spy(mongoClient, 'getObject');
+
+        processEntry(entry, err => {
+            assert.ifError(err);
+
+            // read, and written back, on the version the entry names
+            assert.strictEqual(getObject.getCall(0).args[2].versionId, VERSION_ID);
+            assert.strictEqual(mqp.getAdded()[0].key, `${KEY}${VID_SEP}${VERSION_ID}`);
+            done();
+        });
+    });
+
+    it('should delete an object whose location differs from the bucket\'s', done => {
+        const versionKey = `${KEY}${VID_SEP}${VERSION_ID}`;
+        const entry = new DeleteOpQueueEntry(BUCKET, versionKey);
+        sinon.stub(mongoClient, 'getObject').callsFake((b, k, p, l, cb) =>
+            cb(null, new ObjectMD()
+                .setKey(KEY)
+                .setVersionId(VERSION_ID)
+                // cold, or still pointing at the source: never the bucket's
+                // own location constraint
+                .setDataStoreName('cold-location')
+                .setLocation(null)
+                ._data));
+
+        async.waterfall([
+            cb => mongoClient.getBucketAttributes(BUCKET, fakeLogger, cb),
+            (bucketInfo, cb) => mqp._processDeleteOpQueueEntry(fakeLogger, entry, LOCATION, bucketInfo, cb),
+        ], err => {
+            assert.ifError(err);
+
+            const deleted = mqp.getDeleted();
+            assert.strictEqual(deleted.length, 1);
+            assert.strictEqual(deleted[0].versionId, VERSION_ID);
+            done();
+        });
+    });
+
+    // a cold object with no version of its own, restored on this site
+    const STORED_ARCHIVE = { archiveInfo: { archiveId: 'stored-archive', archiveVersion: 1 } };
+    const STORED_LAST_MODIFIED = '2026-09-01T10:00:00.000Z';
+
+    it('should write over a master that is a copy of a version', done => {
+        // versioning suspended on the source: a new null object is put over
+        // the master, which still copies a real version here
+        sinon.stub(mongoClient, 'getObject').callsFake((b, k, p, l, cb) =>
+            cb(null, new ObjectMD()
+                .setKey(KEY)
+                .setVersionId(VERSION_ID)
+                .setTags({ stored: 'tag' })
+                .setDataStoreName(LOCATION)
+                .setLastModified(STORED_LAST_MODIFIED)
+                ._data));
+        // the same date, so that only the version tells the two apart
+        const objmd = new ObjectMD()
+            .setKey(KEY)
+            .setVersionId(NEW_VERSION_ID)
+            .setIsNull(true)
+            .setTags({ entry: 'tag' })
+            .setDataStoreName(LOCATION)
+            .setLastModified(STORED_LAST_MODIFIED);
+        const entry = new ObjectQueueEntry(BUCKET, KEY, objmd);
+
+        processEntry(entry, err => {
+            assert.ifError(err);
+
+            const added = mqp.getAdded();
+            assert.strictEqual(added.length, 1);
+            // written in place, under the object key alone
+            assert.strictEqual(added[0].key, KEY);
+            assert.strictEqual(added[0].objVal.versionId, NEW_VERSION_ID);
+            assert.deepStrictEqual(added[0].objVal.tags, { entry: 'tag' });
+            done();
+        });
+    });
+
+    function storeUnversioned() {
+        sinon.stub(mongoClient, 'getObject').callsFake((b, k, p, l, cb) =>
+            cb(null, new ObjectMD()
+                .setKey(KEY)
+                .setContentMd5('7d793037a0760186574b0282f2f435e7')
+                .setContentType('text/plain')
+                .setUserMetadata({ 'x-amz-meta-colour': 'red' })
+                .setDataStoreName(LOCATION)
+                .setArchive(STORED_ARCHIVE)
+                .setLastModified(STORED_LAST_MODIFIED)
+                .setAmzRestore({ 'ongoing-request': false })
+                ._data));
+    }
+
+    it('should merge an update to an object with no version of its own', done => {
+        storeUnversioned();
+        // the pipeline strips the restore state, which is this site's own
+        const objmd = new ObjectMD()
+            .setKey(KEY)
+            .setContentMd5('7d793037a0760186574b0282f2f435e7')
+            .setContentType('application/octet-stream')
+            .setUserMetadata({ 'x-amz-meta-colour': 'red' })
+            .setDataStoreName(LOCATION)
+            .setArchive(STORED_ARCHIVE)
+            .setLastModified(STORED_LAST_MODIFIED)
+            .setTags({ mytag: 'mytags-value' });
+        const entry = new ObjectQueueEntry(BUCKET, KEY, objmd);
+
+        processEntry(entry, err => {
+            assert.ifError(err);
+
+            const added = mqp.getAdded();
+            assert.strictEqual(added.length, 1);
+            const { objVal } = added[0];
+            assert.deepStrictEqual(objVal.tags, { mytag: 'mytags-value' });
+            assert.deepStrictEqual(objVal['x-amz-restore'], { 'ongoing-request': false });
+            // not a field an update brings
+            assert.strictEqual(objVal['content-type'], 'text/plain');
+            done();
+        });
+    });
+
+    it('should rewrite a replayed entry for an object with no version of its own as it stands', done => {
+        const objmd = new ObjectMD()
+            .setKey(KEY)
+            .setContentMd5('9e107d9d372bb6826bd81d3542a419d6')
+            .setUserMetadata({ 'x-amz-meta-colour': 'blue' })
+            .setDataStoreName(LOCATION)
+            .setArchive(STORED_ARCHIVE)
+            .setLastModified(STORED_LAST_MODIFIED);
+        const entry = new ObjectQueueEntry(BUCKET, KEY, objmd);
+        // what the first delivery left behind, as mongo gives it back
+        const stored = JSON.parse(JSON.stringify({
+            ...entry.getValue(),
+            acl: new ObjectMD().getAcl(),
+        }));
+        sinon.stub(mongoClient, 'getObject').callsFake((b, k, p, l, cb) => cb(null, stored));
+
+        processEntry(entry, err => {
+            assert.ifError(err);
+            const added = mqp.getAdded();
+            assert.strictEqual(added.length, 1);
+            const { objVal } = added[0];
+            for (const field of ['key', 'content-md5', 'x-amz-meta-colour', 'archive', 'last-modified', 'acl']) {
+                assert.deepStrictEqual(objVal[field], stored[field], field);
+            }
+            done();
+        });
+    });
+
+    it('should keep merging an update to a version of its own', done => {
+        // a version is immutable, so an entry for one carries an update and not
+        // a rewrite: the stored document still decides what it keeps
+        const versionKey = `${KEY}${VID_SEP}${VERSION_ID}`;
+        sinon.stub(mongoClient, 'getObject').callsFake((b, k, p, l, cb) =>
+            cb(null, new ObjectMD()
+                .setKey(KEY)
+                .setVersionId(VERSION_ID)
+                .setUserMetadata({ 'x-amz-meta-colour': 'red' })
+                .setDataStoreName(LOCATION)
+                ._data));
+        const objmd = new ObjectMD()
+            .setKey(KEY)
+            .setVersionId(VERSION_ID)
+            .setTags({ mytag: 'mytags-value' })
+            .setUserMetadata({ 'x-amz-meta-colour': 'blue' })
+            .setDataStoreName(LOCATION);
+        const entry = new ObjectQueueEntry(BUCKET, versionKey, objmd);
+
+        processEntry(entry, err => {
+            assert.ifError(err);
+
+            const added = mqp.getAdded();
+            assert.strictEqual(added.length, 1);
+            const { objVal } = added[0];
+            assert.deepStrictEqual(objVal.tags, { mytag: 'mytags-value' });
+            // not a field an update brings
+            assert.strictEqual(objVal['x-amz-meta-colour'], 'red');
+            done();
         });
     });
 });
