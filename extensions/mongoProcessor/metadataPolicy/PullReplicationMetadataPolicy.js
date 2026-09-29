@@ -33,14 +33,15 @@ class PullReplicationMetadataPolicy extends MetadataPolicy {
         const versionId = this.targetVersionId(entry);
         const stored = this._storedObject(versionId, objMD);
 
-        if (stored) {
+        if (stored && this._isMetadataUpdate(entry, stored)) {
             const content = getContentType(entry, stored);
             this._mergeStoredMetadata(entry, stored);
             return { content: content.length !== 0 ? content : ['METADATA'], versionId };
         }
 
-        // the source-side pipeline shaped everything else this object keeps;
-        // ACLs are not replicated, so they reset as for an ingested object
+        // a first write, or an object overwritten in place: the source-side
+        // pipeline shaped everything else this object keeps; ACLs are not
+        // replicated, so they reset as for an ingested object
         entry.setAcl(new ObjectMD().getAcl());
         return { content: getContentType(entry), versionId };
     }
@@ -63,13 +64,30 @@ class PullReplicationMetadataPolicy extends MetadataPolicy {
     }
 
     /**
-     * A version whose data still lives on the remote site.
+     * Whether the entry updates the metadata of the object already stored,
+     * rather than describing one that replaced it.
      *
+     * A version is immutable, so an entry for one always updates it, a null
+     * version included. An object with no version of its own is rewritten in
+     * place, and so is the master a versioning suspended bucket marks null:
+     * an overwrite moves the modification date, which a metadata update
+     * keeps.
+     *
+     * Nothing of a replaced document is kept. Placement is the one field this
+     * site could own, and cannot here: a cold object holds what the source
+     * pipeline derives from its storage class, and clean room -which pulls
+     * the data to this site- replicates versioned buckets only.
+     *
+     * @param {ObjectQueueEntry} entry - object queue entry object
      * @param {Object} objMD - metadata fetched from mongo
-     * @return {boolean} true if the stored version is not localized
+     * @return {boolean} true if the entry updates the stored object
      */
-    _isNotLocalized(objMD) {
-        return Boolean(locationsConfig[objMD.dataStoreName]?.isCRR);
+    _isMetadataUpdate(entry, objMD) {
+        if (this.targetVersionId(entry)) {
+            return true;
+        }
+
+        return entry.getLastModified() === objMD['last-modified'];
     }
 
     /**
