@@ -813,18 +813,18 @@ class LifecycleTask extends BackbeatTask {
     /**
      * check if rule applies for a given date or calculed days.
      * @param {array} rule - bucket lifecycle rule
-     * @param {number} daysSinceInitiated - Days passed since entity (object or version) last modified
+     * @param {string} lastModified - entity (object or version) last modified date
      * NOTE: entity is not an in-progress MPU or a delete marker.
-     * @param {number} currentDate - current date
      * @return {boolean} true if rule applies - false otherwise.
      */
-    _isRuleApplying(rule, daysSinceInitiated, currentDate) {
+    _isRuleApplying(rule, lastModified) {
         if (rule.Expiration && this._supportedRules.includes('Expiration')) {
-            if (rule.Expiration.Days !== undefined && daysSinceInitiated >= rule.Expiration.Days) {
+            if (rule.Expiration.Days !== undefined &&
+                this._lifecycleDateTime.findDaysSince(new Date(lastModified)) >= rule.Expiration.Days) {
                 return true;
             }
 
-            if (rule.Expiration.Date && rule.Expiration.Date < currentDate) {
+            if (rule.Expiration.Date && rule.Expiration.Date < this._lifecycleDateTime.getCurrentDate()) {
                 return true;
             }
             // Expiration.ExpiredObjectDeleteMarker rule's action does not apply
@@ -835,14 +835,11 @@ class LifecycleTask extends BackbeatTask {
 
         if (rule.Transitions && rule.Transitions.length > 0
             && this._supportedRules.includes('Transition')) {
+            // Same computation as the apply stage, so that
+            // transitionOneDayEarlier is honored.
             return rule.Transitions.some(t => {
-                if (t.Days !== undefined && daysSinceInitiated >= t.Days) {
-                    return true;
-                }
-                if (t.Date && t.Date < currentDate) {
-                    return true;
-                }
-                return false;
+                const transitionTime = this._lifecycleDateTime.getTransitionTimestamp(t, lastModified);
+                return transitionTime !== null && transitionTime <= this._lifecycleDateTime.getCurrentDate();
             });
         }
 
@@ -861,9 +858,6 @@ class LifecycleTask extends BackbeatTask {
      */
     _isEntityEligible(rules, entity, versioningStatus) {
         const currentDate = this._lifecycleDateTime.getCurrentDate();
-        const daysSinceInitiated = this._lifecycleDateTime.findDaysSince(
-            new Date(entity.LastModified)
-        );
         const { staleDate } = entity;
         const daysSinceStaled = staleDate ?
             this._lifecycleDateTime.findDaysSince(new Date(staleDate)) : null;
@@ -881,7 +875,7 @@ class LifecycleTask extends BackbeatTask {
 
             if (versioningStatus === 'Enabled' || versioningStatus === 'Suspended') {
                 if (entity.IsLatest) {
-                    return this._isRuleApplying(rule, daysSinceInitiated, currentDate);
+                    return this._isRuleApplying(rule, entity.LastModified);
                 }
 
                 if (!staleDate) {
@@ -900,14 +894,17 @@ class LifecycleTask extends BackbeatTask {
 
                 if (rule.NoncurrentVersionTransitions && rule.NoncurrentVersionTransitions.length > 0
                     && this._supportedRules.includes('NoncurrentVersionTransition')) {
-                    return rule.NoncurrentVersionTransitions.some(t =>
-                        (t.NoncurrentDays !== undefined && daysSinceInitiated >= t.NoncurrentDays));
+                    return rule.NoncurrentVersionTransitions.some(t => {
+                        const transitionTime = this._lifecycleDateTime
+                            .getNCVTransitionTimestamp(t, staleDate);
+                        return transitionTime !== undefined && transitionTime <= currentDate;
+                    });
                 }
 
                 return false;
             }
 
-            return this._isRuleApplying(rule, daysSinceInitiated, currentDate);
+            return this._isRuleApplying(rule, entity.LastModified);
         });
     }
 
@@ -1356,12 +1353,13 @@ class LifecycleTask extends BackbeatTask {
      */
     _checkAndApplyNCVTransitionRule(bucketData, version, rules, log, cb) {
         const staleDate = version.staleDate;
-        const daysSinceInitiated = this._lifecycleDateTime.findDaysSince(new Date(staleDate));
         const ncvt = 'NoncurrentVersionTransition';
         const ncd = 'NoncurrentDays';
-        const doesNCVTransitionRuleApply = (rules[ncvt] &&
-            rules[ncvt][ncd] !== undefined &&
-            daysSinceInitiated >= rules[ncvt][ncd]);
+        const ncvTransitionTime = rules[ncvt] && rules[ncvt][ncd] !== undefined ?
+            this._lifecycleDateTime.getNCVTransitionTimestamp(rules[ncvt], staleDate) :
+            undefined;
+        const doesNCVTransitionRuleApply = ncvTransitionTime !== undefined &&
+            ncvTransitionTime <= this._lifecycleDateTime.getCurrentDate();
 
         if (doesNCVTransitionRuleApply) {
             this._applyTransitionRule({
