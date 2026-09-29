@@ -124,19 +124,19 @@ Add Ring access key and secret key in conf/locationConfig.json:
 Start backbeat API:
 
 ```
-MANAGEMENT_BACKEND=operator REMOTE_MANAGEMENT_DISABLE=true yarn start
+REMOTE_MANAGEMENT_DISABLE=true yarn start
 ```
 
 ## Backbeat - Ingestion producer
 
 ```
-MANAGEMENT_BACKEND=operator yarn ingestion_populator
+yarn ingestion_populator
 ```
 
 ## Backbeat - Ingestion processor
 
 ```
-MANAGEMENT_BACKEND=operator yarn mongo_queue_processor
+yarn mongo_queue_processor
 ```
 
 ## VaultClient

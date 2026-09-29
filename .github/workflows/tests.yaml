@@ -160,8 +160,6 @@ jobs:
         include:
           - testsuite: api:routes
             runner: run_server_tests.bash
-            env:
-              MANAGEMENT_BACKEND: operator
           - testsuite: api:retry
             runner: run_server_tests.bash
           - testsuite: replication
