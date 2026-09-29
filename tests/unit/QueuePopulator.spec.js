@@ -378,6 +378,11 @@ describe('QueuePopulator', () => {
         });
     });
 
+    it('should refuse to run with no log source', () => {
+        assert.throws(() => new QueuePopulator({}, {}, { logSource: 'none' },
+            null, null, null, null, {}), /'none' log source/);
+    });
+
     describe('configured extensions', () => {
         const extConfigs = { replication: {}, lifecycle: {}, notification: {} };
 

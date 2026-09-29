@@ -48,7 +48,26 @@ describe('backbeat config schema', () => {
 
         it('should reject a log source it cannot read', () => {
             assert.match(validate({ logSource: 'mongo' }).error.message,
-                         /"queuePopulator.logSource" must be one of \[bucketd, ingestion, dmd, kafka\]/);
+                         /"queuePopulator.logSource" must be one of \[bucketd, ingestion, dmd, kafka, none\]/);
+        });
+
+        it('should require the populator settings of any log source but none', () => {
+            const { error } = schema.validate(
+                { queuePopulator: { logSource: 'kafka', kafka: {} }, extensions: { gc: {} } },
+                { abortEarly: false });
+            const missing = error.details.map(detail => detail.path.join('.'));
+            assert.deepStrictEqual(missing.sort(), [
+                'queuePopulator.cronRule',
+                'queuePopulator.probeServer',
+                'queuePopulator.zookeeperPath',
+            ]);
+        });
+
+        // the mongo-processor of a D/R sink reads the mongodb connection only
+        it('should need nothing else with no log source', () => {
+            const mongo = { replicaSetHosts: 'mongo:27017', database: 'metadata' };
+            const config = { queuePopulator: { logSource: 'none', mongo }, extensions: { gc: {} } };
+            assert.strictEqual(schema.validate(config).error, undefined);
         });
     });
 
