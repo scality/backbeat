@@ -188,11 +188,9 @@ class ReplicateObject extends BackbeatTask {
     _getUpdatedSourceEntry(params) {
         const { sourceEntry, replicationStatus } = params;
         const backend = sourceEntry.getReplicationBackend();
-        const entry = replicationStatus === 'COMPLETED' ?
-              sourceEntry.toCompletedEntry(backend) :
-              sourceEntry.toFailedEntry(backend);
-        const versionId = sourceEntry.getReplicationSiteDataStoreVersionId(backend);
-        return entry.setReplicationSiteDataStoreVersionId(backend, versionId);
+        return sourceEntry.clone()
+            .setAccountId(sourceEntry.getAccountId())
+            .setReplicationSiteStatus(backend, replicationStatus);
     }
 
     _publishReplicationStatus(sourceEntry, replicationStatus, params) {
