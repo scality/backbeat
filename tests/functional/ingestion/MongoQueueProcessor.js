@@ -1310,36 +1310,45 @@ describe('MongoQueueProcessor in dr mode', function drMode() {
     const REWRITE_ARCHIVE = { archiveInfo: { archiveId: 'rewrite-archive', archiveVersion: 2 } };
     const REWRITE_LAST_MODIFIED = '2026-09-02T10:00:00.000Z';
 
-    it('should write over a master that is a copy of a version', done => {
-        // versioning suspended on the source: a new null object is put over
-        // the master, which still copies a real version here
-        sinon.stub(mongoClient, 'getObject').callsFake((b, k, p, l, cb) =>
-            cb(null, new ObjectMD()
-                .setKey(KEY)
-                .setVersionId(VERSION_ID)
-                .setTags({ stored: 'tag' })
-                .setDataStoreName(LOCATION)
-                .setLastModified(STORED_LAST_MODIFIED)
-                ._data));
-        // the same date, so that only the version tells the two apart
-        const objmd = new ObjectMD()
+    it('should apply a null master and then its own version as one document', done => {
+        // versioning suspended on the source: the null master is written as a
+        // version of its own, so when the source later gives it a document of
+        // its own -- the same version -- that entry updates what the master
+        // created, and the second write is the first over again
+        const versionKey = `${KEY}${VID_SEP}${VERSION_ID}`;
+        const nullVersion = () => new ObjectMD()
             .setKey(KEY)
-            .setVersionId(NEW_VERSION_ID)
+            .setVersionId(VERSION_ID)
             .setIsNull(true)
-            .setTags({ entry: 'tag' })
+            .setTags({ mytag: 'mytags-value' })
             .setDataStoreName(LOCATION)
             .setLastModified(STORED_LAST_MODIFIED);
-        const entry = new ObjectQueueEntry(BUCKET, KEY, objmd);
+        const master = new ObjectQueueEntry(BUCKET, KEY, nullVersion());
+        const version = new ObjectQueueEntry(BUCKET, versionKey, nullVersion());
+        // what the first write left behind, as mongo gives it back
+        const getObject = sinon.stub(mongoClient, 'getObject').callsFake((b, k, p, l, cb) => {
+            const stored = mqp.getAdded().find(a => a.key === `${KEY}${VID_SEP}${p.versionId}`);
+            return stored ?
+                cb(null, JSON.parse(JSON.stringify(stored.objVal))) :
+                cb(errors.NoSuchKey);
+        });
 
-        processEntry(entry, err => {
+        async.series([
+            next => processEntry(master, next),
+            next => processEntry(version, next),
+        ], err => {
             assert.ifError(err);
 
+            // the null version is requested both times, never the master
+            getObject.getCalls().forEach(call =>
+                assert.strictEqual(call.args[2].versionId, VERSION_ID));
             const added = mqp.getAdded();
-            assert.strictEqual(added.length, 1);
-            // written in place, under the object key alone
-            assert.strictEqual(added[0].key, KEY);
-            assert.strictEqual(added[0].objVal.versionId, NEW_VERSION_ID);
-            assert.deepStrictEqual(added[0].objVal.tags, { entry: 'tag' });
+            assert.strictEqual(added.length, 2);
+            assert.strictEqual(added[0].key, versionKey);
+            assert.strictEqual(added[1].key, versionKey);
+            assert.deepStrictEqual(
+                JSON.parse(JSON.stringify(added[1].objVal)),
+                JSON.parse(JSON.stringify(added[0].objVal)));
             done();
         });
     });
@@ -1437,9 +1446,10 @@ describe('MongoQueueProcessor in dr mode', function drMode() {
     });
 
     it('should take the null version a suspended bucket rewrites', done => {
-        storeUnversioned();
-        // versioning suspended: the master carries a version id and is marked
-        // null, and it is still the document that gets rewritten in place
+        // versioning suspended: the put renews the null master's version id,
+        // so nothing is stored under it yet, and the entry is written as a
+        // version of its own, the master following it
+        sinon.stub(mongoClient, 'getObject').yields(errors.NoSuchKey);
         const objmd = new ObjectMD()
             .setKey(KEY)
             .setVersionId(VERSION_ID)
@@ -1455,7 +1465,7 @@ describe('MongoQueueProcessor in dr mode', function drMode() {
 
             const added = mqp.getAdded();
             assert.strictEqual(added.length, 1);
-            assert.strictEqual(added[0].key, KEY);
+            assert.strictEqual(added[0].key, `${KEY}${VID_SEP}${VERSION_ID}`);
             assert.strictEqual(added[0].objVal['content-md5'], '9e107d9d372bb6826bd81d3542a419d6');
             done();
         });

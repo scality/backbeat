@@ -17,25 +17,21 @@ class PullReplicationMetadataPolicy extends MetadataPolicy {
     }
 
     targetVersionId(entry) {
-        // the document the entry comes from: a version by its key, a master
-        // as the master document itself
-        const documentVersionId = extractVersionId(entry.getObjectVersionedKey());
-        if (documentVersionId) {
-            return documentVersionId;
+        if (entry instanceof DeleteOpQueueEntry) {
+            return extractVersionId(entry.getObjectVersionedKey());
         }
-        if (entry instanceof DeleteOpQueueEntry || entry.getIsNull()) {
-            return undefined;
-        }
-        return entry.getVersionId();
+
+        // the internal version id: getVersionId() names a null version
+        // 'null', as the S3 API does, while mongo keys it by its own id
+        return entry.getValue().versionId;
     }
 
     apply(entry, objMD) {
         const versionId = this.targetVersionId(entry);
-        const stored = this._storedObject(versionId, objMD);
 
-        if (stored && this._isMetadataUpdate(entry, stored)) {
-            const content = getContentType(entry, stored);
-            this._mergeStoredMetadata(entry, stored);
+        if (objMD && this._isMetadataUpdate(entry, objMD, versionId)) {
+            const content = getContentType(entry, objMD);
+            this._mergeStoredMetadata(entry, objMD);
             return { content: content.length !== 0 ? content : ['METADATA'], versionId };
         }
 
@@ -47,31 +43,16 @@ class PullReplicationMetadataPolicy extends MetadataPolicy {
     }
 
     /**
-     * The stored document, when it is the object the entry targets. The
-     * master document is only that object when it has no version of its own:
-     * a master that is a copy of a version, or the latest version mongo
-     * returns in place of a missing master, is not.
-     *
-     * @param {string|undefined} versionId - the version the entry targets
-     * @param {Object|undefined} objMD - metadata fetched from mongo
-     * @return {Object|undefined} the stored object, if any
-     */
-    _storedObject(versionId, objMD) {
-        if (versionId === undefined && objMD?.versionId && !objMD.isNull) {
-            return undefined;
-        }
-        return objMD;
-    }
-
-    /**
      * Whether the entry updates the metadata of the object already stored,
      * rather than describing one that replaced it.
      *
-     * A version is immutable, so an entry for one always updates it, a null
-     * version included. An object with no version of its own is rewritten in
-     * place, and so is the master a versioning suspended bucket marks null:
-     * an overwrite moves the modification date, which a metadata update
-     * keeps.
+     * A version is immutable, so an entry for one always updates it. An
+     * object with no version of its own is rewritten in place under the same
+     * key, and so is the master a versioning suspended bucket marks null: an
+     * overwrite moves the modification date, which a metadata update keeps.
+     * A master that copies a real version, or the latest version mongo
+     * returns in place of a missing master, carries that version's date and
+     * is replaced the same way.
      *
      * Nothing of a replaced document is kept. Placement is the one field this
      * site could own, and cannot here: a cold object holds what the source
@@ -80,10 +61,11 @@ class PullReplicationMetadataPolicy extends MetadataPolicy {
      *
      * @param {ObjectQueueEntry} entry - object queue entry object
      * @param {Object} objMD - metadata fetched from mongo
+     * @param {string|undefined} versionId - the version the entry targets
      * @return {boolean} true if the entry updates the stored object
      */
-    _isMetadataUpdate(entry, objMD) {
-        if (this.targetVersionId(entry)) {
+    _isMetadataUpdate(entry, objMD, versionId) {
+        if (versionId) {
             return true;
         }
 
