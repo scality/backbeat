@@ -199,6 +199,18 @@ class OplogPopulator {
                 }
                 break;
             }
+            case 'drop':
+            case 'rename':
+            case 'dropDatabase':
+            case 'invalidate':
+                // The change stream is closed for good, and buckets may have been removed or
+                // restored meanwhile: restart so that setup() re-syncs them on a new stream.
+                this._logger.error('Metastore change stream invalidated, exiting', {
+                    method: 'OplogPopulator._handleChangeStreamChange',
+                    type: change.operationType,
+                });
+                process.exit(1);
+                return;
             default:
                 this._logger.info('Skipping unsupported change stream event', {
                     method: 'OplogPopulator._handleChangeStreamChange',

@@ -857,7 +857,7 @@ describe('OplogPopulator', () => {
                 has: () => true,
             };
             const changeDocument = {
-                operationType: 'drop',
+                operationType: 'modify',
                 documentKey: {
                     _id: 'example-bucket',
                 },
@@ -878,14 +878,33 @@ describe('OplogPopulator', () => {
                 has: () => true,
             };
             const eventProcessed = sinon.stub(oplogPopulator._metricsHandler, 'onOplogEventProcessed');
-            // "drop" and "invalidate" events carry no documentKey
             const changeDocument = {
-                operationType: 'drop',
+                operationType: 'createIndexes',
             };
             await oplogPopulator._handleChangeStreamChangeEvent(changeDocument);
             assert(stopListening.notCalled);
             assert(startListening.notCalled);
             assert(eventProcessed.calledOnce);
+        });
+
+        ['drop', 'rename', 'dropDatabase', 'invalidate'].forEach(opType => {
+            it(`should exit when the change stream gets invalidated (${opType})`, async () => {
+                const exit = sinon.stub(process, 'exit');
+                const stopListening = sinon.stub().resolves();
+                const startListening = sinon.stub().resolves();
+                oplogPopulator._allocator = {
+                    stopListeningToBucket: stopListening,
+                    listenToBucket: startListening,
+                    has: () => true,
+                };
+                const eventProcessed = sinon.stub(oplogPopulator._metricsHandler, 'onOplogEventProcessed');
+                // these events carry no documentKey
+                await oplogPopulator._handleChangeStreamChangeEvent({ operationType: opType });
+                assert(exit.calledOnceWith(1));
+                assert(stopListening.notCalled);
+                assert(startListening.notCalled);
+                assert(eventProcessed.notCalled);
+            });
         });
 
         ['replace', 'insert', 'update'].forEach(opType => {
