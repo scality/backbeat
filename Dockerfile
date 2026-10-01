@@ -10,7 +10,6 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates \
         build-essential \
-        wget \
         bash \
         python3 \
         git \
@@ -23,12 +22,6 @@ RUN apt-get update \
         libffi-dev \
         libzstd-dev \
         libsasl2-dev
-
-ENV DOCKERIZE_VERSION=v0.6.1
-
-RUN wget https://github.com/jwilder/dockerize/releases/download/$DOCKERIZE_VERSION/dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz \
-    && tar -C /usr/local/bin -xzvf dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz \
-    && rm dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz
 
 COPY package.json yarn.lock /usr/src/app/
 RUN yarn install --frozen-lockfile --production --network-concurrency 1 \
@@ -71,7 +64,6 @@ WORKDIR /usr/src/app
 COPY conf/ ./conf/
 COPY --from=compiler /usr/src/app/dist/ ./
 COPY --from=builder /usr/src/app/node_modules ./node_modules/
-COPY --from=builder /usr/local/bin/dockerize /usr/local/bin/
 
 # Expose the script without extension for backwards compatibility
 RUN mv bin/ensureServiceUser.js bin/ensureServiceUser \
