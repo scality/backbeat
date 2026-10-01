@@ -63,6 +63,7 @@
     "@scality/bucketclient": "scality/bucketclient#8.3.0",
     "@scality/cloudserverclient": "^1.0.12",
     "@smithy/node-http-handler": "^3.3.3",
+    "@smithy/service-error-classification": "^4.6.2",
     "JSONStream": "^1.3.5",
     "async": "^2.3.0",
     "commander": "^13.0.0",
