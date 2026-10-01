@@ -1,4 +1,5 @@
 import mocha from "eslint-plugin-mocha";
+import importPlugin from "eslint-plugin-import";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import js from "@eslint/js";
@@ -16,6 +17,7 @@ const compat = new FlatCompat({
 export default [...compat.extends("@scality/eslint-config-scality"), {
     plugins: {
         mocha,
+        import: importPlugin,
     },
 
     languageOptions: {
@@ -55,13 +57,19 @@ export default [...compat.extends("@scality/eslint-config-scality"), {
         "newline-per-chained-call": "off",
         "no-useless-escape": "off",
         "no-redeclare":"off",
-        "mocha/no-exclusive-tests": "error"
+        "mocha/no-exclusive-tests": "error",
+        // no-extraneous-dependencies silently skips modules it cannot resolve
+        "import/no-unresolved": ["error", { commonjs: true }],
+        "import/no-extraneous-dependencies": ["error", {
+            devDependencies: ["tests/**", "**/*.config.*", ".github/**"],
+        }],
     },
 
     settings: {
         'import/resolver': {
             node: {
-                paths: ["/backbeat/node_modules", "node_modules"]
+                paths: ["/backbeat/node_modules", "node_modules"],
+                extensions: [".js", ".ts", ".json"],
             }
         }
     },
