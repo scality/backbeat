@@ -4,9 +4,9 @@ FROM ghcr.io/scality/backbeat:${BACKBEAT_VERSION} AS builder
 ####################################################################################################
 FROM ghcr.io/scality/backbeat:${BACKBEAT_VERSION} AS supervisord
 
-ARG SUPERVISORD_VERSION=0.7.3
-ADD https://github.com/ochinchina/supervisord/releases/download/v${SUPERVISORD_VERSION}/supervisord_${SUPERVISORD_VERSION}_Linux_64-bit.tar.gz /tmp/supervisord.tar.gz
-RUN tar -xzvf /tmp/supervisord.tar.gz -C /usr/local/bin --strip-components 1 --wildcards '*/supervisord'
+ARG SUPERVISORD_VERSION=0.7.6
+ADD https://github.com/ochinchina/supervisord/releases/download/v${SUPERVISORD_VERSION}/supervisord_linux_amd64 /usr/local/bin/supervisord
+RUN chmod +x /usr/local/bin/supervisord
 
 ####################################################################################################
 FROM ghcr.io/scality/backbeat:${BACKBEAT_VERSION} AS ballot
