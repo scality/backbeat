@@ -2025,7 +2025,7 @@
     "@smithy/types" "^3.7.2"
     tslib "^2.6.2"
 
-"@smithy/protocol-http@^5.3.5":
+"@smithy/protocol-http@^5.3.5", "@smithy/protocol-http@^5.6.2":
   version "5.6.2"
   resolved "https://registry.yarnpkg.com/@smithy/protocol-http/-/protocol-http-5.6.2.tgz#9056bc902872f4eff03d9874340af04c48ebd308"
   integrity sha512-Asd04MaxODN6FNY8EPTeCAM4kPNi3jDUAjZU0Y4F9rHvpLUrrUo7KLcxFgSthywFr6dZfIyDLIJda6jxmVTk5w==
@@ -8219,7 +8219,7 @@ webidl-conversions@^7.0.0:
     fast-safe-stringify "^2.1.1"
     safe-json-stringify "^1.2.0"
 
-"werelogs@github:scality/werelogs#8.2.5", werelogs@scality/werelogs, werelogs@scality/werelogs#8.2.5, "werelogs@scality/werelogs#semver:^8.2.4":
+werelogs@scality/werelogs, werelogs@scality/werelogs#8.2.5, "werelogs@scality/werelogs#semver:^8.2.4":
   version "8.2.5"
   uid "41188826d661227f98ebaaeda7df5e5862809bc7"
   resolved "https://codeload.github.com/scality/werelogs/tar.gz/41188826d661227f98ebaaeda7df5e5862809bc7"
