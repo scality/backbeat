@@ -30,7 +30,10 @@ ENV HOME_DIR="/home/${USER}" \
     DATA_DIR="/data" \
     SUP_RUN_DIR="/var/run/supervisor"
 
+# Debian creates home directories with mode 0700 (since trixie): open it up so
+# that ${USER}, which does not own it, can reach the application.
 RUN mv /home/node ${HOME_DIR} && \
+    chmod 755 ${HOME_DIR} && \
     useradd -ms /bin/bash ${USER} && \
     usermod -aG node ${USER} && \
     mkdir ${LOG_DIR} && chown ${USER} ${LOG_DIR} && \

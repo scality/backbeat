@@ -1,4 +1,4 @@
-ARG NODE_VERSION=24.21.0-bookworm-slim
+ARG NODE_VERSION=24.21.0-trixie-slim
 
 FROM node:${NODE_VERSION} AS builder
 
@@ -15,7 +15,7 @@ RUN apt-get update \
         python3 \
         git \
         zlib1g-dev \
-        libncurses5-dev \
+        libncurses-dev \
         libgdbm-dev \
         libnss3-dev \
         libssl-dev \
