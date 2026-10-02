@@ -103,8 +103,6 @@ is derived for them, and their value is not validated.
   passed by the deployment rather than configured in the file.
 - `S3AUTH_CONFIG`: path of the account credentials file, for the `account` auth
   type.
-- `MANAGEMENT_BACKEND`, `REMOTE_MANAGEMENT_DISABLE`: management backend of the
-  Zenko deployment, and whether to run it.
 - `LIFECYCLE_OBJECT_PROCESSOR_TYPE`: the lifecycle object tasks this processor
   consumes, `expiration` (the default) or `transition`.
 - `LIFECYCLE_MAX_AUTO_INDEX_DOC_COUNT`,

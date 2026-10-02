@@ -3,13 +3,10 @@ const async = require('async');
 const http = require('http');
 const kafka = require('node-rdkafka');
 const { MetadataMock, mockLogs } = require('../utils/MetadataMock');
-const MongoClient = require('mongodb').MongoClient;
 const { promisify } = require('util');
 const timers  = require('timers/promises');
 
 const dummyLogger = require('../../utils/DummyLogger');
-const dummyPensieveCredentials = require('./DummyPensieveCredentials.json');
-const dummySSHKey = require('./DummySSHKey.json');
 const { expectedNewIngestionEntry, expectedZeroByteObj, expectedUTF8Obj,
     expectedVersionIdObj, expectedTagsObj } = require('./expectedEntries');
 const IngestionQueuePopulator =
@@ -104,15 +101,9 @@ describe('ingestion reader tests with mock', function fD() {
     let httpServer;
     let producer;
     let zkClient;
-    const mongoUrl =
-    `mongodb://${testConfig.queuePopulator.mongo.replicaSetHosts}` +
-    '/db?replicaSet=rs0';
-    const client = new MongoClient(mongoUrl, {});
-    const db = client.db('metadata', { ignoreUndefined: true });
     before(async () => {
         testConfig.s3.port = testPort;
         const topic = testConfig.extensions.ingestion.topic;
-        await client.connect();
         try {
             const createTopic = promisify(kafkaAdminClient.createTopic).bind(kafkaAdminClient);
             await createTopic({
@@ -137,14 +128,6 @@ describe('ingestion reader tests with mock', function fD() {
 
         consumer.subscribe([testConfig.extensions.ingestion.topic]);
         await timers.setTimeout(2000);
-        await db.createCollection('PENSIEVE');
-        const collection = db.collection('PENSIEVE');
-        await collection.insertOne(dummyPensieveCredentials);
-        await collection.insertOne({
-            _id: 'configuration/overlay-version',
-            value: 6,
-        });
-        await collection.insertOne(dummySSHKey);
         zkClient = new ZookeeperManager('localhost:2181', { autoCreateNamespace: true }, dummyLogger);
         await new Promise((resolve, reject) => {
             zkClient.once('error', reject);
@@ -159,8 +142,6 @@ describe('ingestion reader tests with mock', function fD() {
     after(async () =>  {
         await promisify(httpServer.close.bind(httpServer))();
         consumer.unsubscribe();
-        await db.collection('PENSIEVE').drop();
-        await client.close();
     });
 
     describe('testing with `bucket1` configuration', () => {
