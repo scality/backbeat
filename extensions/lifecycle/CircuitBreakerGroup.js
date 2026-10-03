@@ -12,13 +12,14 @@ const { startCircuitBreakerMetricsExport } = require('../../lib/CircuitBreaker')
  */
 
 class CircuitBreakerGroup {
-    constructor(cbGlobalConf, circuitBreakers) {
+    constructor(cbGlobalConf, circuitBreakers, logger) {
         if (circuitBreakers) {
             this.circuitBreakers = circuitBreakers;
             return;
         }
 
         this._cbGlobalConf = cbGlobalConf;
+        this._log = logger;
 
         // breaker id used for the metrics
         this._latestBreakerId = 0;
@@ -68,6 +69,7 @@ class CircuitBreakerGroup {
             circuitBreaker,
             metricsName
         );
+        return metricsName;
     }
 
     addCircuitBreaker(probeConf, query, isTransition, isExpiration, topic, location, metricsSuffix) {
@@ -78,8 +80,27 @@ class CircuitBreakerGroup {
                 query,
             }],
         });
+        const breakerId = this.exportCircuitBreakerMetric(circuitBreaker, metricsSuffix);
+        const logFields = {
+            breaker: breakerId,
+            workflows: [isTransition && 'transition', isExpiration && 'expiration'].filter(Boolean),
+            topic: topic || undefined,
+            location: location || undefined,
+            query,
+        };
+        circuitBreaker.on('state-changed', state => {
+            const fields = {
+                ...logFields,
+                state: BreakerState[state],
+                failedProbes: circuitBreaker.failedProbes,
+            };
+            if (state === BreakerState.Tripped) {
+                this._log.warn('lifecycle circuit breaker tripped', fields);
+            } else {
+                this._log.info('lifecycle circuit breaker state changed', fields);
+            }
+        });
         circuitBreaker.start();
-        this.exportCircuitBreakerMetric(circuitBreaker, metricsSuffix);
         if (isTransition) {
             this._addWorkflowCircuitBreaker(circuitBreaker, 'transition', topic, location);
         }
@@ -153,13 +174,13 @@ function extractBucketProcessorCircuitBreakerConfigs(cbConf, lcConfig, repConfig
     if (!cbConf || !cbConf.probes) {
         return {
             global: {},
-            circuitBreakerGroup: new CircuitBreakerGroup({}, null),
+            circuitBreakerGroup: new CircuitBreakerGroup({}, null, logger),
         };
     }
 
     const { probes, ...globalCircuitBreakerConf } = cbConf;
 
-    const circuitBreakerGroup = new CircuitBreakerGroup(globalCircuitBreakerConf, null);
+    const circuitBreakerGroup = new CircuitBreakerGroup(globalCircuitBreakerConf, null, logger);
 
     // config off global circuit breaker
     const global = {
