@@ -3,6 +3,7 @@ const sinon = require('sinon');
 const { EventEmitter } = require('events');
 
 const BackbeatConsumer = require('../../lib/BackbeatConsumer');
+const KafkaBacklogMetrics = require('../../lib/KafkaBacklogMetrics');
 const { CODES } = require('node-rdkafka');
 
 const { kafka } = require('../config.json');
@@ -613,6 +614,169 @@ describe('backbeatConsumer', () => {
                 consumer._tryConsume();
                 assert(mockConsumer.consume.notCalled);
             });
+        });
+    });
+
+    describe('superseded rebalance', () => {
+        const REVOKE = { code: CODES.ERRORS.ERR__REVOKE_PARTITIONS };
+        const ASSIGN = { code: CODES.ERRORS.ERR__ASSIGN_PARTITIONS };
+        const partitions = [
+            { topic: 'my-test-topic', partition: 0 },
+            { topic: 'my-test-topic', partition: 1 },
+        ];
+
+        let consumer;
+        let mockConsumer;
+        let queueIdle;
+        let ledgerCount;
+
+        beforeEach(() => {
+            consumer = new BackbeatConsumerMock({
+                kafka,
+                groupId: 'unittest-group',
+                topic: 'my-test-topic',
+                // a free slot must remain next to in-flight work, or the
+                // consume loop stops on its own
+                concurrency: 2,
+            });
+            const mock = new EventEmitter();
+            mockConsumer = Object.assign(mock, {
+                isConnected: () => true,
+                subscription: () => ['my-test-topic'],
+                assignments: () => [],
+                unsubscribe: sinon.stub(),
+                unassign: sinon.stub(),
+                assign: sinon.stub(),
+                commit: sinon.stub(),
+                pause: sinon.stub(),
+                resume: sinon.stub(),
+                consume: sinon.stub(),
+                disconnect: sinon.stub().callsFake(() => process.nextTick(
+                    () => mock.emit('disconnected'))),
+            });
+            consumer._consumer = mockConsumer;
+
+            queueIdle = false;
+            ledgerCount = 1;
+            consumer._processingQueue = {
+                length: () => 0,
+                running: () => (queueIdle ? 0 : 1),
+                idle: () => queueIdle,
+                setDrain: () => {},
+                push: sinon.stub(),
+            };
+            consumer._offsetLedger.getProcessingCount = () => ledgerCount;
+
+            sinon.stub(KafkaBacklogMetrics, 'onRebalance');
+        });
+
+        afterEach(() => {
+            clearTimeout(consumer._drainProcessQueueTimeout);
+            sinon.restore();
+        });
+
+        const completeDrain = () => {
+            queueIdle = true;
+            ledgerCount = 0;
+            if (consumer._drainCallback) {
+                consumer._drainCallback();
+            }
+        };
+
+        it('should accept the grant and start aborting when it lands on a '
+        + 'parked revoke', () => {
+            consumer._onRebalance(REVOKE, partitions);
+            assert.strictEqual(consumer._waitingDrain, true);
+            assert(mockConsumer.unassign.notCalled);
+
+            consumer._onRebalance(ASSIGN, partitions);
+
+            // accepted, so the draining entries can still store offsets
+            assert(mockConsumer.assign.calledOnceWithExactly(partitions));
+            assert.strictEqual(consumer._abortingRebalance, true);
+            assert(KafkaBacklogMetrics.onRebalance.calledWith(
+                'my-test-topic', 'unittest-group',
+                unassignStatus.SUPERSEDED));
+        });
+
+        it('should stop consuming once aborting', () => {
+            consumer._onRebalance(REVOKE, partitions);
+            consumer._onRebalance(ASSIGN, partitions);
+
+            consumer._tryConsume();
+            assert(mockConsumer.consume.notCalled);
+        });
+
+        it('should drop entries delivered by a request outstanding when the '
+        + 'abort started', () => {
+            const onOffsetConsumed =
+                sinon.spy(consumer._offsetLedger, 'onOffsetConsumed');
+            mockConsumer.consume = sinon.stub().yields(null, [
+                { topic: 'my-test-topic', partition: 0, offset: 0,
+                  value: Buffer.from('a') },
+            ]);
+            consumer._tryConsume();
+            assert(onOffsetConsumed.calledOnce);
+            assert(consumer._processingQueue.push.calledOnce);
+
+            consumer._onRebalance(REVOKE, partitions);
+            consumer._onRebalance(ASSIGN, partitions);
+
+            // replay the callback of the request that was already
+            // outstanding: the grant reset the fetch position, so this is
+            // the draining entry coming back around
+            mockConsumer.consume.yield(null, [
+                { topic: 'my-test-topic', partition: 0, offset: 0,
+                  value: Buffer.from('a') },
+            ]);
+
+            assert(onOffsetConsumed.calledOnce);
+            assert(consumer._processingQueue.push.calledOnce);
+        });
+
+        it('should leave the group once the pending drain has committed',
+        done => {
+            consumer._onRebalance(REVOKE, partitions);
+            consumer._onRebalance(ASSIGN, partitions);
+            assert(mockConsumer.disconnect.notCalled);
+
+            mockConsumer.disconnect = sinon.stub().callsFake(() => {
+                // the drain committed and un-assigned before we left
+                assert(mockConsumer.commit.calledOnce);
+                assert(mockConsumer.unassign.calledOnce);
+                assert(mockConsumer.unsubscribe.calledOnce);
+                process.nextTick(() => mockConsumer.emit('disconnected'));
+                done();
+            });
+            completeDrain();
+        });
+
+        it('should not abort on a grant that follows a completed revoke',
+        () => {
+            queueIdle = true;
+            ledgerCount = 0;
+            consumer._onRebalance(REVOKE, partitions);
+            assert.strictEqual(consumer._waitingDrain, false);
+
+            consumer._onRebalance(ASSIGN, partitions);
+
+            assert.strictEqual(consumer._abortingRebalance, false);
+            assert(mockConsumer.assign.calledOnceWithExactly(partitions));
+            assert(KafkaBacklogMetrics.onRebalance.neverCalledWith(
+                'my-test-topic', 'unittest-group',
+                unassignStatus.SUPERSEDED));
+        });
+
+        it('should decline the grant rather than abort when already '
+        + 'shutting down', () => {
+            consumer._onRebalance(REVOKE, partitions);
+            consumer._closing = true;
+
+            consumer._onRebalance(ASSIGN, partitions);
+
+            assert.strictEqual(consumer._abortingRebalance, false);
+            assert(mockConsumer.assign.notCalled);
+            assert(mockConsumer.unassign.calledOnce);
         });
     });
 });
