@@ -433,6 +433,7 @@ describe('ReplicateObject', () => {
                     destination: 'arn:aws:s3:::bucket-a',
                 }),
                 'v-1');
+            assert.strictEqual(updated.getReplicationStatus(), 'PENDING');
         });
 
         it('returns a FAILED entry preserving the dataStoreVersionId', () => {
@@ -453,6 +454,7 @@ describe('ReplicateObject', () => {
                     destination: 'arn:aws:s3:::bucket-a',
                 }),
                 'v-1');
+            assert.strictEqual(updated.getReplicationStatus(), 'PENDING');
         });
     });
 
