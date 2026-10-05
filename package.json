@@ -58,7 +58,7 @@
     "@aws-sdk/client-s3": "^3.921.0",
     "@aws-sdk/client-sts": "^3.921.0",
     "@aws-sdk/credential-providers": "^3.921.0",
-    "@scality/arsenal": "8.6.0-preview.1",
+    "@scality/arsenal": "8.6.0-preview.3",
     "@scality/breakbeat": "1.1.0",
     "@scality/bucketclient": "scality/bucketclient#8.3.0",
     "@scality/cloudserverclient": "^1.0.12",

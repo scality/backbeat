@@ -38,7 +38,7 @@ describe('QueueEntry helper class', () => {
                 'REPLICA');
             assert.strictEqual(
                 replica.getReplicationSiteStatus({ site: 'replicationaws' }),
-                'PENDING');
+                undefined);
             assert.strictEqual(replica.getReplicationStatus(), 'REPLICA');
 
             // If one site is FAILED, the global status should be FAILED
@@ -46,7 +46,7 @@ describe('QueueEntry helper class', () => {
             assert.strictEqual(failed.getReplicationSiteStatus({ site: 'sf' }),
                 'FAILED');
             assert.strictEqual(
-                replica.getReplicationSiteStatus({ site: 'replicationaws' }),
+                failed.getReplicationSiteStatus({ site: 'replicationaws' }),
                 'PENDING');
             assert.strictEqual(failed.getReplicationStatus(), 'FAILED');
 
@@ -61,14 +61,15 @@ describe('QueueEntry helper class', () => {
             assert.strictEqual(completed.getReplicationStatus(), 'PROCESSING');
 
             // If all sites are COMPLETED, the global status should be COMPLETED
-            const completed1 = entry.toCompletedEntry({ site: 'sf' });
-            const completed2 = entry.toCompletedEntry({ site: 'replicationaws' });
-            assert.strictEqual(completed2
+            const allCompleted = entry.toCompletedEntry({ site: 'sf' })
+                .toCompletedEntry({ site: 'replicationaws' });
+            assert.strictEqual(allCompleted.getReplicationSiteStatus({ site: 'sf' }),
+                'COMPLETED');
+            assert.strictEqual(allCompleted
                 .getReplicationSiteStatus({ site: 'replicationaws' }),
                 'COMPLETED');
-            assert.strictEqual(completed1.getReplicationSiteStatus({ site: 'sf' }),
-                'COMPLETED');
-            assert.strictEqual(completed1.getReplicationStatus(), 'COMPLETED');
+            assert.strictEqual(allCompleted.getReplicationStatus(), 'COMPLETED');
+            assert.strictEqual(entry.getReplicationSiteStatus({ site: 'sf' }), 'PENDING');
         });
     });
 
