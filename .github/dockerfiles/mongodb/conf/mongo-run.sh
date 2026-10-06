@@ -7,4 +7,4 @@ init_RS() {
 }
 init_RS &
 
-mongod --bind_ip_all --config=/conf/mongod.conf
+exec mongod --bind_ip_all --config=/conf/mongod.conf
