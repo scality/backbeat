@@ -1,7 +1,7 @@
 const assert = require('assert');
 const werelogs = require('werelogs');
 
-const { ObjectMD } = require('@scality/arsenal').models;
+const { ObjectMD, ObjectMDArchive } = require('@scality/arsenal').models;
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const { LifecycleResetTransitionInProgressTask } = require(
     '../../../extensions/lifecycle/tasks/LifecycleResetTransitionInProgressTask');
@@ -45,6 +45,13 @@ describe('LifecycleResetTransitionInProgressTask', () => {
         .setTransitionInProgress(true)
         .setAmzStorageClass('location-dmf-v1')
         .setDataStoreName('us-east-1');
+    // archived, waiting for the garbage collector to remove the hot data
+    const objectDirectArchived = new ObjectMD()
+        .setContentMd5('etag1')
+        .setTransitionInProgress(true)
+        .setAmzStorageClass('location-dmf-v1')
+        .setDataStoreName('us-east-1')
+        .setArchive(new ObjectMDArchive({ archiveId: 'archive-1' }));
     const objectDirectTransitioned = new ObjectMD()
         .setContentMd5('etag1')
         .setTransitionInProgress(true)
@@ -98,6 +105,7 @@ describe('LifecycleResetTransitionInProgressTask', () => {
 
             const md = backbeatMetadataProxyClient.mdObj;
             assert.ok(!md.getTransitionInProgress());
+            assert.strictEqual(md.getOriginOp(), 's3:LifecycleTransition:Retry');
 
             done();
         });
@@ -113,6 +121,19 @@ describe('LifecycleResetTransitionInProgressTask', () => {
             assert.strictEqual(md.getOriginOp(), 's3:LifecycleTransition:Retry');
             const umd = JSON.parse(md.getUserMetadata());
             assert.strictEqual(umd['x-amz-meta-scal-s3-transition-attempt'], 12);
+
+            done();
+        });
+    });
+
+    it('should reset transition in progress flag for a direct transition already archived', done => {
+        backbeatMetadataProxyClient.setMdObj(objectDirectArchived);
+        task.processActionEntry(actionEntry, err => {
+            assert.ifError(err);
+
+            const md = backbeatMetadataProxyClient.mdObj;
+            assert.ok(!md.getTransitionInProgress());
+            assert.strictEqual(md.getOriginOp(), 's3:LifecycleTransition:Retry');
 
             done();
         });

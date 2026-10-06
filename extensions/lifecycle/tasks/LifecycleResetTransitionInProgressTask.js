@@ -20,7 +20,7 @@ class LifecycleResetTransitionInProgressTask extends LifecycleRequeueTask {
             return false;
         }
         md.setOriginOp('s3:LifecycleTransition:Retry');
-        if (!this._isDirectToCold(md)) {
+        if (!this._isDirectToCold(md) || md.getArchive()?.archiveInfo) {
             // Keep the flag as the queue populator keys on it to trigger the next attempt
             md.setTransitionInProgress(false);
         }
