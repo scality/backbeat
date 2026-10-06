@@ -809,6 +809,95 @@ describe('LifecycleQueuePopulator', () => {
             });
         });
 
+        describe('repair of a stuck direct-to-cold transition', () => {
+            const versionId = '98500086134471999999RG001  0';
+            const archiveInfo = {
+                archiveId: '04425717-a65c-4e8a-95e1-fa1d902d9d9f',
+                archiveVersion: 7504504064263669,
+            };
+
+            let archiveSendStub;
+            let restoreSendStub;
+
+            function getEntry(value) {
+                return {
+                    type: 'put',
+                    bucket: 'lc-queue-populator-test-bucket',
+                    key: `hosts\x00${versionId}`,
+                    value: JSON.stringify({
+                        'owner-id': templateEntry['owner-id'],
+                        'content-length': 542,
+                        'content-md5': '01064f35c238bd2b785e34508c3d27f4',
+                        'last-modified': '2017-07-13T02:44:25.519Z',
+                        'x-amz-storage-class': 'dmf-v1',
+                        'key': 'hosts',
+                        versionId,
+                        ...value,
+                    }),
+                };
+            }
+
+            beforeEach(() => {
+                lcqp.vaultClientWrapper = {
+                    getAccountId: sinon.stub().yields(null, templateEntry['owner-id']),
+                };
+                archiveSendStub = sinon.stub().yields();
+                restoreSendStub = sinon.stub().yields();
+                lcqp._producers[`${coldStorageArchiveTopicPrefix}dmf-v1`] = { send: archiveSendStub };
+                lcqp._producers[`${coldStorageRestoreTopicPrefix}dmf-v1`] = { send: restoreSendStub };
+            });
+
+            it('should republish the archive request on a retry write', () => {
+                lcqp.filter(getEntry({
+                    'originOp': 's3:LifecycleTransition:Retry',
+                    'x-amz-scal-transition-in-progress': true,
+                    'x-amz-meta-scal-s3-transition-attempt': '2',
+                    'dataStoreName': 'us-east-1',
+                    // restore requested while the transition was stuck
+                    'archive': {
+                        restoreRequestedAt: '2017-07-14T02:44:25.519Z',
+                        restoreRequestedDays: 2,
+                    },
+                }));
+
+                assert(archiveSendStub.calledOnce);
+                assert(!restoreSendStub.called);
+                const message = JSON.parse(archiveSendStub.args[0][0][0].message);
+                assert.strictEqual(message.objectKey, 'hosts');
+                assert.strictEqual(message.try, 2);
+            });
+
+            it('should not republish the archive request once archived', () => {
+                lcqp.filter(getEntry({
+                    'originOp': 's3:LifecycleTransition:Retry',
+                    'x-amz-scal-transition-in-progress': true,
+                    'dataStoreName': 'us-east-1',
+                    'archive': { archiveInfo },
+                }));
+
+                assert(!archiveSendStub.called);
+                assert(!restoreSendStub.called);
+            });
+
+            it('should initiate the deferred restore on completion of the repaired transition', () => {
+                lcqp.filter(getEntry({
+                    originOp: 's3:LifecycleTransition:Direct',
+                    dataStoreName: 'dmf-v1',
+                    archive: {
+                        archiveInfo,
+                        restoreRequestedAt: '2017-07-14T02:44:25.519Z',
+                        restoreRequestedDays: 2,
+                    },
+                }));
+
+                assert(!archiveSendStub.called);
+                assert(restoreSendStub.calledOnce);
+                const message = JSON.parse(restoreSendStub.args[0][0][0].message);
+                assert.deepStrictEqual(message.archiveInfo, archiveInfo);
+                assert.strictEqual(message.requestedDurationSecs, 2 * 24 * 3600);
+            });
+        });
+
         ['null', '42', '"str"'].forEach(value => {
             it(`should ignore a put entry whose value parses to ${value}`, () => {
                 lcqp.extConfig.conductor.bucketSource = 'zookeeper';
