@@ -448,25 +448,25 @@ yarn run lifecycle_conductor
 ### Run lifecycle bucket processor
 
 ```sh
-EXPIRE_ONE_DAY_EARLIER=true TRANSITION_ONE_DAY_EARLIER=true REMOTE_MANAGEMENT_DISABLE=true yarn run lifecycle_bucket_processor
+EXPIRE_ONE_DAY_EARLIER=true TRANSITION_ONE_DAY_EARLIER=true yarn run lifecycle_bucket_processor
 ```
 
 ### Run lifecycle object transition processor
 
 ```sh
-REMOTE_MANAGEMENT_DISABLE=true yarn run lifecycle_object_transition_processor
+yarn run lifecycle_object_transition_processor
 ```
 
 ### Run queue processor that includes the data mover consumer
 
 ```sh
-REMOTE_MANAGEMENT_DISABLE=true yarn run queue_processor
+yarn run queue_processor
 ```
 
 ### Run garbage collector
 
 ```sh
-REMOTE_MANAGEMENT_DISABLE=true yarn run garbage_collector
+yarn run garbage_collector
 ```
 
 ## Put object for transition and check it worked

@@ -279,21 +279,21 @@ Make sure `conf/config.json` section
 #### Queue populator
 
 ```
-S3_REPLICATION_METRICS_PROBE=true REMOTE_MANAGEMENT_DISABLE=true \
+S3_REPLICATION_METRICS_PROBE=true \
 yarn run queue_populator
 ```
 
 #### Queue processor
 
 ```
-S3_REPLICATION_METRICS_PROBE=true REMOTE_MANAGEMENT_DISABLE=true \
+S3_REPLICATION_METRICS_PROBE=true \
 yarn run queue_processor aws-location
 ```
 
 #### Replication status processor
 
 ```
-S3_REPLICATION_METRICS_PROBE=true REMOTE_MANAGEMENT_DISABLE=true \
+S3_REPLICATION_METRICS_PROBE=true \
 yarn run replication_status_processor
 ```
 

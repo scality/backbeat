@@ -124,7 +124,7 @@ Add Ring access key and secret key in conf/locationConfig.json:
 Start backbeat API:
 
 ```
-REMOTE_MANAGEMENT_DISABLE=true yarn start
+yarn start
 ```
 
 ## Backbeat - Ingestion producer
