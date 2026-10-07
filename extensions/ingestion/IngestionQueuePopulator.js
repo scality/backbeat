@@ -1,5 +1,3 @@
-const { zenkoIDHeader } = require('@scality/arsenal').constants;
-
 const QueuePopulatorExtension =
           require('../../lib/queuePopulator/QueuePopulatorExtension');
 const { isMasterKey } = require('@scality/arsenal').versioning;
@@ -10,7 +8,6 @@ class IngestionQueuePopulator extends QueuePopulatorExtension {
     constructor(params) {
         super(params);
         this.config = params.config;
-        this._instanceId = params.instanceId;
     }
 
     // called by _processLogEntry in lib/queuePopulator/LogReader.js
@@ -73,10 +70,6 @@ class IngestionQueuePopulator extends QueuePopulatorExtension {
                 });
                 return true;
             }
-            if (this._isRetroPropagationEntry(queueEntry)) {
-                this.log.trace('skipping retro-propagated entry');
-                return true;
-            }
             if (this._isMasterKeyEntry(queueEntry)) {
                 this.log.trace('skipping master key entry');
                 return true;
@@ -96,41 +89,6 @@ class IngestionQueuePopulator extends QueuePopulatorExtension {
         if (metadataVal.mdBucketModelVersion ||
             metadataVal.attributes) {
             return true;
-        }
-        return false;
-    }
-
-    /**
-     * Retro-propagation is where S3C ingestion will re-ingest an object whose
-     * request originated from Zenko. Filter these entries indicated by user
-     * metadata field defined by constants.zenkoIDHeader
-     * @param {ObjectQueueEntry} entry - object queue entry instance
-     * @return {Boolean} true if we should filter entry
-     */
-    _isRetroPropagationEntry(entry) {
-        const userMD = entry.getUserMetadata();
-        let existingIDHeader;
-        if (userMD) {
-            try {
-                const metaHeaders = JSON.parse(userMD);
-                existingIDHeader = metaHeaders[zenkoIDHeader];
-            } catch {
-                this.log.trace('malformed user metadata', {
-                    method: 'IngestionQueuePopulator.filter',
-                    bucket: entry.bucket,
-                    key: entry.key,
-                    type: entry.type,
-                });
-                return true;
-            }
-            // if user metadata field of `constants.zenkoIDHeader`
-            // exists and value is either 'zenko' (for delete markers)
-            // or matches given hashed instance id
-            if (existingIDHeader && (existingIDHeader === 'zenko' ||
-                existingIDHeader === this._instanceId)) {
-                this.log.trace('skipping retro-propagated entry');
-                return true;
-            }
         }
         return false;
     }

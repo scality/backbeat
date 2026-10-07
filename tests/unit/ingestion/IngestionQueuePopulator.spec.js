@@ -12,7 +12,6 @@ describe('ingestion queue populator', () => {
         const params = {
             config: { topic: 'test-topic' },
             logger: fakeLogger,
-            instanceId: 'test-instance',
         };
         iqp = new IngestionQueuePopulator(params);
     });
