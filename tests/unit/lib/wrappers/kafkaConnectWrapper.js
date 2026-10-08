@@ -10,6 +10,12 @@ const logger = new werelogs.Logger('connect-wrapper-logger');
 const KafkaConnectWrapper =
     require('../../../../lib/wrappers/KafkaConnectWrapper');
 
+function httpError(statusCode) {
+    const err = errors.InternalError.customizeDescription(`status ${statusCode}`);
+    err.statusCode = statusCode;
+    return err;
+}
+
 describe('KafkaConnectWrapper', () => {
     let wrapper;
 
@@ -323,6 +329,14 @@ describe('KafkaConnectWrapper', () => {
             await wrapper.deleteConnector('mongo-source')
             .catch(err => assert.deepEqual(err, errors.InternalError));
         });
+
+        it('should not log a missing connector as an error', async () => {
+            const errorSpy = sinon.spy(logger, 'error');
+            const notFound = httpError(404);
+            sinon.stub(wrapper, 'makeRequest').rejects(notFound);
+            await assert.rejects(wrapper.deleteConnector('mongo-source'), notFound);
+            assert(errorSpy.notCalled);
+        });
     });
 
     describe('restartConnector', () => {
@@ -473,7 +487,7 @@ describe('KafkaConnectWrapper', () => {
 
         it('should fail if response has bad status code', async () => {
             response.statusCode = 500;
-            response.message = 'Server Error';
+            response.statusMessage = 'Server Error';
             const promiseResponse = wrapper.makeRequest({
                 method: 'GET',
                 path: '/connectors',
@@ -481,18 +495,119 @@ describe('KafkaConnectWrapper', () => {
             const bodyBuffer = Buffer.from(JSON.stringify([]));
             response.emit('data', bodyBuffer);
             response.emit('end');
-            await promiseResponse
-            .then(resolvedResponse => {
-                assert.deepEqual(resolvedResponse, []);
-                assert(requestStub.calledOnceWith({
-                    host: 'localhost',
-                    port: 8083,
-                    method: 'GET',
-                    path: '/connectors',
-                }));
-                assert(endStub.calledOnce);
-            })
-            .catch(err => assert.deepEqual(err, errors.InternalError));
+            await assert.rejects(promiseResponse, err => {
+                assert(err.is.InternalError);
+                assert.strictEqual(err.statusCode, 500);
+                return true;
+            });
+        });
+
+        it('should keep the status of an error response that is not JSON', async () => {
+            response.statusCode = 503;
+            const promiseResponse = wrapper.makeRequest({
+                method: 'GET',
+                path: '/connectors',
+            });
+            response.emit('data', Buffer.from('<html>Service Unavailable</html>'));
+            response.emit('end');
+            await assert.rejects(promiseResponse, err => err.statusCode === 503 &&
+                err.description === 'Error occured when making request, status 503');
+        });
+
+        it('should not log a missing resource as an error', async () => {
+            const errorSpy = sinon.spy(logger, 'error');
+            const debugSpy = sinon.spy(logger, 'debug');
+            response.statusCode = 404;
+            const promiseResponse = wrapper.makeRequest({
+                method: 'GET',
+                path: '/connectors/mongo-source/offsets',
+            });
+            response.emit('data', Buffer.from(JSON.stringify({ message: 'not found' })));
+            response.emit('end');
+            await assert.rejects(promiseResponse, err => err.statusCode === 404);
+            assert(errorSpy.notCalled);
+            assert(debugSpy.calledWith('Got bad status when making request'));
+        });
+
+        it('should resolve an empty body', async () => {
+            response.statusCode = 202;
+            const promiseResponse = wrapper.makeRequest({
+                method: 'PUT',
+                path: '/connectors/mongo-source/stop',
+            });
+            response.emit('end');
+            assert.deepStrictEqual(await promiseResponse, {});
+        });
+    });
+
+    describe('getConnectorsWithStatus', () => {
+        it('should list connectors with their info and status', async () => {
+            const connectors = { 'mongo-source': { info: {}, status: {} } };
+            const makeRequestStub = sinon.stub(wrapper, 'makeRequest').resolves(connectors);
+            assert.deepStrictEqual(await wrapper.getConnectorsWithStatus(), connectors);
+            assert(makeRequestStub.calledOnceWith({
+                method: 'GET',
+                path: '/connectors?expand=info&expand=status',
+            }));
+        });
+
+        it('should throw error when request fails', async () => {
+            sinon.stub(wrapper, 'makeRequest').rejects(errors.InternalError);
+            await assert.rejects(wrapper.getConnectorsWithStatus(), errors.InternalError);
+        });
+    });
+
+    describe('stopConnector', () => {
+        it('should stop a connector', async () => {
+            const makeRequestStub = sinon.stub(wrapper, 'makeRequest').resolves({});
+            await wrapper.stopConnector('mongo-source');
+            assert(makeRequestStub.calledOnceWith({
+                method: 'PUT',
+                path: '/connectors/mongo-source/stop',
+            }));
+        });
+
+        it('should throw error when request fails', async () => {
+            sinon.stub(wrapper, 'makeRequest').rejects(errors.InternalError);
+            await assert.rejects(wrapper.stopConnector('mongo-source'), errors.InternalError);
+        });
+
+        it('should not log a missing connector as an error', async () => {
+            const errorSpy = sinon.spy(logger, 'error');
+            const notFound = httpError(404);
+            sinon.stub(wrapper, 'makeRequest').rejects(notFound);
+            await assert.rejects(wrapper.stopConnector('mongo-source'), notFound);
+            assert(errorSpy.notCalled);
+        });
+    });
+
+    describe('getConnectorOffsets', () => {
+        it('should return the connector offsets', async () => {
+            const offsets = [{ partition: { ns: 'p' }, offset: { _id: '{}' } }];
+            const makeRequestStub = sinon.stub(wrapper, 'makeRequest').resolves({ offsets });
+            assert.deepStrictEqual(await wrapper.getConnectorOffsets('mongo-source'), offsets);
+            assert(makeRequestStub.calledOnceWith({
+                method: 'GET',
+                path: '/connectors/mongo-source/offsets',
+            }));
+        });
+
+        it('should return no offsets when none were committed', async () => {
+            sinon.stub(wrapper, 'makeRequest').resolves({});
+            assert.deepStrictEqual(await wrapper.getConnectorOffsets('mongo-source'), []);
+        });
+
+        it('should throw error when request fails', async () => {
+            sinon.stub(wrapper, 'makeRequest').rejects(errors.InternalError);
+            await assert.rejects(wrapper.getConnectorOffsets('mongo-source'), errors.InternalError);
+        });
+
+        it('should not log a missing offsets API as an error', async () => {
+            const errorSpy = sinon.spy(logger, 'error');
+            const notFound = httpError(404);
+            sinon.stub(wrapper, 'makeRequest').rejects(notFound);
+            await assert.rejects(wrapper.getConnectorOffsets('mongo-source'), notFound);
+            assert(errorSpy.notCalled);
         });
     });
 });
