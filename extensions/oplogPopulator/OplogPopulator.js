@@ -17,6 +17,8 @@ const LeastFullConnector = require('./allocationStrategy/LeastFullConnector');
 const UniqueConnector = require('./allocationStrategy/UniqueConnector');
 const WildcardPipelineFactory = require('./pipeline/WildcardPipelineFactory');
 const MultipleBucketsPipelineFactory = require('./pipeline/MultipleBucketsPipelineFactory');
+const HashedPipelineFactory = require('./pipeline/HashedPipelineFactory');
+const HashedConnectorsManager = require('./modules/HashedConnectorsManager');
 
 const paramsJoi = joi.object({
     config: OplogPopulatorConfigJoiSchema.required(),
@@ -58,6 +60,7 @@ class OplogPopulator {
         this._changeStreamWrapper = null;
         this._allocator = null;
         this._connectorsManager = null;
+        this._hashedConnectorsManager = null;
         // contains OplogPopulatorUtils class of each supported extension
         this._extHelpers = {};
         // MongoDB related
@@ -277,6 +280,10 @@ class OplogPopulator {
      * @throws {InternalError}
      */
     async setup() {
+        if (this._config.ingestion === 'hashed') {
+            await this._setupHashed();
+            return;
+        }
         try {
             this._loadOplogHelperClasses();
             // initialize mongo client
@@ -338,6 +345,59 @@ class OplogPopulator {
     }
 
     /**
+     * Returns the current MongoDB cluster time
+     * @returns {Promise<Object>} `{ t, i }`
+     * @throws {InternalError}
+     */
+    async _getClusterTime() {
+        const { operationTime } = await this._mongoClient.command({ ping: 1 });
+        if (!operationTime) {
+            throw errors.InternalError.customizeDescription('MongoDB did not report its cluster time');
+        }
+        return { t: operationTime.t, i: operationTime.i };
+    }
+
+    /**
+     * Sets the OplogPopulator up to ingest the whole oplog through hashed
+     * connectors. Connectors are only reconciled in the background, so that
+     * probes answer while a migration waits.
+     * @returns {Promise|undefined} undefined
+     * @throws {InternalError}
+     */
+    async _setupHashed() {
+        try {
+            await this._setupMongoClient();
+            this._hashedConnectorsManager = new HashedConnectorsManager({
+                nbConnectors: this._config.numberOfConnectors,
+                database: this._database,
+                mongoUrl: this._mongoUrl,
+                oplogTopic: this._config.topic,
+                cronRule: this._config.connectorsUpdateCronRule,
+                prefix: this._config.prefix,
+                heartbeatIntervalMs: this._config.heartbeatIntervalMs,
+                kafkaConnectHost: this._config.kafkaConnectHost,
+                kafkaConnectPort: this._config.kafkaConnectPort,
+                pipelineFactory: new HashedPipelineFactory(this._config.locationStrippingBytesThreshold),
+                metricsHandler: this._metricsHandler,
+                getClusterTime: () => this._getClusterTime(),
+                logger: this._logger,
+            });
+            this._hashedConnectorsManager.start();
+            this._logger.info('OplogPopulator setup complete', {
+                method: 'OplogPopulator._setupHashed',
+                ingestion: this._config.ingestion,
+                connectors: this._config.numberOfConnectors,
+            });
+        } catch (err) {
+            this._logger.error('An error occured when setting up the OplogPopulator', {
+                method: 'OplogPopulator._setupHashed',
+                error: err.description || err.message,
+            });
+            throw errors.InternalError.customizeDescription(err.description || err.message);
+        }
+    }
+
+    /**
      * Init the allocation strategy and the pipeline factory
      * @returns {{
      *     allocationStrategy: RetainBucketsDecorator,
@@ -387,11 +447,15 @@ class OplogPopulator {
     isReady() {
         const components = {
             mongoClient: this._mongoClient,
-            metastore: this._metastore,
-            connectorsManager: this._connectorsManager,
-            allocator: this._allocator,
-            changeStream: this._changeStreamWrapper
         };
+        if (this._config.ingestion === 'hashed') {
+            components.hashedConnectorsManager = this._hashedConnectorsManager;
+        } else {
+            components.metastore = this._metastore;
+            components.connectorsManager = this._connectorsManager;
+            components.allocator = this._allocator;
+            components.changeStream = this._changeStreamWrapper;
+        }
 
         const allReady = Object.values(components).every(v => v);
         if (!allReady) {

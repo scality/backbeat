@@ -3,7 +3,7 @@ const sinon = require('sinon');
 const errors = require('@scality/arsenal').errors;
 const werelogs = require('werelogs');
 const events = require('events');
-const { MongoClient } = require('mongodb');
+const { MongoClient, Timestamp } = require('mongodb');
 
 const logger = new werelogs.Logger('connect-wrapper-logger');
 
@@ -21,11 +21,13 @@ const AllocationStrategy = require('../../../extensions/oplogPopulator/allocatio
 const constants = require('../../../extensions/oplogPopulator/constants');
 const UniqueConnector = require('../../../extensions/oplogPopulator/allocationStrategy/UniqueConnector');
 const PipelineFactory = require('../../../extensions/oplogPopulator/pipeline/PipelineFactory');
+const HashedConnectorsManager = require('../../../extensions/oplogPopulator/modules/HashedConnectorsManager');
 
 const oplogPopulatorConfig = {
     topic: 'oplog',
     kafkaConnectHost: '127.0.0.1',
     kafkaConnectPort: 8083,
+    ingestion: 'perBucket',
     numberOfConnectors: 1,
     probeServer: { port: 8552 },
 };
@@ -973,6 +975,67 @@ describe('OplogPopulator', () => {
                 assert(startListening.notCalled);
                 assert(stopListening.notCalled);
             });
+        });
+    });
+
+    describe('hashed ingestion', () => {
+        let hashedPopulator;
+
+        beforeEach(() => {
+            hashedPopulator = new OplogPopulator({
+                config: { ...oplogPopulatorConfig, ingestion: 'hashed', numberOfConnectors: 2 },
+                mongoConfig,
+                activeExtensions,
+                enableMetrics: false,
+                logger,
+            });
+        });
+
+        it('should only connect to MongoDB and start the hashed connectors manager', async () => {
+            sinon.stub(hashedPopulator, '_setupMongoClient').callsFake(async () => {
+                hashedPopulator._mongoClient = {};
+            });
+            const startStub = sinon.stub(HashedConnectorsManager.prototype, 'start');
+            const loadHelpersStub = sinon.stub(hashedPopulator, '_loadOplogHelperClasses');
+            assert.strictEqual(hashedPopulator.isReady(), false);
+            await hashedPopulator.setup();
+            assert(startStub.calledOnce);
+            assert(loadHelpersStub.notCalled);
+            assert.strictEqual(hashedPopulator._hashedConnectorsManager._nbConnectors, 2);
+            assert.strictEqual(hashedPopulator.isReady(), true);
+        });
+
+        it('should use a single hashed connector when the connector count is 0', async () => {
+            const populator = new OplogPopulator({
+                config: { ...oplogPopulatorConfig, ingestion: 'hashed', numberOfConnectors: 0 },
+                mongoConfig,
+                activeExtensions,
+                enableMetrics: false,
+                logger,
+            });
+            sinon.stub(populator, '_setupMongoClient').callsFake(async () => {
+                populator._mongoClient = {};
+            });
+            sinon.stub(HashedConnectorsManager.prototype, 'start');
+            await populator.setup();
+            assert.strictEqual(populator._hashedConnectorsManager._nbConnectors, 1);
+        });
+
+        it('should fail setup when MongoDB is unreachable', async () => {
+            sinon.stub(hashedPopulator, '_setupMongoClient').rejects(errors.InternalError);
+            await assert.rejects(hashedPopulator.setup(), err => err.is.InternalError);
+        });
+
+        it('should read the cluster time of MongoDB', async () => {
+            hashedPopulator._mongoClient = {
+                command: sinon.stub().resolves({ ok: 1, operationTime: new Timestamp({ t: 10, i: 3 }) }),
+            };
+            assert.deepStrictEqual(await hashedPopulator._getClusterTime(), { t: 10, i: 3 });
+        });
+
+        it('should fail when MongoDB does not report its cluster time', async () => {
+            hashedPopulator._mongoClient = { command: sinon.stub().resolves({ ok: 1 }) };
+            await assert.rejects(hashedPopulator._getClusterTime(), err => err.is.InternalError);
         });
     });
 });
