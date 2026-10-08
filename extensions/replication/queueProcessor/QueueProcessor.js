@@ -23,6 +23,7 @@ const { getTaskSchedulerQueueKey,
 const ReplicateObject = require('../tasks/ReplicateObject');
 const MultipleBackendTask = require('../tasks/MultipleBackendTask');
 const CopyLocationTask = require('../tasks/CopyLocationTask');
+const { PULL_REPLICATION } = require('../../lifecycle/LifecycleMetrics');
 const EchoBucket = require('../tasks/EchoBucket');
 
 const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
@@ -1019,6 +1020,10 @@ class QueueProcessor extends EventEmitter {
         if (actionEntry.getActionType() === 'copyLocation') {
             if (actionEntry.getAttribute('toLocation') === this.site) {
                 task = new CopyLocationTask(this);
+            } else if (this._isPullFromSite(actionEntry)) {
+                // pull replication: the processor of a remote location also pulls
+                // the data from it, to the local location the action targets
+                task = new CopyLocationTask(this);
             }
         } else {
             this.logger.warn('skipping unsupported action type', {
@@ -1039,6 +1044,17 @@ class QueueProcessor extends EventEmitter {
             entry: actionEntry.getLogInfo(),
         });
         return process.nextTick(done);
+    }
+
+    /**
+     * Whether an action copies data from this site to a local location
+     *
+     * @param {ActionQueueEntry} actionEntry - copyLocation action entry
+     * @return {boolean} true if the action pulls data from this site
+     */
+    _isPullFromSite(actionEntry) {
+        return actionEntry.getAttribute('metrics.origin') === PULL_REPLICATION
+            && actionEntry.getAttribute('metrics.fromLocation') === this.site;
     }
 
     isReady() {
