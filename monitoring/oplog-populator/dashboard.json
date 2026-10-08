@@ -107,7 +107,7 @@
       },
       "gridPos": {
         "h": 3,
-        "w": 4,
+        "w": 5,
         "x": 0,
         "y": 1
       },
@@ -188,8 +188,8 @@
       },
       "gridPos": {
         "h": 3,
-        "w": 4,
-        "x": 4,
+        "w": 5,
+        "x": 5,
         "y": 1
       },
       "hideTimeOverride": false,
@@ -269,8 +269,8 @@
       },
       "gridPos": {
         "h": 3,
-        "w": 4,
-        "x": 8,
+        "w": 5,
+        "x": 10,
         "y": 1
       },
       "hideTimeOverride": false,
@@ -294,7 +294,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(s3_oplog_populator_connectors{job=\"${oplog_populator_job}\", namespace=\"${namespace}\"})",
+          "expr": "sum(s3_oplog_populator_connectors{job=\"${oplog_populator_job}\", namespace=\"${namespace}\", state=\"running\"})",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -308,79 +308,6 @@
         }
       ],
       "title": "Active Connectors",
-      "transformations": [],
-      "transparent": false,
-      "type": "stat"
-    },
-    {
-      "datasource": "${DS_PROMETHEUS}",
-      "description": "Number of buckets configured on the connectors",
-      "editable": true,
-      "error": false,
-      "fieldConfig": {
-        "defaults": {
-          "custom": {},
-          "decimals": null,
-          "mappings": [],
-          "noValue": "-",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "index": 0,
-                "line": true,
-                "op": "gt",
-                "value": "null",
-                "yaxis": "left"
-              }
-            ]
-          },
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 3,
-        "w": 4,
-        "x": 12,
-        "y": 1
-      },
-      "hideTimeOverride": false,
-      "id": 5,
-      "links": [],
-      "maxDataPoints": 100,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "last"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": null,
-          "expr": "sum(s3_oplog_populator_connector_buckets{job=\"${oplog_populator_job}\", namespace=\"${namespace}\", connector=~\"${connector}\"})",
-          "format": "time_series",
-          "hide": false,
-          "instant": false,
-          "interval": "",
-          "intervalFactor": 1,
-          "legendFormat": "",
-          "metric": "",
-          "refId": "",
-          "step": 10,
-          "target": ""
-        }
-      ],
-      "title": "Monitored Buckets",
       "transformations": [],
       "transparent": false,
       "type": "stat"
@@ -415,12 +342,12 @@
       },
       "gridPos": {
         "h": 3,
-        "w": 4,
-        "x": 16,
+        "w": 5,
+        "x": 15,
         "y": 1
       },
       "hideTimeOverride": false,
-      "id": 6,
+      "id": 5,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -493,7 +420,7 @@
         "y": 1
       },
       "hideTimeOverride": false,
-      "id": 7,
+      "id": 6,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -530,6 +457,106 @@
       "transformations": [],
       "transparent": false,
       "type": "stat"
+    },
+    {
+      "datasource": "${DS_PROMETHEUS}",
+      "description": "Connectors by state: running, paused (or stopped) and failed connectors, and outdated connectors waiting to be replaced by hashed connectors; and the number of hashed connectors expected",
+      "editable": true,
+      "error": false,
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "opacity",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "stepAfter",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "log": 2,
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {},
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": []
+          },
+          "unit": ""
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 24,
+        "x": 0,
+        "y": 4
+      },
+      "hideTimeOverride": false,
+      "id": 7,
+      "links": [],
+      "maxDataPoints": 100,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "targets": [
+        {
+          "datasource": null,
+          "expr": "sum by(state) (s3_oplog_populator_connectors{job=\"${oplog_populator_job}\", namespace=\"${namespace}\"})",
+          "format": "time_series",
+          "hide": false,
+          "instant": false,
+          "interval": "",
+          "intervalFactor": 1,
+          "legendFormat": "{{state}}",
+          "metric": "",
+          "refId": "",
+          "step": 10,
+          "target": ""
+        },
+        {
+          "datasource": null,
+          "expr": "sum(s3_oplog_populator_expected_connectors{job=\"${oplog_populator_job}\", namespace=\"${namespace}\"}) > 0",
+          "format": "time_series",
+          "hide": false,
+          "instant": false,
+          "interval": "",
+          "intervalFactor": 1,
+          "legendFormat": "expected",
+          "metric": "",
+          "refId": "",
+          "step": 10,
+          "target": ""
+        }
+      ],
+      "title": "Connectors",
+      "transformations": [],
+      "transparent": false,
+      "type": "timeseries"
     },
     {
       "datasource": "${DS_PROMETHEUS}",
@@ -579,7 +606,7 @@
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 4
+        "y": 11
       },
       "hideTimeOverride": false,
       "id": 8,
@@ -598,7 +625,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum (rate(s3_oplog_populator_connector_configurations_total_applied{job=\"${oplog_populator_job}\", namespace=\"${namespace}\", connector=~\"${connector}\", success=\"true\"}[$__rate_interval]))",
+          "expr": "sum (rate(s3_oplog_populator_connector_configuration_applied_total{job=\"${oplog_populator_job}\", namespace=\"${namespace}\", connector=~\"${connector}\", success=\"true\"}[$__rate_interval]))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -664,7 +691,7 @@
         "h": 7,
         "w": 12,
         "x": 12,
-        "y": 4
+        "y": 11
       },
       "hideTimeOverride": false,
       "id": 9,
@@ -683,7 +710,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum (rate(s3_oplog_populator_connector_configurations_total_applied{job=\"${oplog_populator_job}\", namespace=\"${namespace}\", connector=~\"${connector}\", success=\"false\"}[$__rate_interval]))",
+          "expr": "sum (rate(s3_oplog_populator_connector_configuration_applied_total{job=\"${oplog_populator_job}\", namespace=\"${namespace}\", connector=~\"${connector}\", success=\"false\"}[$__rate_interval]))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -702,109 +729,8 @@
       "type": "timeseries"
     },
     {
-      "collapsed": false,
-      "editable": true,
-      "error": false,
-      "fieldConfig": {
-        "defaults": {
-          "thresholds": {
-            "mode": "absolute",
-            "steps": []
-          }
-        }
-      },
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 11
-      },
-      "hideTimeOverride": false,
-      "id": 10,
-      "links": [],
-      "maxDataPoints": 100,
-      "panels": [],
-      "targets": [],
-      "title": "Bucket Metrics",
-      "transformations": [],
-      "transparent": false,
-      "type": "row"
-    },
-    {
       "datasource": "${DS_PROMETHEUS}",
-      "description": "How buckets are distributed among the connectors",
-      "editable": true,
-      "error": false,
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {},
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": []
-          },
-          "unit": ""
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 7,
-        "w": 12,
-        "x": 0,
-        "y": 12
-      },
-      "hideTimeOverride": false,
-      "id": 11,
-      "links": [],
-      "maxDataPoints": 100,
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "right",
-          "values": [
-            "percent",
-            "value"
-          ]
-        },
-        "pieType": "donut",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "tooltip": {
-          "mode": "single"
-        }
-      },
-      "targets": [
-        {
-          "datasource": null,
-          "expr": "sum by(connector) (s3_oplog_populator_connector_buckets{job=\"${oplog_populator_job}\", namespace=\"${namespace}\", connector=~\"${connector}\"})",
-          "format": "time_series",
-          "hide": false,
-          "instant": false,
-          "interval": "",
-          "intervalFactor": 1,
-          "legendFormat": "{{connector}}",
-          "metric": "",
-          "refId": "",
-          "step": 10,
-          "target": ""
-        }
-      ],
-      "title": "Bucket Distribution",
-      "transformations": [],
-      "transparent": false,
-      "type": "piechart"
-    },
-    {
-      "datasource": "${DS_PROMETHEUS}",
-      "description": "Evolution of buckets per connector",
+      "description": "Delay between the latest oplog entry and the last one read by each connector",
       "editable": true,
       "error": false,
       "fieldConfig": {
@@ -832,7 +758,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
-            "spanNulls": true,
+            "spanNulls": false,
             "stacking": {},
             "thresholdsStyle": {
               "mode": "off"
@@ -843,18 +769,18 @@
             "mode": "absolute",
             "steps": []
           },
-          "unit": ""
+          "unit": "s"
         },
         "overrides": []
       },
       "gridPos": {
         "h": 7,
         "w": 12,
-        "x": 12,
-        "y": 12
+        "x": 0,
+        "y": 18
       },
       "hideTimeOverride": false,
-      "id": 12,
+      "id": 10,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -870,7 +796,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum by(connector) (s3_oplog_populator_connector_buckets{job=\"${oplog_populator_job}\", namespace=\"${namespace}\", connector=~\"${connector}\"})",
+          "expr": "max by(connector) (kafka_connect_mongodb_source_task_metrics_latest_mongodb_time_difference_secs{job=\"${kafka_connect_job}\", namespace=\"${namespace}\", connector=~\"${connector}\"})",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -883,295 +809,10 @@
           "target": ""
         }
       ],
-      "title": "Buckets Per Connector",
+      "title": "Oplog Lag Per Connector",
       "transformations": [],
       "transparent": false,
       "type": "timeseries"
-    },
-    {
-      "datasource": "${DS_PROMETHEUS}",
-      "description": "Rate at which buckets are getting added to the connectors",
-      "editable": true,
-      "error": false,
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "opacity",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineInterpolation": "smooth",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "log": 2,
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": true,
-            "stacking": {},
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": []
-          },
-          "unit": "ops"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 7,
-        "w": 12,
-        "x": 0,
-        "y": 19
-      },
-      "hideTimeOverride": false,
-      "id": 13,
-      "links": [],
-      "maxDataPoints": 100,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "hidden",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "single"
-        }
-      },
-      "targets": [
-        {
-          "datasource": null,
-          "expr": "sum (rate(s3_oplog_populator_connector_configurations_total{job=\"${oplog_populator_job}\", namespace=\"${namespace}\", connector=~\"${connector}\", opType=\"add\"}[$__rate_interval]))",
-          "format": "time_series",
-          "hide": false,
-          "instant": false,
-          "interval": "",
-          "intervalFactor": 1,
-          "legendFormat": "",
-          "metric": "",
-          "refId": "",
-          "step": 10,
-          "target": ""
-        }
-      ],
-      "title": "Bucket Addition Rate",
-      "transformations": [],
-      "transparent": false,
-      "type": "timeseries"
-    },
-    {
-      "datasource": "${DS_PROMETHEUS}",
-      "description": "Rate at which buckets are getting removed from the connectors",
-      "editable": true,
-      "error": false,
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "opacity",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineInterpolation": "smooth",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "log": 2,
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": true,
-            "stacking": {},
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": []
-          },
-          "unit": "ops"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 7,
-        "w": 12,
-        "x": 12,
-        "y": 19
-      },
-      "hideTimeOverride": false,
-      "id": 14,
-      "links": [],
-      "maxDataPoints": 100,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "hidden",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "single"
-        }
-      },
-      "targets": [
-        {
-          "datasource": null,
-          "expr": "sum (rate(s3_oplog_populator_connector_configurations_total{job=\"${oplog_populator_job}\", namespace=\"${namespace}\", connector=~\"${connector}\", opType=\"delete\"}[$__rate_interval]))",
-          "format": "time_series",
-          "hide": false,
-          "instant": false,
-          "interval": "",
-          "intervalFactor": 1,
-          "legendFormat": "",
-          "metric": "",
-          "refId": "",
-          "step": 10,
-          "target": ""
-        }
-      ],
-      "title": "Bucket Removal Rate",
-      "transformations": [],
-      "transparent": false,
-      "type": "timeseries"
-    },
-    {
-      "collapsed": false,
-      "editable": true,
-      "error": false,
-      "fieldConfig": {
-        "defaults": {
-          "thresholds": {
-            "mode": "absolute",
-            "steps": []
-          }
-        }
-      },
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 26
-      },
-      "hideTimeOverride": false,
-      "id": 15,
-      "links": [],
-      "maxDataPoints": 100,
-      "panels": [],
-      "targets": [],
-      "title": "Lag Metrics",
-      "transformations": [],
-      "transparent": false,
-      "type": "row"
-    },
-    {
-      "cards": {
-        "cardPadding": 1,
-        "cardRound": 2
-      },
-      "color": {
-        "cardColor": "#b4ff00",
-        "colorScale": "sqrt",
-        "colorScheme": "interpolateOranges",
-        "exponent": 0.5,
-        "max": null,
-        "min": null,
-        "mode": "opacity"
-      },
-      "dataFormat": "tsbuckets",
-      "datasource": "${DS_PROMETHEUS}",
-      "description": "Delay between a config change in mongo and the start of processing by the oplogPopulator in seconds",
-      "editable": true,
-      "error": false,
-      "fieldConfig": {
-        "defaults": {
-          "thresholds": {
-            "mode": "absolute",
-            "steps": []
-          }
-        }
-      },
-      "gridPos": {
-        "h": 7,
-        "w": 12,
-        "x": 0,
-        "y": 27
-      },
-      "heatmap": {},
-      "hideTimeOverride": false,
-      "hideZeroBuckets": true,
-      "highlightCards": true,
-      "id": 16,
-      "legend": {
-        "show": false
-      },
-      "links": [],
-      "maxDataPoints": 25,
-      "reverseYBuckets": false,
-      "targets": [
-        {
-          "datasource": null,
-          "expr": "sum(rate(\n  s3_oplog_populator_acknowledgement_lag_seconds_bucket{namespace=\"${namespace}\", job=\"${oplog_populator_job}\"}[$__rate_interval]\n)) by(le)",
-          "format": "heatmap",
-          "hide": false,
-          "instant": false,
-          "interval": "",
-          "intervalFactor": 1,
-          "legendFormat": "{{le}}",
-          "metric": "",
-          "refId": "",
-          "step": 10,
-          "target": ""
-        }
-      ],
-      "title": "Acknowledgement Lag",
-      "tooltip": {
-        "show": true,
-        "showHistogram": true
-      },
-      "transformations": [],
-      "transparent": false,
-      "type": "heatmap",
-      "xAxis": {
-        "mode": "time",
-        "name": null,
-        "show": true,
-        "values": []
-      },
-      "yAxis": {
-        "decimals": null,
-        "format": "s",
-        "label": null,
-        "logBase": 1,
-        "max": null,
-        "min": null,
-        "show": true
-      }
     },
     {
       "cards": {
@@ -1204,13 +845,13 @@
         "h": 7,
         "w": 12,
         "x": 12,
-        "y": 27
+        "y": 18
       },
       "heatmap": {},
       "hideTimeOverride": false,
       "hideZeroBuckets": true,
       "highlightCards": true,
-      "id": 17,
+      "id": 11,
       "legend": {
         "show": false
       },
@@ -1256,6 +897,589 @@
         "min": null,
         "show": true
       }
+    },
+    {
+      "collapsed": true,
+      "editable": true,
+      "error": false,
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": []
+          }
+        }
+      },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 25
+      },
+      "hideTimeOverride": false,
+      "id": 12,
+      "links": [],
+      "maxDataPoints": 100,
+      "panels": [
+        {
+          "cacheTimeout": null,
+          "datasource": "${DS_PROMETHEUS}",
+          "description": "Number of buckets configured on the connectors",
+          "editable": true,
+          "error": false,
+          "fieldConfig": {
+            "defaults": {
+              "custom": {},
+              "decimals": null,
+              "mappings": [],
+              "noValue": "-",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "index": 0,
+                    "line": true,
+                    "op": "gt",
+                    "value": "null",
+                    "yaxis": "left"
+                  }
+                ]
+              },
+              "unit": "none"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 3,
+            "w": 24,
+            "x": 0,
+            "y": 0
+          },
+          "height": null,
+          "hideTimeOverride": false,
+          "id": 13,
+          "interval": null,
+          "links": [],
+          "maxDataPoints": 100,
+          "maxPerRow": null,
+          "minSpan": null,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "last"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto"
+          },
+          "repeat": null,
+          "repeatDirection": null,
+          "span": null,
+          "targets": [
+            {
+              "datasource": null,
+              "expr": "sum(s3_oplog_populator_connector_buckets{job=\"${oplog_populator_job}\", namespace=\"${namespace}\", connector=~\"${connector}\"})",
+              "format": "time_series",
+              "hide": false,
+              "instant": false,
+              "interval": "",
+              "intervalFactor": 1,
+              "legendFormat": "",
+              "metric": "",
+              "refId": "",
+              "step": 10,
+              "target": ""
+            }
+          ],
+          "timeFrom": null,
+          "timeShift": null,
+          "title": "Monitored Buckets",
+          "transformations": [],
+          "transparent": false,
+          "type": "stat"
+        },
+        {
+          "cacheTimeout": null,
+          "datasource": "${DS_PROMETHEUS}",
+          "description": "How buckets are distributed among the connectors",
+          "editable": true,
+          "error": false,
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {},
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": []
+              },
+              "unit": ""
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 0,
+            "y": 3
+          },
+          "height": null,
+          "hideTimeOverride": false,
+          "id": 14,
+          "interval": null,
+          "links": [],
+          "maxDataPoints": 100,
+          "maxPerRow": null,
+          "minSpan": null,
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "right",
+              "values": [
+                "percent",
+                "value"
+              ]
+            },
+            "pieType": "donut",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "tooltip": {
+              "mode": "single"
+            }
+          },
+          "repeat": null,
+          "repeatDirection": null,
+          "span": null,
+          "targets": [
+            {
+              "datasource": null,
+              "expr": "sum by(connector) (s3_oplog_populator_connector_buckets{job=\"${oplog_populator_job}\", namespace=\"${namespace}\", connector=~\"${connector}\"})",
+              "format": "time_series",
+              "hide": false,
+              "instant": false,
+              "interval": "",
+              "intervalFactor": 1,
+              "legendFormat": "{{connector}}",
+              "metric": "",
+              "refId": "",
+              "step": 10,
+              "target": ""
+            }
+          ],
+          "timeFrom": null,
+          "timeShift": null,
+          "title": "Bucket Distribution",
+          "transformations": [],
+          "transparent": false,
+          "type": "piechart"
+        },
+        {
+          "cacheTimeout": null,
+          "datasource": "${DS_PROMETHEUS}",
+          "description": "Evolution of buckets per connector",
+          "editable": true,
+          "error": false,
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "opacity",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "lineInterpolation": "smooth",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "log": 2,
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": true,
+                "stacking": {},
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": []
+              },
+              "unit": ""
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 12,
+            "y": 3
+          },
+          "height": null,
+          "hideTimeOverride": false,
+          "id": 15,
+          "interval": null,
+          "links": [],
+          "maxDataPoints": 100,
+          "maxPerRow": null,
+          "minSpan": null,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "single"
+            }
+          },
+          "repeat": null,
+          "repeatDirection": null,
+          "span": null,
+          "targets": [
+            {
+              "datasource": null,
+              "expr": "sum by(connector) (s3_oplog_populator_connector_buckets{job=\"${oplog_populator_job}\", namespace=\"${namespace}\", connector=~\"${connector}\"})",
+              "format": "time_series",
+              "hide": false,
+              "instant": false,
+              "interval": "",
+              "intervalFactor": 1,
+              "legendFormat": "{{connector}}",
+              "metric": "",
+              "refId": "",
+              "step": 10,
+              "target": ""
+            }
+          ],
+          "timeFrom": null,
+          "timeShift": null,
+          "title": "Buckets Per Connector",
+          "transformations": [],
+          "transparent": false,
+          "type": "timeseries"
+        },
+        {
+          "cacheTimeout": null,
+          "datasource": "${DS_PROMETHEUS}",
+          "description": "Rate at which buckets are getting added to the connectors",
+          "editable": true,
+          "error": false,
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "opacity",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "lineInterpolation": "smooth",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "log": 2,
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": true,
+                "stacking": {},
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": []
+              },
+              "unit": "ops"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 0,
+            "y": 10
+          },
+          "height": null,
+          "hideTimeOverride": false,
+          "id": 16,
+          "interval": null,
+          "links": [],
+          "maxDataPoints": 100,
+          "maxPerRow": null,
+          "minSpan": null,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "hidden",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "single"
+            }
+          },
+          "repeat": null,
+          "repeatDirection": null,
+          "span": null,
+          "targets": [
+            {
+              "datasource": null,
+              "expr": "sum (rate(s3_oplog_populator_connector_configurations_total{job=\"${oplog_populator_job}\", namespace=\"${namespace}\", connector=~\"${connector}\", opType=\"add\"}[$__rate_interval]))",
+              "format": "time_series",
+              "hide": false,
+              "instant": false,
+              "interval": "",
+              "intervalFactor": 1,
+              "legendFormat": "",
+              "metric": "",
+              "refId": "",
+              "step": 10,
+              "target": ""
+            }
+          ],
+          "timeFrom": null,
+          "timeShift": null,
+          "title": "Bucket Addition Rate",
+          "transformations": [],
+          "transparent": false,
+          "type": "timeseries"
+        },
+        {
+          "cacheTimeout": null,
+          "datasource": "${DS_PROMETHEUS}",
+          "description": "Rate at which buckets are getting removed from the connectors",
+          "editable": true,
+          "error": false,
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "opacity",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "lineInterpolation": "smooth",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "log": 2,
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": true,
+                "stacking": {},
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": []
+              },
+              "unit": "ops"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 12,
+            "y": 10
+          },
+          "height": null,
+          "hideTimeOverride": false,
+          "id": 17,
+          "interval": null,
+          "links": [],
+          "maxDataPoints": 100,
+          "maxPerRow": null,
+          "minSpan": null,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "hidden",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "single"
+            }
+          },
+          "repeat": null,
+          "repeatDirection": null,
+          "span": null,
+          "targets": [
+            {
+              "datasource": null,
+              "expr": "sum (rate(s3_oplog_populator_connector_configurations_total{job=\"${oplog_populator_job}\", namespace=\"${namespace}\", connector=~\"${connector}\", opType=\"delete\"}[$__rate_interval]))",
+              "format": "time_series",
+              "hide": false,
+              "instant": false,
+              "interval": "",
+              "intervalFactor": 1,
+              "legendFormat": "",
+              "metric": "",
+              "refId": "",
+              "step": 10,
+              "target": ""
+            }
+          ],
+          "timeFrom": null,
+          "timeShift": null,
+          "title": "Bucket Removal Rate",
+          "transformations": [],
+          "transparent": false,
+          "type": "timeseries"
+        },
+        {
+          "cacheTimeout": null,
+          "cards": {
+            "cardPadding": 1,
+            "cardRound": 2
+          },
+          "color": {
+            "cardColor": "#b4ff00",
+            "colorScale": "sqrt",
+            "colorScheme": "interpolateOranges",
+            "exponent": 0.5,
+            "max": null,
+            "min": null,
+            "mode": "opacity"
+          },
+          "dataFormat": "tsbuckets",
+          "datasource": "${DS_PROMETHEUS}",
+          "description": "Delay between a config change in mongo and the start of processing by the oplogPopulator in seconds",
+          "editable": true,
+          "error": false,
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": []
+              }
+            }
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 24,
+            "x": 0,
+            "y": 17
+          },
+          "heatmap": {},
+          "height": null,
+          "hideTimeOverride": false,
+          "hideZeroBuckets": true,
+          "highlightCards": true,
+          "id": 18,
+          "interval": null,
+          "legend": {
+            "show": false
+          },
+          "links": [],
+          "maxDataPoints": 25,
+          "maxPerRow": null,
+          "minSpan": null,
+          "options": null,
+          "repeat": null,
+          "repeatDirection": null,
+          "reverseYBuckets": false,
+          "span": null,
+          "targets": [
+            {
+              "datasource": null,
+              "expr": "sum(rate(\n  s3_oplog_populator_acknowledgement_lag_seconds_bucket{namespace=\"${namespace}\", job=\"${oplog_populator_job}\"}[$__rate_interval]\n)) by(le)",
+              "format": "heatmap",
+              "hide": false,
+              "instant": false,
+              "interval": "",
+              "intervalFactor": 1,
+              "legendFormat": "{{le}}",
+              "metric": "",
+              "refId": "",
+              "step": 10,
+              "target": ""
+            }
+          ],
+          "timeFrom": null,
+          "timeShift": null,
+          "title": "Acknowledgement Lag",
+          "tooltip": {
+            "show": true,
+            "showHistogram": true
+          },
+          "transformations": [],
+          "transparent": false,
+          "type": "heatmap",
+          "xAxis": {
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "xBucketNumber": null,
+          "xBucketSize": null,
+          "yAxis": {
+            "decimals": null,
+            "format": "s",
+            "label": null,
+            "logBase": 1,
+            "max": null,
+            "min": null,
+            "show": true
+          },
+          "yBucketBound": null,
+          "yBucketNumber": null,
+          "yBucketSize": null
+        }
+      ],
+      "targets": [],
+      "title": "Bucket Metrics",
+      "transformations": [],
+      "transparent": false,
+      "type": "row"
     }
   ],
   "refresh": "30s",
@@ -1287,7 +1511,7 @@
         "multi": true,
         "name": "connector",
         "options": [],
-        "query": "label_values(s3_oplog_populator_connector_buckets{job=~\"${oplog_populator_job}.*\", namespace=\"${namespace}\", connector=~\".*\"}, connector)",
+        "query": "label_values(s3_oplog_populator_connector_pipeline_bytes{job=~\"${oplog_populator_job}.*\", namespace=\"${namespace}\", connector=~\".*\"}, connector)",
         "refresh": 1,
         "regex": null,
         "sort": 1,

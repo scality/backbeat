@@ -43,7 +43,7 @@ class Metrics:
             'connector=~"${connector}"',
         ) for name, extraLabels in {
             's3_oplog_populator_connector_configurations_total': ['opType'],
-            's3_oplog_populator_connector_configurations_total_applied': ['success'],
+            's3_oplog_populator_connector_configuration_applied_total': ['success'],
             's3_oplog_populator_connector_buckets': [],
             's3_oplog_populator_connector_request_bytes_total': [],
             's3_oplog_populator_connector_pipeline_bytes': [],
@@ -51,8 +51,21 @@ class Metrics:
     ]
 
     CONNECTORS = metrics.CounterMetric(
-        's3_oplog_populator_connectors',
+        's3_oplog_populator_connectors', 'state',
         job="${oplog_populator_job}", namespace="${namespace}"
+    )
+
+    EXPECTED_CONNECTORS = metrics.CounterMetric(
+        's3_oplog_populator_expected_connectors',
+        job="${oplog_populator_job}", namespace="${namespace}"
+    )
+
+    MONGODB_LAG = metrics.CounterMetric(
+        'kafka_connect_mongodb_source_task_metrics_latest_mongodb_time_difference_secs',
+        'connector', 'task',
+        job="${kafka_connect_job}", namespace="${namespace}"
+    ).with_defaults(
+        'connector=~"${connector}"',
     )
 
 oplog_populator_up_current = Stat(
@@ -103,7 +116,7 @@ connector_instances = Stat(
     noValue='-',
     reduceCalc='last',
     targets=[Target(
-        expr='sum(' + Metrics.CONNECTORS.raw() + ')',
+        expr='sum(' + Metrics.CONNECTORS.raw(state="running") + ')',
     )],
     thresholds=[
         Threshold('red', 0, 0.),
@@ -282,6 +295,41 @@ reconfig_lag = Heatmap(
     )],
 )
 
+connectors_by_state = TimeSeries(
+    title='Connectors',
+    description='Connectors by state: running, paused (or stopped) and failed connectors, and outdated '
+                'connectors waiting to be replaced by hashed connectors; and the number of hashed connectors '
+                'expected',
+    dataSource='${DS_PROMETHEUS}',
+    gradientMode='opacity',
+    lineInterpolation='stepAfter',
+    fillOpacity=10,
+    spanNulls=False,
+    targets=[
+        Target(
+            expr='sum by(state) (' + Metrics.CONNECTORS.raw() + ')',
+            legendFormat='{{state}}',
+        ),
+        Target(
+            expr='sum(' + Metrics.EXPECTED_CONNECTORS.raw() + ') > 0',
+            legendFormat='expected',
+        ),
+    ])
+
+mongodb_lag = TimeSeries(
+    title='Oplog Lag Per Connector',
+    description='Delay between the latest oplog entry and the last one read by each connector',
+    dataSource='${DS_PROMETHEUS}',
+    gradientMode='opacity',
+    lineInterpolation='smooth',
+    fillOpacity=10,
+    spanNulls=False,
+    unit=UNITS.SECONDS,
+    targets=[Target(
+        expr='max by(connector) (' + Metrics.MONGODB_LAG.raw() + ')',
+        legendFormat='{{connector}}',
+    )])
+
 
 dashboard = (
     Dashboard(
@@ -321,7 +369,7 @@ dashboard = (
                 dataSource='${DS_PROMETHEUS}',
                 label='Connector',
                 name='connector',
-                query='label_values(' + Metrics.BUCKETS.raw('job=~"${oplog_populator_job}.*"', 'connector=~".*"') + ', connector)',
+                query='label_values(' + Metrics.PIPELINE_SIZE.raw('job=~"${oplog_populator_job}.*"', 'connector=~".*"') + ', connector)',
                 allValue='.*',
                 includeAll=True,
                 multi=True,
@@ -330,31 +378,41 @@ dashboard = (
         panels=layout.column([
             RowPanel(title="Overview"),
             layout.row([
-                oplog_populator_up_current,
-                kafka_connect_up_current,
-                connector_instances,
-                total_number_buckets,
-                max_pipeline_size,
+                *layout.resize([
+                    oplog_populator_up_current,
+                    kafka_connect_up_current,
+                    connector_instances,
+                    max_pipeline_size,
+                ], width=5),
                 bandwidth,
             ], 3),
+            layout.row([
+                connectors_by_state,
+            ], 7),
             layout.row([
                 config_applied_success,
                 config_applied_failure,
             ], 7),
-            RowPanel(title="Bucket Metrics"),
             layout.row([
-                bucket_distribution,
-                bucket_per_connector,
-            ], 7),
-            layout.row([
-                bucket_additions,
-                bucket_removals,
-            ], 7),
-            RowPanel(title="Lag Metrics"),
-            layout.row([
-                ack_lag,
+                mongodb_lag,
                 reconfig_lag,
             ], 7),
+            RowPanel(title="Bucket Metrics", collapsed=True, panels=layout.column([
+                layout.row([
+                    total_number_buckets,
+                ], 3),
+                layout.row([
+                    bucket_distribution,
+                    bucket_per_connector,
+                ], 7),
+                layout.row([
+                    bucket_additions,
+                    bucket_removals,
+                ], 7),
+                layout.row([
+                    ack_lag,
+                ], 7),
+            ])),
         ]),
     )
     .auto_panel_ids()

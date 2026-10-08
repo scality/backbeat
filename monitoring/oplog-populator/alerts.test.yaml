@@ -77,7 +77,9 @@ tests:
   - name: Number of Kafka Connect Replicas
     interval: 1m
     input_series:
-      - series: s3_oplog_populator_connectors{job="artesca-data-backbeat-oplog-populator-headless",namespace="zenko"}
+      - series: s3_oplog_populator_expected_connectors{job="artesca-data-backbeat-oplog-populator-headless",namespace="zenko"}
+        values: 0x26
+      - series: s3_oplog_populator_connectors{state="running",job="artesca-data-backbeat-oplog-populator-headless",namespace="zenko"}
         values: 1x3 11x20 1x3
     alert_rule_test:
       - alertname: KafkaConnectTooManyConnectors
@@ -90,8 +92,83 @@ tests:
               severity: warning
             exp_annotations:
               zenko_service: backbeat-oplog-populator
-              description: "Kafka connector count is above the soft limit. If the number of buckets is too high, consider using a single replica for your cluster"
+              description: "Kafka connector count is above the number of hashed connectors, or above the soft limit with per-bucket ingestion. With per-bucket ingestion, if the number of buckets is too high, consider using a single replica for your cluster"
               summary: "Kafka connector count is above the soft limit"
       - alertname: KafkaConnectReplicasAbove
         eval_time: 25m
         exp_alerts: []
+
+  - name: Per-bucket Connectors Below The Limit
+    interval: 1m
+    input_series:
+      - series: s3_oplog_populator_expected_connectors{job="artesca-data-backbeat-oplog-populator-headless",namespace="zenko"}
+        values: 0x15
+      - series: s3_oplog_populator_connectors{state="running",job="artesca-data-backbeat-oplog-populator-headless",namespace="zenko"}
+        values: 3x15
+    alert_rule_test:
+      - alertname: KafkaConnectTooManyConnectors
+        eval_time: 10m
+        exp_alerts: []
+
+  - name: Number of Hashed Connectors
+    interval: 1m
+    input_series:
+      - series: s3_oplog_populator_expected_connectors{job="artesca-data-backbeat-oplog-populator-headless",namespace="zenko"}
+        values: 12x40
+      - series: s3_oplog_populator_connectors{state="running",job="artesca-data-backbeat-oplog-populator-headless",namespace="zenko"}
+        values: 11x20 13x20
+      - series: s3_oplog_populator_connectors{state="paused",job="artesca-data-backbeat-oplog-populator-headless",namespace="zenko"}
+        values: 1x40
+      - series: s3_oplog_populator_connectors{state="outdated",job="artesca-data-backbeat-oplog-populator-headless",namespace="zenko"}
+        values: 30x40
+    alert_rule_test:
+      - alertname: KafkaConnectTooManyConnectors
+        eval_time: 15m
+        exp_alerts: []
+      - alertname: KafkaConnectTooManyConnectors
+        eval_time: 35m
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              zenko_service: backbeat-oplog-populator
+              description: "Kafka connector count is above the number of hashed connectors, or above the soft limit with per-bucket ingestion. With per-bucket ingestion, if the number of buckets is too high, consider using a single replica for your cluster"
+              summary: "Kafka connector count is above the soft limit"
+
+  - name: Connector Paused
+    interval: 1m
+    input_series:
+      - series: s3_oplog_populator_connectors{state="paused",job="artesca-data-backbeat-oplog-populator-headless",namespace="zenko"}
+        values: 0x5 1x20
+    alert_rule_test:
+      - alertname: OplogPopulatorConnectorPaused
+        eval_time: 10m
+        exp_alerts: []
+      - alertname: OplogPopulatorConnectorPaused
+        eval_time: 20m
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              zenko_service: backbeat-oplog-populator
+              description: "An oplog populator connector is paused or stopped, so changes to the buckets it covers are not processed: replication, lifecycle and notifications are delayed for these buckets"
+              summary: "Oplog populator connector paused"
+
+  - name: Migration Not Completing
+    interval: 1m
+    input_series:
+      - series: s3_oplog_populator_connectors{state="outdated",job="artesca-data-backbeat-oplog-populator-headless",namespace="zenko"}
+        values: 3x5 0x5 3x40
+    alert_rule_test:
+      - alertname: OplogPopulatorMigrationNotCompleting
+        eval_time: 10m
+        exp_alerts: []
+      - alertname: OplogPopulatorMigrationNotCompleting
+        eval_time: 45m
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              zenko_service: backbeat-oplog-populator
+              description: "The oplog populator has not completed the migration of its connectors for 30 minutes, so changes to some buckets may be delayed"
+              summary: "Oplog populator migration not completing"
