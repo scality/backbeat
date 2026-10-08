@@ -30,6 +30,7 @@ const { authTypeAssumeRole } = require('../../../lib/constants');
 const { metricsExtension, metricsTypeQueued, metricsTypeCompleted } =
     require('../constants');
 const locations = require('../../../conf/locationConfig.json') || {};
+const { isPullReplication } = require('../utils/pullReplication');
 
 const MPU_GCP_MAX_PARTS = 1024;
 
@@ -37,6 +38,22 @@ class CopyLocationTask extends BackbeatTask {
 
     _getReplicationEndpointType() {
         return this.destConfig?.replicationEndpoint?.type;
+    }
+
+    /**
+     * Where the data is copied to, through Cloudserver: a copy to this site writes
+     * to this site, with its endpoint type; a pull from this site writes to the
+     * local location the action targets, with the type of that location.
+     *
+     * @param {ActionQueueEntry} actionEntry - the action entry
+     * @return {{location: string, storageType: string}} the destination
+     */
+    _getDestination(actionEntry) {
+        if (isPullReplication(actionEntry)) {
+            const location = actionEntry.getAttribute('toLocation');
+            return { location, storageType: locations[location]?.type };
+        }
+        return { location: this.site, storageType: this.destType };
     }
 
     constructor(qp) {
@@ -472,8 +489,8 @@ class CopyLocationTask extends BackbeatTask {
             Key: key,
             CanonicalID: objMD.getOwnerId(),
             ContentMD5: objMD.getContentMd5(),
-            StorageType: this.destType,
-            StorageClass: actionEntry.getAttribute('toLocation'),
+            StorageType: this._getDestination(actionEntry).storageType,
+            StorageClass: this._getDestination(actionEntry).location,
             VersionId: version,
             UserMetaData: objMD.getUserMetadata(),
             ContentType: objMD.getContentType() || undefined,
@@ -618,8 +635,8 @@ class CopyLocationTask extends BackbeatTask {
         const command = new MultipleBackendAbortMPUCommand({
             Bucket: bucket,
             Key: key,
-            StorageType: this.destType,
-            StorageClass: actionEntry.getAttribute('toLocation'),
+            StorageType: this._getDestination(actionEntry).storageType,
+            StorageClass: this._getDestination(actionEntry).location,
             UploadId: uploadId,
             RequestUids: log.getSerializedUids(),
         });
@@ -651,8 +668,8 @@ class CopyLocationTask extends BackbeatTask {
         const command = new MultipleBackendCompleteMPUCommand({
             Bucket: bucket,
             Key: key,
-            StorageType: this.destType,
-            StorageClass: actionEntry.getAttribute('toLocation'),
+            StorageType: this._getDestination(actionEntry).storageType,
+            StorageClass: this._getDestination(actionEntry).location,
             VersionId: version,
             UserMetaData: objMD.getUserMetadata(),
             ContentType: objMD.getContentType(),
@@ -734,8 +751,8 @@ class CopyLocationTask extends BackbeatTask {
         const command = new MultipleBackendPutMPUPartCommand({
             Bucket: bucket,
             Key: key,
-            StorageType: this.destType,
-            StorageClass: actionEntry.getAttribute('toLocation'),
+            StorageType: this._getDestination(actionEntry).storageType,
+            StorageClass: this._getDestination(actionEntry).location,
             PartNumber: partNumber,
             UploadId: uploadId,
             Body: incomingMsg,
@@ -790,8 +807,8 @@ class CopyLocationTask extends BackbeatTask {
         const command = new MultipleBackendInitiateMPUCommand({
             Bucket: bucket,
             Key: key,
-            StorageType: this.destType,
-            StorageClass: actionEntry.getAttribute('toLocation'),
+            StorageType: this._getDestination(actionEntry).storageType,
+            StorageClass: this._getDestination(actionEntry).location,
             VersionId: version,
             UserMetaData: objMD.getUserMetadata(),
             ContentType: objMD.getContentType() || undefined,

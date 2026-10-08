@@ -360,12 +360,19 @@ describe('Queue Processor', () => {
                 metrics: { origin: 'lifecycle', fromLocation: 'site-crr' },
                 dispatched: false,
             },
-        ].forEach(({ desc, metrics, dispatched }) => {
+            {
+                // only the processor of the location pulled from takes it
+                desc: 'skips a pull to this site from another site',
+                metrics: { origin: 'pullReplication', fromLocation: 'other-site' },
+                toLocation: 'site-crr',
+                dispatched: false,
+            },
+        ].forEach(({ desc, metrics, dispatched, toLocation = 'us-east-1' }) => {
             it(desc, done => {
                 const kafkaEntry = {
                     value: JSON.stringify({
                         action: 'copyLocation',
-                        toLocation: 'us-east-1',
+                        toLocation,
                         metrics,
                         target: {
                             bucket: 'src-bucket',

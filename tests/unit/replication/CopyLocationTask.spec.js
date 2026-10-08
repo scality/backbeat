@@ -307,6 +307,41 @@ describe('CopyLocationTask', () => {
         });
     });
 
+    describe('_getDestination', () => {
+        const task = new CopyLocationTask({
+            getStateVars: () => ({
+                site: 'aws-site',
+                mProducer: { getProducer: () => {} },
+                repConfig: { queueProcessor: { retry: {} } },
+                destConfig: { replicationEndpoint: { site: 'aws-site', type: 'aws_s3' } },
+            }),
+        });
+
+        it('should write a copy to this site to this site, with its endpoint type', () => {
+            const entry = new ActionQueueEntry({
+                action: 'copyLocation',
+                toLocation: 'aws-site',
+                metrics: { origin: 'lifecycle' },
+            });
+            assert.deepStrictEqual(task._getDestination(entry), {
+                location: 'aws-site',
+                storageType: 'aws_s3',
+            });
+        });
+
+        it('should write a pull to the location it targets, with that location type', () => {
+            const entry = new ActionQueueEntry({
+                action: 'copyLocation',
+                toLocation: 'us-east-1',
+                metrics: { origin: 'pullReplication', fromLocation: 'aws-site' },
+            });
+            assert.deepStrictEqual(task._getDestination(entry), {
+                location: 'us-east-1',
+                storageType: 'file',
+            });
+        });
+    });
+
     describe('_sendGetObject', () => {
         let task;
 
