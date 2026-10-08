@@ -1,4 +1,5 @@
 const { constants: arsenalConstants } = require('@scality/arsenal');
+const { pensieveBucket } = require('../../lib/constants');
 
 const constants = {
     bucketMetastore: '__metastore',
@@ -11,6 +12,12 @@ const constants = {
     wildCardForAllBuckets: '*',
     // MPU shadow buckets and internal collections (__metastore, ...)
     internalCollectionsRegex: `^(${arsenalConstants.mpuBucketPrefix}|__).*`,
+    pensieveBucket,
+    // operation types carrying object metadata, the only ones consumed
+    // downstream (object deletions are updates setting the deleted flag)
+    hashedOperationTypes: ['insert', 'update', 'replace'],
+    // bumped whenever the generated hashed pipeline changes, see connectorNaming
+    hashedPipelineGeneration: 1,
     connectorUpdatedEvent: 'connector-updated',
     bucketRemovedFromConnectorEvent: 'bucket-removed',
     connectorsReconciledEvent: 'connectors-reconciled',
