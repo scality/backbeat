@@ -1,6 +1,6 @@
 {
   "name": "@scality/backbeat",
-  "version": "9.6.0-preview.4",
+  "version": "9.6.0-preview.5",
   "description": "Asynchronous queue and job manager",
   "main": "index.js",
   "scripts": {
