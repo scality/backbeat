@@ -58,7 +58,7 @@ class LifecycleObjectTransitionProcessor extends LifecycleObjectProcessor {
         const authConfig = this.getAuthConfig(this._lcConfig);
         if (authConfig.type === authTypeAssumeRole) {
             this.vaultClientWrapper = new VaultClientWrapper(
-                `lifecycle:${this.getProcessorType()}`,
+                `lifecycle-${this.getProcessorType()}`,
                 vaultAdminConfig,
                 authConfig,
                 this._log,

@@ -155,6 +155,11 @@ describe('LifecycleObjectTransitionProcessor', () => {
             sinon.restore();
         });
 
+        it('should use a client id valid as an assumed role session name', () => {
+            // STS role session names allow letters, digits and +=,.@- only
+            assert.match(processor.vaultClientWrapper._clientId, /^[\w+=,.@-]+$/);
+        });
+
         it('should skip the lookup when auth type is not assume role', done => {
             assert.strictEqual(objectProcessor.vaultClientWrapper, undefined);
             objectProcessor.getAccountId(ownerId, log, (err, id) => {
