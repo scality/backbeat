@@ -8,29 +8,22 @@ const constants = require('../constants');
 const KafkaConnectWrapper = require('../../../lib/wrappers/KafkaConnectWrapper');
 const { scheduleExclusiveJob } = require('../../../lib/util/scheduleExclusiveJob');
 const Connector = require('./Connector');
-const OplogPopulatorMetrics = require('../OplogPopulatorMetrics');
+const {
+    connectorsManagerParamsJoi,
+    buildConnectorConfig,
+    getFailedTasks,
+    isConnectorFailed,
+} = require('./connectorConfig');
 const { EventEmitter } = require('stream');
 const AllocationStrategy = require('../allocationStrategy/AllocationStrategy');
 const PipelineFactory = require('../pipeline/PipelineFactory');
 
-const paramsJoi = joi.object({
-    nbConnectors: joi.number().required(),
-    database: joi.string().required(),
-    mongoUrl: joi.string().required(),
-    oplogTopic: joi.string().required(),
-    cronRule: joi.string().required(),
-    prefix: joi.string(),
-    heartbeatIntervalMs: joi.number().required(),
-    kafkaConnectHost: joi.string().required(),
-    kafkaConnectPort: joi.number().required(),
-    metricsHandler: joi.object()
-        .instance(OplogPopulatorMetrics).required(),
+const paramsJoi = connectorsManagerParamsJoi.keys({
     allocationStrategy: joi.object()
         .instance(AllocationStrategy).required(),
     pipelineFactory: joi.object()
         .instance(PipelineFactory).required(),
-    logger: joi.object().required(),
-}).required();
+});
 
 // Promisify async functions
 const eachLimit = util.promisify(async.eachLimit);
@@ -89,21 +82,13 @@ class ConnectorsManager extends EventEmitter {
      * @returns {Object} connector configuration
      */
     _getDefaultConnectorConfiguration(connectorName) {
-        const connectorConfig = {
-            'name': connectorName,
-            'database': this._database,
-            'connection.uri': this._mongoUrl,
-            'topic.namespace.map': JSON.stringify({
-                '*': this._oplogTopic,
-            }),
-            // hearbeat prevents having an outdated resume token in the connectors
-            // by constantly updating the offset to the last object in the oplog
-            'heartbeat.interval.ms': this._heartbeatIntervalMs,
-        };
-        return {
-            ...constants.defaultConnectorConfig,
-            ...connectorConfig
-        };
+        return buildConnectorConfig({
+            name: connectorName,
+            database: this._database,
+            mongoUrl: this._mongoUrl,
+            oplogTopic: this._oplogTopic,
+            heartbeatIntervalMs: this._heartbeatIntervalMs,
+        });
     }
 
     /**
@@ -343,20 +328,15 @@ class ConnectorsManager extends EventEmitter {
 
         try {
             const connectorStatus = await this._kafkaConnect.getConnectorStatus(connector.name);
-            const isConnectorFailed = connectorStatus?.connector?.state === 'FAILED';
-            const areTasksFailed = connectorStatus?.tasks?.some(task => {
-                if (task.state === 'FAILED') {
-                    this._logger.error('Connector task failed', {
-                        method: 'ConnectorsManager._validateConnectorState',
-                        connector: connector.name,
-                        taskId: task.id,
-                        error: task.trace,
-                    });
-                    return true;
-                }
-                return false;
+            getFailedTasks(connectorStatus).forEach(task => {
+                this._logger.error('Connector task failed', {
+                    method: 'ConnectorsManager._validateConnectorState',
+                    connector: connector.name,
+                    taskId: task.id,
+                    error: task.trace,
+                });
             });
-            if (isConnectorFailed || areTasksFailed) {
+            if (isConnectorFailed(connectorStatus)) {
                 await connector.restart();
                 this._metricsHandler.onConnectorRestart(connector);
                 this._logger.info('Successfully restarted a connector', {

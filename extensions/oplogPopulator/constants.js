@@ -1,3 +1,5 @@
+const { constants: arsenalConstants } = require('@scality/arsenal');
+
 const constants = {
     bucketMetastore: '__metastore',
     defaultConnectorName: 'source-connector',
@@ -7,6 +9,8 @@ const constants = {
     maxBucketsPerConnector: 260000,
     mongodbVersionWithImmutablePipelines: '6.0.0',
     wildCardForAllBuckets: '*',
+    // MPU shadow buckets and internal collections (__metastore, ...)
+    internalCollectionsRegex: `^(${arsenalConstants.mpuBucketPrefix}|__).*`,
     connectorUpdatedEvent: 'connector-updated',
     bucketRemovedFromConnectorEvent: 'bucket-removed',
     connectorsReconciledEvent: 'connectors-reconciled',
