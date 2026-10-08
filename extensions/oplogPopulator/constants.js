@@ -18,6 +18,12 @@ const constants = {
     hashedOperationTypes: ['insert', 'update', 'replace'],
     // bumped whenever the generated hashed pipeline changes, see connectorNaming
     hashedPipelineGeneration: 1,
+    // kafka connect worker default, not exposed through its REST API: a
+    // paused connector's last offsets are committed within this delay
+    kafkaConnectOffsetFlushIntervalMs: 60000,
+    // how long to wait for paused connector tasks to stop before going on
+    pauseTimeoutMs: 60000,
+    pausePollIntervalMs: 1000,
     connectorUpdatedEvent: 'connector-updated',
     bucketRemovedFromConnectorEvent: 'bucket-removed',
     connectorsReconciledEvent: 'connectors-reconciled',
