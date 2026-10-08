@@ -11,6 +11,9 @@ const constants = {
     wildCardForAllBuckets: '*',
     // MPU shadow buckets and internal collections (__metastore, ...)
     internalCollectionsRegex: `^(${arsenalConstants.mpuBucketPrefix}|__).*`,
+    // operation types carrying object metadata, the only ones consumed
+    // downstream (object deletions are updates setting the deleted flag)
+    hashedOperationTypes: ['insert', 'update', 'replace'],
     connectorUpdatedEvent: 'connector-updated',
     bucketRemovedFromConnectorEvent: 'bucket-removed',
     connectorsReconciledEvent: 'connectors-reconciled',
