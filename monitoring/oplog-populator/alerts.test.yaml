@@ -95,3 +95,65 @@ tests:
       - alertname: KafkaConnectReplicasAbove
         eval_time: 25m
         exp_alerts: []
+
+  - name: Newer Generation Connectors
+    interval: 1m
+    input_series:
+      - series: s3_oplog_populator_newer_generation_connectors{job="artesca-data-backbeat-oplog-populator-headless",namespace="zenko"}
+        values: 0x5 1x20
+    alert_rule_test:
+      - alertname: OplogPopulatorNewerGenerationConnectors
+        eval_time: 10m
+        exp_alerts: []
+      - alertname: OplogPopulatorNewerGenerationConnectors
+        eval_time: 20m
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              zenko_service: backbeat-oplog-populator
+              description: "Kafka connect holds connectors created by a newer oplog populator, which this one does not manage: failed connectors are not restarted"
+              summary: "Oplog populator found connectors of a newer version"
+
+  - name: Connector Paused Or Edited
+    interval: 1m
+    input_series:
+      - series: s3_oplog_populator_hashed_connectors{state="paused",job="artesca-data-backbeat-oplog-populator-headless",namespace="zenko"}
+        values: 0x5 1x20
+      - series: s3_oplog_populator_hashed_connectors{state="edited",job="artesca-data-backbeat-oplog-populator-headless",namespace="zenko"}
+        values: 0x25
+    alert_rule_test:
+      - alertname: OplogPopulatorConnectorPaused
+        eval_time: 10m
+        exp_alerts: []
+      - alertname: OplogPopulatorConnectorPaused
+        eval_time: 20m
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              zenko_service: backbeat-oplog-populator
+              description: "A hashed oplog populator connector is paused, so the buckets it covers are not ingested. Resume it through the kafka connect API"
+              summary: "Oplog populator connector paused"
+      - alertname: OplogPopulatorConnectorEdited
+        eval_time: 20m
+        exp_alerts: []
+
+  - name: Migration Not Completing
+    interval: 1m
+    input_series:
+      - series: s3_oplog_populator_outdated_connectors{job="artesca-data-backbeat-oplog-populator-headless",namespace="zenko"}
+        values: 3x5 0x5 3x40
+    alert_rule_test:
+      - alertname: OplogPopulatorMigrationNotCompleting
+        eval_time: 10m
+        exp_alerts: []
+      - alertname: OplogPopulatorMigrationNotCompleting
+        eval_time: 45m
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              zenko_service: backbeat-oplog-populator
+              description: "Connectors are still waiting to be migrated to hashed connectors. Kafka connect may not support the offsets API (< 3.5), or the migration keeps failing"
+              summary: "Oplog populator migration not completing"
