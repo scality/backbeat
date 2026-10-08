@@ -2,6 +2,8 @@ const { ZenkoMetrics } = require('@scality/arsenal').metrics;
 
 const { getStringSizeInBytes } = require('../../lib/util/buffer');
 
+const connectorStates = new Set(['running', 'paused', 'failed', 'outdated']);
+
 class OplogPopulatorMetrics {
     /**
      * @param {Logger} logger logger instance
@@ -53,7 +55,8 @@ class OplogPopulatorMetrics {
         });
         this.connectors = ZenkoMetrics.createGauge({
             name: 's3_oplog_populator_connectors',
-            help: 'Total number of configured connectors',
+            help: 'Total number of configured connectors, by state',
+            labelNames: ['state'],
         });
         this.reconfigurationLag = ZenkoMetrics.createHistogram({
             name: 's3_oplog_populator_reconfiguration_lag_seconds',
@@ -70,6 +73,10 @@ class OplogPopulatorMetrics {
             name: 's3_oplog_populator_connector_restarts',
             help: 'Total number of connector restarts',
             labelNames: ['connector'],
+        });
+        this.expectedConnectors = ZenkoMetrics.createGauge({
+            name: 's3_oplog_populator_expected_connectors',
+            help: 'Number of hashed connectors the oplog populator keeps',
         });
     }
 
@@ -133,7 +140,7 @@ class OplogPopulatorMetrics {
      */
     onConnectorsInstantiated(isOld, count = 1) {
         try {
-            this.connectors.inc(count);
+            this.connectors.inc({ state: 'running' }, count);
         } catch (error) {
             this._logger.error('An error occured while pushing metrics', {
                 method: 'OplogPopulatorMetrics.onConnectorsInstantiated',
@@ -149,7 +156,7 @@ class OplogPopulatorMetrics {
      */
     onConnectorDestroyed() {
         try {
-            this.connectors.dec(1);
+            this.connectors.dec({ state: 'running' }, 1);
         } catch (error) {
             this._logger.error('An error occurred while pushing metrics', {
                 method: 'OplogPopulatorMetrics.onConnectorDestroyed',
@@ -159,13 +166,14 @@ class OplogPopulatorMetrics {
     }
 
     /**
-     * updates s3_oplog_populator_reconfiguration_lag_seconds metric
-     * @param {Connector} connector connector instance
+     * updates the metrics of a connector reconfiguration
+     * @param {Connector} connector connector instance, or `{ name }`
      * @param {Boolean} success true if reconfiguration was successful
      * @param {number} delta time it takes to reconfigure a connector
+     * @param {number} [requestBytes] size of the request sent
      * @returns {undefined}
      */
-    onConnectorReconfiguration(connector, success, delta = null) {
+    onConnectorReconfiguration(connector, success, delta = null, requestBytes = null) {
         try {
             this.connectorConfigurationApplied.inc({
                 connector: connector.name,
@@ -175,9 +183,16 @@ class OplogPopulatorMetrics {
                 this.reconfigurationLag.observe({
                     connector: connector.name,
                 }, delta);
-                this.buckets.set({
+                if (connector.bucketCount !== undefined) {
+                    this.buckets.set({
+                        connector: connector.name,
+                    }, connector.bucketCount);
+                }
+            }
+            if (requestBytes !== null) {
+                this.requestSize.inc({
                     connector: connector.name,
-                }, connector.bucketCount);
+                }, requestBytes);
             }
         } catch (error) {
             this._logger.error('An error occured while pushing metrics', {
@@ -220,6 +235,51 @@ class OplogPopulatorMetrics {
         } catch (error) {
             this._logger.error('An error occured while pushing metric', {
                 method: 'OplogPopulatorMetrics.onConnectorsReconciled',
+                error: error.message,
+            });
+        }
+    }
+
+    /**
+     * updates s3_oplog_populator_connectors metric of a state
+     * @param {string} state one of running, paused, failed, outdated
+     * @param {number} count number of connectors in that state
+     * @returns {undefined}
+     */
+    onConnectorsCounted(state, count) {
+        if (!connectorStates.has(state)) {
+            this._logger.error('Invalid connector state', {
+                method: 'OplogPopulatorMetrics.onConnectorsCounted',
+                state,
+            });
+            return;
+        }
+        try {
+            this.connectors.set({ state }, count);
+        } catch (error) {
+            this._logger.error('An error occured while pushing metrics', {
+                method: 'OplogPopulatorMetrics.onConnectorsCounted',
+                error: error.message,
+            });
+        }
+    }
+
+    /**
+     * updates s3_oplog_populator_expected_connectors and
+     * s3_oplog_populator_connector_pipeline_bytes metrics of the hashed
+     * connectors
+     * @param {Object[]} specs hashed connector specs, `{ name, config }`
+     * @returns {undefined}
+     */
+    onHashedConnectorsStarted(specs) {
+        try {
+            this.expectedConnectors.set(specs.length);
+            specs.forEach(({ name, config }) => this.mongoPipelineSize.set({
+                connector: name,
+            }, getStringSizeInBytes(JSON.stringify(config.pipeline))));
+        } catch (error) {
+            this._logger.error('An error occured while pushing metrics', {
+                method: 'OplogPopulatorMetrics.onHashedConnectorsStarted',
                 error: error.message,
             });
         }

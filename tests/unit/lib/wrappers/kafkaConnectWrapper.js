@@ -111,19 +111,19 @@ describe('KafkaConnectWrapper', () => {
             const makeRequestStub = sinon.stub(wrapper, 'makeRequest').resolves({
                 example: 'config'
             });
-            await wrapper.updateConnectorConfig('mongo-source-1', {})
+            await wrapper.updateConnectorConfig('mongo-source-1', { key: 'value' })
             .then(newConf => {
                 assert.deepEqual(newConf, {
                     example: 'config'
                 });
                 assert(getConnectorStub.calledOnce);
-                assert(makeRequestStub.calledOnceWith({
+                assert(makeRequestStub.calledOnceWithExactly({
                     method: 'PUT',
                     path: '/connectors/mongo-source-1/config',
                     headers: {
                         'Content-Type': 'application/json',
                     }
-                }));
+                }, '{"key":"value"}'));
             })
             .catch(err => assert.ifError(err));
         });
@@ -237,13 +237,13 @@ describe('KafkaConnectWrapper', () => {
                 assert.deepEqual(connectorData, {
                     example: 'data'
                 });
-                assert(makeRequestStub.calledOnceWith({
+                assert(makeRequestStub.calledOnceWithExactly({
                     method: 'POST',
                     path: '/connectors',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                }, config));
+                }, JSON.stringify(config)));
             })
             .catch(err => assert.ifError(err));
         });
@@ -252,6 +252,80 @@ describe('KafkaConnectWrapper', () => {
             sinon.stub(wrapper, 'makeRequest').rejects(errors.InternalError);
             await wrapper.createConnector({})
             .catch(err => assert.deepEqual(err, errors.InternalError));
+        });
+    });
+
+    describe('reconfiguration metrics', () => {
+        let metricsHandler;
+        let recordingWrapper;
+        const config = { name: 'mongo-source', config: { key: 'value' } };
+
+        function assertRecorded(success, body) {
+            assert(metricsHandler.onConnectorReconfiguration.calledOnceWithExactly(
+                { name: 'mongo-source' }, success, sinon.match.number, Buffer.byteLength(JSON.stringify(body))));
+        }
+
+        beforeEach(() => {
+            metricsHandler = { onConnectorReconfiguration: sinon.stub() };
+            recordingWrapper = new KafkaConnectWrapper({
+                kafkaConnectHost: 'localhost',
+                kafkaConnectPort: 8083,
+                logger,
+                metricsHandler,
+            });
+        });
+
+        it('should record a connector creation', async () => {
+            sinon.stub(recordingWrapper, 'makeRequest').resolves({});
+            await recordingWrapper.createConnector(config);
+            assertRecorded(true, config);
+        });
+
+        it('should record a failed connector creation', async () => {
+            sinon.stub(recordingWrapper, 'makeRequest').rejects(httpError(409));
+            await assert.rejects(recordingWrapper.createConnector(config));
+            assertRecorded(false, config);
+        });
+
+        it('should record a configuration update', async () => {
+            sinon.stub(recordingWrapper, 'getConnectors').resolves(['mongo-source']);
+            sinon.stub(recordingWrapper, 'makeRequest').resolves({});
+            await recordingWrapper.updateConnectorConfig('mongo-source', config.config);
+            assertRecorded(true, config.config);
+        });
+
+        [
+            ['the connector is not found', w => sinon.stub(w, 'getConnectors').resolves([])],
+            ['the connectors cannot be listed', w => sinon.stub(w, 'getConnectors').rejects(httpError(500))],
+            ['the configuration is refused', w => {
+                sinon.stub(w, 'getConnectors').resolves(['mongo-source']);
+                sinon.stub(w, 'makeRequest').rejects(httpError(400));
+            }],
+        ].forEach(([desc, setup]) => {
+            it(`should record a failed configuration update when ${desc}`, async () => {
+                setup(recordingWrapper);
+                await assert.rejects(recordingWrapper.updateConnectorConfig('mongo-source', config.config));
+                assertRecorded(false, config.config);
+            });
+        });
+
+        it('should count request bytes, not characters', async () => {
+            sinon.stub(recordingWrapper, 'makeRequest').resolves({});
+            const unicode = { name: 'mongo-source', config: { key: 'é' } };
+            await recordingWrapper.createConnector(unicode);
+            assert(metricsHandler.onConnectorReconfiguration.calledOnceWithExactly(
+                { name: 'mongo-source' }, true, sinon.match.number, JSON.stringify(unicode).length + 1));
+        });
+
+        it('should not record connector deletions', async () => {
+            sinon.stub(recordingWrapper, 'makeRequest').resolves({});
+            await recordingWrapper.deleteConnector('mongo-source');
+            assert(metricsHandler.onConnectorReconfiguration.notCalled);
+        });
+
+        it('should create connectors without a metrics handler', async () => {
+            sinon.stub(wrapper, 'makeRequest').resolves({});
+            await wrapper.createConnector(config);
         });
     });
 
@@ -392,6 +466,7 @@ describe('KafkaConnectWrapper', () => {
                     method: 'GET',
                     path: '/connectors',
                 }));
+                assert(writetStub.notCalled);
                 assert(endStub.calledOnce);
             })
             .catch(err => assert.ifError(err));
@@ -412,10 +487,7 @@ describe('KafkaConnectWrapper', () => {
             const promiseResponse = wrapper.makeRequest({
                 method: 'POST',
                 path: '/connectors',
-            }, {
-                name: 'connector-name',
-                config: {},
-            });
+            }, '{"name":"connector-name","config":{}}');
             const bodyBuffer = Buffer.from(JSON.stringify([]));
             response.emit('data', bodyBuffer);
             response.emit('end');
@@ -428,10 +500,7 @@ describe('KafkaConnectWrapper', () => {
                     method: 'POST',
                     path: '/connectors',
                 }));
-                assert(writetStub.calledOnceWith(JSON.stringify({
-                    name: 'connector-name',
-                    config: {},
-                })));
+                assert(writetStub.calledOnceWithExactly('{"name":"connector-name","config":{}}'));
                 assert(endStub.calledOnce);
             })
             .catch(err => assert.ifError(err));
