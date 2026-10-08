@@ -2,11 +2,11 @@ const joi = require('joi');
 const async = require('async');
 const { v4: uuid } = require('uuid');
 const util = require('util');
-const schedule = require('node-schedule');
 const { errors } = require('@scality/arsenal');
 
 const constants = require('../constants');
 const KafkaConnectWrapper = require('../../../lib/wrappers/KafkaConnectWrapper');
+const { scheduleExclusiveJob } = require('../../../lib/util/scheduleExclusiveJob');
 const Connector = require('./Connector');
 const OplogPopulatorMetrics = require('../OplogPopulatorMetrics');
 const { EventEmitter } = require('stream');
@@ -379,14 +379,7 @@ class ConnectorsManager extends EventEmitter {
      * @returns {undefined}
      */
     scheduleConnectorUpdates() {
-        let updateInProgress = false;
-        schedule.scheduleJob(this._cronRule, async () => {
-            if (!updateInProgress) {
-                updateInProgress = true;
-                await this._updateConnectors();
-                updateInProgress = false;
-            }
-        });
+        scheduleExclusiveJob(this._cronRule, () => this._updateConnectors(), this._logger);
     }
 
     /**
