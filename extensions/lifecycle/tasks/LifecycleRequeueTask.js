@@ -25,7 +25,7 @@ class LifecycleRequeueTask extends BackbeatTask {
         this.processName = processName;
     }
 
-    requeueObjectVersion(accountId, bucketName, objectKey, objectVersion, etag, try_, bucketLogger, cb) {
+    requeueObjectVersion(accountId, bucketName, objectKey, objectVersion, etag, try_, location, bucketLogger, cb) {
         const client = this.getBackbeatMetadataProxy(accountId);
         if (!client) {
             return cb(errors.InternalError.customizeDescription(
@@ -62,7 +62,8 @@ class LifecycleRequeueTask extends BackbeatTask {
                 return cb(error);
             }
 
-            if (!this.updateObjectMD(md, try_, log, etag)) {
+            const target = { accountId, bucket: bucketName, key: objectKey, version: objectVersion, location };
+            if (!this.updateObjectMD(md, try_, log, etag, target)) {
                 return cb(null, 0);
             }
 
@@ -88,7 +89,7 @@ class LifecycleRequeueTask extends BackbeatTask {
      */
     processActionEntry(entry, done) {
         const log = this.logger.newRequestLogger(entry.actionId);
-        const { byAccount } = entry.getAttribute('target') || {};
+        const { byAccount, location } = entry.getAttribute('target') || {};
 
         async.reduce(
             Object.keys(byAccount),
@@ -100,6 +101,7 @@ class LifecycleRequeueTask extends BackbeatTask {
                     accountId,
                     buckets,
                     bucketNames,
+                    location,
                     log,
                     (err, res) => {
                         if (err) {
@@ -123,7 +125,7 @@ class LifecycleRequeueTask extends BackbeatTask {
         );
     }
 
-    handleBatch(accountId, buckets, bucketNames, log, cb) {
+    handleBatch(accountId, buckets, bucketNames, location, log, cb) {
         async.map(
             bucketNames,
             (bucketName, next) =>
@@ -138,6 +140,7 @@ class LifecycleRequeueTask extends BackbeatTask {
                             objectVersion,
                             eTag,
                             rest.try,
+                            location,
                             log,
                             (err, res) => {
                                 if (!err) {

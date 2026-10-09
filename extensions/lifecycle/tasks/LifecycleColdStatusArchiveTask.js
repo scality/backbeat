@@ -1,9 +1,9 @@
 const async = require('async');
 
 const ObjectMDArchive = require('@scality/arsenal').models.ObjectMDArchive;
-const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const LifecycleUpdateTransitionTask = require('./LifecycleUpdateTransitionTask');
 const { LifecycleMetrics } = require('../LifecycleMetrics');
+const { garbageCollectArchivedSource } = require('../util/garbageCollectArchivedSource');
 const { TRANSITION_ATTEMPT_MD } = require('../../../lib/util/transitionAttempt');
 
 class SkipMdUpdateError extends Error {}
@@ -21,27 +21,8 @@ class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
     }
 
     _garbageCollectArchivedSource(entry, oldLocation, newLocation, log) {
-        const { bucket, key, version, accountId, owner } = this.getTargetAttribute(entry);
-        const gcEntry = ActionQueueEntry.create('deleteArchivedSourceData')
-              .addContext({
-                  origin: 'lifecycle',
-                  ruleType: 'archive',
-                  reqId: log.getSerializedUids(),
-                  bucketName: bucket,
-                  objectKey: key,
-                  versionId: version,
-              })
-              .setAttribute('serviceName', 'lifecycle-transition')
-              .setAttribute('target.oldLocation', oldLocation)
-              .setAttribute('target.newLocation', newLocation)
-              .setAttribute('target.bucket', bucket)
-              .setAttribute('target.key', key)
-              .setAttribute('target.version', version)
-              .setAttribute('target.accountId', accountId)
-              .setAttribute('target.owner', owner);
-        this.gcProducer.publishActionEntry(gcEntry, err => {
-            LifecycleMetrics.onKafkaPublish(log, 'GCTopic', 'archive', err, 1);
-        });
+        garbageCollectArchivedSource(this.gcProducer, this.getTargetAttribute(entry),
+            oldLocation, newLocation, log);
     }
 
     /**
