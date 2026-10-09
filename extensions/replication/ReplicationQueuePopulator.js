@@ -81,6 +81,12 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
             });
             return;
         }
+        // with the whole oplog ingested, most entries are of buckets without
+        // replication: skip them before building an ObjectQueueEntry
+        const isPullReplicated = locationsConfig[value.dataStoreName]?.isCRR && this.transitionTasksTopic;
+        if (value.replicationInfo?.status !== 'PENDING' && !isPullReplicated) {
+            return;
+        }
         const queueEntry = new ObjectQueueEntry(entry.bucket,
                                                 entry.key, value);
         const sanityCheckRes = queueEntry.checkSanity();
