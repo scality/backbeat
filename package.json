@@ -83,7 +83,9 @@
   },
   "resolutions": {
     "node-rdkafka-prometheus/prom-client": "^15.1.3",
-    "zookeeper-mock/node-zookeeper-client": "^1.1.3"
+    "zookeeper-mock/node-zookeeper-client": "^1.1.3",
+    "**/oas-tools/jsonwebtoken": "^9.0.2",
+    "**/request/form-data": "^2.5.6"
   },
   "devDependencies": {
     "@opentelemetry/context-async-hooks": "^2.11.0",
