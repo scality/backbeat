@@ -68,6 +68,19 @@ describe('NotificationQueuePopulator ::', () => {
     });
 
     describe('_processObjectEntry ::', () => {
+        it('should only count events of buckets with a notification configuration', async () => {
+            const notifEvent = sinon.stub();
+            notificationQueuePopulator._metricsStore = { notifEvent };
+            sinon.stub(notificationQueuePopulator, 'publish');
+            const getConfig = sinon.stub(bnConfigManager, 'getConfig').returns(undefined);
+            const value = { originOp: 's3:ObjectCreated:Put', dataStoreName: 'metastore' };
+            await notificationQueuePopulator._processObjectEntry('example-bucket', 'example-key', value);
+            assert(notifEvent.notCalled);
+            getConfig.returns(config);
+            await notificationQueuePopulator._processObjectEntry('example-bucket', 'example-key', value);
+            assert(notifEvent.calledOnce);
+        });
+
         it('should publish object entry in notification topic of destination1', async () => {
             sinon.stub(bnConfigManager, 'getConfig').returns(config);
             const publishStub = sinon.stub(notificationQueuePopulator, 'publish');
@@ -628,11 +641,13 @@ describe('NotificationQueuePopulator ::', () => {
     });
 
     describe('_processObjectEntryCb ::', () => {
-        it('should properly throw an error if entry value parse fails', done => {
+        it('should properly throw an error if entry processing fails', done => {
+            sinon.stub(bnConfigManager, 'getConfig').returns(config);
             notificationQueuePopulator._metricsStore = {
                 notifEvent: sinon.stub().throws(new Error('Error processing entry')),
             };
-            notificationQueuePopulator._processObjectEntryCb('example-bucket', 'example-key', {}, 'put', {}, err => {
+            const value = { originOp: 's3:ObjectCreated:Put' };
+            notificationQueuePopulator._processObjectEntryCb('example-bucket', 'example-key', value, 'put', {}, err => {
                 assert(err);
                 assert.strictEqual(err.message, 'Error processing entry');
                 return done();
