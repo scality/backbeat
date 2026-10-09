@@ -343,6 +343,50 @@ describe('Queue Processor', () => {
                 done();
             });
         });
+
+        [
+            {
+                desc: 'dispatches a pull from this site to a local location',
+                metrics: { origin: 'pullReplication', fromLocation: 'site-crr' },
+                dispatched: true,
+            },
+            {
+                desc: 'skips a pull from another site',
+                metrics: { origin: 'pullReplication', fromLocation: 'other-site' },
+                dispatched: false,
+            },
+            {
+                desc: 'skips a copy from this site that is not a pull',
+                metrics: { origin: 'lifecycle', fromLocation: 'site-crr' },
+                dispatched: false,
+            },
+            {
+                // only the processor of the location pulled from takes it
+                desc: 'skips a pull to this site from another site',
+                metrics: { origin: 'pullReplication', fromLocation: 'other-site' },
+                toLocation: 'site-crr',
+                dispatched: false,
+            },
+        ].forEach(({ desc, metrics, dispatched, toLocation = 'us-east-1' }) => {
+            it(desc, done => {
+                const kafkaEntry = {
+                    value: JSON.stringify({
+                        action: 'copyLocation',
+                        toLocation,
+                        metrics,
+                        target: {
+                            bucket: 'src-bucket',
+                            key: 'obj',
+                            eTag: '"d41d8cd98f00b204e9800998ecf8427e"',
+                        },
+                    }),
+                };
+                qp.processDataMoverEntry(kafkaEntry, () => {
+                    assert.strictEqual(qp.dataMoverTaskScheduler.push.called, dispatched);
+                    done();
+                });
+            });
+        });
     });
 
     describe('getStateVars', () => {

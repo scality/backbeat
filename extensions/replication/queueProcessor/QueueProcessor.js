@@ -23,6 +23,7 @@ const { getTaskSchedulerQueueKey,
 const ReplicateObject = require('../tasks/ReplicateObject');
 const MultipleBackendTask = require('../tasks/MultipleBackendTask');
 const CopyLocationTask = require('../tasks/CopyLocationTask');
+const { isPullReplication } = require('../utils/pullReplication');
 const EchoBucket = require('../tasks/EchoBucket');
 
 const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
@@ -1017,7 +1018,13 @@ class QueueProcessor extends EventEmitter {
         }
         let task;
         if (actionEntry.getActionType() === 'copyLocation') {
-            if (actionEntry.getAttribute('toLocation') === this.site) {
+            // a pull is run by the processor of the remote location the data is
+            // pulled from, any other copy by the processor of its destination:
+            // a single processor takes the action
+            const site = isPullReplication(actionEntry) ?
+                actionEntry.getAttribute('metrics.fromLocation') :
+                actionEntry.getAttribute('toLocation');
+            if (site === this.site) {
                 task = new CopyLocationTask(this);
             }
         } else {
