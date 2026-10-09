@@ -243,6 +243,10 @@ class GarbageCollectorTask extends BackbeatTask {
             }),
             (objMD, next) => {
                 const locations = objMD.getLocation();
+                // nothing to delete, or the hot data is the restored copy
+                if (!locations?.length || objMD.getArchive()?.restoreCompletedAt) {
+                    return next(null, objMD);
+                }
 
                 const params = {
                     Locations: locations.map(location => ({
@@ -260,7 +264,7 @@ class GarbageCollectorTask extends BackbeatTask {
                     }),
                 };
 
-                this._batchDeleteData(params, entry, log, err => {
+                return this._batchDeleteData(params, entry, log, err => {
                     GarbageCollectorMetrics.onS3Request(log, 'batchdelete', 'archive', err);
                     entry.setEnd(err);
                     log.info('action execution ended', entry.getLogInfo());
@@ -294,6 +298,18 @@ class GarbageCollectorTask extends BackbeatTask {
                 });
             },
             (objMD, next) => {
+                // A previous entry (e.g. a requeue racing with the regular one) may have gone
+                // through already: rewriting the metadata would re-trigger the deferred restore.
+                if (objMD.getDataStoreName() === newLocation && !objMD.getTransitionInProgress()) {
+                    log.info('transition already completed, skipping metadata update', {
+                        method: 'GarbageCollectorTask._deleteArchivedSourceDataOnce',
+                        bucket,
+                        key,
+                        version,
+                    });
+                    return next();
+                }
+
                 log.debug('successfully deleted location data', {
                     bucket,
                     key,
@@ -309,7 +325,7 @@ class GarbageCollectorTask extends BackbeatTask {
                     .setTransitionInProgress(false)
                     .setOriginOp(isDirectToCold ? 's3:LifecycleTransition:Direct' : 's3:LifecycleTransition')
                     .setUserMetadata({ [TRANSITION_ATTEMPT_MD]: undefined });
-                this._putMetadata(entry, objMD, log, err => {
+                return this._putMetadata(entry, objMD, log, err => {
                     GarbageCollectorMetrics.onS3Request(log, 'putMetadata', 'archive', err);
                     if (!err) {
                         log.end().info('completed expiration of archived data',
