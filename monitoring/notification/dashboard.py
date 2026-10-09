@@ -271,7 +271,7 @@ event_types_processed_rate = TimeSeries(
 
 processed_events_in_time = TimeSeries(
     title='Total Processed Oplog Events',
-    description='Number of processed oplog events by the notification producer',
+    description='Number of oplog events of buckets with a notification configuration',
     dataSource='${DS_PROMETHEUS}',
     gradientMode='opacity',
     lineInterpolation='smooth',

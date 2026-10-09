@@ -1008,7 +1008,7 @@
     },
     {
       "datasource": "${DS_PROMETHEUS}",
-      "description": "Number of processed oplog events by the notification producer",
+      "description": "Number of oplog events of buckets with a notification configuration",
       "editable": true,
       "error": false,
       "fieldConfig": {

@@ -219,7 +219,6 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
      */
     async _processObjectEntry(bucket, key, value, type, overheadFields) {
         try {
-            this._metricsStore.notifEvent();
             if (!this._shouldProcessEntry(key, value)) {
                 return undefined;
             }
@@ -238,6 +237,7 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
             const dateTime = this._getEventDateTime(value, overheadFields);
             const config = await this.bnConfigManager.getConfig(bucket);
             if (config && Object.keys(config).length > 0) {
+                this._metricsStore.notifEvent();
                 const ent = {
                     bucket,
                     key: baseKey,
