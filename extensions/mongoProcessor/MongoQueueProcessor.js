@@ -77,7 +77,7 @@ class MongoQueueProcessor {
         this._policy =
             new metadataPolicies[mongoProcessorConfig.mode ?? defaultMode]();
         this._mongoClient = new MongoClient(this.mongoClientConfig);
-        this._bucketMemState = new BucketMemState(Config);
+        this._bucketMemState = new BucketMemState();
 
         // in-mem batch of metrics, we only track total entry count by location
         // this._accruedMetrics = { zenko-location: 10 }
@@ -141,9 +141,6 @@ class MongoQueueProcessor {
             }
 
             this._bootstrapList = Config.getBootstrapList();
-            Config.on('bootstrap-list-update', () => {
-                this._bootstrapList = Config.getBootstrapList();
-            });
 
             let consumerReady = false;
             this._consumer = new BackbeatConsumer({

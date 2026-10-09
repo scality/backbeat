@@ -56,14 +56,10 @@ const replicationProcessedElapsedSeconds = ZenkoMetrics.createHistogram({
                  'contentLengthRange'],
 });
 
-let bootstrapList = config.getBootstrapList();
-config.on('bootstrap-list-update', () => {
-    bootstrapList = config.getBootstrapList();
-});
+const bootstrapList = config.getBootstrapList();
 
 /**
- * Get the type of this location (see mapping in
- * conf/Config.js:locationTypeMatch)
+ * Get the type of this location
  *
  * @param {string} location - location name
  * @return {string} location type if set in config, or 'local'

@@ -95,10 +95,6 @@ function probeServerSetup(config, done) {
 function updateBootstrapList() {
     const { replication } = config.extensions;
     replication.destination.bootstrapList = config.getBootstrapList();
-
-    config.on('bootstrap-list-update', () => {
-        replication.destination.bootstrapList = config.getBootstrapList();
-    });
 }
 
 function loadManagementDatabase(cb) {

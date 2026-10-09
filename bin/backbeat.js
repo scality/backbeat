@@ -29,12 +29,7 @@ function initAndStart() {
         }
         log.info('management init done');
 
-        const bootstrapList = config.getBootstrapList();
-        repConfig.destination.bootstrapList = bootstrapList;
-
-        config.on('bootstrap-list-update', () => {
-            repConfig.destination.bootstrapList = config.getBootstrapList();
-        });
+        repConfig.destination.bootstrapList = config.getBootstrapList();
 
         runServer(config, Logger);
     });

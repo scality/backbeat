@@ -220,13 +220,7 @@ function updateProcessors(zkClient, bootstrapList) {
 }
 
 function loadProcessors(zkClient) {
-    let bootstrapList = config.getBootstrapList();
-    updateProcessors(zkClient, bootstrapList);
-
-    config.on('bootstrap-list-update', () => {
-        bootstrapList = config.getBootstrapList();
-        updateProcessors(zkClient, bootstrapList);
-    });
+    updateProcessors(zkClient, config.getBootstrapList());
 }
 
 /**

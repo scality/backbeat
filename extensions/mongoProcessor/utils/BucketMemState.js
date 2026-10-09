@@ -10,35 +10,9 @@ const REFRESH_TIMER = 60000;
  * when ingestion consumers are backlogged with entries.
  */
 class BucketMemState {
-    constructor(config) {
-        this._config = config;
-
+    constructor() {
         // i.e.: { bucketName: BucketInfo() }
         this._memo = {};
-
-        this._config.on('bootstrap-list-update', this._cleanup.bind(this));
-    }
-
-    /**
-     * if the user somehow removes the ingestion location while kafka entries
-     * for the given location are still queued to be processed, we should
-     * remove any in-mem state for the location. This will lead to an error
-     * propagated by `MongoQueueProcessor.processKafkaEntry` where mongoClient
-     * makes a call to `getBucketAttributes`
-     * @return {undefined}
-     */
-    _cleanup() {
-        const bootstrapList = this._config.getBootstrapList();
-        const sites = bootstrapList.map(b => b.site);
-
-        // all locations in memo should have an associated bootstrapList site
-        Object.keys(this._memo).forEach(bucket => {
-            const bucketInfo = this._memo[bucket];
-            if (bucketInfo &&
-                sites.indexOf(bucketInfo.getLocationConstraint()) === -1) {
-                delete this._memo[bucket];
-            }
-        });
     }
 
     /**

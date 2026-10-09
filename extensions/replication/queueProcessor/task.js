@@ -180,57 +180,6 @@ function initAndStart(zkClient) {
             destConfig[site] = config.getReplicationSiteDestConfig(site);
         });
 
-        config.on('bootstrap-list-update', () => {
-            const updatedBootstrapList = config.getBootstrapList();
-            const activeSites = Object.keys(activeQProcessors);
-            const updatedSites = updatedBootstrapList.map(i => i.site);
-            const allSites = [...new Set(activeSites.concat(updatedSites))];
-
-            async.each(allSites, (site, next) => {
-                if (updatedSites.includes(site)) {
-                    const siteConfig = config.getReplicationSiteDestConfig(site);
-                    if (!destConfig[site]) {
-                        destConfig[site] = siteConfig;
-                    } else {
-                        // Only updating replicationEndpoint to keep maintaining reference
-                        // in the queue processor instance
-                        destConfig[site].replicationEndpoint = siteConfig.replicationEndpoint;
-                    }
-                    if (!activeSites.includes(site)) {
-                        const qp = new QueueProcessor(
-                            topic, zkConfig, zkClient, kafkaConfig,
-                            sourceConfig, destConfig[site],
-                            repConfig, redisConfig, mConfig,
-                            httpsConfig, internalHttpsConfig,
-                            site, repConfig.queueProcessor.circuitBreaker);
-                        activeQProcessors[site] = qp;
-                        setupZkSiteNode(qp, zkClient, site, (err, data) => {
-                            if (err) {
-                                return next(err);
-                            }
-                            qp.start({ paused: data.paused });
-                            return next();
-                        });
-                    }
-                } else {
-                    // this site is no longer in bootstrapList
-                    activeQProcessors[site].removeZkState(err => {
-                        if (err) {
-                            return next(err);
-                        }
-                        activeQProcessors[site].stop(() => { });
-                        delete activeQProcessors[site];
-                        delete destConfig[site];
-                        return next();
-                    });
-                }
-            }, err => {
-                if (err) {
-                    process.exit(1);
-                }
-            });
-        });
-
         // Start QueueProcessor for each site
         async.each(siteNames, (site, next) => {
             const qp = new QueueProcessor(

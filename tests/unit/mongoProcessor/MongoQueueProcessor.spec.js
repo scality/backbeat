@@ -247,7 +247,6 @@ describe('MongoQueueProcessor.start', () => {
     function startProcessor(kafkaConfig = { hosts: 'localhost:9092' }) {
         sinon.stub(BackbeatConsumer.prototype, '_init');
         sinon.stub(Config, 'getBootstrapList').returns([]);
-        sinon.stub(Config, 'on');
 
         const proc = _makeProcessor([]);
         proc.logger = { info: () => {}, error: () => {}, fatal: () => {} };
