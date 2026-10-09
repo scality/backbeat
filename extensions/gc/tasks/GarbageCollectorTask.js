@@ -242,7 +242,20 @@ class GarbageCollectorTask extends BackbeatTask {
                 return next(err, objMD);
             }),
             (objMD, next) => {
+                if (!objMD.getTransitionInProgress()) {
+                    log.warn('transition already completed, skipping', {
+                        method: 'GarbageCollectorTask._deleteArchivedSourceDataOnce',
+                        bucket,
+                        key,
+                        version,
+                    });
+                    return done();
+                }
+
                 const locations = objMD.getLocation();
+                if (!locations?.length) {
+                    return next(null, objMD);
+                }
 
                 const params = {
                     Locations: locations.map(location => ({
@@ -260,7 +273,7 @@ class GarbageCollectorTask extends BackbeatTask {
                     }),
                 };
 
-                this._batchDeleteData(params, entry, log, err => {
+                return this._batchDeleteData(params, entry, log, err => {
                     GarbageCollectorMetrics.onS3Request(log, 'batchdelete', 'archive', err);
                     entry.setEnd(err);
                     log.info('action execution ended', entry.getLogInfo());

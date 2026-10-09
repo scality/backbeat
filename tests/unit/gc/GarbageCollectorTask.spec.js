@@ -151,6 +151,82 @@ describe('GarbageCollectorTask', () => {
         });
     });
 
+    it('should skip an object whose transition is already completed', done => {
+        const entry = ActionQueueEntry.create('deleteArchivedSourceData')
+              .addContext({
+                  origin: 'lifecycle',
+                  ruleType: 'archive',
+                  bucketName: bucket,
+                  objectKey: key,
+                  versionId: version,
+              })
+              .setAttribute('serviceName', 'lifecycle-transition')
+              .setAttribute('target.oldLocation', 'old-location')
+              .setAttribute('target.newLocation', 'new-location')
+              .setAttribute('target.bucket', bucket)
+              .setAttribute('target.key', version)
+              .setAttribute('target.version', key)
+              .setAttribute('target.accountId', accountId)
+              .setAttribute('target.owner', owner);
+
+        // a previous GC entry went through, then the object was restored: the data must stay
+        mdObj.setLocation(loc)
+            .setDataStoreName('new-location')
+            .setAmzStorageClass('new-location')
+            .setTransitionInProgress(false)
+            .setArchive({
+                archiveInfo: { archiveId: 'da80b6dc-280d-4dce-83b5-d5b40276e321' },
+                restoreRequestedAt: '2017-07-11T02:44:25.515Z',
+                restoreRequestedDays: 3,
+                restoreCompletedAt: '2017-07-11T03:44:25.515Z',
+                restoreWillExpireAt: '2017-07-14T03:44:25.515Z',
+            });
+        backbeatMetadataProxyClient.setMdObj(mdObj);
+
+        gcTask.processActionEntry(entry, err => {
+            assert.ifError(err);
+            assert.strictEqual(backbeatClient.times.batchDeleteResponse, 0);
+            assert.strictEqual(backbeatMetadataProxyClient.receivedMd, null);
+            done();
+        });
+    });
+
+    it('should complete the transition of an archived object without data', done => {
+        const entry = ActionQueueEntry.create('deleteArchivedSourceData')
+              .addContext({
+                  origin: 'lifecycle',
+                  ruleType: 'archive',
+                  bucketName: bucket,
+                  objectKey: key,
+                  versionId: version,
+              })
+              .setAttribute('serviceName', 'lifecycle-transition')
+              .setAttribute('target.oldLocation', 'old-location')
+              .setAttribute('target.newLocation', 'new-location')
+              .setAttribute('target.bucket', bucket)
+              .setAttribute('target.key', version)
+              .setAttribute('target.version', key)
+              .setAttribute('target.accountId', accountId)
+              .setAttribute('target.owner', owner);
+
+        mdObj.setLocation()
+            .setDataStoreName('old-location')
+            .setAmzStorageClass('new-location')
+            .setTransitionInProgress(true);
+        backbeatMetadataProxyClient.setMdObj(mdObj);
+
+        gcTask.processActionEntry(entry, err => {
+            assert.ifError(err);
+            assert.strictEqual(backbeatClient.times.batchDeleteResponse, 0);
+
+            const updatedMD = backbeatMetadataProxyClient.mdObj;
+            assert.strictEqual(updatedMD.getDataStoreName(), 'new-location');
+            assert.strictEqual(updatedMD.getTransitionInProgress(), false);
+            assert.strictEqual(updatedMD.getOriginOp(), 's3:LifecycleTransition:Direct');
+            done();
+        });
+    });
+
     it('should delete archived location info if gc failed with 404', done => {
         backbeatClient.batchDeleteResponse = { error: { statusCode: 404 }, res: null };
 
