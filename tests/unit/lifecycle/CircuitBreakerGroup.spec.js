@@ -1,5 +1,6 @@
 /* eslint no-template-curly-in-string: 0 */
 const assert = require('assert');
+const sinon = require('sinon');
 const {
     extractBucketProcessorCircuitBreakerConfigs,
     CircuitBreakerGroup,
@@ -7,7 +8,7 @@ const {
 const config = require('../../config.json');
 const locations = require('../../../conf/locationConfig.json');
 const logger = require('../../utils/fakeLogger');
-const { BreakerState } = require('@scality/breakbeat').CircuitBreaker;
+const { CircuitBreaker, BreakerState } = require('@scality/breakbeat').CircuitBreaker;
 
 describe('extractBucketProcessorCircuitBreakerConfigs', () => {
     // every location in the config gets the templated probe, so the
@@ -1121,6 +1122,56 @@ describe('shouldCircuitBreak', () => {
                 item.topic,
             );
             assert.strictEqual(shouldBreak, item.shouldBreak);
+        });
+    });
+});
+
+describe('CircuitBreakerGroup state change logging', () => {
+    let log;
+    let breaker;
+
+    beforeEach(() => {
+        sinon.stub(CircuitBreaker.prototype, 'start');
+        log = { info: sinon.stub(), warn: sinon.stub() };
+        const group = new CircuitBreakerGroup({}, null, log);
+        group.addCircuitBreaker({
+            type: 'prometheusQuery',
+            threshold: 100,
+            prometheus: { endpoint: 'http://prometheus:9090' },
+        }, 'kafka_consumergroup_group_lag{topic="cold-topic"}', true, false, 'cold-topic', 'cold-location', 'topic');
+        breaker = group.circuitBreakers.transition.topic['cold-topic'][0];
+    });
+
+    afterEach(() => {
+        sinon.restore();
+    });
+
+    const expectedFields = {
+        breaker: 'lifecycle_bucket_processor_0_topic',
+        workflows: ['transition'],
+        topic: 'cold-topic',
+        location: 'cold-location',
+        query: 'kafka_consumergroup_group_lag{topic="cold-topic"}',
+        failedProbes: false,
+    };
+
+    it('should log a warning when the breaker trips', () => {
+        breaker.emit('state-changed', BreakerState.Tripped);
+        assert(log.info.notCalled);
+        sinon.assert.calledOnceWithExactly(log.warn, 'lifecycle circuit breaker tripped', {
+            ...expectedFields,
+            state: 'Tripped',
+        });
+    });
+
+    [BreakerState.Stabilizing, BreakerState.Nominal].forEach(state => {
+        it(`should log at info level when the breaker becomes ${BreakerState[state]}`, () => {
+            breaker.emit('state-changed', state);
+            assert(log.warn.notCalled);
+            sinon.assert.calledOnceWithExactly(log.info, 'lifecycle circuit breaker state changed', {
+                ...expectedFields,
+                state: BreakerState[state],
+            });
         });
     });
 });

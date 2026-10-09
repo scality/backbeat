@@ -28,22 +28,34 @@ const { getTransitionAttempt } = require('../../../lib/util/transitionAttempt');
 const { stampTraceHeaders } = require('@scality/arsenal/build/lib/tracing').kafka;
 const { decode } = versioning.VersionID;
 
-const errorTransitionInProgress = errors.InternalError.
-    customizeDescription('transition is currently in progress');
-const errorTransitionColdObject = errors.InternalError.
-    customizeDescription('transitioning a cold object is forbidden');
-const errorTransitionDeclaredColdObject = errors.InternalError.
-    customizeDescription('transitioning an object declared as cold is forbidden');
-const errorTransitionObjectOnSource = errors.InternalError.
-    customizeDescription('transitioning an object still on the source location is forbidden');
-const errorObjectTemporarilyRestored = errors.InternalError.
-    customizeDescription('object temporarily restored');
-const errorReplicationInProgress = errors.InternalError.
-    customizeDescription('replication of the object is currently in progress');
-const errorLocationPaused = errors.InternalError.
-    customizeDescription('lifecycle events to location have been paused');
-const errorCircuitBreakerTripped = errors.Throttling.
-    customizeDescription('circuit breaker tripped, skipping action');
+// Marks outcomes which only mean the object is not eligible for transition
+// right now: normal states of a healthy system, to be reported as such rather
+// than as failures.
+const EXPECTED_SKIP = 'expectedSkip';
+function expectedSkip(error) {
+    return error.addMetadataEntry(EXPECTED_SKIP, true);
+}
+
+function isExpectedSkip(error) {
+    return error.metadata?.get(EXPECTED_SKIP) === true;
+}
+
+const errorTransitionInProgress = expectedSkip(errors.InternalError.
+    customizeDescription('transition is currently in progress'));
+const errorTransitionColdObject = expectedSkip(errors.InternalError.
+    customizeDescription('transitioning a cold object is forbidden'));
+const errorTransitionDeclaredColdObject = expectedSkip(errors.InternalError.
+    customizeDescription('transitioning an object declared as cold is forbidden'));
+const errorTransitionObjectOnSource = expectedSkip(errors.InternalError.
+    customizeDescription('transitioning an object still on the source location is forbidden'));
+const errorObjectTemporarilyRestored = expectedSkip(errors.InternalError.
+    customizeDescription('object temporarily restored'));
+const errorReplicationInProgress = expectedSkip(errors.InternalError.
+    customizeDescription('replication of the object is currently in progress'));
+const errorLocationPaused = expectedSkip(errors.InternalError.
+    customizeDescription('lifecycle events to location have been paused'));
+const errorCircuitBreakerTripped = expectedSkip(errors.Throttling.
+    customizeDescription('circuit breaker tripped, skipping action'));
 
 // Default max AWS limit is 1000 for both list objects and list object versions
 const MAX_KEYS = process.env.CI === 'true' ? 3 : 1000;
@@ -1346,25 +1358,24 @@ class LifecycleTask extends BackbeatTask {
                 });
             }
         ], err => {
-            if (err) {
-                // FIXME: this can get verbose with expected errors
-                // such as temporarily restored objects. A flag
-                // needs to be added to expected errors.
-                log.error('could not apply transition rule', {
-                    method: 'LifecycleTask._applyTransitionRule',
-                    error: err.description || err.message,
-                    owner: params.owner,
-                    bucket: params.bucket,
-                    key: params.objectKey,
-                    site: params.site,
+            const logFields = {
+                method: 'LifecycleTask._applyTransitionRule',
+                owner: params.owner,
+                bucket: params.bucket,
+                key: params.objectKey,
+                site: params.site,
+            };
+            if (!err) {
+                log.debug('transition rule applied', logFields);
+            } else if (isExpectedSkip(err)) {
+                log.debug('transition rule skipped', {
+                    ...logFields,
+                    reason: err.description,
                 });
             } else {
-                log.debug('transition rule applied', {
-                    method: 'LifecycleTask._applyTransitionRule',
-                    owner: params.owner,
-                    bucket: params.bucket,
-                    key: params.objectKey,
-                    site: params.site,
+                log.error('could not apply transition rule', {
+                    ...logFields,
+                    error: err.description || err.message,
                 });
             }
             if (cb) {
