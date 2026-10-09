@@ -77,3 +77,51 @@ groups:
       zenko_service: backbeat-oplog-populator
       description: "Oplog populator restarted connectors too many times"
       summary: "Oplog populator connectors keep failing after restarts"
+
+  - alert: OplogPopulatorNewerGenerationConnectors
+    Expr: |
+        max(s3_oplog_populator_newer_generation_connectors{job="${oplog_populator_job}",namespace="${namespace}"})
+        > 0
+    For: "10m"
+    Labels:
+     severity: warning
+    Annotations:
+      zenko_service: backbeat-oplog-populator
+      description: "Kafka connect holds connectors created by a newer oplog populator, which this one does not manage: failed connectors are not restarted"
+      summary: "Oplog populator found connectors of a newer version"
+
+  - alert: OplogPopulatorConnectorPaused
+    Expr: |
+        max(s3_oplog_populator_hashed_connectors{state="paused",job="${oplog_populator_job}",namespace="${namespace}"})
+        > 0
+    For: "10m"
+    Labels:
+     severity: critical
+    Annotations:
+      zenko_service: backbeat-oplog-populator
+      description: "A hashed oplog populator connector is paused, so the buckets it covers are not ingested. Resume it through the kafka connect API"
+      summary: "Oplog populator connector paused"
+
+  - alert: OplogPopulatorConnectorEdited
+    Expr: |
+        max(s3_oplog_populator_hashed_connectors{state="edited",job="${oplog_populator_job}",namespace="${namespace}"})
+        > 0
+    For: "10m"
+    Labels:
+     severity: warning
+    Annotations:
+      zenko_service: backbeat-oplog-populator
+      description: "The pipeline of a hashed oplog populator connector was modified by hand"
+      summary: "Oplog populator connector pipeline edited"
+
+  - alert: OplogPopulatorMigrationNotCompleting
+    Expr: |
+        max(s3_oplog_populator_outdated_connectors{job="${oplog_populator_job}",namespace="${namespace}"})
+        > 0
+    For: "30m"
+    Labels:
+     severity: warning
+    Annotations:
+      zenko_service: backbeat-oplog-populator
+      description: "Connectors are still waiting to be migrated to hashed connectors. Kafka connect may not support the offsets API (< 3.5), or the migration keeps failing"
+      summary: "Oplog populator migration not completing"

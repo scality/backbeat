@@ -71,6 +71,32 @@ class OplogPopulatorMetrics {
             help: 'Total number of connector restarts',
             labelNames: ['connector'],
         });
+        this.hashedConnectors = ZenkoMetrics.createGauge({
+            name: 's3_oplog_populator_hashed_connectors',
+            help: 'Number of hashed connectors, by state',
+            labelNames: ['state'],
+        });
+        this.newerGenerationConnectors = ZenkoMetrics.createGauge({
+            name: 's3_oplog_populator_newer_generation_connectors',
+            help: 'Number of connectors created by a newer oplog populator, which this one leaves alone',
+        });
+        this.outdatedConnectors = ZenkoMetrics.createGauge({
+            name: 's3_oplog_populator_outdated_connectors',
+            help: 'Number of connectors to migrate to hashed connectors',
+        });
+        this.migrations = ZenkoMetrics.createCounter({
+            name: 's3_oplog_populator_migrations_total',
+            help: 'Total number of migrations to hashed connectors',
+            labelNames: ['success'],
+        });
+        this.migrationInProgress = ZenkoMetrics.createGauge({
+            name: 's3_oplog_populator_migration_in_progress',
+            help: 'Whether a migration to hashed connectors is in progress',
+        });
+        this.migrationStartTimeAge = ZenkoMetrics.createGauge({
+            name: 's3_oplog_populator_migration_start_time_age_seconds',
+            help: 'Age of the oplog time the last migration restarted from',
+        });
     }
 
     /**
@@ -220,6 +246,66 @@ class OplogPopulatorMetrics {
         } catch (error) {
             this._logger.error('An error occured while pushing metric', {
                 method: 'OplogPopulatorMetrics.onConnectorsReconciled',
+                error: error.message,
+            });
+        }
+    }
+
+    /**
+     * updates the gauges describing the connectors seen by the hashed mode
+     * @param {Object} counts counts
+     * @param {number} counts.connectors number of managed connectors
+     * @param {Object} counts.states number of hashed connectors per state
+     * @param {number} counts.outdated number of connectors to migrate
+     * @param {number} counts.newer number of newer generation connectors
+     * @returns {undefined}
+     */
+    onHashedConnectorsObserved({ connectors, states, outdated, newer }) {
+        try {
+            this.connectors.set(connectors);
+            Object.entries(states).forEach(([state, count]) => this.hashedConnectors.set({ state }, count));
+            this.outdatedConnectors.set(outdated);
+            this.newerGenerationConnectors.set(newer);
+        } catch (error) {
+            this._logger.error('An error occured while pushing metrics', {
+                method: 'OplogPopulatorMetrics.onHashedConnectorsObserved',
+                error: error.message,
+            });
+        }
+    }
+
+    /**
+     * updates s3_oplog_populator_migration_in_progress metric
+     * @param {boolean} inProgress whether a migration is in progress
+     * @returns {undefined}
+     */
+    onMigrationInProgress(inProgress) {
+        try {
+            this.migrationInProgress.set(inProgress ? 1 : 0);
+        } catch (error) {
+            this._logger.error('An error occured while pushing metric', {
+                method: 'OplogPopulatorMetrics.onMigrationInProgress',
+                error: error.message,
+            });
+        }
+    }
+
+    /**
+     * updates the metrics of a completed migration attempt
+     * @param {boolean} success whether the migration completed
+     * @param {number|null} startTimeAge age of the oplog time the hashed
+     * connectors restarted from, in seconds
+     * @returns {undefined}
+     */
+    onMigration(success, startTimeAge = null) {
+        try {
+            this.migrations.inc({ success });
+            if (startTimeAge !== null) {
+                this.migrationStartTimeAge.set(startTimeAge);
+            }
+        } catch (error) {
+            this._logger.error('An error occured while pushing metrics', {
+                method: 'OplogPopulatorMetrics.onMigration',
                 error: error.message,
             });
         }

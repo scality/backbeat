@@ -55,6 +55,33 @@ class Metrics:
         job="${oplog_populator_job}", namespace="${namespace}"
     )
 
+    HASHED_CONNECTORS, MIGRATIONS = [
+        metrics.CounterMetric(
+            name, label,
+            job="${oplog_populator_job}", namespace="${namespace}"
+        ) for name, label in {
+            's3_oplog_populator_hashed_connectors': 'state',
+            's3_oplog_populator_migrations_total': 'success',
+        }.items()
+    ]
+
+    OUTDATED_CONNECTORS, NEWER_GENERATION_CONNECTORS, MIGRATION_START_TIME_AGE = [
+        metrics.CounterMetric(
+            name,
+            job="${oplog_populator_job}", namespace="${namespace}"
+        ) for name in [
+            's3_oplog_populator_outdated_connectors',
+            's3_oplog_populator_newer_generation_connectors',
+            's3_oplog_populator_migration_start_time_age_seconds',
+        ]
+    ]
+
+    MONGODB_LAG = metrics.CounterMetric(
+        'kafka_connect_mongodb_source_task_metrics_latest_mongodb_time_difference_secs',
+        'connector', 'task',
+        job="${kafka_connect_job}", namespace="${namespace}"
+    )
+
 oplog_populator_up_current = Stat(
     title='Oplog Populator Instances',
     description='Number of active oplog populator instances',
@@ -282,6 +309,91 @@ reconfig_lag = Heatmap(
     )],
 )
 
+outdated_connectors = Stat(
+    title='Connectors To Migrate',
+    description='Connectors waiting to be replaced by hashed connectors',
+    dataSource='${DS_PROMETHEUS}',
+    colorMode='value',
+    noValue='-',
+    reduceCalc='last',
+    targets=[Target(
+        expr='max(' + Metrics.OUTDATED_CONNECTORS.raw() + ')',
+    )],
+    thresholds=[
+        Threshold('green', 0, 0.),
+        Threshold('orange', 1, 1.),
+    ])
+
+newer_generation_connectors = Stat(
+    title='Newer Generation Connectors',
+    description='Connectors created by a newer oplog populator, left alone by this one',
+    dataSource='${DS_PROMETHEUS}',
+    colorMode='value',
+    noValue='-',
+    reduceCalc='last',
+    targets=[Target(
+        expr='max(' + Metrics.NEWER_GENERATION_CONNECTORS.raw() + ')',
+    )],
+    thresholds=[
+        Threshold('green', 0, 0.),
+        Threshold('red', 1, 1.),
+    ])
+
+migration_start_time_age = Stat(
+    title='Last Migration Replay',
+    description='How far back in the oplog the hashed connectors restarted from, on the last migration',
+    dataSource='${DS_PROMETHEUS}',
+    colorMode='value',
+    noValue='-',
+    reduceCalc='last',
+    format=UNITS.SECONDS,
+    targets=[Target(
+        expr='max(' + Metrics.MIGRATION_START_TIME_AGE.raw() + ')',
+    )],
+    thresholds=[
+        Threshold('green', 0, 0.),
+    ])
+
+hashed_connectors_by_state = TimeSeries(
+    title='Hashed Connectors',
+    description='Hashed connectors, by state',
+    dataSource='${DS_PROMETHEUS}',
+    gradientMode='opacity',
+    lineInterpolation='smooth',
+    fillOpacity=10,
+    spanNulls=True,
+    targets=[Target(
+        expr='sum by(state) (' + Metrics.HASHED_CONNECTORS.raw() + ')',
+        legendFormat='{{state}}',
+    )])
+
+migrations = TimeSeries(
+    title='Migrations',
+    description='Migrations to hashed connectors, by outcome',
+    dataSource='${DS_PROMETHEUS}',
+    gradientMode='opacity',
+    lineInterpolation='smooth',
+    fillOpacity=10,
+    spanNulls=True,
+    targets=[Target(
+        expr='sum by(success) (increase(' + Metrics.MIGRATIONS() + '))',
+        legendFormat='success={{success}}',
+    )])
+
+mongodb_lag = TimeSeries(
+    title='Oplog Lag Per Connector',
+    description='Delay between the latest oplog entry and the last one read by each connector',
+    dataSource='${DS_PROMETHEUS}',
+    gradientMode='opacity',
+    lineInterpolation='smooth',
+    fillOpacity=10,
+    spanNulls=True,
+    unit=UNITS.SECONDS,
+    targets=[Target(
+        expr='max by(connector) (' + Metrics.MONGODB_LAG.raw() + ')',
+        legendFormat='{{connector}}',
+    )])
+
 
 dashboard = (
     Dashboard(
@@ -340,6 +452,19 @@ dashboard = (
             layout.row([
                 config_applied_success,
                 config_applied_failure,
+            ], 7),
+            RowPanel(title="Hashed Ingestion"),
+            layout.row([
+                outdated_connectors,
+                newer_generation_connectors,
+                migration_start_time_age,
+            ], 3),
+            layout.row([
+                hashed_connectors_by_state,
+                migrations,
+            ], 7),
+            layout.row([
+                mongodb_lag,
             ], 7),
             RowPanel(title="Bucket Metrics"),
             layout.row([

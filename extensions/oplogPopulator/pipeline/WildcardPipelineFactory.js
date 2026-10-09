@@ -1,5 +1,4 @@
-const { constants } = require('@scality/arsenal');
-const { wildCardForAllBuckets } = require('../constants');
+const { wildCardForAllBuckets, internalCollectionsRegex } = require('../constants');
 const PipelineFactory = require('./PipelineFactory');
 
 /**
@@ -42,7 +41,7 @@ class WildcardPipelineFactory extends PipelineFactory {
             $match: {
                 'ns.coll': {
                     $not: {
-                        $regex: `^(${constants.mpuBucketPrefix}|__).*`,
+                        $regex: internalCollectionsRegex,
                     },
                 }
             }

@@ -6,6 +6,7 @@ const { encode } = require('@scality/arsenal').versioning.VersionID;
 const ReplicationQueuePopulator =
     require('../../../extensions/replication/ReplicationQueuePopulator');
 const ReplicationAPI = require('../../../extensions/replication/ReplicationAPI');
+const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
 const ReplicationMetrics = require('../../../extensions/replication/ReplicationMetrics');
 const { LifecycleMetrics } =
     require('../../../extensions/lifecycle/LifecycleMetrics');
@@ -227,6 +228,22 @@ describe('replication queue populator', () => {
                 assert.deepStrictEqual(rqp.getState(), {});
             }
         });
+    });
+
+    it('should skip entries without pending replication before parsing them as objects', () => {
+        const checkSanity = sinon.spy(ObjectQueueEntry.prototype, 'checkSanity');
+        const value = JSON.parse(JSON.stringify(kafkaValue));
+        delete value.replicationInfo;
+        rqp.filter({
+            type: 'put',
+            bucket: 'test-bucket-source',
+            key: 'a-test-key',
+            value: JSON.stringify(value),
+            logReader: { getMetricLabels: stubMetricLabels() },
+        });
+        assert.deepStrictEqual(rqp.getState(), {});
+        assert(checkSanity.notCalled);
+        checkSanity.restore();
     });
 
     it('publish prom metrics', () => {

@@ -1,3 +1,6 @@
+const { constants: arsenalConstants } = require('@scality/arsenal');
+const { pensieveBucket } = require('../../lib/constants');
+
 const constants = {
     bucketMetastore: '__metastore',
     defaultConnectorName: 'source-connector',
@@ -7,6 +10,20 @@ const constants = {
     maxBucketsPerConnector: 260000,
     mongodbVersionWithImmutablePipelines: '6.0.0',
     wildCardForAllBuckets: '*',
+    // MPU shadow buckets and internal collections (__metastore, ...)
+    internalCollectionsRegex: `^(${arsenalConstants.mpuBucketPrefix}|__).*`,
+    pensieveBucket,
+    // operation types carrying object metadata, the only ones consumed
+    // downstream (object deletions are updates setting the deleted flag)
+    hashedOperationTypes: ['insert', 'update', 'replace'],
+    // bumped whenever the generated hashed pipeline changes, see connectorNaming
+    hashedPipelineGeneration: 1,
+    // kafka connect worker default, not exposed through its REST API: a
+    // paused connector's last offsets are committed within this delay
+    kafkaConnectOffsetFlushIntervalMs: 60000,
+    // how long to wait for paused connector tasks to stop before going on
+    pauseTimeoutMs: 60000,
+    pausePollIntervalMs: 1000,
     connectorUpdatedEvent: 'connector-updated',
     bucketRemovedFromConnectorEvent: 'bucket-removed',
     connectorsReconciledEvent: 'connectors-reconciled',

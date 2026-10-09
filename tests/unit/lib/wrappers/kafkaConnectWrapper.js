@@ -481,18 +481,76 @@ describe('KafkaConnectWrapper', () => {
             const bodyBuffer = Buffer.from(JSON.stringify([]));
             response.emit('data', bodyBuffer);
             response.emit('end');
-            await promiseResponse
-            .then(resolvedResponse => {
-                assert.deepEqual(resolvedResponse, []);
-                assert(requestStub.calledOnceWith({
-                    host: 'localhost',
-                    port: 8083,
-                    method: 'GET',
-                    path: '/connectors',
-                }));
-                assert(endStub.calledOnce);
-            })
-            .catch(err => assert.deepEqual(err, errors.InternalError));
+            await assert.rejects(promiseResponse, err => {
+                assert(err.is.InternalError);
+                assert.strictEqual(err.statusCode, 500);
+                return true;
+            });
+        });
+
+        it('should resolve an empty body', async () => {
+            response.statusCode = 202;
+            const promiseResponse = wrapper.makeRequest({
+                method: 'PUT',
+                path: '/connectors/mongo-source/pause',
+            });
+            response.emit('end');
+            assert.deepStrictEqual(await promiseResponse, {});
+        });
+    });
+
+    describe('getConnectorsWithStatus', () => {
+        it('should list connectors with their info and status', async () => {
+            const connectors = { 'mongo-source': { info: {}, status: {} } };
+            const makeRequestStub = sinon.stub(wrapper, 'makeRequest').resolves(connectors);
+            assert.deepStrictEqual(await wrapper.getConnectorsWithStatus(), connectors);
+            assert(makeRequestStub.calledOnceWith({
+                method: 'GET',
+                path: '/connectors?expand=info&expand=status',
+            }));
+        });
+
+        it('should throw error when request fails', async () => {
+            sinon.stub(wrapper, 'makeRequest').rejects(errors.InternalError);
+            await assert.rejects(wrapper.getConnectorsWithStatus(), errors.InternalError);
+        });
+    });
+
+    describe('pauseConnector', () => {
+        it('should pause a connector', async () => {
+            const makeRequestStub = sinon.stub(wrapper, 'makeRequest').resolves({});
+            await wrapper.pauseConnector('mongo-source');
+            assert(makeRequestStub.calledOnceWith({
+                method: 'PUT',
+                path: '/connectors/mongo-source/pause',
+            }));
+        });
+
+        it('should throw error when request fails', async () => {
+            sinon.stub(wrapper, 'makeRequest').rejects(errors.InternalError);
+            await assert.rejects(wrapper.pauseConnector('mongo-source'), errors.InternalError);
+        });
+    });
+
+    describe('getConnectorOffsets', () => {
+        it('should return the connector offsets', async () => {
+            const offsets = [{ partition: { ns: 'p' }, offset: { _id: '{}' } }];
+            const makeRequestStub = sinon.stub(wrapper, 'makeRequest').resolves({ offsets });
+            assert.deepStrictEqual(await wrapper.getConnectorOffsets('mongo-source'), offsets);
+            assert(makeRequestStub.calledOnceWith({
+                method: 'GET',
+                path: '/connectors/mongo-source/offsets',
+            }));
+        });
+
+        it('should return no offsets when none were committed', async () => {
+            sinon.stub(wrapper, 'makeRequest').resolves({});
+            assert.deepStrictEqual(await wrapper.getConnectorOffsets('mongo-source'), []);
+        });
+
+        it('should throw error when request fails', async () => {
+            sinon.stub(wrapper, 'makeRequest').rejects(errors.InternalError);
+            await assert.rejects(wrapper.getConnectorOffsets('mongo-source'), errors.InternalError);
         });
     });
 });
