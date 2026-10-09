@@ -20,5 +20,4 @@ killandsleep () {
 }
 
 cd ${NODE_PATH}/@scality/cloudserver && yarn run mem_backend & bash tests/utils/wait_for_local_port.bash $PORT 40
-./node_modules/.bin/nyc --clean --silent yarn run $1
-./node_modules/.bin/nyc report --report-dir "./coverage/$1" --reporter=lcov
+./node_modules/.bin/c8 --temp-directory .c8_output --reporter=lcov --report-dir "./coverage/$1" yarn run $1

@@ -14,8 +14,8 @@ killandsleep () {
 # Unlike the image, which runs the compiled output, the server is started from
 # the sources here, so it needs the TypeScript loader.
 NODE_OPTIONS="${NODE_OPTIONS:-} -r ts-node/register/transpile-only" \
-    ./node_modules/.bin/nyc --clean --silent yarn start &
+    ./node_modules/.bin/c8 --temp-directory .c8_output --reporter=lcov --report-dir "./coverage/$1" yarn start &
 bash tests/utils/wait_for_local_port.bash $PORT 40
 yarn run $1
 killandsleep
-./node_modules/.bin/nyc report --report-dir "./coverage/$1" --reporter=lcov
+./node_modules/.bin/c8 report --temp-directory .c8_output --reporter=lcov --report-dir "./coverage/$1"
