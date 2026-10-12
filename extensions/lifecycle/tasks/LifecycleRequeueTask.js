@@ -1,6 +1,6 @@
 'use strict';
 
-const async = require('async');
+const { callbackify, promisify } = require('util');
 
 const { errors } = require('@scality/arsenal');
 const ObjectMD = require('@scality/arsenal').models.ObjectMD;
@@ -25,13 +25,33 @@ class LifecycleRequeueTask extends BackbeatTask {
         this.processName = processName;
     }
 
-    requeueObjectVersion(accountId, bucketName, objectKey, objectVersion, etag, try_, location, bucketLogger, cb) {
+    /**
+     * Get a promisified metadata client for an account, recording the request metrics
+     *
+     * @param {string} accountId - account id
+     * @return {Object} client with async getMetadata(params, log) and putMetadata(params, log)
+     */
+    _getClient(accountId) {
         const client = this.getBackbeatMetadataProxy(accountId);
         if (!client) {
-            return cb(errors.InternalError.customizeDescription(
+            throw errors.InternalError.customizeDescription(
                 `Unable to obtain client for account ${accountId}`,
-            ));
+            );
         }
+
+        const wrap = method => promisify((params, log, cb) =>
+            client[method](params, log, (err, res) => {
+                LifecycleMetrics.onS3Request(log, method, this.processName, err);
+                cb(err, res);
+            }));
+        return {
+            getMetadata: wrap('getMetadata'),
+            putMetadata: wrap('putMetadata'),
+        };
+    }
+
+    async requeueObjectVersion(client, accountId, bucketName, location, entry, bucketLogger) {
+        const { objectKey, objectVersion, eTag: etag, try: try_ } = entry;
 
         const params = {
             bucket: bucketName,
@@ -45,122 +65,84 @@ class LifecycleRequeueTask extends BackbeatTask {
         log.addDefaultFields({
             accountId,
             bucketName,
-            objectKey,
-            objectVersion,
-            etag,
-            try: try_,
+            ...entry,
         });
 
-        return client.getMetadata(params, log, (err, blob) => {
-            LifecycleMetrics.onS3Request(log, 'getMetadata', this.processName, err);
-            if (err) {
-                return cb(err);
-            }
+        const blob = await client.getMetadata(params, log);
+        const { result: md, error } = ObjectMD.createFromBlob(blob.Body);
+        if (error) {
+            throw error;
+        }
 
-            const { result: md, error } = ObjectMD.createFromBlob(blob.Body);
-            if (error) {
-                return cb(error);
-            }
+        const target = { accountId, bucket: bucketName, key: objectKey, version: objectVersion, location };
+        if (!this.updateObjectMD(md, try_, log, etag, target)) {
+            return 0;
+        }
 
-            const target = { accountId, bucket: bucketName, key: objectKey, version: objectVersion, location };
-            if (!this.updateObjectMD(md, try_, log, etag, target)) {
-                return cb(null, 0);
-            }
-
-            return client.putMetadata({ ...params, mdBlob: md.getSerialized() }, log,
-                err => {
-                    LifecycleMetrics.onS3Request(log, 'putMetadata', this.processName, err);
-                    if (err) {
-                        return cb(err);
-                    }
-
-                    return cb(null, 1);
-                }
-            );
-        });
+        await client.putMetadata({ ...params, mdBlob: md.getSerialized() }, log);
+        return 1;
     }
 
     /**
      * Execute the action specified in action entry
      *
      * @param {ActionQueueEntry} entry - action entry to execute
-     * @param {Function} done - callback funtion
-     * @return {undefined}
+     * @param {Function} [done] - callback, for callers not using the returned promise
+     * @return {Promise<undefined>} resolved once the entry is processed
      */
-    processActionEntry(entry, done) {
+    async processActionEntry(entry, done) {
+        if (done) {
+            return callbackify(() => this.processActionEntry(entry))(done);
+        }
+
         const log = this.logger.newRequestLogger(entry.actionId);
         const { byAccount, location } = entry.getAttribute('target') || {};
 
-        async.reduce(
-            Object.keys(byAccount),
-            0,
-            (objsPerBatch, accountId, done) => {
-                const buckets = byAccount[accountId] || {};
-                const bucketNames = Object.keys(buckets);
-                this.handleBatch(
-                    accountId,
-                    buckets,
-                    bucketNames,
-                    location,
-                    log,
-                    (err, res) => {
-                        if (err) {
-                            return done(err);
-                        }
-
-                        const sum = res.reduce((acc, v) => acc + v, 0);
-                        return done(null, sum + objsPerBatch);
-                    }
-                );
-            },
-            (err, objectCount) => {
-                if (err) {
-                    log.error('could not process message', { error: err, objectCount });
-                } else {
-                    log.info('processed requeue message', { objectCount });
-                }
-
-                done(err);
+        let objectCount = 0;
+        try {
+            for (const [accountId, buckets] of Object.entries(byAccount)) {
+                objectCount += await this.handleBatch(accountId, buckets, location, log);
             }
-        );
+        } catch (err) {
+            log.error('could not process message', { error: err, objectCount });
+            throw err;
+        }
+
+        log.info('processed requeue message', { objectCount });
+        return undefined;
     }
 
-    handleBatch(accountId, buckets, bucketNames, location, log, cb) {
-        async.map(
-            bucketNames,
-            (bucketName, next) =>
-                async.reduce(
-                    buckets[bucketName] || [],
-                    0,
-                    (objsPerBucket, { objectKey, objectVersion, eTag, ...rest }, nextObject) =>
-                        this.requeueObjectVersion(
-                            accountId,
-                            bucketName,
-                            objectKey,
-                            objectVersion,
-                            eTag,
-                            rest.try,
-                            location,
-                            log,
-                            (err, res) => {
-                                if (!err) {
-                                    return nextObject(null, res + objsPerBucket);
-                                }
+    /**
+     * Requeue the objects of an account: buckets in parallel, objects of a bucket in sequence
+     *
+     * @param {string} accountId - account id
+     * @param {Object} buckets - objects to requeue, by bucket name
+     * @param {string} [location] - cold location the objects are transitioning to
+     * @param {Logger} log - request logger
+     * @return {Promise<number>} number of requeued objects
+     */
+    async handleBatch(accountId, buckets, location, log) {
+        const client = this._getClient(accountId);
 
-                                if (err.name === 'ObjNotFound' || err.name === 'NoSuchBucket') {
-                                    log.warn(`${err.name}, skipping`, {
-                                        bucketName, objectKey, objectVersion,
-                                    });
-                                    return nextObject(null, objsPerBucket);
-                                }
+        const counts = await Promise.all(Object.entries(buckets).map(async ([bucketName, objects]) => {
+            let objsPerBucket = 0;
+            for (const object of objects) {
+                try {
+                    objsPerBucket += await this.requeueObjectVersion(
+                        client, accountId, bucketName, location, object, log);
+                } catch (err) {
+                    if (err.name !== 'ObjNotFound' && err.name !== 'NoSuchBucket') {
+                        throw err;
+                    }
+                    log.warn(`${err.name}, skipping`, {
+                        bucketName, objectKey: object.objectKey, objectVersion: object.objectVersion,
+                    });
+                }
+            }
+            return objsPerBucket;
+        }));
 
-                                return nextObject(err);
-                            }
-                        ),
-                    (err, res) => next(err, res)
-                ),
-            (err, res) => cb(err, res)
-        );
+        return counts.reduce((acc, v) => acc + v, 0);
     }
 }
 
