@@ -52,6 +52,9 @@ const errorObjectTemporarilyRestored = expectedSkip(errors.InternalError.
     customizeDescription('object temporarily restored'));
 const errorReplicationInProgress = expectedSkip(errors.InternalError.
     customizeDescription('replication of the object is currently in progress'));
+// Not an expected skip: the object will not transition until replication is retried
+const errorReplicationFailed = errors.InternalError.
+    customizeDescription('replication of the object has failed');
 const errorLocationPaused = expectedSkip(errors.InternalError.
     customizeDescription('lifecycle events to location have been paused'));
 const errorCircuitBreakerTripped = expectedSkip(errors.Throttling.
@@ -1275,8 +1278,11 @@ class LifecycleTask extends BackbeatTask {
             (objectMD, next) => {
                 // No transition when replication is ongoing or failed
                 const replicationStatus = objectMD.getReplicationStatus();
-                if (['PENDING', 'PROCESSING', 'FAILED'].includes(replicationStatus)) {
+                if (['PENDING', 'PROCESSING'].includes(replicationStatus)) {
                     return next(errorReplicationInProgress);
+                }
+                if (replicationStatus === 'FAILED') {
+                    return next(errorReplicationFailed);
                 }
                 const dataStoreName = objectMD.getDataStoreName();
                 const locationConfig = (dataStoreName && locationsConfig[dataStoreName]) || {};

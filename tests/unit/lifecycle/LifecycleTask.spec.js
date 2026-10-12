@@ -2639,6 +2639,17 @@ describe('lifecycle task helper methods', () => {
                     done();
                 });
             });
+
+            it('should log an error when replication has failed', done => {
+                setupObjectMD({ getReplicationStatus: () => 'FAILED' });
+
+                lifecycleTask._applyTransitionRule(testParams, fakeLogger, err => {
+                    assert.strictEqual(err.description, 'replication of the object has failed');
+                    sinon.assert.calledWith(logError, 'could not apply transition rule');
+                    sinon.assert.notCalled(sendDataMoverAction);
+                    done();
+                });
+            });
         });
     });
 
