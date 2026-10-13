@@ -4,6 +4,7 @@ const { ObjectMD } = require('@scality/arsenal').models;
 const sinon = require('sinon');
 const config = require('../../config.json');
 
+const { LifecycleMetrics } = require('../../../extensions/lifecycle/LifecycleMetrics');
 const LifecycleColdStatusArchiveTask = require(
     '../../../extensions/lifecycle/tasks/LifecycleColdStatusArchiveTask');
 const ColdStorageStatusQueueEntry =
@@ -122,6 +123,28 @@ describe('LifecycleColdStatusArchiveTask', () => {
                 archiveId: 'da80b6dc-280d-4dce-83b5-d5b40276e321',
                 archiveVersion: 5166759712787974,
             });
+            done();
+        });
+    });
+
+    it('should report the transition latency if location info is empty', done => {
+        const onLifecycleCompleted = sinon.spy(LifecycleMetrics, 'onLifecycleCompleted');
+
+        const entry = ColdStorageStatusQueueEntry.createFromKafkaEntry({ value: message });
+        mdObj.setLocation()
+            .setDataStoreName('us-east-1')
+            .setAmzStorageClass('us-east-1')
+            .setTransitionInProgress(true, Date.now() - 1000)
+            .setArchive(null);
+        backbeatMetadataProxyClient.setMdObj(mdObj);
+
+        archiveTask.processEntry(coldLocation, entry, err => {
+            onLifecycleCompleted.restore();
+            assert.ifError(err);
+
+            assert(onLifecycleCompleted.calledOnce);
+            const durationMs = onLifecycleCompleted.firstCall.args[3];
+            assert(durationMs >= 1000, `unexpected latency ${durationMs}`);
             done();
         });
     });
