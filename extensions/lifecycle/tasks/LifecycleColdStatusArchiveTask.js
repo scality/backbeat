@@ -84,6 +84,19 @@ class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
             return await this._deleteColdObject(coldLocation, entry, entry.archiveInfo, log);
         }
 
+        // The object may have been replaced while it was being archived: the archive then holds
+        // the previous object's data, and the transition cannot complete.
+        if (entry.eTag && entry.eTag !== `"${objectMD.getContentMd5()}"`) {
+            log.info('object was overwritten, aborting transition', {
+                entry: entry.getLogInfo(),
+                method: 'LifecycleColdStatusArchiveTask.processEntry',
+                archivedETag: entry.eTag,
+                objectETag: objectMD.getContentMd5(),
+            });
+
+            return await this._deleteColdObject(coldLocation, entry, entry.archiveInfo, log);
+        }
+
         const archive = objectMD.getArchive();
         const isSameArchive = (a, b) => a.archiveId === b.archiveId && a.archiveVersion === b.archiveVersion;
         if (archive?.archiveInfo && !isSameArchive(archive.archiveInfo, entry.archiveInfo)) {

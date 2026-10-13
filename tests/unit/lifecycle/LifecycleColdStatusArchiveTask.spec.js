@@ -250,6 +250,55 @@ describe('LifecycleColdStatusArchiveTask', () => {
         });
     });
 
+    describe('eTag', () => {
+        const messageWithETag = eTag => Buffer.from(JSON.stringify({
+            ...JSON.parse(message),
+            eTag,
+        }));
+
+        beforeEach(() => {
+            mdObj.setLocation(loc)
+                .setDataStoreName('us-east-1')
+                .setAmzStorageClass('us-east-1')
+                .setContentMd5('1ccc7006b902a4d30ec26e9ddcf759d8')
+                .setArchive(null);
+            backbeatMetadataProxyClient.setMdObj(mdObj);
+        });
+
+        it('should set archive info when the eTag matches', done => {
+            const entry = ColdStorageStatusQueueEntry.createFromKafkaEntry({
+                value: messageWithETag('"1ccc7006b902a4d30ec26e9ddcf759d8"'),
+            });
+
+            archiveTask.processEntry(coldLocation, entry, err => {
+                assert.ifError(err);
+
+                const updatedMD = backbeatMetadataProxyClient.getReceivedMd();
+                assert.deepStrictEqual(updatedMD.archive.archiveInfo, entry.archiveInfo);
+                assert.strictEqual(coldProducer.getReceivedEntry(), null);
+                assert.strictEqual(gcProducer.getReceivedEntry().getActionType(), 'deleteArchivedSourceData');
+                done();
+            });
+        });
+
+        it('should delete the archive when the object was overwritten', done => {
+            const entry = ColdStorageStatusQueueEntry.createFromKafkaEntry({
+                value: messageWithETag('"d41d8cd98f00b204e9800998ecf8427e"'),
+            });
+
+            archiveTask.processEntry(coldLocation, entry, err => {
+                assert.ifError(err);
+
+                assert.strictEqual(backbeatMetadataProxyClient.getReceivedMd(), null);
+                assert.strictEqual(gcProducer.getReceivedEntry(), null);
+                assert.strictEqual(coldProducer.getReceivedTopic(), 'cold-gc-req-cold');
+                const gcMessage = JSON.parse(coldProducer.getReceivedEntry()[0].message);
+                assert.deepStrictEqual(gcMessage.archiveInfo, entry.archiveInfo);
+                done();
+            });
+        });
+    });
+
     describe('redundant archive', () => {
         const existingArchiveInfo = {
             archiveId: '11111111-2222-3333-4444-555555555555',
