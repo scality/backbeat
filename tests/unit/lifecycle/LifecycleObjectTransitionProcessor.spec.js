@@ -9,6 +9,7 @@ const LifecycleColdStatusArchiveTask =
     require('../../../extensions/lifecycle/tasks/LifecycleColdStatusArchiveTask');
 const { LifecycleMetrics } =
     require('../../../extensions/lifecycle/LifecycleMetrics');
+const { BackbeatProducerMock } = require('../mocks');
 
 describe('LifecycleObjectTransitionProcessor', () => {
     let objectProcessor;
@@ -74,6 +75,9 @@ describe('LifecycleObjectTransitionProcessor', () => {
         };
 
         beforeEach(() => {
+            // the task resolves the producer when constructed, as it does once started
+            objectProcessor._coldProducer = new BackbeatProducerMock();
+
             // Fast retry config so the test doesn't burn seconds on backoff.
             objectProcessor.retryWrapper = new BackbeatTask({
                 maxRetries: 1,

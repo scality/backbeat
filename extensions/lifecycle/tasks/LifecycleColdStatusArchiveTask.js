@@ -24,23 +24,23 @@ class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
      * @param {string} coldLocation cold location name
      * @param {ColdStorageStatusQueueEntry} entry entry received
      * from the cold location status topic
+     * @param {Object} archiveInfo archive to delete
      * @param {Logger} log logger instance
      * @return {Promise<undefined>} resolved once the deletion is requested
      */
-    async _deleteColdObject(coldLocation, entry, log) {
+    async _deleteColdObject(coldLocation, entry, archiveInfo, log) {
         const coldGcTopic = `${this.lcConfig.coldStorageGCTopicPrefix}${coldLocation}`;
         const gcMessage = JSON.stringify({
             bucketName: entry.target.bucketName,
             objectKey: entry.target.objectKey,
             objectVersion: entry.target.objectVersion,
-            archiveInfo: entry.archiveInfo,
+            archiveInfo,
             requestId: entry.requestId,
             transitionTime: new Date().toISOString(),
         });
-        const sendToTopic = promisify(this.coldProducer.sendToTopic).bind(this.coldProducer);
 
         try {
-            await sendToTopic(coldGcTopic, [{ message: gcMessage }]);
+            await promisify(cb => this.coldProducer.sendToTopic(coldGcTopic, [{ message: gcMessage }], cb))();
         } catch (err) {
             log.error('error sending cold object deletion entry', {
                 error: err,
@@ -80,7 +80,31 @@ class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
                 entry: entry.getLogInfo(),
                 method: 'LifecycleColdStatusArchiveTask.processEntry',
             });
-            return await this._deleteColdObject(coldLocation, entry, log);
+
+            return await this._deleteColdObject(coldLocation, entry, entry.archiveInfo, log);
+        }
+
+        const archive = objectMD.getArchive();
+        const isSameArchive = (a, b) => a.archiveId === b.archiveId && a.archiveVersion === b.archiveVersion;
+        if (archive?.archiveInfo && !isSameArchive(archive.archiveInfo, entry.archiveInfo)) {
+            // Keep the archive the metadata already references: status entries may be
+            // redelivered, and switching would point the object to an archive a previous status
+            // already reclaimed.
+            const restoring = archive.restoreRequestedAt || archive.restoreCompletedAt;
+            log.info('object is already archived, deleting the redundant archive', {
+                entry: entry.getLogInfo(),
+                method: 'LifecycleColdStatusArchiveTask.processEntry',
+                existingArchiveId: archive.archiveInfo.archiveId,
+                newArchiveId: entry.archiveInfo.archiveId,
+            });
+
+            if (restoring) {
+                // Overwriting the metadata would also drop the restored location, making the
+                // object unreadable until the next restore.
+                return await this._deleteColdObject(coldLocation, entry, entry.archiveInfo, log);
+            }
+
+            return await this._deleteColdObject(coldLocation, entry, entry.archiveInfo, log);
         }
 
         // read before setTransitionInProgress(false) clears it
@@ -88,7 +112,6 @@ class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
 
         // set new ObjectMDArchive to ObjectMD, but make sure to keep any (deferred)
         // restore request
-        const archive = objectMD.getArchive();
         objectMD.setArchive(new ObjectMDArchive(
             entry.archiveInfo,
             archive?.restoreRequestedAt,

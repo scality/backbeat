@@ -1,6 +1,6 @@
 const assert = require('assert');
 const werelogs = require('werelogs');
-const { ObjectMD } = require('@scality/arsenal').models;
+const { ObjectMD, ObjectMDArchive } = require('@scality/arsenal').models;
 const sinon = require('sinon');
 const config = require('../../config.json');
 
@@ -247,6 +247,102 @@ describe('LifecycleColdStatusArchiveTask', () => {
             assert.strictEqual(gcEntry, null);
 
             done();
+        });
+    });
+
+    describe('redundant archive', () => {
+        const existingArchiveInfo = {
+            archiveId: '11111111-2222-3333-4444-555555555555',
+            archiveVersion: 42,
+        };
+
+        it('should delete the new archive when the object was already archived', done => {
+            const entry = ColdStorageStatusQueueEntry.createFromKafkaEntry({ value: message });
+            mdObj.setLocation(loc)
+                .setDataStoreName('us-east-1')
+                .setAmzStorageClass('us-east-1')
+                .setArchive(new ObjectMDArchive(existingArchiveInfo));
+            backbeatMetadataProxyClient.setMdObj(mdObj);
+
+            archiveTask.processEntry(coldLocation, entry, err => {
+                assert.ifError(err);
+
+                const coldGcMessage = JSON.parse(coldProducer.getReceivedEntry()[0].message);
+                assert.strictEqual(coldProducer.getReceivedTopic(), 'cold-gc-req-cold');
+                assert.deepStrictEqual(coldGcMessage.archiveInfo, entry.archiveInfo);
+
+                // the object keeps referring to the existing archive
+                assert.strictEqual(backbeatMetadataProxyClient.getReceivedMd(), null);
+                assert.strictEqual(gcProducer.getReceivedEntry(), null);
+                done();
+            });
+        });
+
+        it('should delete the new archive when a restore is pending on the previous one', done => {
+            const entry = ColdStorageStatusQueueEntry.createFromKafkaEntry({ value: message });
+            mdObj.setLocation(loc)
+                .setDataStoreName('us-east-1')
+                .setAmzStorageClass(coldLocation)
+                .setArchive(new ObjectMDArchive(
+                    existingArchiveInfo, '2017-07-11T02:44:25.515Z', 3));
+            backbeatMetadataProxyClient.setMdObj(mdObj);
+
+            archiveTask.processEntry(coldLocation, entry, err => {
+                assert.ifError(err);
+
+                const coldGcMessage = JSON.parse(coldProducer.getReceivedEntry()[0].message);
+                assert.deepStrictEqual(coldGcMessage.archiveInfo, entry.archiveInfo);
+
+                // metadata is left untouched: the restore request refers to the existing archive
+                assert.strictEqual(backbeatMetadataProxyClient.getReceivedMd(), null);
+                assert.strictEqual(gcProducer.getReceivedEntry(), null);
+                done();
+            });
+        });
+
+        it('should delete the new archive when the object is restored', done => {
+            const entry = ColdStorageStatusQueueEntry.createFromKafkaEntry({ value: message });
+            mdObj.setLocation(loc)
+                .setDataStoreName('us-east-1')
+                .setAmzStorageClass(coldLocation);
+            mdObj.getValue().archive = {
+                archiveInfo: existingArchiveInfo,
+                restoreRequestedAt: '2017-07-11T02:44:25.515Z',
+                restoreRequestedDays: 3,
+                restoreCompletedAt: '2017-07-11T03:44:25.515Z',
+                restoreWillExpireAt: '2017-07-14T03:44:25.515Z',
+            };
+            backbeatMetadataProxyClient.setMdObj(mdObj);
+
+            archiveTask.processEntry(coldLocation, entry, err => {
+                assert.ifError(err);
+
+                const coldGcMessage = JSON.parse(coldProducer.getReceivedEntry()[0].message);
+                assert.deepStrictEqual(coldGcMessage.archiveInfo, entry.archiveInfo);
+
+                // the restored (hot) data must stay readable, and expire on its own
+                assert.strictEqual(backbeatMetadataProxyClient.getReceivedMd(), null);
+                assert.strictEqual(gcProducer.getReceivedEntry(), null);
+                done();
+            });
+        });
+
+        it('should not delete anything when the status entry is a duplicate', done => {
+            const entry = ColdStorageStatusQueueEntry.createFromKafkaEntry({ value: message });
+            mdObj.setLocation(loc)
+                .setDataStoreName('us-east-1')
+                .setAmzStorageClass('us-east-1')
+                .setArchive(new ObjectMDArchive(entry.archiveInfo));
+            backbeatMetadataProxyClient.setMdObj(mdObj);
+
+            archiveTask.processEntry(coldLocation, entry, err => {
+                assert.ifError(err);
+
+                assert.strictEqual(coldProducer.getReceivedEntry(), null);
+                assert.strictEqual(gcProducer.getReceivedEntry().getActionType(),
+                    'deleteArchivedSourceData');
+                done();
+            });
         });
     });
 });
