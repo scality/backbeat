@@ -16,8 +16,8 @@ class LifecycleResetTransitionInProgressTask extends LifecycleRequeueTask {
         super(proc, 'transition');
     }
 
-    updateObjectMD(md, try_, log, etag, target) {
-        if (this.shouldSkipObject(md, etag, log)) {
+    updateObjectMD(md, log, target) {
+        if (this.shouldSkipObject(md, target.eTag, log)) {
             return false;
         }
 
@@ -31,7 +31,7 @@ class LifecycleResetTransitionInProgressTask extends LifecycleRequeueTask {
             // Keep the flag as the queue populator keys on it to trigger the next attempt
             md.setTransitionInProgress(false);
         }
-        md.setUserMetadata({ [TRANSITION_ATTEMPT_MD]: try_ });
+        md.setUserMetadata({ [TRANSITION_ATTEMPT_MD]: target.try });
         return true;
     }
 
@@ -41,6 +41,11 @@ class LifecycleResetTransitionInProgressTask extends LifecycleRequeueTask {
      *
      * @param {ObjectMD} md - object metadata
      * @param {Object} target - requeued object, see LifecycleRequeueTask.requeueObjectVersion
+     * @param {string} [target.accountId] - account id
+     * @param {string} target.bucketName - bucket name
+     * @param {string} target.objectKey - object key
+     * @param {string} [target.objectVersion] - object version id
+     * @param {string} target.location - cold location name
      * @param {Logger} log - request logger
      * @return {boolean} true if the metadata must be written back
      */

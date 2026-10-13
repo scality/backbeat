@@ -13,12 +13,12 @@ class LifecycleRetriggerRestoreTask extends LifecycleRequeueTask {
         super(proc, 'restore');
     }
 
-    updateObjectMD(md, try_, log) {
+    updateObjectMD(md, log, target) {
         if (this.shouldSkipObject(md, log)) {
             return false;
         }
         md.setUserMetadata({
-            'x-amz-meta-scal-s3-restore-attempt': try_,
+            'x-amz-meta-scal-s3-restore-attempt': target.try,
         });
         md.setOriginOp('s3:ObjectRestore:Retry');
         return true;

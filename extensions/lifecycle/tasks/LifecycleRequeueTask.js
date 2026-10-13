@@ -50,8 +50,23 @@ class LifecycleRequeueTask extends BackbeatTask {
         };
     }
 
-    async requeueObjectVersion(client, accountId, bucketName, location, entry, bucketLogger) {
-        const { objectKey, objectVersion, eTag: etag, try: try_ } = entry;
+    /**
+     * Requeue a single object version
+     *
+     * @param {Object} client - metadata client, see _getClient
+     * @param {Object} target - object to requeue
+     * @param {string} target.accountId - account id
+     * @param {string} target.bucketName - bucket name
+     * @param {string} target.objectKey - object key
+     * @param {string} [target.objectVersion] - object version id
+     * @param {string} target.eTag - expected etag, as a JSON string
+     * @param {number} [target.try] - attempt count
+     * @param {string} [target.location] - cold location the object is transitioning to
+     * @param {Logger} bucketLogger - logger
+     * @return {Promise<number>} 1 if the object metadata was updated, 0 otherwise
+     */
+    async requeueObjectVersion(client, target, bucketLogger) {
+        const { bucketName, objectKey, objectVersion } = target;
 
         const params = {
             bucket: bucketName,
@@ -62,11 +77,7 @@ class LifecycleRequeueTask extends BackbeatTask {
         }
 
         const log = this.logger.newRequestLogger(bucketLogger.getUids());
-        log.addDefaultFields({
-            accountId,
-            bucketName,
-            ...entry,
-        });
+        log.addDefaultFields(target);
 
         const blob = await client.getMetadata(params, log);
         const { result: md, error } = ObjectMD.createFromBlob(blob.Body);
@@ -74,8 +85,7 @@ class LifecycleRequeueTask extends BackbeatTask {
             throw error;
         }
 
-        const target = { accountId, bucket: bucketName, key: objectKey, version: objectVersion, location };
-        if (!this.updateObjectMD(md, try_, log, etag, target)) {
+        if (!this.updateObjectMD(md, log, target)) {
             return 0;
         }
 
@@ -127,16 +137,16 @@ class LifecycleRequeueTask extends BackbeatTask {
         const counts = await Promise.all(Object.entries(buckets).map(async ([bucketName, objects]) => {
             let objsPerBucket = 0;
             for (const object of objects) {
+                const target = { ...object, accountId, bucketName, location };
                 try {
-                    objsPerBucket += await this.requeueObjectVersion(
-                        client, accountId, bucketName, location, object, log);
+                    objsPerBucket += await this.requeueObjectVersion(client, target, log);
                 } catch (err) {
                     if (err.name !== 'ObjNotFound' && err.name !== 'NoSuchBucket') {
                         throw err;
                     }
-                    log.warn(`${err.name}, skipping`, {
-                        bucketName, objectKey: object.objectKey, objectVersion: object.objectVersion,
-                    });
+
+                    const { objectKey, objectVersion } = object;
+                    log.warn(`${err.name}, skipping`, { bucketName, objectKey, objectVersion });
                 }
             }
             return objsPerBucket;

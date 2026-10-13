@@ -20,11 +20,6 @@ class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
         return { bucket, key, version, accountId, owner };
     }
 
-    _garbageCollectArchivedSource(entry, oldLocation, newLocation, log) {
-        garbageCollectArchivedSource(this.gcProducer, this.getTargetAttribute(entry),
-            oldLocation, newLocation, log);
-    }
-
     /**
      * Requests the deletion of a cold object by pushing
      * a message into the cold GC topic
@@ -119,7 +114,7 @@ class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
             },
             next => {
                 if (!skipLocationDeletion) {
-                    this._garbageCollectArchivedSource(entry, oldLocation, coldLocation, log);
+                    garbageCollectArchivedSource(this.gcProducer, entry.target, oldLocation, coldLocation, log);
                 }
 
                 return process.nextTick(next);

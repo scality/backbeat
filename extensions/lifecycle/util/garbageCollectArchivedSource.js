@@ -9,9 +9,9 @@ const { LifecycleMetrics } = require('../LifecycleMetrics');
  *
  * @param {Object} gcProducer - garbage collector producer
  * @param {Object} target - object to collect
- * @param {string} target.bucket - bucket name
- * @param {string} target.key - object key
- * @param {string} [target.version] - object version id
+ * @param {string} target.bucketName - bucket name
+ * @param {string} target.objectKey - object key
+ * @param {string} [target.objectVersion] - object version id
  * @param {string} [target.accountId] - account id
  * @param {string} [target.owner] - owner canonical id, used to resolve the account id if missing
  * @param {string} oldLocation - hot location holding the data
@@ -20,22 +20,22 @@ const { LifecycleMetrics } = require('../LifecycleMetrics');
  * @return {undefined}
  */
 function garbageCollectArchivedSource(gcProducer, target, oldLocation, newLocation, log) {
-    const { bucket, key, version, accountId, owner } = target;
+    const { bucketName, objectKey, objectVersion, accountId, owner } = target;
     const gcEntry = ActionQueueEntry.create('deleteArchivedSourceData')
         .addContext({
             origin: 'lifecycle',
             ruleType: 'archive',
             reqId: log.getSerializedUids(),
-            bucketName: bucket,
-            objectKey: key,
-            versionId: version,
+            bucketName,
+            objectKey,
+            versionId: objectVersion,
         })
         .setAttribute('serviceName', 'lifecycle-transition')
         .setAttribute('target.oldLocation', oldLocation)
         .setAttribute('target.newLocation', newLocation)
-        .setAttribute('target.bucket', bucket)
-        .setAttribute('target.key', key)
-        .setAttribute('target.version', version)
+        .setAttribute('target.bucket', bucketName)
+        .setAttribute('target.key', objectKey)
+        .setAttribute('target.version', objectVersion)
         .setAttribute('target.accountId', accountId)
         .setAttribute('target.owner', owner);
     gcProducer.publishActionEntry(gcEntry, err => {
