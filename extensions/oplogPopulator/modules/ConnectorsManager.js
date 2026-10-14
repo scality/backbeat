@@ -9,6 +9,7 @@ const KafkaConnectWrapper = require('../../../lib/wrappers/KafkaConnectWrapper')
 const { scheduleExclusiveJob } = require('../../../lib/util/scheduleExclusiveJob');
 const Connector = require('./Connector');
 const OplogPopulatorMetrics = require('../OplogPopulatorMetrics');
+const { buildConnectorConfig } = require('./connectorConfig');
 const { EventEmitter } = require('stream');
 const AllocationStrategy = require('../allocationStrategy/AllocationStrategy');
 const PipelineFactory = require('../pipeline/PipelineFactory');
@@ -89,21 +90,13 @@ class ConnectorsManager extends EventEmitter {
      * @returns {Object} connector configuration
      */
     _getDefaultConnectorConfiguration(connectorName) {
-        const connectorConfig = {
-            'name': connectorName,
-            'database': this._database,
-            'connection.uri': this._mongoUrl,
-            'topic.namespace.map': JSON.stringify({
-                '*': this._oplogTopic,
-            }),
-            // hearbeat prevents having an outdated resume token in the connectors
-            // by constantly updating the offset to the last object in the oplog
-            'heartbeat.interval.ms': this._heartbeatIntervalMs,
-        };
-        return {
-            ...constants.defaultConnectorConfig,
-            ...connectorConfig
-        };
+        return buildConnectorConfig({
+            name: connectorName,
+            database: this._database,
+            mongoUrl: this._mongoUrl,
+            oplogTopic: this._oplogTopic,
+            heartbeatIntervalMs: this._heartbeatIntervalMs,
+        });
     }
 
     /**
