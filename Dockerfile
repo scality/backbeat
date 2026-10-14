@@ -69,8 +69,6 @@ COPY --from=builder /usr/src/app/node_modules ./node_modules/
 RUN mv bin/ensureServiceUser.js bin/ensureServiceUser \
     && chmod +x bin/ensureServiceUser
 
-ENV AWS_SDK_JS_SUPPRESS_MAINTENANCE_MODE_MESSAGE=1
-
 ENTRYPOINT ["tini", "-g", "--"]
 
 EXPOSE 8900
