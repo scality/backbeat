@@ -99,25 +99,38 @@ class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
 
         const archive = objectMD.getArchive();
         const isSameArchive = (a, b) => a.archiveId === b.archiveId && a.archiveVersion === b.archiveVersion;
-        if (archive?.archiveInfo && !isSameArchive(archive.archiveInfo, entry.archiveInfo)) {
+
+        if (archive?.archiveInfo) {
             // Keep the archive the metadata already references: status entries may be
             // redelivered, and switching would point the object to an archive a previous status
             // already reclaimed.
-            const restoring = archive.restoreRequestedAt || archive.restoreCompletedAt;
-            log.info('object is already archived, deleting the redundant archive', {
-                entry: entry.getLogInfo(),
-                method: 'LifecycleColdStatusArchiveTask.processEntry',
-                existingArchiveId: archive.archiveInfo.archiveId,
-                newArchiveId: entry.archiveInfo.archiveId,
-            });
+            if (!isSameArchive(archive.archiveInfo, entry.archiveInfo)) {
+                log.info('object is already archived, deleting the redundant archive', {
+                    entry: entry.getLogInfo(),
+                    method: 'LifecycleColdStatusArchiveTask.processEntry',
+                    existingArchiveId: archive.archiveInfo.archiveId,
+                    newArchiveId: entry.archiveInfo.archiveId,
+                });
 
-            if (restoring) {
-                // Overwriting the metadata would also drop the restored location, making the
-                // object unreadable until the next restore.
                 return await this._deleteColdObject(coldLocation, entry, entry.archiveInfo, log);
             }
 
-            return await this._deleteColdObject(coldLocation, entry, entry.archiveInfo, log);
+            // A restore means the transition already completed: keep the metadata as it is.
+            // A direct-to-cold object may carry a restore request before that, which has not
+            // started yet.
+            if (!objectMD.getTransitionInProgress()
+                && (archive.restoreRequestedAt || archive.restoreCompletedAt)) {
+                log.info('object is being restored, skipping archive update', {
+                    entry: entry.getLogInfo(),
+                    method: 'LifecycleColdStatusArchiveTask.processEntry',
+                });
+
+                return undefined;
+            }
+
+            // Same archive replayed: the transition may not have completed (e.g. crash before
+            // the hot data was collected, or metadata repaired with sorbetctl), so go on to
+            // finish it.
         }
 
         // read before setTransitionInProgress(false) clears it

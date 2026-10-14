@@ -394,4 +394,105 @@ describe('LifecycleColdStatusArchiveTask', () => {
             });
         });
     });
+
+    describe('restore', () => {
+        const restoreRequest = {
+            restoreRequestedAt: '2017-07-11T02:44:25.515Z',
+            restoreRequestedDays: 3,
+        };
+
+        const assertNothingDone = () => {
+            assert.strictEqual(backbeatMetadataProxyClient.getReceivedMd(), null);
+            assert.strictEqual(gcProducer.getReceivedEntry(), null);
+            assert.strictEqual(coldProducer.getReceivedEntry(), null);
+        };
+
+        it('should ignore a replayed status entry while the object is being restored', done => {
+            const entry = ColdStorageStatusQueueEntry.createFromKafkaEntry({ value: message });
+            mdObj.setLocation()
+                .setDataStoreName(coldLocation)
+                .setAmzStorageClass(coldLocation);
+            mdObj.getValue().archive = { archiveInfo: entry.archiveInfo, ...restoreRequest };
+            backbeatMetadataProxyClient.setMdObj(mdObj);
+
+            archiveTask.processEntry(coldLocation, entry, err => {
+                assert.ifError(err);
+                // rewriting the metadata would trigger the restore again
+                assertNothingDone();
+                done();
+            });
+        });
+
+        it('should ignore a replayed status entry once the object is restored', done => {
+            const entry = ColdStorageStatusQueueEntry.createFromKafkaEntry({ value: message });
+            mdObj.setLocation(loc)
+                .setDataStoreName('us-east-1')
+                .setAmzStorageClass(coldLocation);
+            mdObj.getValue().archive = {
+                archiveInfo: entry.archiveInfo,
+                ...restoreRequest,
+                restoreCompletedAt: '2017-07-11T03:44:25.515Z',
+                restoreWillExpireAt: '2017-07-14T03:44:25.515Z',
+            };
+            backbeatMetadataProxyClient.setMdObj(mdObj);
+
+            archiveTask.processEntry(coldLocation, entry, err => {
+                assert.ifError(err);
+                // the restored data must not be collected as archived source
+                assertNothingDone();
+                done();
+            });
+        });
+
+        describe('deferred restore of a direct-to-cold object', () => {
+            const existingArchiveInfo = {
+                archiveId: '11111111-2222-3333-4444-555555555555',
+                archiveVersion: 42,
+            };
+
+            // archived, but the hot data is not released yet: the restore is not started
+            const setupArchivedMd = archiveInfo => {
+                mdObj.setLocation(loc)
+                    .setDataStoreName('us-east-1')
+                    .setAmzStorageClass(coldLocation)
+                    .setTransitionInProgress(true, Date.now());
+                mdObj.getValue().archive = { archiveInfo, ...restoreRequest };
+                backbeatMetadataProxyClient.setMdObj(mdObj);
+            };
+
+            it('should process a replayed status entry', done => {
+                const entry = ColdStorageStatusQueueEntry.createFromKafkaEntry({ value: message });
+                setupArchivedMd(entry.archiveInfo);
+
+                archiveTask.processEntry(coldLocation, entry, err => {
+                    assert.ifError(err);
+
+                    const updatedMD = backbeatMetadataProxyClient.getReceivedMd();
+                    assert.deepStrictEqual(updatedMD.archive, {
+                        archiveInfo: entry.archiveInfo,
+                        ...restoreRequest,
+                    });
+                    assert.strictEqual(gcProducer.getReceivedEntry().getActionType(),
+                        'deleteArchivedSourceData');
+                    assert.strictEqual(coldProducer.getReceivedEntry(), null);
+                    done();
+                });
+            });
+
+            it('should delete the new archive and keep the existing one', done => {
+                const entry = ColdStorageStatusQueueEntry.createFromKafkaEntry({ value: message });
+                setupArchivedMd(existingArchiveInfo);
+
+                archiveTask.processEntry(coldLocation, entry, err => {
+                    assert.ifError(err);
+
+                    assert.strictEqual(backbeatMetadataProxyClient.getReceivedMd(), null);
+                    assert.strictEqual(gcProducer.getReceivedEntry(), null);
+                    const coldGcMessage = JSON.parse(coldProducer.getReceivedEntry()[0].message);
+                    assert.deepStrictEqual(coldGcMessage.archiveInfo, entry.archiveInfo);
+                    done();
+                });
+            });
+        });
+    });
 });
