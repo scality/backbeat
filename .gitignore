@@ -22,3 +22,7 @@ dist
 
 # Python cache, created when refreshing the monitoring files
 __pycache__
+
+# Claude Code: personal and machine-local files
+.claude/settings.local.json
+.claude/worktrees/
