@@ -17,7 +17,7 @@ These rules apply to every Claude Code session on D1, for every developer. They 
 - Every change starts in plan mode. The plan goes to `.claude/plans/` (`plansDirectory`).
 - When the developer approves the plan in the session, run the `bnaas-plan-pr` skill. It commits the plan and opens a plan PR into the backbeat epic. Write code only after the reviewers approve that plan PR.
 - The code PR links its plan file. If the work moves away from the plan, update the plan on its PR first.
-- AI reviews the code: `bnaas-reviewer` in the session, and the review-pr skill in CI.
+- AI reviews the code: `bnaas-reviewer` in the session, the review-pr skill on the branch before each push (Rule 7), and the same skill in CI.
 
 ## Rule 3: an epic changes only through a reviewed PR
 
@@ -82,6 +82,14 @@ Claude does the bookkeeping, so the developer never has to know where things are
 - cloudserverclient can release from an epic only after the change to its release workflow, which publishes under the dist-tag `prerelease`.
 - A CloudServer release also starts the scality-kms release, with the same version. scality-kms is part of CloudServer and needs no separate step.
 - The merge decisions (M1 to M9) are in the Merge strategy tab of the tech spec doc.
+
+## Rule 7: review locally before every push
+
+- Before every push, run the CI review on the branch: `.claude/hooks/review-branch.sh <repository>`. It runs the `review-pr` skill of `scality-skills@scality-agent-hub`, the skill that the Code Review workflow runs on each PR. It posts nothing to GitHub. It takes 5 to 15 minutes, so run it in the background.
+- Fix each finding, or tell the developer why it stays, in the same question that asks for the push.
+- The `review-gate.sh` hook refuses a `git push` until a saved review exists for the exact commit being pushed. A new commit needs a new review.
+- The hook runs in each session that loads this setup, in the workspace layout or in the backbeat clone. It reads the target repository from the push command, so it covers every D1 repository of that session. A session started inside another clone does not load it.
+- The hook catches a forgotten review. It is not a security boundary, and a command written to evade it can get through.
 
 ## Adding a rule
 

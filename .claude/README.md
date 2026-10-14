@@ -6,10 +6,12 @@ This folder holds the Claude Code setup that every BNaaS D1 developer uses. It l
 
 | Path | What it does |
 |---|---|
-| `rules/bnaas-d1.md` | Team rules 1 to 6. Claude Code loads them at the start of each session. |
+| `rules/bnaas-d1.md` | Team rules 1 to 7. Claude Code loads them at the start of each session. |
 | `agents/bnaas-reviewer.md` | Read-only reviewer for diffs and plans. |
 | `skills/bnaas-plan-pr/` | `/bnaas-plan-pr`: commits an approved plan and opens a plan PR. |
-| `settings.json` | Fable as the advisor and `plans/` as the plans folder. |
+| `hooks/review-branch.sh` | Runs the CI review on the current branch of a repository and saves it (Rule 7). |
+| `hooks/review-gate.sh` | Refuses a `git push` until a saved review exists for the pushed commit (Rule 7). |
+| `settings.json` | Fable as the advisor, `plans/` as the plans folder, and the hooks. |
 | `plans/` | Approved plans, one file per change. |
 
 ## Before you start
@@ -19,6 +21,8 @@ You need these tools:
 - Claude Code, logged in with a claude.ai account. The Fable advisor runs only on the Anthropic API.
 - `git` with SSH access to the scality repositories on GitHub.
 - `gh`, logged in to GitHub.
+- `python3`, for the hooks.
+- The `scality-skills` plugin from the Scality agent hub, for the review before each push. The install section shows how to get it.
 - The Atlassian connector, or an Atlassian MCP server, in Claude Code. Without it, Claude cannot create or update Jira tickets for you.
 
 ## Install
@@ -52,6 +56,15 @@ If the workspace `.claude/` already has real folders with these names, move them
 
 Keep personal settings in the workspace `.claude/settings.local.json`. Git never commits it.
 
+### The review skill, for both layouts
+
+Install the plugin once, at user scope, so that the review runs in every repository:
+
+```
+claude plugin marketplace add scality/agent-hub
+claude plugin install scality-skills@scality-agent-hub
+```
+
 ## Make sure that it works
 
 Start `claude` in the workspace folder, or in the backbeat clone for the one-repository layout. Then run these commands in the session:
@@ -61,6 +74,8 @@ Start `claude` in the workspace folder, or in the backbeat clone for the one-rep
 | `/memory` | `rules/bnaas-d1.md` is in the list. |
 | `/agents` | `bnaas-reviewer` is in the list. |
 | `/advisor` | The advisor is Fable. |
+| `/hooks` | `review-gate.sh` runs on PreToolUse for Bash. |
+| `! claude plugin list` | `scality-skills@scality-agent-hub` is enabled. |
 | Type `/bnaas` | `/bnaas-plan-pr` appears. |
 
 ## If a skill or a rule is missing
@@ -77,6 +92,24 @@ Start `claude` in the workspace folder, or in the backbeat clone for the one-rep
 
    If they differ, update the worktree as the next section shows.
 4. Start a new session after any fix. A session reads the setup only at its start.
+
+## If a push is refused
+
+The message starts with "Rule 7". It names the repository and the command to run.
+
+1. If it says "no local review", run `.claude/hooks/review-branch.sh <repository>`. Fix or report each finding, then push again. A new commit needs a new review.
+2. If it says that the gate cannot check the push, push one branch of one repository per command: `git -C <literal path> push -u origin <branch>`. The gate cannot check a path with a shell variable, `GIT_DIR`, `--git-dir`, or a push behind another command.
+3. If it says that the command runs other steps before the push, run the push as a command of its own. Only read-only steps, such as `cd` or `git fetch`, can come before it.
+4. If it names `--all`, `--mirror` or `--tags`, push one branch per command.
+5. If it cannot resolve a ref, check the branch name in the push command.
+
+The saved reviews are in `.git/bnaas-review/` of each repository. Git never commits them.
+
+`review-branch.sh` can also stop with one of these messages:
+
+- "No commit of <branch> is missing from the other local branches": another local branch holds all the commits of this branch, for example the next branch of a stack. Review and push a branch before you stack the next one on it.
+- "This output is not a review": the nested session did not finish the review. Read the printed output, then run the script again.
+- "The review-pr skill is not installed": run the two install commands of the install section.
 
 ## Update the setup
 
@@ -102,7 +135,8 @@ git -C backbeat pull --ff-only
 2. After the humans approve the plan PR, cut a ticket branch from the epic: `improvement/<ticket>-<message>`. The ticket comes from the Jira project of that repository, for example ARSN for arsenal or BB for backbeat.
 3. After each change, run the `bnaas-reviewer` agent on the diff.
 4. When the work is done, an Opus subagent checks it against the plan (Rule 4).
-5. Open a PR into the epic. It needs two approvals.
+5. Before each push, run `.claude/hooks/review-branch.sh <repository>`. It runs the same review as CI, on your branch, and posts nothing (Rule 7). It takes 5 to 15 minutes, so Claude runs it in the background.
+6. Open a PR into the epic. It needs two approvals.
 
 ## Where things live
 

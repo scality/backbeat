@@ -18,12 +18,12 @@ Rule 2: humans review the plan, AI reviews the code. This skill turns an approve
 
 1. Pick a short topic in kebab case from the plan's title. Rename the file to `YYYY-MM-DD-<topic>.md` with today's date. Do not change its content.
 2. Check the plan: no em-dashes, no credentials, no personal or customer data. Fix only what breaks these rules, and tell the user.
-3. Pick the worktree path once: run `echo "${TMPDIR:-/tmp}/plan-<topic>"`, and write the printed path in full in every later command. These steps call it `<worktree>`.
+3. Pick the worktree path once: run `echo "${TMPDIR:-/tmp}/plan-<topic>"`, and write the printed path in full in every later command. These steps call it `<worktree>`. The push gate refuses a path that holds a shell variable (Rule 7).
    Create a temporary worktree on a new ticket branch from the epic:
    `git -C <checkout> fetch origin`, then `git -C <checkout> worktree add -b improvement/<ticket>-plan-<topic> <worktree> <epic ref>`.
    Every ticket branch is named `improvement/<ticket>-<message>`, and Bert-E refuses unknown prefixes such as `plan/`.
 4. Copy the plan file to `<worktree>/.claude/plans/`. In that worktree, `git add` that file only and commit it. Commit message (Rule 6): the subject `<ticket>: plan <topic>`, at most 55 characters, a blank line, then a body that names the plan file, wrapped at 72 characters.
-5. Ask the user one question that names both actions: push the branch, and open the draft PR. After a yes, push and open a draft PR into the epic branch (the epic ref without `origin/`):
+5. Run the CI review on the plan branch in the background, because it takes 5 to 15 minutes: `.claude/hooks/review-branch.sh <worktree>` (Rule 7). Then ask the user one question that names both actions, push the branch and open the draft PR, and give the review findings in it. After a yes, push and open a draft PR into the epic branch (the epic ref without `origin/`):
    - Title: `<ticket>: plan <topic>` (Rule 6).
    - Body: five sections, each a `##` heading followed by one to three sentences. Intent says what the plan decides. Verification says how a reviewer checks the plan.
 
@@ -41,7 +41,7 @@ Rule 2: humans review the plan, AI reviews the code. This skill turns an approve
 
 ## Updating a plan after review
 
-Pick `<worktree>` as in step 3, and add a temporary worktree on the existing plan branch (`git -C <checkout> worktree add <worktree> improvement/<ticket>-plan-<topic>`). Edit the plan there, and commit the change as a new commit (never amend). Ask before the push, then remove the worktree. The PR history then shows each version, and `git revert` undoes one.
+Pick `<worktree>` as in step 3, and add a temporary worktree on the existing plan branch (`git -C <checkout> worktree add <worktree> improvement/<ticket>-plan-<topic>`). Edit the plan there, and commit the change as a new commit (never amend). Run `.claude/hooks/review-branch.sh <worktree>`, ask before the push, then remove the worktree. The PR history then shows each version, and `git revert` undoes one.
 
 ## Code PRs
 
