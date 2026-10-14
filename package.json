@@ -31,7 +31,7 @@
     "ft_test:queuepopulator": "mocha --recursive $(find tests/functional/queuePopulator -name '*.js') --timeout 30000 --exit",
     "bh_test": "mocha --recursive tests/behavior --exit",
     "lint": "eslint $(git ls-files '*.js' '*.ts')",
-    "lint_md": "mdlint $(git ls-files '[^bucket-scanner/]*.md')",
+    "lint_md": "mdlint $(git ls-files '[^bucket-scanner/]*.md' ':!:.claude/')",
     "typecheck": "tsc --noEmit",
     "build": "tsc",
     "start": "node bin/backbeat.js",
