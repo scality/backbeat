@@ -19,7 +19,7 @@ groups:
   - alert: OplogPopulatorUnavailable
     Expr: |
       sum(up{namespace="${namespace}",job="${oplog_populator_job}"}) < 1
-    For: "30s"
+    For: "2m"
     Labels:
      severity: critical
     Annotations:
@@ -29,7 +29,7 @@ groups:
 
   - alert: KafkaConnectFailedConnectorConfiguration
     Expr: |
-        sum by(connector) (increase(s3_oplog_populator_reconfiguration{success="false",job="${oplog_populator_job}",namespace="${namespace}"}[1m]))
+        sum by(connector) (increase(s3_oplog_populator_connector_configuration_applied_total{success="false",job="${oplog_populator_job}",namespace="${namespace}"}[5m]))
         > 0
     For: "5m"
     Labels:
@@ -58,7 +58,7 @@ groups:
     Expr: |
         histogram_quantile(
           0.99,
-          sum by(le) (rate(s3_oplog_populator_acknowledgement_lag_seconds_bucket{job="${oplog_populator_job}",namespace="${namespace}"}[1m]))
+          sum by(le) (rate(s3_oplog_populator_acknowledgement_lag_seconds_bucket{job="${oplog_populator_job}",namespace="${namespace}"}[5m]))
         )
         >= ${oplogPopulatorChangeStreamLagThreshold}
     For: "5m"
@@ -71,7 +71,7 @@ groups:
 
   - alert: KafkaConnectFailedConnectors
     Expr: |
-        sum by(connector) (increase(s3_oplog_populator_connector_restarts{job="${oplog_populator_job}",namespace="${namespace}"}[1m]))
+        sum by(connector) (increase(s3_oplog_populator_connector_restarts{job="${oplog_populator_job}",namespace="${namespace}"}[5m]))
         > 0
     For: "10m"
     Labels:
