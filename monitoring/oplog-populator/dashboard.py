@@ -80,7 +80,7 @@ oplog_populator_up_current = Stat(
             'sum(up{',
             '    namespace="${namespace}",',
             '    job="${oplog_populator_job}"',
-            '})',
+            '}) or vector(0)',
         ]),
     )],
     thresholds=[
@@ -100,7 +100,7 @@ kafka_connect_up_current = Stat(
             'sum(up{',
             '    namespace="${namespace}",',
             '    job="${kafka_connect_job}"',
-            '})',
+            '}) or vector(0)',
         ]),
     )],
     thresholds=[

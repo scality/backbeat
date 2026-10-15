@@ -132,7 +132,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(up{\n    namespace=\"${namespace}\",\n    job=\"${oplog_populator_job}\"\n})",
+          "expr": "sum(up{\n    namespace=\"${namespace}\",\n    job=\"${oplog_populator_job}\"\n}) or vector(0)",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -213,7 +213,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(up{\n    namespace=\"${namespace}\",\n    job=\"${kafka_connect_job}\"\n})",
+          "expr": "sum(up{\n    namespace=\"${namespace}\",\n    job=\"${kafka_connect_job}\"\n}) or vector(0)",
           "format": "time_series",
           "hide": false,
           "instant": false,
