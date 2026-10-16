@@ -1,6 +1,6 @@
 const joi = require('joi');
 const semver = require('semver');
-const { errors } = require('@scality/arsenal');
+const { errors, constants: arsenalConstants } = require('@scality/arsenal');
 const { MongoClient } = require('mongodb');
 const constants = require('./constants');
 const { constructConnectionString, getMongoVersion } = require('../utils/MongoUtils');
@@ -17,6 +17,12 @@ const LeastFullConnector = require('./allocationStrategy/LeastFullConnector');
 const UniqueConnector = require('./allocationStrategy/UniqueConnector');
 const WildcardPipelineFactory = require('./pipeline/WildcardPipelineFactory');
 const MultipleBucketsPipelineFactory = require('./pipeline/MultipleBucketsPipelineFactory');
+const locationsConfig = require('../../conf/locationConfig.json') || {};
+
+function isUserBucket(bucketName) {
+    return bucketName !== arsenalConstants.usersBucket
+        && !bucketName.startsWith(arsenalConstants.mpuBucketPrefix);
+}
 
 const paramsJoi = joi.object({
     config: OplogPopulatorConfigJoiSchema.required(),
@@ -124,11 +130,40 @@ class OplogPopulator {
     }
 
     /**
+     * A site with a source location pulls the data replicated to it (the
+     * replication populator requests the copy), whatever the bucket and its
+     * configuration: replication rules are not replicated with the buckets, so
+     * such a site listens to every bucket.
+     * @returns {boolean} true if the site pulls data from a source location
+     */
+    _pullsFromSourceLocation() {
+        return Object.values(locationsConfig).some(location => location.isCRR);
+    }
+
+    /**
+     * Whether a single connector listens to the whole database rather than
+     * connectors to the buckets backbeat is enabled on: when configured with no
+     * connector, or on a site that listens to every bucket anyway.
+     * @returns {boolean} true if a single connector listens to the whole database
+     */
+    _listensToWholeDatabase() {
+        return this._config.numberOfConnectors === 0 || this._pullsFromSourceLocation();
+    }
+
+    /**
      * Get buckets that have at least one extension active
      * @returns {string[]} list of buckets to listen to
      * @throws {InternalError}
      */
     async _getBackbeatEnabledBuckets() {
+        if (this._pullsFromSourceLocation()) {
+            return this._findBuckets({
+                _id: {
+                    $ne: arsenalConstants.usersBucket,
+                    $not: new RegExp(`^${arsenalConstants.mpuBucketPrefix}`),
+                },
+            });
+        }
         const filter = {
             $or: [],
         };
@@ -142,6 +177,16 @@ class OplogPopulator {
         if (filter.$or.length === 0) {
             return [];
         }
+        return this._findBuckets(filter);
+    }
+
+    /**
+     * Get the buckets matching a filter
+     * @param {Object} filter MongoDB filter on the metastore
+     * @returns {string[]} list of bucket names
+     * @throws {InternalError}
+     */
+    async _findBuckets(filter) {
         try {
             const buckets = await this._metastore.find(filter)
                 .project({ _id: 1 })
@@ -150,7 +195,7 @@ class OplogPopulator {
             return buckets;
         } catch (err) {
             this._logger.error('Error querying buckets from MongoDB', {
-                method: 'OplogPopulator._getBackbeatEnabledBuckets',
+                method: 'OplogPopulator._findBuckets',
                 error: err.message,
             });
             throw errors.InternalError.customizeDescription(err.message);
@@ -163,6 +208,9 @@ class OplogPopulator {
      * @returns {boolean} is bucket backbeat enabled
      */
     _isBucketBackbeatEnabled(bucketMetadata) {
+        if (this._pullsFromSourceLocation()) {
+            return isUserBucket(bucketMetadata.name);
+        }
         return Object.values(this._extHelpers).some(extHelper =>
             extHelper.isBucketExtensionEnabled(bucketMetadata));
     }
@@ -285,7 +333,9 @@ class OplogPopulator {
             this._allocationStrategy = configuration.allocationStrategy;
             this._pipelineFactory = configuration.pipelineFactory;
             this._connectorsManager = new ConnectorsManager({
-                nbConnectors: this._config.numberOfConnectors,
+                // a single connector listening to the whole database is created
+                // with its first bucket, none upfront
+                nbConnectors: this._listensToWholeDatabase() ? 0 : this._config.numberOfConnectors,
                 database: this._database,
                 mongoUrl: this._mongoUrl,
                 oplogTopic: this._config.topic,
@@ -347,9 +397,8 @@ class OplogPopulator {
     initConfiguration() {
         let strategy;
         let pipelineFactory;
-        if (this._config.numberOfConnectors === 0) {
-            // If the number of connector is set to 0, then we
-            // use a single connector to listen to the whole DB.
+        if (this._listensToWholeDatabase()) {
+            // A single connector listens to the whole DB.
             pipelineFactory = new WildcardPipelineFactory(this._config.locationStrippingBytesThreshold);
             strategy = new UniqueConnector({
                 logger: this._logger,

@@ -21,6 +21,7 @@ const AllocationStrategy = require('../../../extensions/oplogPopulator/allocatio
 const constants = require('../../../extensions/oplogPopulator/constants');
 const UniqueConnector = require('../../../extensions/oplogPopulator/allocationStrategy/UniqueConnector');
 const PipelineFactory = require('../../../extensions/oplogPopulator/pipeline/PipelineFactory');
+const WildcardPipelineFactory = require('../../../extensions/oplogPopulator/pipeline/WildcardPipelineFactory');
 
 const oplogPopulatorConfig = {
     topic: 'oplog',
@@ -49,6 +50,8 @@ describe('OplogPopulator', () => {
     let oplogPopulator;
 
     beforeEach(() => {
+        // the test location config has a source location: tests opt in to pulling
+        sinon.stub(OplogPopulator.prototype, '_pullsFromSourceLocation').returns(false);
         oplogPopulator = new OplogPopulator({
             config: oplogPopulatorConfig,
             mongoConfig,
@@ -160,6 +163,14 @@ describe('OplogPopulator', () => {
             assert(configuration.allocationStrategy instanceof RetainBucketsDecorator);
             assert(configuration.allocationStrategy._strategy instanceof UniqueConnector);
         });
+
+        it('should listen to the whole database on a site pulling from a source location', () => {
+            OplogPopulator.prototype._pullsFromSourceLocation.returns(true);
+            sinon.stub(oplogPopulator, '_arePipelinesImmutable').returns(true);
+            const configuration = oplogPopulator.initConfiguration();
+            assert(configuration.allocationStrategy._strategy instanceof UniqueConnector);
+            assert(configuration.pipelineFactory instanceof WildcardPipelineFactory);
+        });
     });
 
     describe('setup', () => {
@@ -189,6 +200,19 @@ describe('OplogPopulator', () => {
             assert(getBackbeatEnabledBucketsStub.calledOnce);
             assert(setMetastoreChangeStreamStub.calledOnce);
             assert(initializeConnectorsManagerStub.calledOnce);
+        });
+
+        it('should create no connector upfront on a site pulling from a source location', async () => {
+            OplogPopulator.prototype._pullsFromSourceLocation.returns(true);
+            sinon.stub(oplogPopulator, '_setupMongoClient').resolves();
+            sinon.stub(oplogPopulator, '_setMetastoreChangeStream');
+            sinon.stub(oplogPopulator, '_initializeConnectorsManager');
+            sinon.stub(oplogPopulator, '_getBackbeatEnabledBuckets').resolves([]);
+
+            await oplogPopulator.setup();
+
+            assert.strictEqual(oplogPopulator._connectorsManager._nbConnectors, 0);
+            assert(oplogPopulator._allocationStrategy._strategy instanceof UniqueConnector);
         });
 
         it('should setup oplog populator with immutable pipelines', async () => {
@@ -770,6 +794,50 @@ describe('OplogPopulator', () => {
                 tmpOplogPopulator._loadOplogHelperClasses();
                 const valid = tmpOplogPopulator._isBucketBackbeatEnabled(metadata);
                 assert.strictEqual(valid, result);
+            });
+        });
+    });
+
+    describe('on a site pulling from a source location', () => {
+        beforeEach(() => {
+            OplogPopulator.prototype._pullsFromSourceLocation.returns(true);
+        });
+
+        it('should listen to every user bucket at startup', async () => {
+            const findStub = sinon.stub().returns({
+                project: () => ({
+                    map: () => ({
+                        toArray: () => ['bucket-without-rules'],
+                    }),
+                })
+            });
+            oplogPopulator._metastore = { find: findStub };
+            oplogPopulator._loadOplogHelperClasses();
+            const buckets = await oplogPopulator._getBackbeatEnabledBuckets();
+            assert.deepStrictEqual(buckets, ['bucket-without-rules']);
+            assert(findStub.calledOnce);
+            assert.deepStrictEqual(findStub.firstCall.args[0], {
+                _id: {
+                    $ne: 'users..bucket',
+                    $not: /^mpuShadowBucket/,
+                },
+            });
+        });
+
+        [
+            { name: 'bucket-without-rules', result: true },
+            { name: 'users..bucket', result: false },
+            { name: 'mpuShadowBucketbucket-without-rules', result: false },
+        ].forEach(({ name, result }) => {
+            it(`should ${result ? '' : 'not '}listen to ${name} when it changes`, () => {
+                oplogPopulator._loadOplogHelperClasses();
+                const metadata = {
+                    name,
+                    notificationConfiguration: null,
+                    lifecycleConfiguration: null,
+                    replicationConfiguration: null,
+                };
+                assert.strictEqual(oplogPopulator._isBucketBackbeatEnabled(metadata), result);
             });
         });
     });
