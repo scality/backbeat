@@ -95,3 +95,53 @@ tests:
       - alertname: KafkaConnectReplicasAbove
         eval_time: 25m
         exp_alerts: []
+
+  - name: Number of Hashed Connectors
+    interval: 1m
+    input_series:
+      - series: s3_oplog_populator_connectors{state="running",job="artesca-data-backbeat-oplog-populator-headless",namespace="zenko"}
+        values: 12x20
+      - series: s3_oplog_populator_connectors{state="outdated",job="artesca-data-backbeat-oplog-populator-headless",namespace="zenko"}
+        values: 30x20
+    alert_rule_test:
+      - alertname: KafkaConnectTooManyConnectors
+        eval_time: 15m
+        exp_alerts: []
+
+  - name: Connector Paused
+    interval: 1m
+    input_series:
+      - series: s3_oplog_populator_connectors{state="paused",job="artesca-data-backbeat-oplog-populator-headless",namespace="zenko"}
+        values: 0x5 1x20
+    alert_rule_test:
+      - alertname: OplogPopulatorConnectorPaused
+        eval_time: 10m
+        exp_alerts: []
+      - alertname: OplogPopulatorConnectorPaused
+        eval_time: 20m
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              zenko_service: backbeat-oplog-populator
+              description: "An oplog populator connector is paused or stopped, so changes to the buckets it covers are not processed: replication, lifecycle and notifications are delayed for these buckets"
+              summary: "Oplog populator connector paused"
+
+  - name: Migration Not Completing
+    interval: 1m
+    input_series:
+      - series: s3_oplog_populator_connectors{state="outdated",job="artesca-data-backbeat-oplog-populator-headless",namespace="zenko"}
+        values: 3x5 0x5 3x40
+    alert_rule_test:
+      - alertname: OplogPopulatorMigrationNotCompleting
+        eval_time: 10m
+        exp_alerts: []
+      - alertname: OplogPopulatorMigrationNotCompleting
+        eval_time: 45m
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              zenko_service: backbeat-oplog-populator
+              description: "The oplog populator has not completed the migration of its connectors for 30 minutes, so changes to some buckets may be delayed. This may happen when Kafka Connect does not support the migration"
+              summary: "Oplog populator migration not completing"
