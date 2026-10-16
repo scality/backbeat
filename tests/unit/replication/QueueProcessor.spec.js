@@ -343,6 +343,65 @@ describe('Queue Processor', () => {
                 done();
             });
         });
+
+        describe('copies by site', () => {
+            [
+                {
+                    desc: 'dispatches a pull replication from this site to a local location',
+                    site: 'site-crr',
+                    toLocation: 'us-east-1',
+                    dispatched: true,
+                },
+                {
+                    desc: 'skips a pull replication from another site',
+                    site: 'location-crr-source',
+                    toLocation: 'us-east-1',
+                    dispatched: false,
+                },
+                {
+                    // only the processor of the location pulled from takes it
+                    desc: 'skips a pull replication to this site from another site',
+                    site: 'location-crr-source',
+                    toLocation: 'site-crr',
+                    dispatched: false,
+                },
+                {
+                    desc: 'dispatches a transition to this site',
+                    site: 'site-crr',
+                    toLocation: 'site-crr',
+                    dispatched: true,
+                },
+                {
+                    desc: 'dispatches a message without site to this site, by toLocation',
+                    toLocation: 'site-crr',
+                    dispatched: true,
+                },
+                {
+                    desc: 'skips a message without site to another site',
+                    toLocation: 'us-east-2',
+                    dispatched: false,
+                },
+            ].forEach(({ desc, site, toLocation, dispatched }) => {
+                it(desc, done => {
+                    const kafkaEntry = {
+                        value: JSON.stringify({
+                            action: 'copyLocation',
+                            site,
+                            toLocation,
+                            target: {
+                                bucket: 'src-bucket',
+                                key: 'obj',
+                                eTag: '"d41d8cd98f00b204e9800998ecf8427e"',
+                            },
+                        }),
+                    };
+                    qp.processDataMoverEntry(kafkaEntry, () => {
+                        assert.strictEqual(qp.dataMoverTaskScheduler.push.called, dispatched);
+                        done();
+                    });
+                });
+            });
+        });
     });
 
     describe('getStateVars', () => {

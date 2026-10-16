@@ -1017,7 +1017,9 @@ class QueueProcessor extends EventEmitter {
         }
         let task;
         if (actionEntry.getActionType() === 'copyLocation') {
-            if (actionEntry.getAttribute('toLocation') === this.site) {
+            // messages queued before the site attribute existed only have toLocation
+            const site = actionEntry.getAttribute('site') || actionEntry.getAttribute('toLocation');
+            if (site === this.site) {
                 task = new CopyLocationTask(this);
             }
         } else {

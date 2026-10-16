@@ -187,6 +187,7 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
             eTag: `"${queueEntry.getContentMd5()}"`,
             lastModified: queueEntry.getLastModified(),
             toLocation: targetLocation,
+            site: queueEntry.getDataStoreName(),
             originLabel: PULL_REPLICATION,
             fromLocation: queueEntry.getDataStoreName(),
             contentLength,

@@ -25,6 +25,8 @@ class ReplicationAPI {
      * @param {string} [params.eTag] - ETag of object
      * @param {string} [params.lastModified] - object last modification date
      * @param {string} params.toLocation - name of target location
+     * @param {string} params.site - location whose data processor does the
+     * copy: toLocation for a transition, the source location for a pull replication
      * @param {string} params.originLabel - label to mark origin of
      * request (for metrics accounting)
      * @param {string} params.fromLocation - source location name (for
@@ -49,6 +51,7 @@ class ReplicationAPI {
                 attempt: params.attempt,
                 lastModified: params.lastModified,
             })
+            .setAttribute('site', params.site)
             .setAttribute('toLocation', params.toLocation)
             .setAttribute('metrics', {
                 origin: params.originLabel,
