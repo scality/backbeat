@@ -39,6 +39,22 @@ class CopyLocationTask extends BackbeatTask {
         return this.destConfig?.replicationEndpoint?.type;
     }
 
+    /**
+     * Where the data is copied to: the destination of the action, with the type
+     * of this site when it is the destination, else of the destination location
+     * (a pull runs on the processor of the remote location it reads from)
+     *
+     * @param {ActionQueueEntry} actionEntry - the action entry
+     * @return {{location: string, storageType: string}} the destination
+     */
+    _getDestination(actionEntry) {
+        const location = actionEntry.getAttribute('toLocation');
+        if (location === this.site) {
+            return { location, storageType: this.destType };
+        }
+        return { location, storageType: locations[location]?.type };
+    }
+
     constructor(qp) {
         const qpState = qp.getStateVars();
         super();
@@ -467,13 +483,14 @@ class CopyLocationTask extends BackbeatTask {
     _sendMultipleBackendPutObject(actionEntry, objMD, size,
         incomingMsg, log, cb) {
         const { bucket, key, version } = actionEntry.getAttribute('target');
+        const { location, storageType } = this._getDestination(actionEntry);
         const command = new MultipleBackendPutObjectCommand({
             Bucket: bucket,
             Key: key,
             CanonicalID: objMD.getOwnerId(),
             ContentMD5: objMD.getContentMd5(),
-            StorageType: this.destType,
-            StorageClass: this.site,
+            StorageType: storageType,
+            StorageClass: location,
             VersionId: version,
             UserMetaData: objMD.getUserMetadata(),
             ContentType: objMD.getContentType() || undefined,
@@ -615,11 +632,12 @@ class CopyLocationTask extends BackbeatTask {
             uploadId,
         }, actionEntry.getLogInfo()));
         const { bucket, key } = actionEntry.getAttribute('target');
+        const { location, storageType } = this._getDestination(actionEntry);
         const command = new MultipleBackendAbortMPUCommand({
             Bucket: bucket,
             Key: key,
-            StorageType: this.destType,
-            StorageClass: this.site,
+            StorageType: storageType,
+            StorageClass: location,
             UploadId: uploadId,
             RequestUids: log.getSerializedUids(),
         });
@@ -648,11 +666,12 @@ class CopyLocationTask extends BackbeatTask {
     */
     _completeMPU(actionEntry, objMD, uploadId, data, log, doneOnce) {
         const { bucket, key, version } = actionEntry.getAttribute('target');
+        const { location, storageType } = this._getDestination(actionEntry);
         const command = new MultipleBackendCompleteMPUCommand({
             Bucket: bucket,
             Key: key,
-            StorageType: this.destType,
-            StorageClass: this.site,
+            StorageType: storageType,
+            StorageClass: location,
             VersionId: version,
             UserMetaData: objMD.getUserMetadata(),
             ContentType: objMD.getContentType(),
@@ -731,11 +750,12 @@ class CopyLocationTask extends BackbeatTask {
         }
 
         const { bucket, key } = actionEntry.getAttribute('target');
+        const { location, storageType } = this._getDestination(actionEntry);
         const command = new MultipleBackendPutMPUPartCommand({
             Bucket: bucket,
             Key: key,
-            StorageType: this.destType,
-            StorageClass: this.site,
+            StorageType: storageType,
+            StorageClass: location,
             PartNumber: partNumber,
             UploadId: uploadId,
             Body: incomingMsg,
@@ -787,11 +807,12 @@ class CopyLocationTask extends BackbeatTask {
             return setImmediate(() => cb(null, uploadId));
         }
         const { bucket, key, version } = actionEntry.getAttribute('target');
+        const { location, storageType } = this._getDestination(actionEntry);
         const command = new MultipleBackendInitiateMPUCommand({
             Bucket: bucket,
             Key: key,
-            StorageType: this.destType,
-            StorageClass: this.site,
+            StorageType: storageType,
+            StorageClass: location,
             VersionId: version,
             UserMetaData: objMD.getUserMetadata(),
             ContentType: objMD.getContentType() || undefined,
