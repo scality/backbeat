@@ -958,15 +958,10 @@
     "@opentelemetry/core" "2.12.0"
     yaml "^2.8.3"
 
-"@opentelemetry/context-async-hooks@2.12.0":
+"@opentelemetry/context-async-hooks@2.12.0", "@opentelemetry/context-async-hooks@^2.11.0":
   version "2.12.0"
   resolved "https://registry.yarnpkg.com/@opentelemetry/context-async-hooks/-/context-async-hooks-2.12.0.tgz#2ab3fa3027d05b0f4019c309dd4def1af0dc22ac"
   integrity sha512-iK/1nD7mmZVkuYjVjkdFBiCvzntJdFny1S3CYbUYyOq7V5enL6XX+gJ7eh965L1LnS11VA8mQ7Ej/ck04SB0MQ==
-
-"@opentelemetry/context-async-hooks@^2.11.0":
-  version "2.11.0"
-  resolved "https://registry.yarnpkg.com/@opentelemetry/context-async-hooks/-/context-async-hooks-2.11.0.tgz#1377ad3cb1125106ba36d4cd3c4933484d157691"
-  integrity sha512-Tr79DyWI8itsBdg+jH+opjfrwLzX+erk1/ExkIwhWoAVjVrJIn2y5+cGjTC0Vy8fyNIA/y8wuJPZwr1T3xCZeQ==
 
 "@opentelemetry/core@2.11.0":
   version "2.11.0"
