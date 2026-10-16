@@ -26,12 +26,30 @@ tests:
               description: "Oplog populator pod is down"
               summary: "Oplog populator service is in critical state"
 
+  - name: Oplog Populator Missing
+    interval: 1m
+    input_series:
+      - series: up{namespace="zenko",job="other-job",pod="other-1"}
+        values: 1 1 1
+    alert_rule_test:
+      - alertname: OplogPopulatorUnavailable
+        eval_time: 2m
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              namespace: zenko
+              job: artesca-data-backbeat-oplog-populator-headless
+            exp_annotations:
+              zenko_service: backbeat-oplog-populator
+              description: "Oplog populator pod is down"
+              summary: "Oplog populator service is in critical state"
+
   - name: Connector Configuration Failure
     interval: 1m
     input_series:
-      - series: s3_oplog_populator_reconfiguration{connector="example-connector",success="false",job="artesca-data-backbeat-oplog-populator-headless",namespace="zenko"}
+      - series: s3_oplog_populator_connector_configuration_applied_total{connector="example-connector",success="false",job="artesca-data-backbeat-oplog-populator-headless",namespace="zenko"}
         values: 0+0x4 0+40x4 160+50x6
-      - series: s3_oplog_populator_reconfiguration{connector="example-connector",job="artesca-data-backbeat-oplog-populator-headless",namespace="zenko"}
+      - series: s3_oplog_populator_connector_configuration_applied_total{connector="example-connector",success="true",job="artesca-data-backbeat-oplog-populator-headless",namespace="zenko"}
         values: 100+100x16
     alert_rule_test:
       - alertname: KafkaConnectFailedConnectorConfiguration
