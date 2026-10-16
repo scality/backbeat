@@ -1,9 +1,9 @@
 const joi = require('joi');
-const { v4: uuid } = require('uuid');
 const { errors } = require('@scality/arsenal');
 const { EventEmitter } = require('stream');
 const KafkaConnectWrapper = require('../../../lib/wrappers/KafkaConnectWrapper');
 const constants = require('../constants');
+const { newPartitionName } = require('./connectorConfig');
 
 const connectorParams = joi.object({
     name: joi.string().required(),
@@ -122,7 +122,7 @@ class Connector extends EventEmitter {
      * @returns {undefined}
      */
     updatePartitionName() {
-        this._config['offset.partition.name'] = `partition-${uuid()}`;
+        this._config[constants.connectorPartitionNameKey] = newPartitionName();
     }
 
     /**
@@ -133,11 +133,11 @@ class Connector extends EventEmitter {
      * @returns {undefined}
     */
     setResumePoint(eventDate) {
-        if (this._config['startup.mode.timestamp.start.at.operation.time']) {
+        if (this._config[constants.connectorStartupTimeKey]) {
             return;
         }
 
-        this._config['startup.mode.timestamp.start.at.operation.time'] = eventDate.toISOString();
+        this._config[constants.connectorStartupTimeKey] = eventDate.toISOString();
 
         this._logger.info('Connector resume point updated', {
             method: 'Connector.updateResumeDate',
@@ -197,7 +197,7 @@ class Connector extends EventEmitter {
             this._isRunning = false;
             this._liveBuckets = new Set();
             // resetting the resume point to set a new one on creation of the connector
-            delete this._config['startup.mode.timestamp.start.at.operation.time'];
+            delete this._config[constants.connectorStartupTimeKey];
         } catch (err) {
             this._logger.error('Error while destroying connector', {
                 method: 'Connector.destroy',

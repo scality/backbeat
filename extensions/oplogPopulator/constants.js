@@ -14,6 +14,19 @@ const constants = {
     // operation types carrying object metadata, the only ones consumed
     // downstream (object deletions are updates setting the deleted flag)
     hashedOperationTypes: ['insert', 'update', 'replace'],
+    // kafka connect worker default, not exposed through its REST API: a
+    // running connector commits its offsets within this delay
+    kafkaConnectOffsetFlushIntervalMs: 60000,
+    // how long to wait for a stopped connector's tasks to shut down before
+    // retrying later
+    stopTimeoutMs: 60000,
+    stopPollIntervalMs: 1000,
+    // bounds parallel kafka connect requests: there may be thousands of per-bucket
+    // connectors to migrate, and some calls are expensive (offsets reads make the
+    // worker read its whole offsets topic)
+    kafkaConnectConcurrency: 10,
+    connectorPartitionNameKey: 'offset.partition.name',
+    connectorStartupTimeKey: 'startup.mode.timestamp.start.at.operation.time',
     connectorUpdatedEvent: 'connector-updated',
     bucketRemovedFromConnectorEvent: 'bucket-removed',
     connectorsReconciledEvent: 'connectors-reconciled',

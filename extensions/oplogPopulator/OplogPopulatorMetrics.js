@@ -2,6 +2,9 @@ const { ZenkoMetrics } = require('@scality/arsenal').metrics;
 
 const { getStringSizeInBytes } = require('../../lib/util/buffer');
 
+// connector label of the reconfiguration metrics of all hashed connectors
+const hashedConnectorsLabel = 'hashed';
+
 class OplogPopulatorMetrics {
     /**
      * @param {Logger} logger logger instance
@@ -53,7 +56,8 @@ class OplogPopulatorMetrics {
         });
         this.connectors = ZenkoMetrics.createGauge({
             name: 's3_oplog_populator_connectors',
-            help: 'Total number of configured connectors',
+            help: 'Total number of configured connectors, by state with hashed ingestion',
+            labelNames: ['state'],
         });
         this.reconfigurationLag = ZenkoMetrics.createHistogram({
             name: 's3_oplog_populator_reconfiguration_lag_seconds',
@@ -71,6 +75,13 @@ class OplogPopulatorMetrics {
             help: 'Total number of connector restarts',
             labelNames: ['connector'],
         });
+        this.migrations = ZenkoMetrics.createCounter({
+            name: 's3_oplog_populator_migrations_total',
+            help: 'Total number of migrations to hashed connectors',
+            labelNames: ['success'],
+        });
+        // exposed from the start, so that the first migration shows as an increase
+        [true, false].forEach(success => this.migrations.inc({ success }, 0));
     }
 
     /**
@@ -220,6 +231,103 @@ class OplogPopulatorMetrics {
         } catch (error) {
             this._logger.error('An error occured while pushing metric', {
                 method: 'OplogPopulatorMetrics.onConnectorsReconciled',
+                error: error.message,
+            });
+        }
+    }
+
+    /**
+     * updates s3_oplog_populator_connectors metric with the connectors seen by
+     * the hashed mode
+     * @param {Object} states number of connectors per state: running, paused
+     * and failed hashed connectors, and outdated connectors to migrate
+     * @returns {undefined}
+     */
+    onHashedConnectorsObserved(states) {
+        try {
+            Object.entries(states).forEach(([state, count]) => this.connectors.set({ state }, count));
+        } catch (error) {
+            this._logger.error('An error occured while pushing metrics', {
+                method: 'OplogPopulatorMetrics.onHashedConnectorsObserved',
+                error: error.message,
+            });
+        }
+    }
+
+    /**
+     * updates s3_oplog_populator_connector_pipeline_bytes metric of a hashed
+     * connector
+     * @param {string} connector connector name
+     * @param {string} pipeline connector pipeline
+     * @returns {undefined}
+     */
+    onHashedConnectorPipeline(connector, pipeline) {
+        try {
+            this.mongoPipelineSize.set({ connector }, getStringSizeInBytes(JSON.stringify(pipeline)));
+        } catch (error) {
+            this._logger.error('An error occured while pushing metrics', {
+                method: 'OplogPopulatorMetrics.onHashedConnectorPipeline',
+                error: error.message,
+            });
+        }
+    }
+
+    /**
+     * creates the reconfiguration metrics of hashed connectors at 0, so that
+     * their first increase shows: each connector is only created or deleted
+     * once, so they are recorded under a single label for all of them
+     * @returns {undefined}
+     */
+    onHashedConnectorsStarted() {
+        try {
+            const connector = hashedConnectorsLabel;
+            [true, false].forEach(success => this.connectorConfigurationApplied.inc({ connector, success }, 0));
+            this.requestSize.inc({ connector }, 0);
+            this.reconfigurationLag.zero({ connector });
+        } catch (error) {
+            this._logger.error('An error occured while pushing metrics', {
+                method: 'OplogPopulatorMetrics.onHashedConnectorsStarted',
+                error: error.message,
+            });
+        }
+    }
+
+    /**
+     * updates the metrics of a hashed connector creation, update or deletion
+     * @param {boolean} success whether kafka connect applied it
+     * @param {number} delta duration of the request, in seconds
+     * @param {Object} [config] configuration sent, if any
+     * @returns {undefined}
+     */
+    onHashedConnectorReconfiguration(success, delta, config = null) {
+        try {
+            const connector = hashedConnectorsLabel;
+            this.connectorConfigurationApplied.inc({ connector, success });
+            if (success) {
+                this.reconfigurationLag.observe({ connector }, delta);
+            }
+            if (config) {
+                this.requestSize.inc({ connector }, getStringSizeInBytes(JSON.stringify(config)));
+            }
+        } catch (error) {
+            this._logger.error('An error occured while pushing metrics', {
+                method: 'OplogPopulatorMetrics.onHashedConnectorReconfiguration',
+                error: error.message,
+            });
+        }
+    }
+
+    /**
+     * updates s3_oplog_populator_migrations_total metric
+     * @param {boolean} success whether the migration completed
+     * @returns {undefined}
+     */
+    onMigration(success) {
+        try {
+            this.migrations.inc({ success });
+        } catch (error) {
+            this._logger.error('An error occured while pushing metrics', {
+                method: 'OplogPopulatorMetrics.onMigration',
                 error: error.message,
             });
         }
