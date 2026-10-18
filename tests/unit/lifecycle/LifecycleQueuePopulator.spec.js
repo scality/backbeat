@@ -396,6 +396,66 @@ describe('LifecycleQueuePopulator', () => {
                 assert(kafkaAdjustSendStub.calledOnce);
                 assert(!kafkaSendStub.called);
             });
+
+            describe('null version', () => {
+                const versionId = '98500086134471999999RG001  0';
+                const getRestoreEntry = (key, overrides) => ({
+                    type: 'put',
+                    bucket: 'lc-queue-populator-test-bucket',
+                    key,
+                    value: JSON.stringify({
+                        'md-model-version': 2,
+                        'owner-display-name': 'Bart',
+                        'owner-id': '79a59df900b949e55d96a1e698fbacedfd6e09d98eacf8f8d5218e7cd47ef2be',
+                        'x-amz-storage-class': 'dmf-v1',
+                        'content-length': 542,
+                        'content-type': 'text/plain',
+                        'last-modified': '2017-07-13T02:44:25.515Z',
+                        'content-md5': '01064f35c238bd2b785e34508c3d27f4',
+                        'key': 'object',
+                        'location': [],
+                        'isDeleteMarker': false,
+                        'isNull': true,
+                        versionId,
+                        'archive': {
+                            archiveInfo: {
+                                archiveId: '04425717-a65c-4e8a-95e1-fa1d902d9d9f',
+                                archiveVersion: 7504504064263669
+                            },
+                            restoreRequestedAt: '2017-07-11T02:44:25.515Z',
+                            restoreRequestedDays: 3,
+                        },
+                        'dataStoreName': 'dmf-v1',
+                        'originOp': 's3:ObjectRestore:Post',
+                        ...overrides,
+                    }),
+                });
+
+                it('should send restore request for the master entry', () => {
+                    handleRestoreOp(getRestoreEntry('object'));
+
+                    assert(kafkaSendStub.calledOnce);
+                    assert(!kafkaAdjustSendStub.called);
+                    const message = JSON.parse(kafkaSendStub.args[0][0][0].message);
+                    assert.strictEqual(message.objectKey, 'object');
+                    assert.strictEqual(message.objectVersion, encode(versionId));
+                });
+
+                it('should send duration-adjust for the master entry', () => {
+                    const archive = {
+                        archiveInfo: {
+                            archiveId: '04425717-a65c-4e8a-95e1-fa1d902d9d9f',
+                            archiveVersion: 7504504064263669
+                        },
+                        restoreCompletedAt: '2017-07-13T02:44:25.519Z',
+                        restoreWillExpireAt: '2017-07-15T02:44:25.519Z',
+                    };
+
+                    handleRestoreOp(getRestoreEntry('object', { archive }));
+                    assert(kafkaAdjustSendStub.calledOnce);
+                    assert(!kafkaSendStub.called);
+                });
+            });
         });
 
         describe('deferred restore requests', () => {
@@ -722,6 +782,23 @@ describe('LifecycleQueuePopulator', () => {
             const entry = getTransitionEntry();
             entry.key = 'hosts';
             handleTransitionOp(entry);
+            assert(!kafkaSendStub.called);
+        });
+
+        it('should publish for the master key of a null version', () => {
+            // a PUT to a versioning-suspended bucket writes the master key only
+            const entry = getTransitionEntry({ isNull: true });
+            entry.key = 'hosts';
+            handleTransitionOp(entry);
+
+            assert(kafkaSendStub.calledOnce);
+            const message = JSON.parse(kafkaSendStub.args[0][0][0].message);
+            assert.strictEqual(message.objectKey, 'hosts');
+            assert.strictEqual(message.objectVersion, encode(versionId));
+        });
+
+        it('should skip delete markers', () => {
+            handleTransitionOp(getTransitionEntry({ isDeleteMarker: true }));
             assert(!kafkaSendStub.called);
         });
 

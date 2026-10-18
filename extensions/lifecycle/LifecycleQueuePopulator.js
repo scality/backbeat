@@ -225,12 +225,6 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
             !(entry.key && entry.key.startsWith(mpuBucketPrefix));
     }
 
-    _isVersionedObject(mdValue) {
-        return mdValue.versionId !== undefined ||
-            mdValue.isNull ||
-            mdValue.isDeleteMarker;
-    }
-
     /**
      * Parses a date object or string and returns a Date instance. Date in the oplog may be an
      * ISODate from MongoDB, or a fully serialized date: allow both cases to be on the safe side.
@@ -247,8 +241,11 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
 
     /**
      * Whether a put entry designates an object we may act upon: bucket entries carry no object
-     * key, mpu shadow bucket entries are internal, and the master entry of a versioned object
-     * duplicates the version entry, which is processed on its own.
+     * key, mpu shadow bucket entries are internal, delete markers hold no data, and the master
+     * entry of a versioned object duplicates the version entry, which is processed on its own.
+     *
+     * A null version (put while versioning is suspended, or before it was enabled) lives in the
+     * master entry, with no version entry to shadow it, so its master is processed.
      *
      * @param {Object} entry - The record log entry from metadata.
      * @param {Object} value - The object metadata, already decoded by the caller.
@@ -259,8 +256,11 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
             return false;
         }
 
-        if (this._isVersionedObject(value) && isMasterKey(entry.key)) {
-            this.log.trace('skip processing of object master entry');
+        if (value.isDeleteMarker || (isMasterKey(entry.key) && value.versionId && !value.isNull)) {
+            this.log.trace('skip processing of delete marker or object master entry', {
+                bucket: entry.bucket,
+                key: entry.key,
+            });
             return false;
         }
 
