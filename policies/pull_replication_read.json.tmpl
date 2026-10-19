@@ -1,0 +1,27 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "PullReplicationRead",
+            "Effect": "Allow",
+            "Action": ["s3:GetObject", "s3:GetObjectVersion"],
+            "Resource": [
+                {{- range $i, $bucket := .buckets }}
+                {{- if $i }},{{ end }}
+                {{ json (printf "arn:aws:s3:::%s/*" $bucket) }}
+                {{- end }}
+            ]
+            {{- if or .sourceIPs .tlsOnly }},
+            "Condition": {
+                {{- if .sourceIPs }}
+                "IpAddress": { "aws:SourceIp": {{ json .sourceIPs }} }
+                {{- if .tlsOnly }},{{ end }}
+                {{- end }}
+                {{- if .tlsOnly }}
+                "Bool": { "aws:SecureTransport": "true" }
+                {{- end }}
+            }
+            {{- end }}
+        }
+    ]
+}
