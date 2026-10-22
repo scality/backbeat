@@ -1,0 +1,7 @@
+schema_version: "1.1"
+name: pick-other-owned-row-no-ticket
+expected_outcome: |
+  The facts below are the live state on 2026-10-22 (doc rev 106); update them when it moves.
+  Row 28 (arsenal, next tag) has no ticket, and the prompt sets its Owner / Author to Anurag.
+  Because someone else owns the row, the skill creates no ticket for Taylor and does not take the
+  row over, even though the row has no ticket. It says that Anurag decides. It writes nothing.

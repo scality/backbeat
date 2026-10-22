@@ -1,0 +1,7 @@
+schema_version: "1.1"
+name: pick-owned-row-with-ticket
+expected_outcome: |
+  The facts below are the live state on 2026-10-22 (doc rev 106); update them when it moves.
+  Row 3.5 (backbeat) is owned by Anurag and already has a ticket, so the skill creates no ticket
+  and does not take the row over for Taylor. It says that Anurag, the row's Owner / Author,
+  decides, and it points Taylor at rows with no owner instead. It writes nothing.
