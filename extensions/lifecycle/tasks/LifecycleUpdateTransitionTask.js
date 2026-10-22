@@ -72,9 +72,11 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
         // fields, shared with cloudserver
         const { location } = entry.getAttribute('results');
         const newLocationName = entry.getAttribute('toLocation');
+        if (!locationsConfig[objMD.getDataStoreName()]?.isCRR) {
+            objMD.setAmzStorageClass(newLocationName);
+        }
         objMD.setLocation(location)
             .setDataStoreName(newLocationName)
-            .setAmzStorageClass(newLocationName)
             .setOriginOp('s3:LifecycleTransition')
             .setUserMetadata({ [TRANSITION_ATTEMPT_MD]: undefined })
             .setTransitionInProgress(false);
