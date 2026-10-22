@@ -5,7 +5,7 @@ description: Commit an approved D1 plan to the plans folder on the backbeat epic
 
 # Plan PR
 
-Rule 2: humans review the plan, AI reviews the code. This skill turns an approved plan into a plan PR on the backbeat epic. It works in a temporary worktree, so the developer's own checkout and its uncommitted work stay as they are.
+Rule 5: a plan normally ships as the first commit of its code PR. A change that alters the shared contract beyond what the approved tech spec says gets a plan PR first, so that the other repositories can build on it. This skill turns such an approved plan into a plan PR on the backbeat epic. It works in a temporary worktree, so the developer's own checkout and its uncommitted work stay as they are.
 
 ## Find the pieces
 
@@ -18,13 +18,13 @@ Rule 2: humans review the plan, AI reviews the code. This skill turns an approve
 
 1. Pick a short topic in kebab case from the plan's title. Rename the file to `YYYY-MM-DD-<topic>.md` with today's date. Do not change its content.
 2. Check the plan: no em-dashes, no credentials, no personal or customer data. Fix only what breaks these rules, and tell the user.
-3. Pick the worktree path once: run `echo "${TMPDIR:-/tmp}/plan-<topic>"`, and write the printed path in full in every later command. These steps call it `<worktree>`. The push gate refuses a path that holds a shell variable (Rule 7).
+3. `<worktree>` is `<checkout>/.claude/worktrees/<ticket>-plan-<topic>`.
    Create a temporary worktree on a new ticket branch from the epic:
    `git -C <checkout> fetch origin`, then `git -C <checkout> worktree add -b improvement/<ticket>-plan-<topic> <worktree> <epic ref>`.
    Every ticket branch is named `improvement/<ticket>-<message>`, and Bert-E refuses unknown prefixes such as `plan/`.
-4. Copy the plan file to `<worktree>/.claude/plans/`. In that worktree, `git add` that file only and commit it. Commit message (Rule 6): the subject `<ticket>: plan <topic>`, at most 55 characters, a blank line, then a body that names the plan file, wrapped at 72 characters.
-5. Run the CI review on the plan branch in the background, because it takes 5 to 15 minutes: `.claude/hooks/review-branch.sh <worktree>` (Rule 7). Then ask the user one question that names both actions, push the branch and open the draft PR, and give the review findings in it. After a yes, push and open a draft PR into the epic branch (the epic ref without `origin/`):
-   - Title: `<ticket>: plan <topic>` (Rule 6).
+4. Copy the plan file to `<worktree>/.claude/plans/`. In that worktree, `git add` that file only and commit it. Commit message (Rule 7): the subject `<ticket>: plan <topic>`, at most 55 characters, a blank line, then a body that names the plan file, wrapped at 72 characters.
+5. Tell the user, then push the branch with `git -C <worktree> push -u origin improvement/<ticket>-plan-<topic>` and open the draft PR into the epic. The Claude Code review on the PR is the review stage (Rule 5).
+   - Title: `<ticket>: plan <topic>` (Rule 7).
    - Body: five sections, each a `##` heading followed by one to three sentences. Intent says what the plan decides. Verification says how a reviewer checks the plan.
 
      ```
@@ -35,14 +35,18 @@ Rule 2: humans review the plan, AI reviews the code. This skill turns an approve
      ## Verification: how do we know this worked, or how would we know if it didn't?
      ```
 
-   - Reviewers (Rule 3, at least two approvals): if `gh api user --jq .login` is `anurag4DSB`, request `tmacro`. If it is `tmacro`, request `anurag4DSB`. Also request `nicolas2bert`. If he cannot review, request the team `scality/hopocalypse` instead.
+   - Reviewers (Rule 4, at least two approvals): if `gh api user --jq .login` is `anurag4DSB`, request `tmacro`. If it is `tmacro`, request `anurag4DSB`. Also request `nicolas2bert`. If he cannot review, request the team `scality/hopocalypse` instead.
 6. Clean up: `git -C <checkout> worktree remove <worktree>`. Then delete the untracked plan file from the setup checkout. The file is on the plan branch now, and it comes back with the next update of the setup after the merge.
 7. Report the PR link and the plan path.
 
 ## Updating a plan after review
 
-Pick `<worktree>` as in step 3, and add a temporary worktree on the existing plan branch (`git -C <checkout> worktree add <worktree> improvement/<ticket>-plan-<topic>`). Edit the plan there, and commit the change as a new commit (never amend). Run `.claude/hooks/review-branch.sh <worktree>`, ask before the push, then remove the worktree. The PR history then shows each version, and `git revert` undoes one.
+Pick `<worktree>` as in step 3, and add a temporary worktree on the existing plan branch (`git -C <checkout> worktree add <worktree> improvement/<ticket>-plan-<topic>`). Edit the plan there, and commit the change as a new commit (never amend). Ask before the push, push the branch, then remove the worktree. The Claude Code review on the PR runs in CI (Rule 5). The PR history then shows each version, and `git revert` undoes one.
 
 ## Code PRs
 
 The code PR's Intent section links the plan file on the epic. If the code moves away from the plan, update the plan first.
+
+## Self-improvement
+
+At the end of every run, ask: did any step, path or assumption here turn out wrong or incomplete, and did the run need a step this file does not mention? If so, fix the section where it belongs, in a worktree of your own on the standing self-improvement ticket, and open a draft PR into the backbeat epic (Rule 8). Find that ticket in Jira with the search `parent = <epic key> AND summary ~ "self-improvements of the D1 skills"`; if there is none, stop and say that the ticket is missing. The key stays out of this file (Rule 7). Keep it lean: no changelog, no list of workarounds. Never edit the shared setup checkout in place.
