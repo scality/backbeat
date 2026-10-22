@@ -10,7 +10,7 @@ This folder holds the Claude Code setup that every BNaaS D1 developer uses. It l
 | `agents/bnaas-reviewer.md` | Read-only reviewer for diffs and plans. |
 | `skills/bnaas-plan-pr/` | `/bnaas-plan-pr`: commits an approved plan and opens a plan PR. |
 | `hooks/review-branch.sh` | Runs the CI review on the current branch of a repository and saves it (Rule 7). |
-| `hooks/review-gate.sh` | Refuses a `git push` until a saved review exists for the pushed commit (Rule 7). |
+| `hooks/review-gate.sh` | Refuses a `git push` until a saved review exists for the pushed commit (Rule 7). Lets epic tags through, and refuses any production tag (Rule 6). |
 | `hooks/test-review-gate.sh` | Test set for the gate. Run it after any change to the gate. |
 | `settings.json` | Fable as the advisor, `plans/` as the plans folder, and the hooks. |
 | `plans/` | Approved plans, one file per change. |
@@ -103,6 +103,7 @@ The message starts with "Rule 7". It names the repository and the command to run
 3. If it says that the command runs other steps before the push, run the push as a command of its own. Only read-only steps, such as `cd` or `git fetch`, can come before it.
 4. If it names `--all`, `--mirror` or `--tags`, push one branch per command.
 5. If it cannot resolve a ref, check the branch name in the push command.
+6. If it names a tag that is not an epic tag, stop. A production tag never comes from a D1 session (Rule 6).
 
 The saved reviews are in `.git/bnaas-review/` of each repository. Git never commits them.
 

@@ -19,6 +19,8 @@ echo review >"$S/ws/a/.git/bnaas-review/$(git -C "$S/ws/a" rev-parse HEAD).md"
 git -C "$S/ws/a" switch -q other
 git -C "$S/ws/a" commit -q --allow-empty -m unreviewed
 git -C "$S/ws/a" switch -q feat
+git -C "$S/ws/a" tag -m test 8.6.1-bnaas.1
+git -C "$S/ws/a" tag -m test 8.6.1
 W=$S/ws
 A=$S/ws/a
 SHA=$(git -C "$A" rev-parse HEAD)
@@ -78,6 +80,18 @@ t DENY d22 "$W" "git -C a \\
 push origin other"
 t DENY d23 "$A" "$P \\
 origin other"
+
+# Epic tags pass with no review; any other tag is refused (Rule 6).
+t ALLOW tag1 "$A" "$P origin 8.6.1-bnaas.1"
+t ALLOW tag2 "$A" "$P origin refs/tags/8.6.1-bnaas.1"
+t ALLOW tag3 "$W" "git -C a push origin refs/tags/8.6.1-bnaas.1 2>&1 | tail -2"
+t DENY tag4 "$A" "$P origin 8.6.1"
+t DENY tag5 "$A" "$P origin refs/tags/9.9.9"
+t DENY tag6 "$A" "$P origin --delete 8.6.0"
+t DENY tag7 "$A" "$P origin :refs/tags/8.6.0"
+t ALLOW tag8 "$A" "$P origin --delete old-branch"
+t DENY tag9 "$A" "$P --follow-tags origin feat"
+t DENY tag10 "$A" "$P origin $SHA:refs/tags/7.0.0"
 
 # Malformed payloads.
 out=$(printf '{"tool_name":"Bash","tool_input":"%s origin other","cwd":"%s"}' "$P" "$A" | "$G")

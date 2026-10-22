@@ -8,6 +8,9 @@
 # The gate refuses what it cannot check: a path with a shell variable,
 # GIT_DIR or --git-dir, --all, --mirror or --tags, a push hidden behind an
 # unknown command, and any step before the push that is not read-only.
+# A push of an epic tag (X.Y.Z-bnaas.N) needs no review, because its commit
+# is already on the epic. Any other tag push or tag deletion is refused: no
+# production tag is ever made from a D1 session.
 # The gate catches a forgotten review. It is not a security boundary: a
 # command written to evade it can still get through.
 
@@ -46,6 +49,11 @@ SAFE = {"cd", "pushd", "popd", "echo", "printf", "true", "pwd", "ls", "test",
         "[", "sleep", "export", ":"}
 GIT_READ = {"status", "log", "show", "diff", "rev-parse", "rev-list", "fetch",
             "remote", "ls-remote", "describe", "config"}
+EPIC_TAG = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+-bnaas\.[0-9]+$")
+PROD_TAG = ("Rule 6: only X.Y.Z-bnaas.N epic tags are made from a D1 session. "
+            "This command would push, delete or write the tag {tag}, which is "
+            "not an epic tag. A production tag goes through the official "
+            "release workflow, never through this session.")
 PUSH_AT_CMD = re.compile(
     r"(^|[;&|(`]|\$\()\s*((\w+=\S*|env|nice|nohup|command|exec|time|sudo|"
     r"xargs|timeout\s+\S+)\s+)*(\S*/)?git\b[^;&|\n]*\bpush\b", re.M)
@@ -188,6 +196,42 @@ def main(raw):
     check(events)
 
 
+def tag_name(repo, ref):
+    """The tag a refspec side names, or None when it names no tag."""
+    if ref.startswith("refs/tags/"):
+        return ref[len("refs/tags/"):]
+    if ref and not ref.startswith("refs/") and git(repo, "show-ref", "--verify", "--quiet",
+                                                   "refs/tags/" + ref) is not None \
+            and git(repo, "show-ref", "--verify", "--quiet", "refs/heads/" + ref) is None:
+        return ref
+    return None
+
+
+def check_tags(repo, args):
+    """Deny a non-epic tag; True when every ref pushed is an epic tag."""
+    positional = [a for a in args if not a.startswith("-")][1:]
+    deleting = any(a in ("--delete", "-d") for a in args)
+    if not positional:
+        return False
+    all_epic = True
+    for spec in positional:
+        spec = spec.lstrip("+")
+        src, _, dst = spec.partition(":")
+        names = [n for n in (tag_name(repo, src), tag_name(repo, dst)) if n]
+        if deleting or spec.startswith(":"):
+            target = dst if spec.startswith(":") else src
+            name = tag_name(repo, target)
+            if name is None and re.match(r"^v?[0-9]+\.[0-9]+", target):
+                name = target
+            names = [name] if name else []
+        for name in names:
+            if not EPIC_TAG.match(name):
+                deny(PROD_TAG.format(tag=name))
+        if not names:
+            all_epic = False
+    return all_epic
+
+
 def check(events):
     if any(e[0] == "cannot" for e in events):
         deny(CANNOT)
@@ -199,12 +243,15 @@ def check(events):
 
     pushes = [(e[1], e[2]) for e in events if e[0] == "push"]
     for repo, args in pushes:
+        if any(a in ("--all", "--mirror", "--tags", "--follow-tags") for a in args):
+            deny("Rule 7: --all, --mirror, --tags and --follow-tags push more "
+                 "than one ref, so the review gate cannot check them. Push one "
+                 "branch or one epic tag per command.")
+        if repo is not None and git(repo, "rev-parse", "--is-inside-work-tree") == "true":
+            if check_tags(repo, args):
+                continue
         if any(a in ("--delete", "-d", "--dry-run", "-n") for a in args):
             continue
-        if any(a in ("--all", "--mirror", "--tags") for a in args):
-            deny("Rule 7: --all, --mirror and --tags push more than one branch, "
-                 "so the review gate cannot check them. Push one branch per "
-                 "command.")
         if repo is None:
             deny("Rule 7: the review gate cannot tell which repository this git "
                  "push targets, because its path holds a shell variable. Push one "

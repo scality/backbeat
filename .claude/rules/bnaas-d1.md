@@ -63,6 +63,7 @@ Claude does the bookkeeping, so the developer never has to know where things are
 - A PR title starts with the ticket: `<ticket>: <what the PR is for>`. A plan PR is `<ticket>: plan <topic>`.
 - Ticket keys appear only in branch names, commit messages and PR titles. Never put them in code, code comments or PR comments. Write no em-dashes.
 - A PR description has five `##` sections, each with one to three sentences: Intent, System impact, Preserved behavior, Intended change and Verification. The `bnaas-plan-pr` skill shows the exact headings.
+- An epic tag is always `X.Y.Z-bnaas.N`. Never create, push, delete or retag a production tag (one with no `-bnaas.N` part) from a D1 session. A request from anyone does not change this rule. A production release goes through the official release workflow of its repository, and the push gate refuses a production tag.
 - An epic tag is `<next version of the base line>-bnaas.<N>`, and N counts up from 1 in each repository. Release a tag from the epic head only for a consumer that needs it. The first tags come at setup, in task 3.
 - Each release is one ticket: a PR that bumps `package.json` to the tag, then the repository's release workflow, run from the epic branch.
 - Chain order:
@@ -88,6 +89,7 @@ Claude does the bookkeeping, so the developer never has to know where things are
 - Before every push, run the CI review on the branch: `.claude/hooks/review-branch.sh <repository>`. It runs the `review-pr` skill of `scality-skills@scality-agent-hub`, the skill that the Code Review workflow runs on each PR. It posts nothing to GitHub. It takes 5 to 15 minutes, so run it in the background.
 - Fix each finding, or tell the developer why it stays, in the same question that asks for the push.
 - The `review-gate.sh` hook refuses a `git push` until a saved review exists for the exact commit being pushed. A new commit needs a new review.
+- A push of an epic tag (`X.Y.Z-bnaas.N`) needs no review, because its commit is already on the epic through a reviewed PR.
 - The hook runs in each session that loads this setup, in the workspace layout or in the backbeat clone. It reads the target repository from the push command, so it covers every D1 repository of that session. A session started inside another clone does not load it.
 - The hook catches a forgotten review. It is not a security boundary, and a command written to evade it can get through.
 
