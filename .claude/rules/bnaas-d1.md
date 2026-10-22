@@ -29,7 +29,7 @@ Session memory, plan files and chat history are not shared state. If something m
 
 - A task is claimed by its Jira ticket: Task, parent the D1 epic (its key is in the epic branch name), assigned to you, in the current sprint, moved to In Progress. `/bnaas-whats-next` (added by a later PR of this stack) creates it after one question, and fills the row in the Tickets tab.
 - One task, one owner. Never claim a task that has a ticket assigned to someone else, and never claim a task whose dependencies are not done unless you also own them. If the backlog says "dependencies unknown", read the breakdown comment (https://claude.ai/artifact/QC6Cbrfm7a5hAfRw752c7L, frozen v55) and decide.
-- A dependency or scope fix is an edit of the Backlog tab, with no PR: fix the Depends on cell, or add a row with Origin "new scope". Re-seeding the tab from the breakdown is a deliberate step (`.claude/bnaas/README.md`, added by a later PR of this stack).
+- A dependency or scope fix is an edit of the Backlog tab, with no PR: fix the Depends on cell, or add a row with Origin "new scope". Re-seeding the tab from the breakdown is a deliberate step (`.claude/bnaas/README.md`).
 - Before you claim, read Jira again. The other developer may have claimed it an hour ago.
 - Hand a task over by reassigning its ticket and noting it with `journal note`.
 - Jira is read and written only through the Atlassian MCP connector, never through its REST API.
