@@ -10,7 +10,26 @@ on:
         required: true
 
 jobs:
+  # Epic copy: refuse a non-epic tag before any image is pushed.
+  check-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Refuse a tag that is not an epic tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.inputs.tag }}
+        run: |
+          if ! [[ "$TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+-bnaas\.[0-9]+$ ]]; then
+            echo "::error::$TAG is not an X.Y.Z-bnaas.N epic tag"
+            exit 1
+          fi
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" --silent 2>/dev/null; then
+            echo "::error::Tag $TAG already exists"
+            exit 1
+          fi
+
   build:
+    needs: check-tag
     uses: ./.github/workflows/docker-build.yaml
     with:
       tag: ${{ github.event.inputs.tag }}
@@ -19,12 +38,11 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - name: Create Release
-        uses: softprops/action-gh-release@v3
+      # Epic copy: create the tag only, with no GitHub release.
+      - name: Create the tag
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          name: Release ${{ github.event.inputs.tag }}
-          tag_name: ${{ github.event.inputs.tag }}
-          generate_release_notes: true
-          target_commitish: ${{ github.sha }}
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.inputs.tag }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/git/refs" \
+            -f ref="refs/tags/$TAG" -f sha="$GITHUB_SHA"
