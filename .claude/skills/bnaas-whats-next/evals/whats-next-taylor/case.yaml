@@ -1,8 +1,7 @@
 schema_version: "1.1"
 name: whats-next-taylor
 expected_outcome: |
-  Taylor gets the report as the developer, not Anurag, read at the time of the run. The PRs
-  waiting for Taylor's review are the ones that prs.py gives for tmacro. The work Taylor can pick
-  up is the rows with no owner, with "dependencies unknown" while the tab has no Depends on column,
-  and none of Anurag's rows. A section shows what Anurag is working on: Anurag's open rows and
-  their status. It writes nothing. The examples in the graders come from the state on 2026-10-22.
+  Taylor gets the next-action flow as the developer, not Anurag, read at the time of the run.
+  The reviews that rank first are the ones that prs.py gives for tmacro. A task proposed to
+  start has no owner in Jira and is none of Anurag's. The context table has one line on what
+  Anurag is working on. A test run writes nothing live: the renders go to <tmp>, with no journal mark-read and no In Review auto-fix; nothing is written. The examples in the graders come from the state on 2026-10-22.

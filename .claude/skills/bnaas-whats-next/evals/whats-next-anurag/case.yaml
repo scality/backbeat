@@ -1,9 +1,10 @@
 schema_version: "1.1"
 name: whats-next-anurag
 expected_outcome: |
-  Anurag gets a short report from the Tickets tab, Jira and GitHub, read at the time of the run.
-  It starts with the PRs waiting for Anurag's review, as prs.py gives them for anurag4DSB. Then the
-  work Anurag can pick up: Anurag's open PRs and who they wait on, Anurag's open rows, and the next
-  rows with no owner, each with "dependencies unknown" while the tab has no Depends on column.
-  Then what Taylor is working on. Then the rows whose PR or Status cell disagrees with GitHub.
-  It writes nothing. The examples in the graders come from the state on 2026-10-22.
+  Anurag gets the next-action flow, read at the time of the run: the two doc links, a context
+  table of at most 12 lines, and the actions that next_actions.py ranks for anurag4DSB. Reviews
+  that unblock Taylor come first, then Anurag's unfinished work, then pins and Jira fixes, then
+  the ready task in his repositories that unblocks the most. Tasks and PRs carry their plain
+  names. The full state goes into the Tickets tab and the journal doc. It cannot ask in a test
+  run, so it stops after the table.
+  A test run writes nothing live: the renders go to <tmp>, with no journal mark-read and no In Review auto-fix; nothing is written. The examples in the graders come from the state on 2026-10-22.

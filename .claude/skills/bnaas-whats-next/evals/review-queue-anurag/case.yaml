@@ -2,6 +2,8 @@ schema_version: "1.1"
 name: review-queue-anurag
 expected_outcome: |
   Anurag learns which D1 PRs wait for review: exactly the ones that prs.py gives for anurag4DSB
-  at the time of the run (none on 2026-10-22). The run lists the open PRs into the D1 epic in each
-  D1 repository with gh pr list (directly or through the skill's script), because gh search prs
-  misses PRs. It writes nothing.
+  at the time of the run. The run lists the open PRs into the D1 epic in each D1 repository, and
+  the developers' open PRs into development/* in arsenal and cloudserverclient, with gh pr list
+  (directly or through the skill's script), because gh search prs misses PRs. A test run writes
+  nothing live: the renders go to <tmp>, with no journal mark-read and no In Review auto-fix;
+  nothing is written.

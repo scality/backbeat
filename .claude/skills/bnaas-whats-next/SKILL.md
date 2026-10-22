@@ -1,19 +1,27 @@
 ---
 name: bnaas-whats-next
-description: Tell a D1 developer what to do next. It lists the PRs that wait for their review, then the work they can pick up (their own open PRs and rows, and the rows with no owner, each marked ready or blocked by its dependencies), then what the other developer is working on. Use it when the developer asks "what's next", "what should I work on", "what is left", "what do I need to review", "what is waiting on me", or asks for the state of the D1 work in other words. When they pick a row with no ticket, it creates the Jira ticket in the current sprint, assigns it to them and fills the row, after one question.
+description: Tell a D1 developer what to do next, and do it. It catches up the journal, reads the journal, the local clones, the Backlog tab, Jira and GitHub, ranks the next actions by critical path (reviews that unblock the other developer, local work to push, pins and Jira fixes, then the ready task that unblocks the most), asks which one to run, runs it and asks again. Use it when the developer asks "what's next", "what should I work on", "what is left", "what do I need to review", "what is waiting on me", or asks for the state of the D1 work in other words. When they start a task with no ticket, it creates the Jira ticket in the current sprint and assigns it to them, after one question.
 ---
 
 # What to do next on D1
 
-Rule 5 says that Claude does the bookkeeping, so that the developer never has to know where things are recorded. This skill answers from three sources, in one short report:
+Rule 2 says that every session starts here, and Rule 3 says that Claude does the bookkeeping, so that the developer never has to know where things are recorded. This skill reads five sources, ranks the next actions of the developer by critical path, asks which one to run, runs it, and asks again:
 
-- The Tickets tab of the tech spec doc: the epic work, in work order, with the owner of each row.
-- Jira: the status of each ticket, and the current sprint.
-- GitHub: the review state of each D1 PR.
+- The journal: the facts that the hooks logged as work happened (commits, pushes, PRs, test results, Jira and doc writes) and the notes that sessions added, in the Log section of the journal doc named in `<setup>/.claude/bnaas/journal.json`.
+- The local clones: the branches with commits that no remote holds yet.
+- The Backlog tab of the tech spec doc: every D1 task with its area, estimate and dependencies. People edit it there; it was seeded from the breakdown.
+- Jira: who claimed which task (the assignee of its ticket), the status of each ticket, and the current sprint.
+- GitHub: the review state of each D1 PR, and whether the Federation pins are current.
 
-Reading changes nothing. Creating a ticket and editing the doc happen only after one question to the developer.
+The "Tickets / Tasks" tab of the doc is a rendered view of those sources, written by `render_tickets.py`, and so are the two charts of the Progress tab. It holds no truth of its own: never read ownership or status from its cells, and never edit a cell. The reads change nothing. The renders of section 3 need no question. Every other write happens only inside an action that the developer picked, and each Jira write of a claim takes one question of its own, except the one auto-fix of section 4.
 
-In this file, `<base>` is the base directory of this skill. Claude Code prints it when it loads the skill.
+In this file, `<base>` is the base directory of this skill. Claude Code prints it when it loads the skill. `<tmp>` is the session scratchpad. `journal` is `<setup>/.claude/hooks/journal`.
+
+## 0. Catch up the journal, find who is asking, then delegate the reads
+
+In the main session, before any delegation: write to the journal what this session decided or hit that the hooks could not see. Run `journal note "<one sentence>"` for each blocker or surprise, `journal note --decision "<one sentence>"` (with `--why "<text>"` and `--tasks <ids>` when known) for each decision or change of plan, then `journal flush`: it prints the facts that wait. Append them to the Log section of the journal doc through the Claude Docs connector, newest day first, under the day heading it prints, then run the `journal flushed` command it prints. If the write fails, leave them: the next Stop or run retries. No names, facts only. Skip it in a fresh session.
+
+Then run section 1 in the main session: the login, the Jira account and the epic that it finds are needed here too, for the claim and the ranking. Section 2 runs in one Opus subagent (the `general-purpose` agent, default model), so that the main session stays small. Give it this file, the GitHub login, the Jira account and the epic, and ask for the paths of the files of reads 0 to 6 (`decisions.json` included) and the context table of section 3 back. Section 3 runs `next_actions.py` in the main session, and the questions, every Jira write, every doc write and `journal mark-read` stay there too.
 
 ## 1. Find who is asking
 
@@ -24,160 +32,104 @@ Run `gh api user --jq .login`.
 | `anurag4DSB` | Anurag | Anurag Mittal | `tmacro` |
 | `tmacro` | Taylor | Taylor McKinnon | `anurag4DSB` |
 
-For Jira, call `atlassianUserInfo` of the Atlassian connector. Each developer's connector logs in as that developer, so it gives the account to assign. If its name is not the Jira name of the table, look the account up by that name with `lookupJiraAccountId`, and say so. Anyone who is not in the table gets the report only.
+For Jira, call `atlassianUserInfo` of the Atlassian connector. Each developer's connector logs in as that developer, so it gives the account to assign. If its name is not the Jira name of the table, look the account up by that name with `lookupJiraAccountId`, and say so. Anyone who is not in the table gets the context table only, with no action.
 
-Find the epic: `git -C <base> branch -r --list 'origin/epic/*-bnaas-d1'`. The D1 Jira epic key is the part between `epic/` and `-bnaas-d1`.
+Find the epic: `git -C <base> branch -r --list 'origin/epic/*-bnaas-d1'`. The D1 Jira epic key is the part between `epic/` and `-bnaas-d1`. `<setup>` is the folder that holds `.claude/` of the shared setup, three levels above `<base>` (`<base>` is `<setup>/.claude/skills/bnaas-whats-next`). The D1 repositories are arsenal, vault, cloudserver, cloudserverclient, backbeat, federation, integration, ring and s3utils.
 
 ## 2. Read the state
 
-Read the Tickets tab first, because the other reads need its repositories and PR links. Then run the other three reads in parallel. None of them changes anything.
+Run reads 1 and 6 first, then read 0, which checks the journal against them, then reads 2 to 4 in parallel, because read 2 needs the PR links of read 0. Read 5 comes last, because it needs the files of reads 1 and 2. None of them changes anything.
 
-1. The Tickets tab, through the Claude Docs connector. Load the docs skill or the connector guide first, as the connector asks. The doc is https://claude.ai/code/artifact/bfe390f9-d819-4a93-9050-ffd5eee1b80a. Read the doc to list its tabs, then read the body of the "Tickets / Tasks" tab. Find the columns of the "Epic work" table by the names in its header row, because columns get added. Today they are ID, To do, Repository, Owner / Author, Ticket, PR, Status and Sprint, and a Depends on column is planned:
-   - Owner / Author names the developer who owns the row and writes its PR. It is a dropdown. A row has no owner when the dropdown has no `index`, or when it says "Not assigned".
-   - Status uses the words that the line under the table lists.
-   - Sprint is the sprint in which the work on the row started. It never changes after that.
-   - Depends on lists the IDs of the rows that must be done first, separated by commas. An empty cell means no dependency.
-
-   Keep this read. Before any write, section 4 compares the cells that it writes with this read. Note the full id of the table and the enum id of the Owner / Author dropdowns too.
-2. Jira, two searches, with `maxResults` 100 each:
-   - The open D1 tickets: `parent = <epic key> AND statusCategory != Done ORDER BY key`, with only the fields `summary`, `status`, `assignee` and `customfield_10004` (the sprint).
-   - The done D1 tickets: `parent = <epic key> AND statusCategory = Done`, with only the field `summary`.
-
-   Each D1 ticket has the epic as parent (Rule 5). A row ticket in the first answer is open, and one in the second is done. A row ticket in neither answer is "not found": Jira does not know it, or it is not under the epic. The filters and the short field lists keep the answers small enough to read.
-3. GitHub, with the GitHub login of section 1, and one `--pr <link>` for each link of the PR column:
+0. The journal since the last run. `export` the journal doc once, with `format` markdown, decode its `bytes_b64` into `<tmp>/journal.md`, then run `journal tail --new --doc <tmp>/journal.md`. It prints the bullets of the Log section that `~/.bnaas/journal/last-read` has not seen yet (all of them on a first run), each under its `### <date>` heading, one bullet per fact, `<repo> <branch>: <fact>`: they are what moved. The state comes from the whole Log, not from that unread tail, because last-read is kept per machine: run `journal tail 1000 --doc <tmp>/journal.md`, group its facts by repository and branch, and derive for each active branch: the last commit, the last test or lint result, the PR (its link from a `PR create` fact), and the open notes and decisions. Then verify each against the real state: `gh pr view <link> --json state,isDraft,reviewDecision` for each PR, the Jira status in `<tmp>/jira.json` (read 1) for each Jira fact, and read 6 for each commit that should still be local. Where the journal and the real state disagree, the real state wins: note the correction. Write the verified state to `<tmp>/journal-state.json` (a list of `{repo, branch, last_commit, tests, pr, notes}`), and write the decision notes to `<tmp>/decisions.json` (a list of `{date, text, why, tasks}`) for the Pivots table of the journal doc render ([references/renders.md](references/renders.md)). If the doc cannot be exported, say so in one line and go on. In the same step, collect the PR links of the journal facts and of the "Tickets / Tasks" tab (one `view` read of the tab through the Claude Docs connector; load the docs skill or the connector guide first, as the connector asks; the doc is https://claude.ai/code/artifact/bfe390f9-d819-4a93-9050-ffd5eee1b80a): they keep merged PRs visible to read 2.
+1. Jira, through the Atlassian connector: `searchJiraIssuesUsingJql` with the JQL `parent = <epic key> ORDER BY key`, the fields `summary`, `status`, `assignee`, `customfield_10004` (the sprint) and `description`, and `maxResults` 100; follow `nextPageToken` until the last page. Each D1 ticket has the epic as parent (Rule 3), so this answer holds every claimed task, open and done. Write `<tmp>/jira.json` yourself: a JSON list with one issue per line, each holding only `key` and those five `fields`, in the shape of `evals/fixtures/jira-sample.json` (`status.name`, `assignee.displayName`, the sprint list, the description as text).
+2. GitHub, with the GitHub login of section 1, and one `--pr <link>` for each PR link of read 0:
 
    ```
-   python3 <base>/scripts/prs.py --login <login> <each repository of the Repository column> --pr <link> --pr <link>
+   python3 -I <base>/scripts/prs.py --json --login <login> vault cloudserver backbeat federation integration ring s3utils --dev arsenal --dev cloudserverclient --pr <link> ... > <tmp>/prs.json
    ```
 
-   The script lists the open PRs into the epic in each repository, and the PRs stacked on them. It does not use `gh search prs`, because the search index misses PRs: it once missed a merged Arsenal PR of the epic. For each PR, it prints its status in the words of the tab, who must act next, and the ticket key of its branch or title. Add `--json` for the details. Pass `--login` even though it defaults to the gh user, so that the report is right for whoever the developer is.
-4. The sprint that the dates give: `python3 <base>/scripts/sprint.py`.
+   The script lists the open PRs into the epic in each repository given by name. Arsenal and cloudserverclient take their D1 work on their development branches (Rule 4), so for them `--dev` lists the open PRs of the two developers into any `development/*` branch. It also follows the PRs stacked on all of those. It does not use `gh search prs`, because the search index misses PRs. For each PR it gives its status words, who must act next, its kind for `<login>` (review, mine, other, closed), whether it is a draft, and the ticket key of its branch or title. Pass `--login` even though it defaults to the gh user, so that the ranking is right for whoever the developer is.
+3. The current sprint: Jira's own name first, `python3 -I <base>/scripts/sprint.py --jira -` fed the `customfield_10004` values of read 1, and the date math (`python3 -I <base>/scripts/sprint.py`) only when that exits 1. Jira wins over the dates, so a renamed sprint never turns every open ticket into an out-of-sync line.
+4. The Federation pins, read-only: `git -C <the Federation clone> fetch -q origin && python3 -I <setup>/.claude/skills/bnaas-pin-federation/scripts/pins.py --dry-run --json --federation <the Federation clone> > <tmp>/pins.json`. The fetch matters: the script reads the pins from the local epic ref and the heads live from GitHub, so a stale clone says the pins are behind after a pin PR merged. It says for each service whether the pin is current, behind, or waiting for a CI image.
+5. The rendered view. First get the backlog, from a cache when the tab did not change:
+   - Read the Backlog tab with a cheap `outline` read through the connector, and note its `rev`.
+   - If `~/.bnaas/backlog.rev` holds that `rev` and `~/.bnaas/backlog.md` exists, copy that file to `<tmp>/backlog.md`.
+   - Else `export` the tab with `format` markdown, decode its `bytes_b64` and write it to `<tmp>/backlog.md`. If the export is not possible, read the tab and write its table yourself as Markdown, with the same columns, to that file: this is the one retype, and it happens only when the tab changed. Then copy the file to `~/.bnaas/backlog.md` and write the `rev` to `~/.bnaas/backlog.rev`.
 
-## 3. Report
-
-Keep it short: one line per item, each with its link. Use these sections, in this order. Write "none" in an empty section, and leave out the last one when it is empty.
-
-1. **Waiting for your review**: the PRs of kind `review`. Say who wrote each one, whether it is a draft, and whether you are requested or only have not approved yet. They come first, because the other developer is blocked until you review (Rule 3). After them, list the other open PRs where you are requested (`asked` in the JSON), with who acts first, for example "requested, but Nicolas asked for changes first".
-2. **What you can pick up next**: the work that you can move now, ready work first.
-   - Your open PRs (kind `mine`): first the ones where you must act, then one line each for the ones that wait on someone else, with who.
-   - Your rows that are not done: their ticket is open or not found in Jira, or they have no ticket yet. Give the ID, the To do in a few words, the Jira status with the ticket link, and what is left from the Status cell. Jira decides whether a row is done, not the Status cell: a merged PR can still leave work, such as a tag to push.
-   - The first three to five rows with no owner, in table order. The table order is the work order.
-
-   Mark each row with its dependencies:
-   - "ready": each row of its Depends on cell is done, that is, its ticket is in the done search. A row with an empty cell is ready.
-   - "blocked": name each dependency that is not done, and who is on it: its Owner / Author, or "nobody yet". For example: "blocked: Anurag is on 28, the Arsenal tag that Vault needs".
-   - "dependencies unknown": the table has no Depends on column yet, or the cell names an ID that the table does not have. Do not guess the dependencies from the To do text, because a wrong "ready" sends the developer to work that cannot start.
-3. **What <the other developer> is working on**: their rows that are not done and their open PRs, with the status of each. Each developer then sees the other's work, and what a blocked row waits for.
-4. **Out of sync**: one line for each place where two sources disagree.
-   - GitHub and the tab: a PR or Status cell that the script contradicts, an Owner / Author cell that is not the author of the row's PR, or an open D1 PR that no row lists. Match each PR to its row by the ticket key that the script prints and the Ticket cell of the row: a row that says "No PR yet" can have an open PR.
-   - Jira and the tab: an Owner / Author cell that is not the ticket's assignee, an open D1 ticket with no row, or a row ticket that is not found.
-   - Jira and the sprint: an open D1 ticket that is not in the current sprint.
-   - Jira and GitHub: a ticket still in review after its PR merged or closed. It may be ready to close, but only when its whole scope is done (Rule 5).
-
-The script has three states that the Status words of the tab do not cover: "Approved, not merged yet", "Draft, no review requested yet" and "Waiting for a reviewer: nobody is requested". Report them, but do not count a Status cell as out of sync because of them, and never write them into the tab.
-
-End with the doc link, name its "Tickets / Tasks" tab (the connector gives no link to a single tab), and ask which row the developer takes next.
-
-## 4. When the developer picks a row
-
-The developer can name a row in the first message ("I'll take 28"). Then run the reads of section 2, answer for that row first, and give the report of section 3 after it.
-
-The Owner / Author of a row decides about its work. So a row that already has a ticket never gets another one, and a row that someone else owns never gets one from this skill, whoever runs it. The skill creates a ticket only for a row with no ticket, and it makes the developer the Owner / Author in the same step.
-
-- The row has an Owner / Author who is not the developer: say who, and change nothing. That person decides. Say how a handover works: the owner clears the Owner / Author cell, or sets it to the developer, and the next run prepares the ticket.
-- The row has a ticket assigned to someone else: say who, and change nothing.
-- The row has a ticket with no assignee: if the Owner / Author cell is empty, offer to make the developer the Owner / Author and then to assign the ticket to them with `editJiraIssue`, in that order, as in steps 1 and 2 below. Otherwise, leave it.
-- The row has a ticket assigned to the developer: check that it is in the current sprint and in the status Ongoing, because Rule 5 moves a ticket to In Progress when its work starts. Offer the missing changes.
-- The row has no ticket ("Not created yet"), and no owner or the developer as owner: prepare the ticket below. But first look at the open D1 tickets with no row (section 3, Out of sync). Read each one with `getJiraIssue` and the field `description`, because only its "Tracked in ... row <ID>" line names the row. If one names this row, an earlier run created it and could not fill the cell: offer to fill the Ticket cell with it, and create nothing.
-
-When there is a write to propose, ask one question with the AskUserQuestion tool. When there is none, for example because someone else owns the row, say so and ask nothing. The question lists every write: the ticket with its project, summary, assignee and sprint, the move to In Progress, the Owner / Author, Ticket and Sprint cells of the row, and the out-of-sync cells to fix, if any. The answers are "Do it" and "Nothing now". The developer approves all the writes at once, and nothing is half done. If you cannot ask, for example in a test run, stop after the report and change nothing.
-
-### The ticket
-
-| Field | Value |
-|---|---|
-| Project | The Jira project of the row's repository: ARSN for arsenal, VAULT for vault, CLDSRV for cloudserver, CLDSRVCLT for cloudserverclient, BB for backbeat, S3C for federation, RING for ring, INTGR for integration, S3UTILS for s3utils. |
-| Issue type | Task |
-| Parent | The D1 Jira epic. |
-| Summary | `BNaaS D1: <the To do in a few words>`, like the other D1 tickets. |
-| Assignee | The Jira account of section 1. |
-| Priority | Medium |
-| Severity, `customfield_10800` | `{"id": "10859"}` (Medium) |
-| Development Type, `customfield_13078` | `{"id": "12026"}` (BUILD) |
-| Release notes, `customfield_12101` | `{"id": "12053"}` (No), only in S3C and RING. The other projects do not have the field, and only the epic carries the release note. |
-| Components | `[{"name": "Federation"}]` in S3C. `[{"name": "S3C"}]` in RING, which requires one. None in the other projects. |
-| Sprint, `customfield_10004` | The id of the current sprint, as a number. |
-| Description | What the row asks. Then "Done when:" and a numbered list of results that a reviewer can check. Then the line "Tracked in the Tickets tab of the BNaaS D1 tech spec, row <ID>: <doc link>". If the scope is not clear from the row and the tech spec, ask the developer. |
-
-Find the current sprint in Jira, because the sprint calendar can move:
-
-1. Search `parent = <epic key> AND sprint in openSprints()`, with `maxResults` 10 and only the field `customfield_10004`. Put the values of that field together into one JSON array of sprints, and pass it on stdin, through a quoted heredoc, because a sprint name or goal can hold an apostrophe:
+   The tab may have a last column, Status: "done" there marks a task done with no ticket, such as the work that came before the Jira epic. Then:
 
    ```
-   python3 <base>/scripts/sprint.py --jira - <<'EOF'
-   <the JSON array>
-   EOF
+   python3 -I <base>/scripts/render_tickets.py --backlog <tmp>/backlog.md --jira <tmp>/jira.json --prs <tmp>/prs.json --sprint "<current sprint>" --json > <tmp>/render.json
    ```
 
-   The script keeps only the active sprints of the team board, because `openSprints()` also matches future sprints and a ticket can also be in a sprint of another board. It says whether the name matches the dates.
-2. If the script finds no active sprint, for example because the D1 tickets are only in a future sprint, search `sprint = "<the name that sprint.py prints>"` in the same way.
-3. If Jira still gives no active sprint, ask the developer. Do not create a sprint.
+   It matches each ticket to its task by the "row <ID>" line of its description, else by the task id after "BNaaS D1: " in its summary. Each area has `id`, `title` and `rows`. For each area with a claimed or done task it gives rows with `id`, `task` (the title), `repos`, `estimate_days`, `owner` (the Jira assignee), `tickets`, `prs`, `status` (the Jira status), `depends_on` (each dependency marked done, open or unclaimed), and `dependencies`: ready, blocked or unknown. A task that nobody claimed has the owner "ready, nobody yet" or "dependencies unknown, nobody yet"; a blocked one is left out; one marked done in the Backlog tab has the owner "nobody, no ticket". A task with a dependency text that the backlog could not resolve is never ready. The `done` list holds the ids of the done tasks, and the `out_of_sync` list the mechanical mismatches, among them a ticket still open whose PR is merged or closed. `skipped` lists the PRs into a development branch whose ticket is not a D1 ticket: they are not D1 work, so leave them out. `progress` and `scope` feed the charts ([references/renders.md](references/renders.md)). A ticket for a step, such as row 3.1, counts for its task, 3. For the tasks in areas with no claimed task, run `python3 -I <setup>/.claude/bnaas/scripts/backlog.py --backlog <tmp>/backlog.md ready --done <the done ids, comma-separated>` (`--done ''` when there is none), and `unknown` with the same `--done` for the tasks with unknown dependencies.
+6. The local work: `python3 -I <base>/scripts/local_work.py --json --workspace <the folder that holds the D1 clones> > <tmp>/local.json`. For each D1 clone and its worktrees, it lists the branches with commits that no remote branch holds: repository, worktree, branch, commits ahead and last subject. In the one-repository layout, pass the folder above the backbeat clone.
 
-When the name of the Jira sprint does not match the dates, Jira wins. Use its sprint, and tell the developer, so that the next setup PR moves the anchor date in `sprint.py`.
+## 3. Rank the next actions, then ask
 
-### After the yes
-
-1. Read the whole table again with `{"kind": "view", "parentId": "<table id>"}`, because the other developer may have changed it since section 2. Compare each cell that you are about to write with the read of section 2: the Owner / Author, Ticket and Sprint cells of the row, and each out-of-sync cell. If one of them changed, for example because the other developer took the row, stop before any write, and show the developer the new state. Step 2 uses the `rev` of this read as `ifRev`, and counts rows and columns in this read.
-2. Claim the row: set its Owner / Author cell to the developer, in an `update` of its own. Do it before the ticket exists. If the connector refuses it, nothing is written yet, and no ticket is left without its row.
-3. Create the ticket with `createJiraIssue`.
-4. Read the transitions of the ticket, and use the one named "In Progress" (id 21 in backbeat today, but the id can differ in another project). The ticket then has the status "Ongoing".
-5. Read the whole table again, because step 2 changed it. Check that the row is still yours and still says "Not created yet", and that each out-of-sync cell is as section 2 read it. Then fill the Ticket cell, the Sprint cell and the approved out-of-sync cells in one `update`, with the `rev` of this read as `ifRev`. If the connector refuses it, read and try once more, and leave out each out-of-sync cell that changed in between. If the Ticket cell still cannot be written, give the developer the ticket key and the row, and say that the cell needs it: the next run then finds the ticket as an open D1 ticket with no row.
-6. Report what changed and where (Rule 5): the ticket link, the doc link with the name of its "Tickets / Tasks" tab, and the row. Then give the next steps: the work starts in plan mode (Rule 2), and the ticket branch is `improvement/<key>-<message>`, cut from the epic of that repository (Rule 3).
-
-Each `update` is a prose `update` on the tab body, with one cell replacement per cell. `<row>` is the place of the row in the read just before the update (step 1 for step 2, step 5 for step 5), counted from 0 for the header row. `<rev>` is the `rev` of that read. `<owner col>`, `<ticket col>` and `<sprint col>` are the places of those columns in the header row of that read, counted from 0. Today they are 3, 4 and 7, but a new column such as Depends on moves them.
-
-The claim, step 2:
+Take owners, statuses and dependencies from the JSON files, never from the cells of the tab. First render the three views, with no question, in this order: the "Tickets / Tasks" tab, the journal doc, then the two charts, because the scope chart counts the Pivots table that the journal doc render has just updated ([references/renders.md](references/renders.md)). They hold the full state, so the terminal does not. Then rank:
 
 ```
-{"ops": [
-  {"op": "replace", "target": {"kind": "cell", "table": "<table id>", "row": <row>, "col": <owner col>}, "ifRev": <rev>,
-   "with": {"as": "markdown", "blocks": {"o": {"type": "dropdown", "enum": "<enum id>", "index": <option>}},
-            "from": {"kind": "inline", "content": "<?claude block o?>"}}}
-]}
+python3 -I <base>/scripts/next_actions.py --render <tmp>/render.json --local <tmp>/local.json --prs <tmp>/prs.json --backlog <tmp>/backlog.md --login <login> --pins <tmp>/pins.json > <tmp>/next.json
 ```
 
-The other cells, step 5:
+Pass `--pins` only when read 4 succeeded; an empty or broken pins file only leaves out the pins row.
 
-```
-{"ops": [
-  {"op": "replace", "target": {"kind": "cell", "table": "<table id>", "row": <row>, "col": <ticket col>}, "ifRev": <rev>,
-   "with": {"as": "markdown",
-            "from": {"kind": "inline", "content": "[<key>](https://scality.atlassian.net/browse/<key>)"}}},
-  {"op": "replace", "target": {"kind": "cell", "table": "<table id>", "row": <row>, "col": <sprint col>}, "ifRev": <rev>,
-   "with": {"as": "markdown", "from": {"kind": "inline", "content": "<current sprint name>"}}}
-]}
-```
+It ranks by critical path, for this developer: (1) unblock the other developer, the PRs that wait for their review; (2) finish what they started, local commits to push and open as a PR, their PRs with changes requested or approved, their claimed tasks with nothing pushed; (3) keep the pipeline flowing, the Federation pins behind and the Jira mismatches; (4) start the next task, the ready task with no owner in their repositories that unblocks the most work downstream (transitive dependents, then their estimate days), admin and nice-to-have tasks last, and a piggyback when a task waits only on open PRs. Each action has `kind`, `title` (the plain name), `ref` (the task number, the PR or the branch), `does`, `why`, `unblocks`, `links` and `recommended`.
 
-- `<option>` is the place of the developer's name in the Owner / Author enum. Read the enum to find it.
-- Write the Sprint cell only when it is empty. Sprint records when the work started, so never change a Sprint cell that has a value.
-- Use full ids, as the connector guide explains. The same replacement fixes an out-of-sync PR or Status cell.
-- If the connector refuses a write, follow its guide for that refusal. Never force a write over a cell that someone else changed.
+Write for a terminal, in this shape and nothing more:
+
+1. One line with the two doc links: the tech spec (its "Tickets / Tasks" tab; the connector gives no link to a single tab) and the journal doc.
+2. At most 12 lines of context, as one Markdown table, What | State | Link: what moved since the last run (read 0, with each correction), the PRs that wait on you, your local unpushed work, and one line for what the other developer is on. When `other_local` of `next.json` is not empty, add one line "Other local branches" that names them: they carry no D1 ticket, so they are never an action. Never show a bare task number: write "Arsenal: Add the bucketnotif IAM actions (task 25)". Name a PR by repository and title, never only "#7261". Leave the full list of ready tasks and the out-of-sync lines to the Tickets tab.
+3. The two doc links again, then the question.
+
+Ask one question with the AskUserQuestion tool. Its options are the top two to four actions of `next.json`, the first labelled "<title> (<ref>) (Recommended)", the others "<title> (<ref>)". Each description says in plain words what the action does and what it leads to, then why, then what it unblocks, as if the reader has forgotten the context: use `does`, `why` and `unblocks`. The question text names the first action by title and repository, and ends with the tech spec link and the sentence "The Tickets tab has the details." The developer can always type their own answer (the tool adds Other). From the second question on, keep at most three actions and add the option "Stop here" (the tool takes two to four options). If you cannot ask, for example in a test run, stop after the table and change nothing. A test run (the prompt says so) writes nothing live: it writes each render to `<tmp>` (the Tickets tab Markdown, the chart payloads, the journal doc tables) instead of the doc, and runs no `journal mark-read` and no In Review auto-fix, so that the developer's next real run still shows what moved.
+
+## 4. Run the chosen action, then ask again
+
+Run the action that the developer picked, then re-run reads 2 and 6 and `next_actions.py`, and ask the next question, until they pick "Stop here". After each action, say what changed and where, with the links (Rule 7).
+
+- **review** a PR: open it with `sh <base>/scripts/open_url.sh <url>`. Run `bnaas-reviewer` in a subagent on its diff (`gh pr diff <url>`), and give its findings as a five-line brief. Then ask what to start while you read it.
+- **push-pr**, push a local branch and open its PR: check the commit story first (a plan commit when there is a plan, then tests, then code; each subject `<ticket>: ...` and at most 55 characters; a ticket key in the branch name), and propose the fixes before any push. Push with `git -C <worktree> push -u origin <branch>`, open a draft PR into the epic or development branch with the five sections of Rule 7 and no reviewers (they are requested when the developer marks it ready, Rule 4), and open its link. **push** adds the commits to its open PR the same way, except when review fixes were folded: if `git merge-base --is-ancestor origin/<branch> <branch>` fails, say so and push with `--force-with-lease` (Rule 4 forbids force pushes only to epic branches). After every push of a PR branch, wait for the Claude Code review workflow on the PR to finish (`gh pr checks <n> --watch`, or poll `gh run list --branch <branch> --workflow 'Code Review'`), read every review comment (`gh api repos/<repo>/pulls/<n>/comments` and the review bodies), address each one: fix it and fold the fix into the commit it belongs to, then push with lease, or reply on the comment with why it stays. When you fix or reply to a comment of the Claude Code review (author `claude[bot]`), also resolve its thread (GraphQL `resolveReviewThread`, with the thread id from `pullRequest.reviewThreads`); never resolve a thread written by a human. The review is the "Claude Code Review" check (`gh pr checks <n> --json name,state,bucket`, or `gh api repos/<repo>/commits/<sha>/check-runs`): `action_required` means read and address its comments, push, and wait again; `success` is Claude Code's LGTM; `failure` or `cancelled` goes to the developer with the run link. On a stack, after any fold or force-push of a lower PR, rebase every PR above it onto the new tip before pushing, and before every push check `gh pr view <n> --json mergeable,mergeStateStatus` on each PR of the stack: a CONFLICTING or DIRTY state is a failure to report and fix at once, like a red CI check. When a lower PR merges, retarget the next PR of the stack to the branch the merged PR targeted (`gh pr edit <n> --base <base>`: the epic, or the development branch in Arsenal and cloudserverclient), and rebase it. Never mark the PR ready yourself: once every comment is addressed, open the PR in the default browser (`open <url>` on macOS, `xdg-open <url>` on Linux) and tell the developer that it is ready for their check; the developer clicks "Ready for review", and the reviewers get it then. After the push, tell the developer the stage in these words: "Waiting for Claude Code's LGTM on <PR>. When it is there, the PR is ready for your review and for you to mark it ready; it is a draft until then. Meanwhile I watch the CI checks and tell you if one fails and what I do about it." Then keep checking the PR's CI checks in the background (`gh pr checks <n>`) until the developer marks the PR ready, and report a failure with its cause and the fix you are making.
+- **fix-pr**: open the PR and list its review comments: the inline ones (`gh api repos/<repo>/pulls/<n>/comments`) and the review bodies (`gh pr view <url> --comments`). **merge**: into an epic, merge it with `gh pr merge <url> --merge` once its checks pass. Into a `development/*` branch (Arsenal, cloudserverclient), bert-e merges and runs the waterfall: never run `gh pr merge` there; post the `/approve` comment as the author (`gh pr comment <url> --body /approve`), and bert-e merges once its checks pass.
+- **start** a task, or **continue** a claimed one: run the claim below. Then look for a worktree or branch of the ticket that already exists (`git -C <clone> worktree list --porcelain`, `git -C <clone> branch --list 'improvement/<key>-*'`) and reuse it: a claimed task with no commit yet, or a branch pushed with no PR, already has one. Only when there is none, `git -C <clone> worktree add -b improvement/<key>-<message> <clone>/.claude/worktrees/<key> <epic or development ref>`. Then enter plan mode (Rule 5).
+- **piggyback**: the claim below, then the same worktree cut from the branch of the open PR that the task waits on, not from the epic. Across repositories (CloudServer on an unreleased Arsenal change), pin that PR's commit by git in `package.json`, and replace the pin by the released version before the PR leaves draft. Say both caveats in the option: a rebase when that PR changes, and the pin to replace.
+- **pins**: run `/bnaas-pin-federation`. **jira-fix**: propose each fix of `out_of_sync`, one question per write.
+
+### The claim
+
+The Jira assignee of a task's ticket owns it and decides about its work. So a task that already has a ticket never gets another one, and a task that someone else owns never gets one from this skill, whoever runs it. The one exception is **next-step**: when every step ticket of a task is Done and the developer owns one of them, the skill asks whether to open the next step ticket (row `<task>.<n+1>`, same fields) or to mark the task done in the Backlog tab, because step tickets alone never complete a task.
+
+- The ticket is assigned to someone else: say who, and change nothing. That person decides. A handover is a change of assignee in Jira, by the owner; the next run shows it.
+- The ticket has no assignee: offer to assign it to the developer with `editJiraIssue`.
+- The ticket is assigned to the developer: check that it is in the current sprint and in the status Ongoing, because Rule 3 moves a ticket to In Progress when its work starts. Offer the missing changes.
+- The task has no ticket: prepare the ticket of [references/ticket-fields.md](references/ticket-fields.md), in the current sprint that it finds. Refuse to prepare one for a task with an open or unclaimed dependency unless the developer owns every open one or chose the piggyback, and say why. A ticket that matches no task (in `out_of_sync`) may be an earlier claim with a broken "row" line: read its description with `getJiraIssue`, and if it is for this task, offer to fix its description, and create nothing.
+
+Every Jira write of the claim takes one question of its own with AskUserQuestion. It lists every write: the ticket with its project, summary, assignee and sprint, the move to In Progress, and any Jira fix. The answers are "Do it" and "Nothing now". After the yes:
+
+1. Check the claim again: search the task's tickets in Jira as in read 1, limited to this task. If someone else claimed it since section 2, stop before any write, and show the developer the new state.
+2. Create the ticket with `createJiraIssue`. Read its transitions, and use the one named "In Progress" (the id can differ between projects). The ticket then has the status "Ongoing". Make any other approved Jira fix.
+3. Re-run reads 1 and 5, and render the Tickets tab and the charts again.
+
+**Auto-fix, no question** (never in a test run). When a ticket assigned to the developer has the status Ongoing and a PR of it in read 5 is open and not a draft, move the ticket to "In Review": read its transitions with `getTransitionsForJiraIssue`, and use the one whose target is In Review. Then render the Tickets tab and the charts again. Report each move.
 
 ## If a source does not answer
 
-- Jira: an Atlassian connector can time out. If the session has a second Atlassian connector, try it. Without Jira, report from the doc and GitHub, say that the Jira statuses are missing, and create nothing.
-- The doc: report from Jira and GitHub, and create nothing, because a new ticket needs its row.
-- GitHub: `prs.py` prints an "Error:" line for each repository that it could not read. Name those repositories in the report, because their PRs are missing.
+- Jira: an Atlassian connector can time out. If the session has a second Atlassian connector, try it. Without Jira, rank from the doc and GitHub, say that the Jira statuses are missing, and create nothing. `next_actions.py` then offers only the reviews of epic PRs, the local work and the pins: with an empty export it cannot tell D1 work from the rest, nor claimed tasks from free ones.
+- The journal: if `journal tail` fails, leave what moved out of the table, say why in one line, and do not run `journal mark-read`.
+- The doc: rank from the backlog, Jira and GitHub. A ticket can still be created, because Jira holds the claim; say that the tab stays stale until the next run renders it.
+- The Backlog tab: rank without the start actions, say that the Backlog tab could not be read, and mark every task "dependencies unknown". Leave the charts as they are.
+- The Federation pins: if read 4 fails (no Federation clone, or `pins.py` not on the epic yet), run `next_actions.py` without `--pins`, and say in one line that the pins were not checked.
+- GitHub: `prs.py --json` exits 1 when it could not read a repository or a PR link, and lists each one in the `errors` field of its output. Read that field, and name those repositories in the table, because their PRs are missing.
 
 ## Self-improvement
 
 This skill is a living document. At the end of every run, before you finish, ask two questions. Did any command, path or assumption in this skill or its scripts turn out wrong or incomplete? Did the run need a step or a check that this skill does not mention? If so, fix the section of this SKILL.md, or the script, where it belongs, so that the next run benefits. Keep it lean. Put each correction into its existing section, not into a changelog or a list of workarounds, and delete guidance that proved useless.
 
-Never edit the files of the shared setup checkout in place. That checkout is what every session loads, and an uncommitted edit there blocks the next setup update. The fix goes to the epic through a push and a draft PR that you make yourself, without asking first (Rules 2 and 3 make this one exception): a draft cannot merge without two approvals, so the reviewers still decide. In a test run, say what you would change, and change nothing.
+Never edit the files of the shared setup checkout in place. That checkout is what every session loads, and an uncommitted edit there blocks the next setup update. The fix goes to the epic through a draft PR that you make yourself, without asking first: that push and that draft PR are the one exception of Rule 4 to asking before a push, because a draft cannot merge without two approvals, so the reviewers still decide (Rule 8). In a test run, say what you would change, and change nothing.
 
-1. Take the key of the standing BB ticket for the fixes of this skill from the Ticket cell of row 22d in the Tickets tab, which section 2 has read. The key stays out of this file (Rule 6). If row 22d has no ticket, stop before any edit, and tell the developer what you would change and that row 22d needs its ticket.
-2. Find the setup checkout and the epic ref as `bnaas-plan-pr` does. Pick the worktree path once with `echo "${TMPDIR:-/tmp}/whats-next-<topic>"`, and write it in full in every later command, because the push gate refuses a path with a shell variable (Rule 7). Then run `git -C <checkout> fetch origin` and `git -C <checkout> worktree add -b improvement/<ticket>-<topic> <worktree> <epic ref>`.
-3. Make the fix in that worktree, and commit it (Rule 6).
-4. Run `.claude/hooks/review-branch.sh <worktree>` in the background (Rule 7). It takes 5 to 15 minutes. Fold a fix for each finding into the commit. A folded fix makes a new commit, and the push gate wants a review of the exact commit that you push, so run `review-branch.sh` again after each fold.
-5. Tell the developer the findings and what you did with each, then push with `git -C <worktree> push -u origin improvement/<ticket>-<topic>`. Open a draft PR into the epic branch. The title is `<ticket>: <what the fix does>`. The body has the five sections that `bnaas-plan-pr` shows, and the findings that stay. Request the reviewers of Rule 3: the other developer, and `nicolas2bert` or the team `scality/hopocalypse`.
-6. Remove the worktree, and give the developer the PR link. The fix reaches their setup when the PR merges and they update the setup (README, "Update the setup").
+1. Find the standing self-improvement ticket in Jira with the search `parent = <epic key> AND summary ~ "self-improvements of the D1 skills"`. The key stays out of this file (Rule 7). If there is none, stop before any edit, and tell the developer what you would change and that the ticket is missing.
+2. Find the setup checkout, the git checkout that `.claude/plans` really lives in (`cd "$CLAUDE_PROJECT_DIR/.claude/plans" && git rev-parse --show-toplevel`), and the epic ref, as `git -C <checkout> branch -r --list 'origin/epic/*-bnaas-d1'` prints it. Run `git -C <checkout> fetch origin` and `git -C <checkout> worktree add -b improvement/<ticket>-<topic> <checkout>/.claude/worktrees/<ticket>-<topic> <epic ref>`.
+3. Make the fix in that worktree, run `bnaas-reviewer` on the diff, and commit it (Rules 5 and 7).
+4. Push with `git -C <worktree> push -u origin improvement/<ticket>-<topic>`, and open a draft PR into the epic branch. The title is `<ticket>: <what the fix does>`. The body has the five sections of Rule 7. Request no reviewers: they are requested when the developer marks it ready (Rule 4). The Claude Code review on the PR is the review stage: follow its review loop (Rule 5).
+5. Remove the worktree, and give the developer the PR link. The fix reaches their setup when the PR merges and they update the setup (README, "Update the setup").
