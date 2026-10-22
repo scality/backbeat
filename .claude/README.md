@@ -9,6 +9,7 @@ This folder holds the Claude Code setup that every BNaaS D1 developer uses. It l
 | `rules/bnaas-d1.md` | Team rules 1 to 7. Claude Code loads them at the start of each session. |
 | `agents/bnaas-reviewer.md` | Read-only reviewer for diffs and plans. |
 | `skills/bnaas-plan-pr/` | `/bnaas-plan-pr`: commits an approved plan and opens a plan PR. |
+| `skills/bnaas-whats-next/` | `/bnaas-whats-next`: the PRs to review and the work to take next, and the ticket for a new row. |
 | `hooks/review-branch.sh` | Runs the CI review on the current branch of a repository and saves it (Rule 7). |
 | `hooks/review-gate.sh` | Refuses a `git push` until a saved review exists for the pushed commit (Rule 7). |
 | `settings.json` | Fable as the advisor, `plans/` as the plans folder, and the hooks. |
@@ -21,7 +22,7 @@ You need these tools:
 - Claude Code, logged in with a claude.ai account. The Fable advisor runs only on the Anthropic API.
 - `git` with SSH access to the scality repositories on GitHub.
 - `gh`, logged in to GitHub.
-- `python3`, for the hooks.
+- `python3`, for the hooks and the skill scripts.
 - The `scality-skills` plugin from the Scality agent hub, for the review before each push. The install section shows how to get it.
 - The Atlassian connector, or an Atlassian MCP server, in Claude Code. Without it, Claude cannot create or update Jira tickets for you.
 
@@ -150,4 +151,4 @@ Both developers have access to the tech spec doc. You do not need to update thes
 | Epic branches | `epic/S3C-10971-bnaas-d1` in arsenal, vault, cloudserver, cloudserverclient, backbeat, federation, ring and integration. |
 | Rules in full | `rules/bnaas-d1.md` |
 
-To see what to work on next, ask Claude "What's next?" (Rule 5).
+To see what to work on next, ask Claude "What's next?" or run `/bnaas-whats-next` (Rule 5).

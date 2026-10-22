@@ -14,7 +14,7 @@ These rules apply to every Claude Code session on D1, for every developer. They 
 
 ## Rule 2: plan first, humans review the plan, AI reviews the code
 
-- Every change starts in plan mode. The plan goes to `.claude/plans/` (`plansDirectory`).
+- Every change starts in plan mode. The plan goes to `.claude/plans/` (`plansDirectory`). The one exception is the draft PR that a skill opens for its own self-improvement: its description says what it fixes and why, and the reviewers judge that instead of a plan.
 - When the developer approves the plan in the session, run the `bnaas-plan-pr` skill. It commits the plan and opens a plan PR into the backbeat epic. Write code only after the reviewers approve that plan PR.
 - The code PR links its plan file. If the work moves away from the plan, update the plan on its PR first.
 - AI reviews the code: `bnaas-reviewer` in the session, the review-pr skill on the branch before each push (Rule 7), and the same skill in CI.
@@ -27,7 +27,7 @@ These rules apply to every Claude Code session on D1, for every developer. They 
 - Reviewers: the other developer is mandatory. Taylor (`tmacro`) reviews Anurag's PRs, and Anurag (`anurag4DSB`) reviews Taylor's PRs. Find the author with `gh api user --jq .login`.
 - For the second approval, request Nicolas Humbert (`nicolas2bert`), who volunteered. If he cannot review, request the Hopocalypse team (`scality/hopocalypse`) instead.
 - When a new upstream release lands, the developers decide whether and how the epic takes it in.
-- Ask the developer before any push and before opening a PR.
+- Ask the developer before any push and before opening a PR. The one exception is the push and the draft PR that a skill makes for its own self-improvement: a draft cannot merge without the two approvals.
 
 ## Rule 4: verify every piece of work against its plan
 
@@ -53,9 +53,9 @@ Claude does the bookkeeping, so the developer never has to know where things are
 - The description lists "Done when" and links the ticket's row in the Tickets tab.
 - When work starts, move the ticket to In Progress. Log the time spent for the work done. Close the ticket only after its whole scope is done. In RING, Done needs Release notes set first.
 - After a branch cut, add a Jira comment. It gives the branch link, the cut sha, the last release tag on that line and the GitHub compare link.
-- Every ticket has a row in the Tickets tab of the tech spec doc: https://claude.ai/code/artifact/bfe390f9-d819-4a93-9050-ffd5eee1b80a. The row gives the ID, To do, Repository, Owner and the ticket as a link. When Claude creates a ticket, it adds or fills the row through the Claude Docs connector.
+- Every ticket has a row in the Tickets tab of the tech spec doc: https://claude.ai/code/artifact/bfe390f9-d819-4a93-9050-ffd5eee1b80a. The row gives the ID, To do, Repository, Owner / Author, the ticket as a link, PR, Status and Sprint, the sprint in which its work started. When Claude creates a ticket, it adds or fills the row through the Claude Docs connector.
 - After any change in Jira, the doc or GitHub, tell the developer what changed and where. Give the links to the ticket, the doc tab, the branch and the PR. Name the task they are working on.
-- "What's next", for now: give the Tickets tab link and the rows the developer owns that are not done. Also list the open D1 PRs that wait for their review: `gh search prs --review-requested=@me --state=open --owner=scality --base epic/S3C-10971-bnaas-d1`.
+- "What's next": run the `bnaas-whats-next` skill. It lists the PRs that wait for the developer's review, then the work they can pick up, ready or blocked by its dependencies, then what the other developer is working on. When the developer picks a row with no ticket that nobody else owns, it creates the ticket and fills the row, after one question.
 
 ## Rule 6: commits, tags and releases
 
