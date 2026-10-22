@@ -9,8 +9,9 @@
 # GIT_DIR or --git-dir, --all, --mirror or --tags, a push hidden behind an
 # unknown command, and any step before the push that is not read-only.
 # A push of an epic tag (X.Y.Z-bnaas.N) needs no review, because its commit
-# is already on the epic. Any other tag push or tag deletion is refused: no
-# production tag is ever made from a D1 session.
+# is already on the epic. Any other tag push or tag deletion is refused, and
+# so is an image retag (docker, crane, oras, skopeo, regctl) to a tag that
+# is not an epic tag: no production tag is ever made from a D1 session.
 # The gate catches a forgotten review. It is not a security boundary: a
 # command written to evade it can still get through.
 
@@ -50,6 +51,10 @@ SAFE = {"cd", "pushd", "popd", "echo", "printf", "true", "pwd", "ls", "test",
 GIT_READ = {"status", "log", "show", "diff", "rev-parse", "rev-list", "fetch",
             "remote", "ls-remote", "describe", "config"}
 EPIC_TAG = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+-bnaas\.[0-9]+$")
+IMAGE_TAG_OK = re.compile(r"^([0-9a-f]{40}(-federation|-test)?|"
+                          r"[0-9]+\.[0-9]+\.[0-9]+-bnaas\.[0-9]+(-federation)?)$")
+REGISTRY_TOOLS = {"docker", "crane", "oras", "skopeo", "regctl"}
+REGISTRY_WRITES = {"push", "tag", "create", "copy", "cp", "mutate", "append"}
 PROD_TAG = ("Rule 6: only X.Y.Z-bnaas.N epic tags are made from a D1 session. "
             "This command would push, delete or write the tag {tag}, which is "
             "not an epic tag. A production tag goes through the official "
@@ -136,6 +141,8 @@ def handle(seg, here, events):
     if head == "eval":
         scan(" ".join(seg[1:]), here, events)
         return here
+    if head in REGISTRY_TOOLS and REGISTRY_WRITES & set(seg[1:]):
+        check_images(head, seg)
     if head == "git":
         repo, i = here, 1
         while i < len(seg) and seg[i].startswith("-"):
@@ -163,6 +170,23 @@ def handle(seg, here, events):
     return here
 
 
+def check_images(head, seg):
+    """Refuse a registry write whose image tag is not a sha or an epic tag."""
+    words = [t for t in seg[1:] if not t.startswith("-")]
+    for tok in words:
+        ref = tok.split("@", 1)[0]
+        name = ref.rsplit("/", 1)[-1]
+        if "scality" in ref and "/" in ref and ":" in name:
+            tag = name.split(":", 1)[1]
+            if not IMAGE_TAG_OK.match(tag):
+                deny(PROD_TAG.format(tag=tag))
+    if head in ("crane", "oras", "regctl") and "tag" in words:
+        bare = [w for w in words[words.index("tag") + 1:] if "/" not in w]
+        for tag in bare:
+            if not IMAGE_TAG_OK.match(tag):
+                deny(PROD_TAG.format(tag=tag))
+
+
 def scan(text, here, events):
     stack, seg = [], []
     for tok in tokenize(text) + [";"]:
@@ -184,7 +208,9 @@ def main(raw):
     cmd = (data.get("tool_input") or {}).get("command") or ""
     cwd = data.get("cwd") or os.getcwd()
     text = strip_heredocs(cmd)
-    if not re.search(r"\bgit\b", text) or not re.search(r"\bpush\b", text):
+    registry = re.search(r"\b(docker|crane|oras|skopeo|regctl)\b", text)
+    if not registry and (not re.search(r"\bgit\b", text)
+                         or not re.search(r"\bpush\b", text)):
         return
     events = []
     try:

@@ -93,6 +93,16 @@ t ALLOW tag8 "$A" "$P origin --delete old-branch"
 t DENY tag9 "$A" "$P --follow-tags origin feat"
 t DENY tag10 "$A" "$P origin $SHA:refs/tags/7.0.0"
 
+# Image retags: only a sha or an epic tag may be written.
+t ALLOW img1 "$W" "docker buildx imagetools create -t ghcr.io/scality/vault:7.95.0-bnaas.1 ghcr.io/scality/vault:$SHA"
+t DENY img2 "$W" "docker buildx imagetools create -t ghcr.io/scality/vault:7.95.0 ghcr.io/scality/vault:$SHA"
+t DENY img3 "$W" "docker tag foo ghcr.io/scality/backbeat:9.6.0-federation"
+t ALLOW img4 "$W" "docker push ghcr.io/scality/backbeat:9.6.0-bnaas.1-federation"
+t DENY img5 "$W" "crane tag ghcr.io/scality/vault:$SHA 7.95.0"
+t ALLOW img6 "$W" "docker pull ghcr.io/scality/vault:7.94.0"
+t ALLOW img7 "$W" "docker push localhost:5000/foo:latest"
+t ALLOW img8 "$W" "docker buildx imagetools create -t ghcr.io/scality/scality-kms:9.6.0-bnaas.1-federation ghcr.io/scality/scality-kms:$SHA-federation"
+
 # Malformed payloads.
 out=$(printf '{"tool_name":"Bash","tool_input":"%s origin other","cwd":"%s"}' "$P" "$A" | "$G")
 if [ -n "$out" ]; then pass=$((pass + 1)); else fail=$((fail + 1)); echo "FAIL malformed payload"; fi
