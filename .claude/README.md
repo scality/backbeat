@@ -11,6 +11,7 @@ This folder holds the Claude Code setup that every BNaaS D1 developer uses. It l
 | `skills/bnaas-plan-pr/` | `/bnaas-plan-pr`: commits an approved plan and opens a plan PR. |
 | `hooks/review-branch.sh` | Runs the CI review on the current branch of a repository and saves it (Rule 7). |
 | `hooks/review-gate.sh` | Refuses a `git push` until a saved review exists for the pushed commit (Rule 7). |
+| `hooks/test-review-gate.sh` | Test set for the gate. Run it after any change to the gate. |
 | `settings.json` | Fable as the advisor, `plans/` as the plans folder, and the hooks. |
 | `plans/` | Approved plans, one file per change. |
 
