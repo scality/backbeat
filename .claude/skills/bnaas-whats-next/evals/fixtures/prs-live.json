@@ -1,0 +1,22 @@
+{
+ "epic": "epic/S3C-10971-bnaas-d1",
+ "login": "anurag4DSB",
+ "prs": [
+  {
+   "pr": "Federation#7261",
+   "url": "https://github.com/scality/Federation/pull/7261",
+   "title": "S3C-11573: Pin the first D1 epic images",
+   "author": "Anurag",
+   "draft": true,
+   "ticket": "S3C-11573",
+   "base": "epic/S3C-10971-bnaas-d1",
+   "next": [
+    "Taylor",
+    "Nicolas"
+   ],
+   "kind": "mine",
+   "status": "Waiting for review from Taylor and Nicolas"
+  }
+ ],
+ "errors": []
+}

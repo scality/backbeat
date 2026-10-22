@@ -2,15 +2,19 @@
 """List the open D1 PRs and say who must act on each.
 
 Usage:
-  prs.py [--epic <branch>] [--login <login>] [--json] [--pr <url>]... <repository>...
+  prs.py [--epic <branch>] [--login <login>] [--json] [--pr <url>]...
+         [--dev <repository>]... <repository>...
   prs.py --self-test
 
 Each <repository> is a name from the Repository column of the Tickets tab,
-for example arsenal or backbeat. The script runs `gh pr list --base <epic>`
-in each one, then follows stacked PRs: a PR whose base is the head branch
-of a D1 PR. It does not use `gh search prs`, because the search index
-misses PRs. Each --pr adds one PR of the PR column, open or not, so that
-the caller can check every Status cell of the tab.
+for example vault or backbeat. The script runs `gh pr list --base <epic>`
+in each one. D1 work in Arsenal and cloudserverclient goes to their
+development branches instead (Rule 4), so each --dev <repository> lists
+the open PRs of the two developers into any development/* branch. Then
+the script follows stacked PRs: a PR whose base is the head branch of a
+D1 PR. It does not use `gh search prs`, because the search index misses
+PRs. Each --pr adds one PR of the PR column, open or not, so that the
+caller can check every Status cell of the tab.
 
 For each PR it gives the Status words of the Tickets tab ("Waiting for
 review from Taylor"), who must act next, and its kind for <login>: review
@@ -28,6 +32,7 @@ import io
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
@@ -37,8 +42,10 @@ FIELDS = ("number,title,url,author,isDraft,headRefName,baseRefName,state,"
 # Keys are lower case: GitHub logins do not depend on case.
 NAMES = {"anurag4dsb": "Anurag", "tmacro": "Taylor", "nicolas2bert": "Nicolas",
          "scality/hopocalypse": "the Hopocalypse team"}
-# Rule 3: each developer must approve the other's PRs.
+# Rule 4: each developer must approve the other's PRs.
 PAIR = {"anurag4dsb": "tmacro", "tmacro": "anurag4dsb"}
+# The authors of D1 PRs into the development branches (--dev).
+DEVELOPERS = ("anurag4DSB", "tmacro")
 BOTS = {"claude", "github-actions", "bert-e", "copilot", "copilot-pull-request-reviewer"}
 TICKET = re.compile(r"\b([A-Z][A-Z0-9]+-\d+)\b")
 
@@ -96,7 +103,8 @@ def classify(pr, me):
     out = {"pr": "%s#%s" % (m.group(1), m.group(2)), "url": pr["url"], "title": pr["title"],
            "author": name(pr["author"]["login"]), "draft": bool(pr.get("isDraft")),
            "ticket": ticket.group(1) if ticket else None,
-           "base": pr.get("baseRefName"), "next": [], "kind": "other"}
+           "base": pr.get("baseRefName"), "head": pr.get("headRefName"), "next": [],
+           "kind": "other"}
     if pr.get("state") in ("MERGED", "CLOSED"):
         out["kind"] = "closed"
         out["status"] = ("Merged on " + (pr.get("mergedAt") or "")[:10]
@@ -136,19 +144,25 @@ def classify(pr, me):
     return out
 
 
-def collect(epic, repos, urls, run=gh):
-    """Open PRs into the epic, the PRs stacked on them, and the given URLs."""
+def collect(epic, repos, urls, run=gh, dev=()):
+    """Open PRs into the epic, the developers' open PRs into development/*
+    in the dev repositories, the PRs stacked on them, and the given URLs."""
     found, errors = {}, []
 
-    def listing(repo, base):
+    def listing(repo, base, author=None):
+        flag, value = ("--author", author) if author else ("--base", base)
         try:
-            return repo, json.loads(run("pr", "list", "-R", "scality/" + repo, "--base", base,
-                                        "--state", "open", "--json", FIELDS, "--limit", "100"))
+            prs = json.loads(run("pr", "list", "-R", "scality/" + repo, flag, value,
+                                 "--state", "open", "--json", FIELDS, "--limit", "100"))
         except (RuntimeError, ValueError) as e:
-            errors.append("%s, base %s: %s" % (repo, base, e))
+            errors.append("%s, %s %s: %s" % (repo, flag[2:], value, e))
             return repo, []
+        if author:
+            prs = [p for p in prs if (p.get("baseRefName") or "").startswith("development/")]
+        return repo, prs
 
     todo = [(repo, epic) for repo in repos]
+    todo += [(repo, None, who) for repo in dev for who in DEVELOPERS]
     with ThreadPoolExecutor(max_workers=8) as pool:
         while todo:
             heads = []
@@ -292,11 +306,23 @@ def self_test():
                 ("backbeat", "improvement/ZZ-1-x21"): [],
                 ("vault", "epic/E"): []}
 
+    # Arsenal PRs by author: one into development/8.4 with one stacked on
+    # it, one into another branch, and none by Taylor.
+    open_prs.update({
+        ("arsenal", "anurag4DSB"): [pr(40, A, baseRefName="development/8.4",
+                                       headRefName="improvement/ZZ-1-x40"),
+                                    pr(41, A, baseRefName="feature/other")],
+        ("arsenal", "tmacro"): [],
+        ("arsenal", "improvement/ZZ-1-x40"): [pr(42, T, baseRefName="improvement/ZZ-1-x40",
+                                                 headRefName="improvement/ZZ-1-x42")],
+        ("arsenal", "improvement/ZZ-1-x42"): []})
+
     def fake(*args):
         if args[:2] == ("pr", "view"):
             n = int(args[2].rstrip("/").split("/")[-1])
             return json.dumps(pr(n, A, state="MERGED", mergedAt="2026-10-15T16:19:09Z"))
-        key = (args[3].split("/")[1], args[5])
+        flags = dict(zip(args[2::2], args[3::2]))
+        key = (flags["-R"].split("/")[1], flags.get("--base") or flags["--author"])
         if key not in open_prs:
             raise RuntimeError("no such repository")
         return json.dumps(open_prs[key])
@@ -305,9 +331,11 @@ def self_test():
     got, errors = collect("epic/E", ["backbeat", "vault", "nope"],
                           ["https://github.com/scality/backbeat/pull/30",
                            "https://github.com/scality/Backbeat/pull/30/",
-                           "https://github.com/scality/backbeat/pull/20"], run=fake)
-    assert sorted(p["number"] for p in got) == [20, 21, 30], got
+                           "https://github.com/scality/backbeat/pull/20"], run=fake,
+                          dev=["arsenal"])
+    assert sorted(p["number"] for p in got) == [20, 21, 30, 40, 42], got
     assert len(errors) == 1 and errors[0].startswith("nope"), errors
+    got = [p for p in got if p["number"] < 40]
     text = report([classify(p, A) for p in got], errors)
     assert "Waiting for your review:\n- none" in text and "Error: nope" in text, text
     text = report([classify(pr(1, T, asked=[A, N]), A), classify(pr(2, T, asked=[N]), A)], [])
@@ -326,10 +354,10 @@ def main(argv):
         self_test()
         return 0
     epic = login = None
-    as_json, urls, repos = False, [], []
+    as_json, urls, repos, dev = False, [], [], []
     args = iter(argv)
     for a in args:
-        if a in ("--epic", "--login", "--pr"):
+        if a in ("--epic", "--login", "--pr", "--dev"):
             value = next(args, None)
             if value is None or value.startswith("-"):
                 print(__doc__, file=sys.stderr)
@@ -338,6 +366,8 @@ def main(argv):
                 epic = value
             elif a == "--login":
                 login = value
+            elif a == "--dev":
+                dev.append(value)
             else:
                 urls.append(value)
         elif a == "--json":
@@ -347,12 +377,22 @@ def main(argv):
             return 2
         else:
             repos.append(a)
-    if not repos and not urls:
+    if not repos and not urls and not dev:
         print(__doc__, file=sys.stderr)
         return 2
+    if not shutil.which("gh"):
+        print("Error: gh is not installed or not on PATH; install it and run gh auth login.",
+              file=sys.stderr)
+        return 2
     epic = epic or find_epic()
-    login = login or gh("api", "user", "--jq", ".login").strip()
-    prs, errors = collect(epic, repos, urls)
+    if not login:
+        try:
+            login = gh("api", "user", "--jq", ".login").strip()
+        except RuntimeError as e:
+            print("Error: gh api user failed (%s); run gh auth login or pass --login."
+                  % str(e).splitlines()[0], file=sys.stderr)
+            return 2
+    prs, errors = collect(epic, repos, urls, dev=dev)
     rows = sorted((classify(p, login) for p in prs), key=lambda r: r["url"].lower())
     if as_json:
         print(json.dumps({"epic": epic, "login": login, "prs": rows, "errors": errors}, indent=1))

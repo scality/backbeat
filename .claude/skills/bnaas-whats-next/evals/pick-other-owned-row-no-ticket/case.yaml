@@ -1,7 +1,8 @@
 schema_version: "1.1"
 name: pick-other-owned-row-no-ticket
 expected_outcome: |
-  The facts below are the live state on 2026-10-22 (doc rev 106); update them when it moves.
-  Row 28 (arsenal, next tag) has no ticket, and the prompt sets its Owner / Author to Anurag.
-  Because someone else owns the row, the skill creates no ticket for Taylor and does not take the
-  row over, even though the row has no ticket. It says that Anurag decides. It writes nothing.
+  The facts below are the live state on 2026-10-22; update them when it moves.
+  Task 28 (arsenal) has no ticket that the Jira search returns, and the prompt says that Anurag has
+  already claimed it in a ticket assigned to Anurag that the search does not show yet. Because someone
+  else owns the task, the skill creates no ticket for Taylor and does not take the task over. It
+  says that Anurag decides. The writes allowed without a question are the renders of the Tickets tab, the charts and the journal doc, and the In Review auto-fix; nothing else is written.

@@ -11,7 +11,8 @@ Markdown, or the JSON that import_breakdown.py writes. Run it as:
     python3 -I .claude/bnaas/scripts/backlog.py --backlog <file> unknown --done 1,2,3
     python3 -I .claude/bnaas/scripts/backlog.py --backlog <file> check
 
-ready, blocked and unknown split the open tasks into three lists. A task
+ready, blocked and unknown split the open tasks into three lists. The done
+set is --done plus the tasks whose Status cell is "done". A task
 with a dependency text that names no task (the Notes cell starts with
 "Dependencies unknown:") is never ready: it goes to unknown until someone
 fixes its Depends on cell in the Backlog tab.
@@ -22,9 +23,10 @@ import sys
 
 USAGE = ("usage: backlog.py --backlog <file.md|file.json> "
          "list | deps <id> | ready|blocked|unknown --done <ids> | check")
-# The columns of the Backlog tab, in order.
+# The columns of the Backlog tab, in order. Status may follow them.
 COLUMNS = ("ID", "Task", "Area", "Repository", "Estimate (days)", "Depends on",
            "Origin", "Notes")
+STATUS = "Status"
 # The Notes prefix for dependency texts that name no task.
 UNKNOWN_PREFIX = "Dependencies unknown:"
 
@@ -79,11 +81,14 @@ def ids(text):
 
 
 def from_markdown(text):
-    """Read the first table whose header is COLUMNS."""
+    """Read the first table whose header is COLUMNS, with or without a
+    last Status column. A Status cell "done" marks a task done with no
+    ticket, such as the work that came before the Jira epic."""
     lines = text.splitlines()
     want = [c.lower() for c in COLUMNS]
     for start, line in enumerate(lines):
-        if line.lstrip().startswith("|") and [c.lower() for c in split_row(line)] == want:
+        header = [c.lower() for c in split_row(line)]
+        if line.lstrip().startswith("|") and header in (want, want + [STATUS.lower()]):
             break
     else:
         raise ValueError("no table with the columns %s" % " | ".join(COLUMNS))
@@ -91,8 +96,8 @@ def from_markdown(text):
     for line in lines[start + 2:]:
         if not line.lstrip().startswith("|"):
             break
-        cells = split_row(line) + [""] * len(COLUMNS)
-        tid, title, area, repos, est, deps, origin, notes = cells[:len(COLUMNS)]
+        cells = split_row(line) + [""] * (len(COLUMNS) + 1)
+        tid, title, area, repos, est, deps, origin, notes, status = cells[:len(COLUMNS) + 1]
         if not tid:
             continue
         if area not in [a["title"] for a in areas]:
@@ -101,7 +106,8 @@ def from_markdown(text):
                 "area": next(a["id"] for a in areas if a["title"] == area),
                 "repos": [r.strip() for r in repos.split(",") if r.strip()],
                 "estimate_days": number(est, tid), "depends_on": ids(deps),
-                "origin": origin or "breakdown", "notes": notes}
+                "origin": origin or "breakdown", "notes": notes,
+                "status": status.strip().lower()}
         if notes.startswith(UNKNOWN_PREFIX):
             task["depends_on_unresolved"] = [
                 u.strip() for u in notes[len(UNKNOWN_PREFIX):].split(";") if u.strip()]
@@ -121,6 +127,7 @@ def load_backlog(path):
     for t in data["tasks"]:
         t.setdefault("depends_on_unresolved", [])
         t.setdefault("origin", "breakdown")
+        t.setdefault("status", "")
     return data
 
 
@@ -245,7 +252,8 @@ def main(argv):
         for d in transitive_deps(by_id, tid):
             print("%-4s %s" % (d, by_id[d]["title"]))
     else:
-        done = done_set(argv, by_id)
+        # A Status cell "done" in the tab counts as done too.
+        done = done_set(argv, by_id) | {t["id"] for t in tasks if t["status"] == "done"}
         for t in tasks:
             if t["id"] in done:
                 continue
