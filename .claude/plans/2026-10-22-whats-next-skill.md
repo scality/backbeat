@@ -1,3 +1,5 @@
+Superseded on 2026-10-22 by 2026-10-22-round-the-clock.md: the Tickets tab is now rendered, dependencies come from the backlog, and there is no local review gate.
+
 # What's next skill
 
 ## Context
