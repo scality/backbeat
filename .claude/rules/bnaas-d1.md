@@ -17,7 +17,7 @@ Session memory, plan files and chat history are not shared state. If something m
 
 ## Rule 2: the day starts with what's next, and the journal records as you go
 
-- Start every session with `/bnaas-whats-next` (added by a later PR of this stack). It first catches up the journal from the session before it, then reads the journal, the Backlog tab, Jira, GitHub and the local clones, and gives: what moved since your last run, the PRs that wait for your review, the tasks you can take (ready, blocked, or dependencies unknown), and what the other developer is on. It also re-renders the Tickets tab, the charts of the Progress tab and the journal doc.
+- Start every session with `/bnaas-whats-next`. It first catches up the journal from the session before it, then reads the journal, the Backlog tab, Jira, GitHub and the local clones, and gives: what moved since your last run, the PRs that wait for your review, the tasks you can take (ready, blocked, or dependencies unknown), and what the other developer is on. It also re-renders the Tickets tab, the charts of the Progress tab and the journal doc.
 - Reviews come first, because the other developer is asleep and blocked on them.
 - Take a task by claiming it (Rule 3), never by starting the code.
 - The journal records as you go. Hooks (added by a later PR of this stack) log commits, pushes, PRs, test and lint results, Jira ticket changes and doc writes, and at the end of each turn the Stop hook asks the session to append them to the Log of the journal doc. When a decision, a blocker or a surprise happens, run `.claude/hooks/journal note "<one sentence>"` from the folder the session started in (the path is relative to it) at that moment (`--decision` for a decision or a change of plan), never at the end of the day. Facts only, no names. The other developer's next run of what's next reads it.
@@ -27,7 +27,7 @@ Session memory, plan files and chat history are not shared state. If something m
 
 ## Rule 3: claim before you build
 
-- A task is claimed by its Jira ticket: Task, parent the D1 epic (its key is in the epic branch name), assigned to you, in the current sprint, moved to In Progress. `/bnaas-whats-next` (added by a later PR of this stack) creates it after one question, and fills the row in the Tickets tab.
+- A task is claimed by its Jira ticket: Task, parent the D1 epic (its key is in the epic branch name), assigned to you, in the current sprint, moved to In Progress. `/bnaas-whats-next` creates it after one question, and fills the row in the Tickets tab.
 - One task, one owner. Never claim a task that has a ticket assigned to someone else, and never claim a task whose dependencies are not done unless you also own them. If the backlog says "dependencies unknown", read the breakdown comment (https://claude.ai/artifact/QC6Cbrfm7a5hAfRw752c7L, frozen v55) and decide.
 - A dependency or scope fix is an edit of the Backlog tab, with no PR: fix the Depends on cell, or add a row with Origin "new scope". Re-seeding the tab from the breakdown is a deliberate step (`.claude/bnaas/README.md`).
 - Before you claim, read Jira again. The other developer may have claimed it an hour ago.

@@ -2,7 +2,7 @@
 
 This folder holds the Claude Code setup that both D1 developers use, in Paris and in San Francisco. It lives only on the backbeat epic branch, `epic/S3C-10971-bnaas-d1`, and the final merge removes it.
 
-The idea is simple. The two developers never work at the same time, so the shared state must be enough to start from. The Backlog tab of the tech spec doc holds the work and its dependencies, Jira holds who does what, GitHub holds the code, the other tabs of the doc hold the human view and the progress charts, and the journal holds what moved and what each session decided. Hooks write the journal as work happens, so nobody writes an end-of-day note. One skill moves a session through that state: `/bnaas-whats-next` at the start (added by a later PR of this stack).
+The idea is simple. The two developers never work at the same time, so the shared state must be enough to start from. The Backlog tab of the tech spec doc holds the work and its dependencies, Jira holds who does what, GitHub holds the code, the other tabs of the doc hold the human view and the progress charts, and the journal holds what moved and what each session decided. Hooks write the journal as work happens, so nobody writes an end-of-day note. One skill moves a session through that state: `/bnaas-whats-next` at the start.
 
 ## What is here
 
@@ -10,7 +10,7 @@ The idea is simple. The two developers never work at the same time, so the share
 |---|---|
 | `rules/bnaas-d1.md` | Team rules 1 to 8. Claude Code loads them at the start of each session. |
 | `bnaas/` | The importer and backlog scripts: seed the Backlog tab from the breakdown, and list the tasks that are ready, blocked or with dependencies unknown. |
-| `skills/bnaas-whats-next/` | `/bnaas-whats-next` (added by a later PR of this stack): what moved since your last run, the PRs to review, the work to take next, and the ticket for a new task. |
+| `skills/bnaas-whats-next/` | `/bnaas-whats-next`: what moved since your last run, the PRs to review, the work to take next, and the ticket for a new task. |
 | `hooks/journal-capture.sh` | `PostToolUse` hook (added by a later PR of this stack): logs a fact for each git commit and push, `gh pr create`, `ready`, `merge` and `close`, test and lint run with its exit code, Jira ticket created, moved or edited, and write to the tech spec doc. Repositories outside `github.com/scality` are skipped. |
 | `hooks/journal-flush.sh` | `Stop` hook (added by a later PR of this stack): asks the session to append the logged facts to the Log of the journal doc, then to run `journal flushed`. |
 | `hooks/journal` | (added by a later PR of this stack) `journal note "<text>"` (`--decision` for a decision), `journal flush`, `journal flushed`, `journal tail --doc <export>`. |
@@ -84,7 +84,7 @@ Once the later PRs of this stack have landed, run `.claude/hooks/test-journal.sh
 
 ## Daily flow
 
-1. `/bnaas-whats-next` (added by a later PR of this stack). Review first, then claim one task. The skill creates the ticket and fills the row.
+1. `/bnaas-whats-next`. Review first, then claim one task. The skill creates the ticket and fills the row.
 2. Plan in plan mode, in a worktree of the ticket. The plan ships as the first commit of the PR.
 3. Build with `test-driven-development`, review the diff with `bnaas-reviewer` before each commit, then open a draft PR with no reviewers. Fix what the Claude Code review on the PR raises (Rule 5); the developer then marks it ready, and the three reviewers of Rule 4 are requested then.
 4. When a service epic moves, `/bnaas-pin-federation` (added by a later PR of this stack) updates the Federation pins in one PR.
