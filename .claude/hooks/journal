@@ -1,0 +1,535 @@
+#!/usr/bin/env python3
+"""The D1 journal: facts about the work, logged as it happens.
+
+Usage:
+  journal note [--decision] [--why <text>] [--tasks <ids>] "<one sentence>"
+  journal flush
+  journal tail [n] | tail --new   (--new: the comments since the last mark-read)
+  journal mark-read               (after a render: the next --new starts there)
+  journal capture       (the PostToolUse hook; JSON on stdin)
+  journal hook-flush    (the Stop and SubagentStop hook; JSON on stdin)
+
+The hooks append one JSON fact per line to ~/.bnaas/journal/buffer.jsonl
+(BNAAS_JOURNAL_DIR moves the folder). The Stop hook posts the buffer as
+one comment on the journal issue named in .claude/bnaas/journal.json, and
+empties it. If gh fails, the facts stay for the next flush. With
+BNAAS_JOURNAL_DRY_RUN=1, a flush prints the comment instead.
+
+A fact holds no name and never the text of a command or its output, which
+can hold secrets: only the repository, the branch and what happened (a
+commit sha and subject, a push, a PR link, a test command name and its
+exit code, a Jira key and its change, a doc write). A repository whose
+origin is not on github.com/scality is never logged.
+
+The hook subcommands always exit 0 and log their errors to errors.log in
+the journal folder, so a broken journal never stops a session.
+"""
+import contextlib
+import datetime
+import fcntl
+import glob
+import json
+import os
+import re
+import shlex
+import subprocess
+import sys
+import traceback
+
+HERE = os.path.dirname(os.path.realpath(__file__))
+CONFIG = os.path.join(HERE, "..", "bnaas", "journal.json")
+DIR = os.environ.get("BNAAS_JOURNAL_DIR") or os.path.expanduser("~/.bnaas/journal")
+BUFFER = os.path.join(DIR, "buffer.jsonl")
+ERRORS = os.path.join(DIR, "errors.log")
+LAST_READ = os.path.join(DIR, "last-read")
+LAST_SEEN = os.path.join(DIR, "last-seen")
+LOCK = os.path.join(DIR, "lock")
+SCALITY = re.compile(r"^(?:git@github\.com:|(?:https|ssh)://(?:git@)?github\.com/)scality/"
+                     r"([^/]+?)(?:\.git)?/?$", re.I)
+PR_URL = re.compile(r"https://github\.com/scality/[\w.-]+/pull/\d+")
+JIRA_KEY = re.compile(r"\b[A-Z][A-Z0-9]+-\d+\b")
+JIRA_TOOL = re.compile(r"^mcp__.+__(createJiraIssue|transitionJiraIssue|editJiraIssue)$")
+DOCS_TOOL = re.compile(r"^mcp__.+Claude_Docs__(update|batch)$")
+# Test and lint commands: the words that start a segment, and the name logged.
+CHECKS = [(("yarn", "test"), "yarn test"), (("yarn", "run", "test"), "yarn test"),
+          (("npm", "test"), "npm test"), (("npm", "run", "test"), "npm test"),
+          (("yarn", "lint"), "yarn lint"), (("yarn", "run", "lint"), "yarn lint"),
+          (("yarn", "mocha"), "mocha"), (("yarn", "jest"), "jest"),
+          (("yarn", "run", "unit"), "yarn unit"), (("make", "test"), "make test"), (("jest",), "jest"), (("mocha",), "mocha"),
+          (("pytest",), "pytest"), (("python3", "-m", "pytest"), "pytest")]
+MAX_TEXT = 300
+MAX_COMMENT = 60000  # GitHub refuses a comment over 65536 characters
+
+
+def now():
+    return datetime.datetime.now(datetime.timezone.utc)
+
+
+def log_error(where):
+    try:
+        os.makedirs(DIR, exist_ok=True)
+        kind, value, _ = sys.exc_info()
+        # The type and message only: a traceback can quote a command.
+        line = "%s %s: %s: %s\n" % (now().isoformat(timespec="seconds"), where,
+                                     kind.__name__ if kind else "error", str(value)[:200])
+        with open(ERRORS, "a", encoding="utf-8") as f:
+            f.write(line)
+    except OSError:
+        pass
+
+
+def config():
+    with open(CONFIG, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def git(path, *args):
+    try:
+        out = subprocess.run(["git", "-C", path] + list(args), capture_output=True,
+                             text=True, timeout=10)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return out.stdout.strip() if out.returncode == 0 else None
+
+
+def repo_of(path):
+    """(repository, branch) of a scality clone or worktree, else None."""
+    if not path or not os.path.isdir(path):
+        return None
+    m = SCALITY.match(git(path, "remote", "get-url", "origin") or "")
+    if not m:
+        return None
+    return m.group(1).lower(), git(path, "rev-parse", "--abbrev-ref", "HEAD") or "?"
+
+
+@contextlib.contextmanager
+def locked():
+    """An exclusive lock on the journal folder, so that appends from other
+    sessions never land in a buffer that a flush is taking."""
+    os.makedirs(DIR, exist_ok=True)
+    with open(LOCK, "a") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
+
+
+def append(facts):
+    if not facts:
+        return
+    stamp = now().isoformat(timespec="seconds")
+    lines = []
+    for fact in facts:
+        fact.setdefault("t", stamp)
+        # One line per fact, so that a flush can count what it puts back.
+        fact["text"] = " ".join(str(fact["text"]).split())[:MAX_TEXT]
+        lines.append(json.dumps(fact) + "\n")
+    with locked(), open(BUFFER, "a", encoding="utf-8") as f:
+        f.writelines(lines)
+
+
+# Bash commands -------------------------------------------------------------
+
+OPERATORS = set("();<>|&\n")
+
+
+def strip_heredocs(command):
+    """The command without its here-document bodies, which are text, not
+    commands."""
+    out, lines, i = [], command.split("\n"), 0
+    while i < len(lines):
+        line = lines[i]
+        out.append(line)
+        ends = re.findall(r"<<-?\s*['\"]?(\w+)['\"]?", line)
+        i += 1
+        for end in ends:
+            while i < len(lines) and lines[i].strip() != end:
+                i += 1
+            i += 1
+    return "\n".join(out)
+
+
+def tokens(command):
+    lexer = shlex.shlex(command, posix=True, punctuation_chars="();<>|&\n")
+    lexer.whitespace, lexer.whitespace_split = " \t\r", True
+    try:
+        return list(lexer)
+    except ValueError:
+        # An unquoted apostrophe: split on blanks and operators instead.
+        return [t for t in re.split(r"[ \t\r]+|([();<>|&\n]+)", command) if t]
+
+
+def segments(command):
+    """The simple commands of a shell line, as (words, piped) pairs, split
+    at the operators and newlines that are not quoted. piped is true when
+    the output of the command goes into a pipe, so its exit code is lost."""
+    out, words = [], []
+    for token in tokens(strip_heredocs(command)) + ["\n"]:
+        if token and set(token) <= OPERATORS and set(token) & set("<>"):
+            continue  # a redirection: the command goes on
+        if token and set(token) <= OPERATORS:
+            while words and re.match(r"^\w+=", words[0]):
+                words = words[1:]  # VAR=value prefixes
+            if words:
+                out.append((words, token == "|"))
+            words = []
+        else:
+            words.append(token)
+    return out
+
+
+def git_opts(words):
+    """The folder (-C) and the index of the subcommand of a git command,
+    after any -C <dir> and -c k=v options."""
+    i, where = 1, None
+    while i + 1 < len(words) and words[i] in ("-C", "-c"):
+        if words[i] == "-C":
+            where = words[i + 1]
+        i += 2
+    return where, i
+
+
+def resolve(cwd, path):
+    """A folder from a command, or None when it holds a shell expansion
+    that the hook cannot know."""
+    if cwd is None or re.search(r"[$`*?]", path):
+        return None
+    return os.path.join(cwd, os.path.expanduser(path))
+
+
+def check_name(words):
+    if words[0] in ("npx", "./node_modules/.bin/mocha", "node_modules/.bin/mocha"):
+        words = words[1:] if words[0] == "npx" else ["mocha"] + words[1:]
+    if not words:
+        return None
+    base = [os.path.basename(words[0])] + words[1:]
+    for prefix, name in CHECKS:
+        if tuple(base[:len(prefix)]) == prefix:
+            return name
+    return None
+
+
+def from_bash(data):
+    command = (data.get("tool_input") or {}).get("command") or ""
+    response = data.get("tool_response") or {}
+    if isinstance(response, dict) and response.get("backgroundTaskId"):
+        return []  # a background run: its result is not known yet
+    failed = data.get("hook_event_name") == "PostToolUseFailure"
+    code = 0
+    if failed:
+        m = re.search(r"Exit code (\d+)", str(data.get("error") or ""))
+        code = int(m.group(1)) if m else 1
+    stdout = response.get("stdout", "") if isinstance(response, dict) else str(response)
+    cwd = data.get("cwd") or os.getcwd()
+    found = []  # (folder or None, kind, text)
+    for words, piped in segments(command):
+        if words[0] == "cd" and len(words) > 1:
+            cwd = resolve(cwd, words[1])
+            continue
+        if words[0] == "git" and not failed:
+            path, i = git_opts(words)
+            where = resolve(cwd, path) if path else cwd
+            sub = words[i] if i < len(words) else None
+            if sub == "commit":
+                found.append((where, "commit", None))
+            elif sub == "push" and not {"--dry-run", "-n"} & set(words[i:]):
+                found.append((where, "push", "push"))
+        elif words[0] == "gh" and words[1:2] == ["pr"] and len(words) > 2 \
+                and words[2] in ("create", "ready", "merge", "close") and not failed:
+            urls = PR_URL.findall(stdout) or [w for w in words if PR_URL.fullmatch(w)]
+            target = urls[0] if urls else next((w for w in words[3:] if w.isdigit()), "?")
+            found.append((cwd, "pr", "PR %s %s" % (words[2], target)))
+        else:
+            name = check_name(words)
+            if name:
+                # In a pipe, the exit code is the last command's, not this one's.
+                found.append((cwd, "check", "%s exit %s" % (name, "unknown" if piped
+                                                            else code)))
+    facts, seen = [], set()
+    for where, kind, text in found:
+        if where is None:
+            # The folder holds a shell expansion: log the kind of fact only.
+            repo = ("unknown", "-")
+            text = kind if kind == "commit" else text
+        else:
+            repo = repo_of(where)
+            if not repo:
+                continue  # not a scality clone
+            if kind == "commit":
+                # The HEAD after the command, once per folder.
+                text = "commit %s %s" % (git(where, "log", "-1", "--format=%h"),
+                                         git(where, "log", "-1", "--format=%s"))
+        key = (repo, kind, text)
+        if key in seen:
+            continue
+        seen.add(key)
+        facts.append({"repo": repo[0], "branch": repo[1], "kind": kind, "text": text})
+    return facts
+
+
+# MCP tools -----------------------------------------------------------------
+
+def response_text(response):
+    if isinstance(response, str):
+        return response
+    if isinstance(response, list):
+        return " ".join(response_text(r) for r in response)
+    if isinstance(response, dict):
+        if "text" in response and isinstance(response["text"], str):
+            return response["text"]
+        if "content" in response:
+            return response_text(response["content"])
+    return json.dumps(response)
+
+
+def from_jira(data):
+    tool = JIRA_TOOL.match(data.get("tool_name") or "").group(1)
+    args = data.get("tool_input") or {}
+    text = response_text(data.get("tool_response"))
+    key = args.get("issueIdOrKey") or ""
+    if tool == "createJiraIssue":
+        found = JIRA_KEY.findall(text)
+        key = found[0] if found else "?"
+        what = "created"
+    elif tool == "transitionJiraIssue":
+        tr = args.get("transition") or {}
+        what = "transitioned (transition %s)" % (tr.get("id") if isinstance(tr, dict) else tr)
+    else:
+        what = "edited: %s" % ", ".join(sorted((args.get("fields") or {}).keys()))
+    return [{"repo": "jira", "branch": "-", "kind": "jira", "text": "%s %s" % (key, what)}]
+
+
+def from_docs(data):
+    args = data.get("tool_input") or {}
+    text = response_text(data.get("tool_response"))
+    if '"verdict":"allow"' not in text.replace(" ", ""):
+        return []  # refused: nothing was written
+    container = args.get("container") or {}
+    ref = args.get("ref") or {}
+    doc_id = str(container.get("id") or (ref.get("id") if ref.get("object") == "project" else ""))
+    docs = config().get("docs") or {}
+    name = next((n for k, n in docs.items() if k and k in doc_id), None)
+    if not name:
+        return []  # not a D1 doc
+    node = ref.get("id") if ref.get("object") == "node" else None
+    return [{"repo": "doc", "branch": "-", "kind": "doc",
+             "text": "%s write%s" % (name, " (node %s)" % node if node else "")}]
+
+
+def capture(data):
+    tool = data.get("tool_name") or ""
+    if tool == "Bash":
+        return from_bash(data)
+    if data.get("hook_event_name") == "PostToolUseFailure":
+        return []
+    if JIRA_TOOL.match(tool):
+        return from_jira(data)
+    if DOCS_TOOL.match(tool):
+        return from_docs(data)
+    return []
+
+
+# Flush and read ------------------------------------------------------------
+
+def comment(facts):
+    lines = []
+    for f in facts:
+        kind = "decision: " if f.get("kind") == "decision" else \
+            "note: " if f.get("kind") == "note" else ""
+        lines.append("- %s %s: %s%s" % (f["repo"], f["branch"], kind, f["text"]))
+    return lines
+
+
+def bodies(facts):
+    """The comment bodies: a dated heading, then one bullet per fact, cut
+    into chunks under the GitHub comment limit."""
+    head = "### %s UTC\n\n" % now().strftime("%Y-%m-%d %H:%M")
+    out, body = [], head
+    for line in comment(facts):
+        if len(body) + len(line) + 1 > MAX_COMMENT and body != head:
+            out.append(body)
+            body = head
+        body += line + "\n"
+    out.append(body)
+    return out
+
+
+def alive(pid):
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def take():
+    """Move the buffer aside under the lock, with the leftovers of flushes
+    whose process died, and return (file, raw lines)."""
+    taken = "%s.%d.flushing" % (BUFFER, os.getpid())
+    with locked():
+        raw = []
+        for old in glob.glob(BUFFER + ".*.flushing"):
+            m = re.search(r"\.(\d+)\.flushing$", old)
+            if m and not alive(int(m.group(1))):
+                with open(old, encoding="utf-8") as f:
+                    raw += f.read().splitlines()
+                os.remove(old)
+        if os.path.exists(BUFFER):
+            with open(BUFFER, encoding="utf-8") as f:
+                raw += f.read().splitlines()
+            os.remove(BUFFER)
+        raw = [line for line in raw if line.strip()]
+        if raw:
+            with open(taken, "w", encoding="utf-8") as f:
+                f.write("\n".join(raw) + "\n")
+    return taken, raw
+
+
+def post(body):
+    if os.environ.get("BNAAS_JOURNAL_DRY_RUN") == "1":
+        sys.stdout.write(body)
+        return
+    cfg = config()
+    out = subprocess.run(["gh", "issue", "comment", str(cfg["issue"]), "--repo", cfg["repo"],
+                          "--body-file", "-"], input=body, capture_output=True, text=True,
+                         timeout=30)
+    if out.returncode != 0:
+        raise RuntimeError("gh issue comment exit %d: %s"
+                           % (out.returncode, out.stderr.strip()[:200]))
+
+
+def flush():
+    """Post the buffer. It moves aside first, under the lock, so that facts
+    that other sessions append meanwhile go to a new buffer. On any
+    failure the lines that were not posted go back to the buffer."""
+    taken, raw = take()
+    if not raw:
+        return 0
+    facts = []
+    for line in raw:
+        try:
+            facts.append(json.loads(line))
+        except ValueError:
+            pass  # a broken line is dropped, not posted
+    pending = bodies(facts) if facts else []
+    try:
+        while pending:
+            post(pending[0])
+            pending.pop(0)
+    finally:
+        if pending:
+            # Put back the facts of the bodies that were not posted.
+            left = sum(len(b.splitlines()) - 2 for b in pending)
+            with locked(), open(BUFFER, "a", encoding="utf-8") as f:
+                f.writelines(json.dumps(x) + "\n" for x in facts[len(facts) - left:])
+        os.remove(taken)
+    return 0
+
+
+def comments():
+    cfg = config()
+    out = subprocess.run(["gh", "api", "--paginate", "repos/%s/issues/%s/comments?per_page=100"
+                          % (cfg["repo"], cfg["issue"]), "--jq",
+                          ".[] | {created_at, body}"], capture_output=True, text=True,
+                         timeout=60)
+    if out.returncode != 0:
+        raise RuntimeError("gh api exit %d: %s" % (out.returncode, out.stderr.strip()[:200]))
+    return [json.loads(line) for line in out.stdout.splitlines() if line.strip()]
+
+
+def read_file(path):
+    if not os.path.exists(path):
+        return ""
+    with open(path, encoding="utf-8") as f:
+        return f.read().strip()
+
+
+def tail(args):
+    items = comments()
+    if args[:1] == ["--new"]:
+        since = read_file(LAST_READ)
+        items = [c for c in items if c["created_at"] > since]
+        print("Journal comments since %s: %d" % (since or "the start", len(items)))
+        if items:
+            # mark-read saves this, so a comment posted during the run is
+            # read by the next run, not skipped.
+            os.makedirs(DIR, exist_ok=True)
+            with open(LAST_SEEN, "w", encoding="utf-8") as f:
+                f.write(max(c["created_at"] for c in items) + "\n")
+    else:
+        items = items[-int(args[0]):] if args else items[-10:]
+    for c in items:
+        print("<!-- %s -->\n%s" % (c["created_at"], c["body"].rstrip()))
+        print()
+    return 0
+
+
+def mark_read():
+    seen = read_file(LAST_SEEN)
+    if not seen:
+        print("Nothing to mark: run journal tail --new first.")
+        return 0
+    with open(LAST_READ, "w", encoding="utf-8") as f:
+        f.write(seen + "\n")
+    os.remove(LAST_SEEN)
+    print("Journal read up to %s." % seen)
+    return 0
+
+
+def note(args):
+    kind, extra = "note", []
+    while args and args[0].startswith("--"):
+        flag = args.pop(0)
+        if flag == "--decision":
+            kind = "decision"
+        elif flag in ("--why", "--tasks") and args:
+            extra.append((flag[2:], args.pop(0)))
+        else:
+            print("unknown option %s" % flag, file=sys.stderr)
+            return 2
+    text = " ".join(args).strip()
+    if not text:
+        print('usage: journal note [--decision] [--why <text>] [--tasks <ids>] "<text>"',
+              file=sys.stderr)
+        return 2
+    for name, value in extra:
+        text += " | %s: %s" % (name, value)
+    where = repo_of(os.getcwd()) or ("d1", "-")
+    append([{"repo": where[0], "branch": where[1], "kind": kind, "text": text}])
+    return 0
+
+
+def main(argv):
+    cmd, args = (argv[0], argv[1:]) if argv else ("", [])
+    if cmd in ("capture", "hook-flush"):
+        try:
+            data = json.loads(sys.stdin.read() or "{}")
+            if cmd == "capture":
+                append(capture(data))
+            elif not data.get("stop_hook_active"):
+                flush()
+        except Exception:  # a hook never fails the session
+            log_error(cmd)
+        return 0
+    try:
+        if cmd == "note":
+            return note(list(args))
+        if cmd == "flush":
+            return flush()
+        if cmd == "tail":
+            return tail(args)
+        if cmd == "mark-read":
+            return mark_read()
+    except Exception as e:
+        log_error(cmd)
+        print("journal %s failed: %s" % (cmd, e), file=sys.stderr)
+        return 1
+    print(__doc__.split("\n\n")[1], file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
