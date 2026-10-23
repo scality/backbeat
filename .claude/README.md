@@ -9,7 +9,7 @@ The idea is simple. The two developers never work at the same time, so the share
 | Path | What it does |
 |---|---|
 | `rules/bnaas-d1.md` | Team rules 1 to 8. Claude Code loads them at the start of each session. |
-| `bnaas/` | (added by a later PR of this stack) The importer and backlog scripts: seed the Backlog tab from the breakdown, and list the tasks that are ready, blocked or with dependencies unknown. |
+| `bnaas/` | The importer and backlog scripts: seed the Backlog tab from the breakdown, and list the tasks that are ready, blocked or with dependencies unknown. |
 | `skills/bnaas-whats-next/` | `/bnaas-whats-next` (added by a later PR of this stack): what moved since your last run, the PRs to review, the work to take next, and the ticket for a new task. |
 | `hooks/journal-capture.sh` | `PostToolUse` hook (added by a later PR of this stack): logs a fact for each git commit and push, `gh pr create`, `ready`, `merge` and `close`, test and lint run with its exit code, Jira ticket created, moved or edited, and write to the tech spec doc. Repositories outside `github.com/scality` are skipped. |
 | `hooks/journal-flush.sh` | `Stop` hook (added by a later PR of this stack): asks the session to append the logged facts to the Log of the journal doc, then to run `journal flushed`. |
