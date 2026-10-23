@@ -2,7 +2,7 @@
 
 This folder holds the Claude Code setup that both D1 developers use, in Paris and in San Francisco. It lives only on the backbeat epic branch, `epic/S3C-10971-bnaas-d1`, and the final merge removes it.
 
-The idea is simple. The two developers never work at the same time, so the shared state must be enough to start from. The Backlog tab of the tech spec doc holds the work and its dependencies, Jira holds who does what, GitHub holds the code, the other tabs of the doc hold the human view and the progress charts, and the journal holds what moved and what each session decided. Hooks write the journal as work happens, so nobody writes an end-of-day note. One skill moves a session through that state: `/bnaas-whats-next` at the start.
+The idea is simple. The two developers never work at the same time, so the shared state must be enough to start from. The Backlog tab of the tech spec doc holds the work and its dependencies, Jira holds who does what, GitHub holds the code, the other tabs of the doc hold the human view and the progress charts, and the journal holds what moved and what each session decided. Hooks write the journal as work happens, so nobody writes an end-of-day note. Four commands move a session through that state: `/bnaas-whats-next` at the start, `/bnaas-shepherd-prs` for each PR, `/bnaas-watch-flock` to watch them, and `/bnaas-pin-federation` when a service epic moves.
 
 ## What is here
 
@@ -16,8 +16,8 @@ The idea is simple. The two developers never work at the same time, so the share
 | `hooks/journal` | `journal note "<text>"` (`--decision` for a decision), `journal flush`, `journal flushed`, `journal tail --doc <export>`. |
 | `hooks/test-journal.sh` | Tests the hooks on sample input, without writing to the doc. |
 | `bnaas/journal.json` | The journal doc, the D1 docs whose writes are logged, and the nodes of the what's next renders (the Tickets tab and the two charts), whose writes are not. |
-| `skills/bnaas-shepherd-prs/` | `/bnaas-shepherd-prs` (next PR): shepherds each PR the session opens through its review loop, and opens a plan PR for a change that alters the shared contract beyond the tech spec. |
-| `skills/bnaas-watch-flock/` | `/bnaas-watch-flock` (next PR): the watch dog that what's next starts over the open PRs. |
+| `skills/bnaas-shepherd-prs/` | `/bnaas-shepherd-prs`: takes a PR or a stack from open to merged: the Claude Code review loop on the draft, the reviewers and the human comments on the ready PR, the merge call and the stack retarget. It also opens plan PRs. |
+| `skills/bnaas-watch-flock/` | `/bnaas-watch-flock`: the dog, one Monitor per machine that reports each change on the developer's PRs and the PRs with no shepherd. |
 | `skills/bnaas-pin-federation/` | `/bnaas-pin-federation`: pins the CI images of the service epics in Federation and opens the pin PR. |
 | `agents/bnaas-reviewer.md` | Reviewer for diffs and plans. It runs the diff's tests and dry runs, and never edits files or writes to GitHub, Jira or the doc. |
 | `settings.json` | Fable as the advisor, `plans/` as the plans folder, and the journal hooks. |
@@ -84,9 +84,9 @@ Then run `.claude/hooks/test-journal.sh`: it ends with "all journal tests passed
 
 ## Daily flow
 
-1. `/bnaas-whats-next`. Review first, then claim one task. The skill creates the ticket and fills the row.
+1. `/bnaas-whats-next`. Review first, then claim one task. The skill creates the ticket and fills the row, and starts the dog, `/bnaas-watch-flock`, which reports each change on your PRs.
 2. Plan in plan mode, in a worktree of the ticket. The plan ships as the first commit of the PR.
-3. Build with `test-driven-development`, review the diff with `bnaas-reviewer` before each commit, then open a draft PR with no reviewers. Fix what the Claude Code review on the PR raises (Rule 5); the developer then marks it ready, and the three reviewers of Rule 4 are requested then.
+3. Build with `test-driven-development`, review the diff with `bnaas-reviewer` before each commit, then open a draft PR with no reviewers and hand it to `/bnaas-shepherd-prs` (Rule 5). The shepherd fixes what the Claude Code review raises and tells you when the draft is ready for your check; you mark it ready, the shepherd requests the three reviewers of Rule 4, and you merge when it says the PR can merge.
 4. When a service epic moves, `/bnaas-pin-federation` updates the Federation pins in one PR.
 5. When a decision, a blocker or a surprise happens, `.claude/hooks/journal note "<one sentence>"` at that moment, from the folder the session started in (the path is relative to it). The hooks log the rest.
 
