@@ -1,8 +1,8 @@
 const QueuePopulatorExtension =
           require('../../lib/queuePopulator/QueuePopulatorExtension');
-const { isMasterKey } = require('@scality/arsenal').versioning;
 const ObjectQueueEntry = require('../../lib/models/ObjectQueueEntry');
 const safeJsonParse = require('../../lib/util/safeJsonParse');
+const { isShadowedMaster } = require('../../lib/util/versioning');
 
 class IngestionQueuePopulator extends QueuePopulatorExtension {
     constructor(params) {
@@ -70,7 +70,7 @@ class IngestionQueuePopulator extends QueuePopulatorExtension {
                 });
                 return true;
             }
-            if (this._isMasterKeyEntry(queueEntry)) {
+            if (isShadowedMaster(queueEntry.getObjectVersionedKey(), queueEntry.getValue())) {
                 this.log.trace('skipping master key entry');
                 return true;
             }
@@ -88,30 +88,6 @@ class IngestionQueuePopulator extends QueuePopulatorExtension {
         // metadata entry for s3c buckets
         if (metadataVal.mdBucketModelVersion ||
             metadataVal.attributes) {
-            return true;
-        }
-        return false;
-    }
-
-    /**
-     * Filter if the entry is considered a master key entry.
-     * There is a case where a single null entry looks like a master key and
-     * will not have a duplicate versioned key. They are created when you have a
-     * non-versioned bucket with objects, and then convert bucket to versioned.
-     * If no new versioned objects are added for given object(s), they look like
-     * standalone master keys. The `isNull` case is undefined for these entries.
-     * @param {ObjectQueueEntry} entry - object queue entry instance
-     * @return {Boolean} true if we should filter entry
-     */
-    _isMasterKeyEntry(entry) {
-        const isMaster = isMasterKey(entry.getObjectVersionedKey());
-        // single null entries will have a version id as undefined or null.
-        // do not filter single null entries
-        // Versioning suspended entries will have a version id but also a isNull tag.
-        // These master keys are considered a version and do not have a duplicate version,
-        // we also don't filter this type of entry.
-        if (isMaster && entry.getVersionId() !== undefined && !entry.getIsNull()) {
-            this.log.trace('skipping master key entry');
             return true;
         }
         return false;

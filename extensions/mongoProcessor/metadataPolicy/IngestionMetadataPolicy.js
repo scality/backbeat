@@ -7,7 +7,7 @@ const { VersionID } = require('@scality/arsenal').versioning;
 const MetadataPolicy = require('./MetadataPolicy');
 const getContentType = require('../utils/contentTypeHelper');
 const DeleteOpQueueEntry = require('../../../lib/models/DeleteOpQueueEntry');
-const { extractVersionId } = require('../../../lib/util/versioning');
+const { extractVersionId, hasVersionKey } = require('../../../lib/util/versioning');
 
 const scalVersionIdHeader = 'x-amz-meta-scal-version-id';
 
@@ -60,16 +60,15 @@ class IngestionMetadataPolicy extends MetadataPolicy {
 
     /**
      * The version a composed entry is written under: its own -- the stored
-     * version's once merged into it -- or none for a master.
+     * version's once merged into it -- or none for an object living in its
+     * master key only (non-versioned or null version), which is then put
+     * as is, with no master repair.
      *
      * @param {ObjectQueueEntry} entry - object queue entry object
      * @return {string|undefined} version id, or undefined for the master
      */
     _writtenVersionId(entry) {
-        // Versioning suspended entries will have a version id but also a isNull tag.
-        // These master keys are considered a version and do not have a duplicate version,
-        // we don't specify the version id and repairMaster in this case
-        if (entry.getVersionId() && !entry.getIsNull()) {
+        if (hasVersionKey(entry.getValue())) {
             return entry.getVersionId();
         }
         return undefined;

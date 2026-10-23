@@ -1,4 +1,3 @@
-const { isMasterKey } = require('@scality/arsenal').versioning;
 const { usersBucket, mpuBucketPrefix, externalBackends } = require('@scality/arsenal').constants;
 
 const QueuePopulatorExtension =
@@ -11,6 +10,7 @@ const config = require('../../lib/Config');
 const locationsConfig = require('../../conf/locationConfig.json') || {};
 const safeJsonParse = require('../../lib/util/safeJsonParse');
 const { getTransitionAttempt } = require('../../lib/util/transitionAttempt');
+const { isShadowedMaster } = require('../../lib/util/versioning');
 const { traceHeadersFromEntry } = require('@scality/arsenal/build/lib/tracing').kafka;
 const { replicationDirections } = require('./constants');
 
@@ -273,27 +273,20 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
     }
 
     /**
-     * Filter if the entry is considered a valid master key entry.
-     * There is a case where a single null entry looks like a master key and
-     * will not have a duplicate versioned key. They are created when you have a
-     * non-versioned bucket with objects, and then convert bucket to versioned.
-     * If no new versioned objects are added for given object(s), they look like
-     * standalone master keys. The `isNull` case is undefined for these entries.
-     * Non-versioned objects if being replicated from an NFS bucket are also allowed
-     * Null versions which are objects created after suspending versioning are allowed,
-     * these only have a master object that has an internal versionId and a 'isNull' flag.
+     * Whether the entry stands for an object to replicate: the master key of
+     * a versioned object duplicates its version key entry, except when
+     * replicating from an NFS bucket, where the master is the entry to use.
+     *
      * @param {ObjectQueueEntry} entry - raw queue entry
-     * @return {Boolean} true if we should filter entry
+     * @return {Boolean} true if the entry is to be processed
      */
     _entryCanBeReplicated(entry) {
-        const isMaster = isMasterKey(entry.getObjectVersionedKey());
-        const isNFS = entry.getReplicationIsNFS();
-        // single null entries will have a version id as undefined or null.
-        // do not filter single null entries
-        const isNonVersionedMaster = entry.getVersionId() === undefined;
-        const isNullVersionedMaster = entry.getIsNull();
-        if (isMaster && !isNFS && !isNonVersionedMaster && !isNullVersionedMaster) {
-            this.log.trace('skipping master key entry');
+        if (entry.getReplicationIsNFS()) {
+            this.log.trace('replicating NFS entry regardless of its key', entry.getLogInfo());
+            return true;
+        }
+        if (isShadowedMaster(entry.getObjectVersionedKey(), entry.getValue())) {
+            this.log.trace('skipping master key entry', entry.getLogInfo());
             return false;
         }
         return true;

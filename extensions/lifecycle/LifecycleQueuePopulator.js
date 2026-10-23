@@ -9,6 +9,7 @@ const QueuePopulatorExtension =
 const { authTypeAssumeRole } = require('../../lib/constants');
 const { v4: uuid } = require('uuid');
 const safeJsonParse = require('../../lib/util/safeJsonParse');
+const { isShadowedMaster } = require('../../lib/util/versioning');
 const { LifecycleMetrics } = require('./LifecycleMetrics');
 const LIFECYCLE_BUCKETS_ZK_PATH = '/data/buckets';
 const LIFEYCLE_POPULATOR_CLIENT_ID = 'lifecycle-populator';
@@ -244,9 +245,6 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
      * key, mpu shadow bucket entries are internal, delete markers hold no data, and the master
      * entry of a versioned object duplicates the version entry, which is processed on its own.
      *
-     * A null version (put while versioning is suspended, or before it was enabled) lives in the
-     * master entry, with no version entry to shadow it, so its master is processed.
-     *
      * @param {Object} entry - The record log entry from metadata.
      * @param {Object} value - The object metadata, already decoded by the caller.
      * @return {boolean} true if the entry may be dispatched to an object handler.
@@ -256,7 +254,7 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
             return false;
         }
 
-        if (value.isDeleteMarker || (isMasterKey(entry.key) && value.versionId && !value.isNull)) {
+        if (value.isDeleteMarker || isShadowedMaster(entry.key, value)) {
             this.log.trace('skip processing of delete marker or object master entry', {
                 bucket: entry.bucket,
                 key: entry.key,
@@ -540,11 +538,12 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
             return;
         }
 
-        const isMaster = isMasterKey(entry.key);
-        const isVersionedMaster = isMaster && !!value.versionId && !value.isNull;
-        const isNullVersion = !isMaster && value.isNull;
-        const isDeleteMarker = value.isDeleteMarker;
-        if (isVersionedMaster || isNullVersion || isDeleteMarker) {
+        // The version key of a null version is skipped too: deleting the current null version
+        // on MongoDB also deletes the version key it was copied into on a metadata update, and
+        // a second GC request for the same archive fails. The lone delete of a non-current null
+        // version is then missed (BB-870).
+        const isNullVersionKey = !isMasterKey(entry.key) && value.isNull;
+        if (value.isDeleteMarker || isNullVersionKey || isShadowedMaster(entry.key, value)) {
             this.log.trace('skip processing of object master entry');
             return;
         }

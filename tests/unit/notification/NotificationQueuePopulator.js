@@ -10,6 +10,7 @@ const mongoConfig
     = require('../../config.json').queuePopulator.mongo;
 const notificationConfig
     = require('../../config.notification.json').extensions.notification;
+const { listEntries } = require('../../utils/nullVersionRows');
 
 const logger = new werelogs.Logger('NotificationConfigManager:test');
 
@@ -602,15 +603,6 @@ describe('NotificationQueuePopulator ::', () => {
                 out: true,
             },
             {
-                desc: 'null versioned PHD master',
-                key: 'master-key',
-                value: {
-                    versionId: '1234',
-                    isNull: true,
-                },
-                out: true,
-            },
-            {
                 desc: 'versioned master',
                 key: 'master-key',
                 value: {
@@ -618,6 +610,8 @@ describe('NotificationQueuePopulator ::', () => {
                 },
                 out: false,
             },
+            ...listEntries().map(({ desc, key, value, shadowed }) =>
+                ({ desc, key, value, out: !shadowed })),
         ].forEach(params => {
             const { desc, key, value, out } = params;
             it(`Should return ${out} if ${desc}`, () => {

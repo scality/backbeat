@@ -1,11 +1,10 @@
 const assert = require('assert');
 const util = require('util');
 
-const { isMasterKey } = require('@scality/arsenal').versioning;
 const { mpuBucketPrefix, supportedNotificationEvents } = require('@scality/arsenal').constants;
-const VID_SEPERATOR = require('@scality/arsenal').versioning.VersioningConstants.VersionId.Separator;
 const configUtil = require('./utils/config');
 const safeJsonParse = require('../../lib/util/safeJsonParse');
+const { extractBaseKey, isShadowedMaster } = require('../../lib/util/versioning');
 const messageUtil = require('./utils/message');
 const notifConstants = require('./constants');
 const QueuePopulatorExtension =
@@ -138,32 +137,16 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
     }
 
     /**
-     * Decides if we should process the entry.
-     * Since we get both master and version events,
-     * we need to avoid pushing two notifications for
-     * the same event.
-     * - For non versiond buckets, we process the master
-     * objects' events.
-     * - For versioned buckets, we process version events
-     * and ignore all master events.
-     * - For versioning suspended buckets, we need to process
-     * both master and version events, as the master is considered
-     * a separate version.
+     * Decides if we should process the entry: one write yields both a master
+     * and a version event for a versioned object, and a single notification
+     * is expected.
+     *
      * @param {String} key object key
      * @param {Object} value object metadata
      * @return {boolean} - true if entry is valid
      */
     _shouldProcessEntry(key, value) {
-        const isMaster = isMasterKey(key);
-        const isVersionedMaster = isMaster && !!value.versionId;
-        const isNullVersion = isMaster && value.isNull;
-        if (!isMaster
-            || !isVersionedMaster
-            || isNullVersion
-            ) {
-            return true;
-        }
-        return false;
+        return !isShadowedMaster(key, value);
     }
 
     /**
@@ -176,16 +159,6 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
      */
     _isNotificationEventSupported(eventType) {
         return supportedNotificationEvents.has(eventType);
-    }
-
-    /**
-     * Extract base key from versioned key
-     *
-     * @param {String} key - object key
-     * @return {String} - versioned base key
-     */
-    _extractVersionedBaseKey(key) {
-        return key.split(VID_SEPERATOR)[0];
     }
 
     /**
@@ -233,7 +206,7 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
             if (!this._isNotificationEventSupported(eventType)) {
                 return undefined;
             }
-            const baseKey = this._extractVersionedBaseKey(key);
+            const baseKey = extractBaseKey(key);
             const versionId = this._getVersionId(value, overheadFields);
             const dateTime = this._getEventDateTime(value, overheadFields);
             const config = await this.bnConfigManager.getConfig(bucket);

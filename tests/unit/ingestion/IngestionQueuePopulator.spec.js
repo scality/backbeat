@@ -4,6 +4,7 @@ const IngestionQueuePopulator =
     require('../../../extensions/ingestion/IngestionQueuePopulator');
 
 const fakeLogger = require('../../utils/fakeLogger');
+const { listEntries } = require('../../utils/nullVersionRows');
 
 describe('ingestion queue populator', () => {
     let iqp;
@@ -39,5 +40,30 @@ describe('ingestion queue populator', () => {
         });
         // `_filterValueOp` returns true when the caller should skip this entry
         assert.strictEqual(result, true);
+    });
+
+    describe('master versus version entries', () => {
+        const baseValue = {
+            'owner-display-name': 'test',
+            'owner-id': 'e166a2080a0c2cf1474dce54654f3f224dd5ae01379f20f338d106b8bc964bb1',
+            'content-length': 128,
+            'content-md5': 'd41d8cd98f00b204e9800118ecf8427e',
+            'key': '',
+            'location': null,
+            'last-modified': '2018-03-28T22:10:00.534Z',
+            'md-model-version': 3,
+        };
+
+        listEntries(baseValue).forEach(({ desc, key, value, shadowed }) => {
+            it(`should ${shadowed ? 'skip' : 'process'} ${desc}`, () => {
+                const entry = {
+                    type: 'put',
+                    bucket: 'test-bucket',
+                    key,
+                    value: JSON.stringify(value),
+                };
+                assert.strictEqual(iqp._filterValueOp(entry), shadowed);
+            });
+        });
     });
 });
