@@ -1,0 +1,26 @@
+[
+  {"key": "S3C-10990", "fields": {
+    "summary": "BNaaS D1: Release line decided",
+    "status": {"name": "Done"},
+    "assignee": {"displayName": "Anurag Mittal"},
+    "customfield_10004": [{"name": "S3C Sprint 42"}],
+    "description": "Done when: the release line is written in the spec. Tickets tab: row 1."}},
+  {"key": "BB-900", "fields": {
+    "summary": "BNaaS D1: 2 Create the D1 Jira epic and component tickets",
+    "status": {"name": "Closed"},
+    "assignee": {"displayName": "Taylor McKinnon"},
+    "customfield_10004": [{"name": "S3C Sprint 41"}],
+    "description": "Created by hand, no row reference."}},
+  {"key": "S3C-11573", "fields": {
+    "summary": "Pin the first D1 epic images",
+    "status": {"name": "In Progress"},
+    "assignee": null,
+    "customfield_10004": [{"name": "S3C Sprint 42"}],
+    "description": "Done when: Federation deploys the epic images. Tickets tab: row 3."}},
+  {"key": "BB-901", "fields": {
+    "summary": "BNaaS D1: Build the bnaas-spec-review skill",
+    "status": {"name": "In Progress"},
+    "assignee": {"displayName": "Anurag Mittal"},
+    "customfield_10004": [{"name": "S3C Sprint 42"}],
+    "description": "Tickets tab: row 18 (not row 180)."}}
+]

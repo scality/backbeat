@@ -1,0 +1,113 @@
+{
+ "epic": "epic/S3C-10971-bnaas-d1",
+ "login": "anurag4DSB",
+ "prs": [
+  {
+   "pr": "Arsenal#2567",
+   "url": "https://github.com/scality/Arsenal/pull/2567",
+   "title": "impr(ARSN-534): Fix website redirect for path style buckets",
+   "author": "Taylor",
+   "draft": false,
+   "ticket": "ARSN-534",
+   "base": "development/8.2",
+   "head": "bugfix/ARSN-534/fix_path_style_redirect",
+   "next": [
+    "Anurag"
+   ],
+   "kind": "review",
+   "status": "Waiting for one more review from Anurag",
+   "asked": false
+  },
+  {
+   "pr": "backbeat#2899",
+   "url": "https://github.com/scality/backbeat/pull/2899",
+   "title": "BB-917: Rewrite the D1 rules for two time zones",
+   "author": "Anurag",
+   "draft": true,
+   "ticket": "BB-917",
+   "base": "epic/S3C-10971-bnaas-d1",
+   "head": "improvement/BB-917-rules-two-time-zones",
+   "next": [
+    "Anurag"
+   ],
+   "kind": "mine",
+   "status": "Draft, waiting for Claude Code's LGTM"
+  },
+  {
+   "pr": "backbeat#2900",
+   "url": "https://github.com/scality/backbeat/pull/2900",
+   "title": "BB-917: Add the D1 backlog as a dependency graph",
+   "author": "Anurag",
+   "draft": true,
+   "ticket": "BB-917",
+   "base": "improvement/BB-917-rules-two-time-zones",
+   "head": "improvement/BB-917-backlog-graph",
+   "next": [
+    "Anurag"
+   ],
+   "kind": "mine",
+   "status": "Draft, waiting for Claude Code's LGTM"
+  },
+  {
+   "pr": "backbeat#2901",
+   "url": "https://github.com/scality/backbeat/pull/2901",
+   "title": "BB-917: Add the what's next skill",
+   "author": "Anurag",
+   "draft": true,
+   "ticket": "BB-917",
+   "base": "improvement/BB-917-backlog-graph",
+   "head": "improvement/BB-917-whats-next",
+   "next": [
+    "Anurag"
+   ],
+   "kind": "mine",
+   "status": "Draft, waiting for Claude Code's LGTM"
+  },
+  {
+   "pr": "backbeat#2902",
+   "url": "https://github.com/scality/backbeat/pull/2902",
+   "title": "BB-917: Add the project journal hooks",
+   "author": "Anurag",
+   "draft": true,
+   "ticket": "BB-917",
+   "base": "improvement/BB-917-whats-next",
+   "head": "improvement/BB-917-journal-hooks",
+   "next": [
+    "Anurag"
+   ],
+   "kind": "mine",
+   "status": "Draft, waiting for Claude Code's LGTM"
+  },
+  {
+   "pr": "backbeat#2903",
+   "url": "https://github.com/scality/backbeat/pull/2903",
+   "title": "BB-917: Add the Federation pin skill",
+   "author": "Anurag",
+   "draft": true,
+   "ticket": "BB-917",
+   "base": "improvement/BB-917-journal-hooks",
+   "head": "improvement/BB-917-federation-pins",
+   "next": [
+    "Anurag"
+   ],
+   "kind": "mine",
+   "status": "Draft, waiting for Claude Code's LGTM"
+  },
+  {
+   "pr": "Federation#7261",
+   "url": "https://github.com/scality/Federation/pull/7261",
+   "title": "S3C-11573: Pin the first D1 epic images",
+   "author": "Anurag",
+   "draft": true,
+   "ticket": "S3C-11573",
+   "base": "epic/S3C-10971-bnaas-d1",
+   "head": "improvement/S3C-11573-release-d1-pins",
+   "next": [
+    "Anurag"
+   ],
+   "kind": "mine",
+   "status": "Draft, waiting for Claude Code's LGTM"
+  }
+ ],
+ "errors": []
+}

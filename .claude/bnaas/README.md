@@ -1,13 +1,14 @@
 # BNaaS D1 backlog
 
-The backlog lives in the Backlog tab of the tech spec doc: https://claude.ai/code/artifact/bfe390f9-d819-4a93-9050-ffd5eee1b80a. It is one table, a row per task, with the columns ID, Task, Area, Repository, Estimate (days), Depends on, Origin and Notes.
+The backlog lives in the Backlog tab of the tech spec doc: https://claude.ai/code/artifact/bfe390f9-d819-4a93-9050-ffd5eee1b80a. It is one table, a row per task, with the columns ID, Task, Area, Repository, Estimate (days), Depends on, Origin and Notes, and an optional last column, Status.
 
-The tab holds only the task graph. Owner, ticket, PR and status are not in it. They live in Jira and GitHub, and what's next renders them into the Tickets tab and the charts of the Progress tab.
+The tab holds only the task graph. Owner, ticket, PR and Jira status are not in it. They live in Jira and GitHub, and what's next renders them into the Tickets tab and the charts of the Progress tab.
 
 The doc wins day to day. People fix a dependency, add a task or correct a title in the tab itself, with no PR:
 
 - Depends on lists task ids, comma-separated. A step of a task, such as 3.1, counts for its task.
 - A task added after the breakdown gets a letter id, such as 22b, and Origin "new scope". The scope chart counts it.
+- Status is empty, "done" for a task that is done with no ticket, such as the work that came before the Jira epic, "dropped" for a task the team dropped, or "standing" for a task that never ends, such as the self-improvement PRs of the skills. The scripts count a done task as done, like a task whose tickets are all Done. A dropped task (Status "dropped", or a Notes cell whose first word is "Dropped:", such as "Dropped: no epic releases (2026-10-22)") is never offered or counted, and a dependency on it does not block. A standing task (Status "standing", or a Notes cell whose first word is "Standing:") is never offered as work to continue, because its ticket stays open between fixes. Both markers are case-insensitive; any other Notes text is a plain note.
 - Notes is free text, except a cell that starts with "Dependencies unknown:". The scripts read the texts after it, separated by semicolons, as dependencies that name no task, and such a task is never ready. Replace them with task ids in Depends on, then clear the note.
 
 ## Seed the tab
