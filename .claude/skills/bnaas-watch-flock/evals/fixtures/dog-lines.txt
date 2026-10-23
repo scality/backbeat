@@ -1,0 +1,6 @@
+backbeat#2902 stray: open, no shepherd runs on it https://github.com/scality/backbeat/pull/2902
+backbeat#2903 stray: open, no shepherd runs on it https://github.com/scality/backbeat/pull/2903
+vault#412 approval: nicolas2bert approved (2 approvals) https://github.com/scality/vault/pull/412
+cloudserver#6021 review: Claude Code Review pending -> action_required https://github.com/scality/cloudserver/pull/6021
+cloudserver#6019 thread: new human thread by tmacro: Should this key be provisional? https://github.com/scality/cloudserver/pull/6019
+Federation#7261 stale: no change for 3 days https://github.com/scality/Federation/pull/7261
