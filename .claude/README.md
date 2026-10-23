@@ -11,16 +11,16 @@ The idea is simple. The two developers never work at the same time, so the share
 | `rules/bnaas-d1.md` | Team rules 1 to 8. Claude Code loads them at the start of each session. |
 | `bnaas/` | The importer and backlog scripts: seed the Backlog tab from the breakdown, and list the tasks that are ready, blocked or with dependencies unknown. |
 | `skills/bnaas-whats-next/` | `/bnaas-whats-next`: what moved since your last run, the PRs to review, the work to take next, and the ticket for a new task. |
-| `hooks/journal-capture.sh` | `PostToolUse` hook (added by a later PR of this stack): logs a fact for each git commit and push, `gh pr create`, `ready`, `merge` and `close`, test and lint run with its exit code, Jira ticket created, moved or edited, and write to the tech spec doc. Repositories outside `github.com/scality` are skipped. |
-| `hooks/journal-flush.sh` | `Stop` hook (added by a later PR of this stack): asks the session to append the logged facts to the Log of the journal doc, then to run `journal flushed`. |
-| `hooks/journal` | (added by a later PR of this stack) `journal note "<text>"` (`--decision` for a decision), `journal flush`, `journal flushed`, `journal tail --doc <export>`. |
-| `hooks/test-journal.sh` | (added by a later PR of this stack) Tests the hooks on sample input, without writing to the doc. |
-| `bnaas/journal.json` | The journal doc (added by a later PR of this stack). |
+| `hooks/journal-capture.sh` | `PostToolUse` hook: logs a fact for each git commit and push, `gh pr create`, `ready`, `merge` and `close`, test and lint run with its exit code, Jira ticket created, moved or edited, and write to the tech spec doc. Repositories outside `github.com/scality` are skipped. |
+| `hooks/journal-flush.sh` | `Stop` hook: asks the session to append the logged facts to the Log of the journal doc, then to run `journal flushed`. |
+| `hooks/journal` | `journal note "<text>"` (`--decision` for a decision), `journal flush`, `journal flushed`, `journal tail --doc <export>`. |
+| `hooks/test-journal.sh` | Tests the hooks on sample input, without writing to the doc. |
+| `bnaas/journal.json` | The journal doc, the D1 docs whose writes are logged, and the nodes of the what's next renders (the Tickets tab and the two charts), whose writes are not. |
 | `skills/bnaas-shepherd-prs/` | `/bnaas-shepherd-prs` (next PR): shepherds each PR the session opens through its review loop, and opens a plan PR for a change that alters the shared contract beyond the tech spec. |
 | `skills/bnaas-watch-flock/` | `/bnaas-watch-flock` (next PR): the watch dog that what's next starts over the open PRs. |
 | `skills/bnaas-pin-federation/` | `/bnaas-pin-federation` (added by a later PR of this stack): pins the CI images of the service epics in Federation and opens the pin PR. |
 | `agents/bnaas-reviewer.md` | Reviewer for diffs and plans. It runs the diff's tests and dry runs, and never edits files or writes to GitHub, Jira or the doc. |
-| `settings.json` | Fable as the advisor and `plans/` as the plans folder. The journal hooks are registered by a later PR of this stack. |
+| `settings.json` | Fable as the advisor, `plans/` as the plans folder, and the journal hooks. |
 | `plans/` | Approved plans, one file per change. |
 
 ## Before you start
@@ -64,7 +64,7 @@ ln -sfn ../bnaas-team-setup/.claude/settings.json .claude/settings.json
 claude
 ```
 
-Until the later PRs of this stack land, the `skills`, `hooks` and `bnaas` links point to folders that do not exist yet. If the workspace `.claude/` already has real folders with these names, move them away first. Otherwise `ln` puts the link inside the old folder.
+The `hooks` link matters: `settings.json` runs the journal hooks from `.claude/hooks/` of the folder where Claude Code starts, so without the link the hooks fail and log nothing. If the workspace `.claude/` already has real folders with these names, move them away first. Otherwise `ln` puts the link inside the old folder.
 
 Keep personal settings in the workspace `.claude/settings.local.json`. Git never commits it.
 
@@ -80,7 +80,7 @@ Start `claude` in the workspace folder, or in the backbeat clone for the one-rep
 
 If one is missing, check that Claude started in that folder, and that `ls -l .claude` shows each link pointing into `../bnaas-team-setup/.claude/`; run the `ln` lines of the install again for a broken one.
 
-Once the later PRs of this stack have landed, run `.claude/hooks/test-journal.sh`: it ends with "all journal tests passed". In a new session, ask "what's next". The answer lists what moved since your last run, the PRs that wait for your review, the ready tasks and the other developer's work. Then export the Backlog tab to Markdown and run `python3 -I .claude/bnaas/scripts/backlog.py --backlog <export.md> check`. It reports the task count and no cycle.
+Then run `.claude/hooks/test-journal.sh`: it ends with "all journal tests passed". In a new session, ask "what's next". The answer lists what moved since your last run, the PRs that wait for your review, the ready tasks and the other developer's work. Then export the Backlog tab to Markdown and run `python3 -I .claude/bnaas/scripts/backlog.py --backlog <export.md> check`. It reports the task count and no cycle.
 
 ## Daily flow
 
