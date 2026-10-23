@@ -39,7 +39,7 @@ Run every `gh` command of this section with `--repo scality/Federation`: the ses
    - `## Verification: how do we know this worked, or how would we know if it didn't?`
    Link the task row of the ticket in the Tickets tab (Rule 7). Name the three images and their compare links in Intended change. Verification names the Federation build of the PR and the Integration run.
 7. Request no reviewers on the draft: the three reviewers of Rule 4 (the other developer, `nicolas2bert` and the team `scality/hopocalypse`) are requested when the developer marks the PR ready. Tell the developer the branch, the PR and the ticket.
-8. After every push of a PR branch, run the review loop of Rule 5: wait for the Claude Code review, address or answer each comment, keep the stack rebased, never mark the PR ready yourself, and watch the CI checks until the developer marks it ready.
+8. Hand the PR to `/bnaas-shepherd-prs`, which runs the Claude Code review loop until the PR is ready for the developer's check.
 
 ## CI
 

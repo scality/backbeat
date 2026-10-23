@@ -1,0 +1,11 @@
+schema_version: "1.1"
+name: route-dog-lines
+expected_outcome: |
+  Given five lines from the dog, the session routes each one: the two strays backbeat#2902 and
+  backbeat#2903 form one stack and get one shepherd, on 2902, with no question, the review and stale lines on PRs that a shepherd looks after go to
+  that shepherd, and the developer gets one table What | State | Link in which the new human
+  thread on cloudserver#6019, which waits for their review, comes first. It is read-only.
+tags: [skill-creator, read-only]
+max_turns: 20
+timeout_seconds: 600
+allowed_tools: [Read, Glob, Grep, Skill, Bash, ToolSearch]
