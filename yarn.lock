@@ -1408,6 +1408,53 @@
   optionalDependencies:
     ioctl "^2.0.2"
 
+"@scality/arsenal@^8.6.0-0":
+  version "8.6.1"
+  resolved "https://registry.yarnpkg.com/@scality/arsenal/-/arsenal-8.6.1.tgz#f2db3ec8184646282872850d1cce3c16870f053c"
+  integrity sha512-EwKYj0htAbDvDmu4h3EeIG1RwwxGCRvUixQN8NHx9bJIHS5qucQLvNCQ45BNR0q4MDIza3fyE6Xn7DF5hxBBUQ==
+  dependencies:
+    "@aws-sdk/client-kms" "^3.975.0"
+    "@aws-sdk/client-s3" "^3.975.0"
+    "@aws-sdk/credential-providers" "^3.975.0"
+    "@aws-sdk/lib-storage" "^3.975.0"
+    "@azure/identity" "^4.13.0"
+    "@azure/storage-blob" "^12.31.0"
+    "@js-sdsl/ordered-set" "^4.4.2"
+    "@opentelemetry/api" "^1.9.1"
+    "@opentelemetry/exporter-trace-otlp-http" "^0.223.0"
+    "@opentelemetry/resources" "^2.12.0"
+    "@opentelemetry/sdk-node" "^0.223.0"
+    "@opentelemetry/sdk-trace-base" "^2.12.0"
+    "@scality/hdclient" "^1.3.2"
+    "@smithy/node-http-handler" "^4.3.0"
+    "@smithy/protocol-http" "^5.3.5"
+    JSONStream "^1.3.5"
+    agentkeepalive "^4.6.0"
+    ajv "6.15.0"
+    async "~2.6.4"
+    base-x "3.0.11"
+    base62 "^2.0.2"
+    classic-level "^3.0.0"
+    debug "^4.4.3"
+    fcntl "github:scality/node-fcntl#0.3.1"
+    httpagent "github:scality/httpagent#1.1.1"
+    https-proxy-agent "^7.0.6"
+    ioredis "^5.8.1"
+    ipaddr.js "^2.2.0"
+    joi "^18.0.1"
+    mongodb "^6.20.0"
+    prom-client "^15.1.3"
+    simple-glob "^0.2.0"
+    socket.io "^4.8.0"
+    socket.io-client "^4.8.0"
+    sproxydclient "github:scality/sproxydclient#8.2.3"
+    utf8 "^3.0.0"
+    uuid "^11.1.0"
+    werelogs "github:scality/werelogs#8.2.5"
+    xml2js "^0.6.2"
+  optionalDependencies:
+    ioctl "^2.0.2"
+
 "@scality/breakbeat@1.1.2":
   version "1.1.2"
   resolved "https://registry.yarnpkg.com/@scality/breakbeat/-/breakbeat-1.1.2.tgz#f7b68a43210724adefe1ba8ca1f4efeb0e0e4eac"
@@ -6483,9 +6530,9 @@ shebang-regex@^3.0.0:
   integrity sha512-7++dFhtcx3353uBaq8DDR4NuxBetBzC7ZQOhmTQInHEd6bSrXdiEyzCvG07Z44UYdLShWUyXt5M/yhz8ekcb1A==
 
 shell-quote@^1.6.1:
-  version "1.10.0"
-  resolved "https://registry.yarnpkg.com/shell-quote/-/shell-quote-1.10.0.tgz#482033e192e4f5c07151521ffa03400ec71b1b0f"
-  integrity sha512-w1aiOKwKuRgtwAReIIj89puqg+I7GvX4IbLrvmhXbzQsj1+Zwi4VO3+fa6ZF91TWSjIxoEkKnMeHcLEODK5ZXA==
+  version "1.12.0"
+  resolved "https://registry.yarnpkg.com/shell-quote/-/shell-quote-1.12.0.tgz#e98fdfd2e921d8a58ae2820f4fc0f75c39f09675"
+  integrity sha512-PcByqNyT/38F2kDNi006HAMRJaULuBzq/FOsw3qdZvX/GA9W/jamDaRskgHjubHiftXK5sIFxLNkvrXUwcof6Q==
 
 side-channel-list@^1.0.1:
   version "1.0.1"
@@ -7212,8 +7259,9 @@ webidl-conversions@^7.0.0:
     fast-safe-stringify "^2.1.1"
     safe-json-stringify "^1.2.0"
 
-werelogs@scality/werelogs#8.2.5, "werelogs@scality/werelogs#semver:^8.2.4":
+"werelogs@github:scality/werelogs#8.2.5", werelogs@scality/werelogs#8.2.5, "werelogs@scality/werelogs#semver:^8.2.4":
   version "8.2.5"
+  uid "41188826d661227f98ebaaeda7df5e5862809bc7"
   resolved "https://codeload.github.com/scality/werelogs/tar.gz/41188826d661227f98ebaaeda7df5e5862809bc7"
   dependencies:
     fast-safe-stringify "^2.1.1"
