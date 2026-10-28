@@ -26,18 +26,32 @@ The idea is simple. The two developers never work at the same time, so the share
 
 ## Before you start
 
-- Claude Code, logged in with a claude.ai account.
+- Claude Code, logged in with a claude.ai account, in a version that has the Monitor tool (the dog of `/bnaas-watch-flock` runs in one), and with access to Fable, the advisor of `settings.json`.
 - `git` with SSH access to the scality repositories, and `gh` logged in to GitHub.
 - `python3` (3.10 or later), for the skill scripts. No package is needed.
-- `docker`, for the image checks of `/bnaas-pin-federation`.
+- `docker`, logged in once with `docker login ghcr.io`, for the image checks of `/bnaas-pin-federation`.
+- In the workspace layout, one clone per D1 repository, in folders with these names: `arsenal`, `vault`, `cloudserver`, `cloudserverclient`, `backbeat`, `federation`, `integration`, `ring` and `s3utils`.
 - `yarn`, for the repository tests. It may live under nvm and be missing from non-interactive shells, so run `source ~/.nvm/nvm.sh` first. A fresh worktree needs `yarn install` before its tests run.
 - For Vault, a GitHub Packages token in `~/.npmrc`, or `yarn install` fails: `//npm.pkg.github.com/:_authToken=<classic PAT with read:packages, SSO-authorized>`. The Vault tests do run on Node 22 on a Mac, despite what its CLAUDE.md says.
 - The Atlassian connector in Claude Code, for Jira reads and writes. The Claude Docs connector, for the tech spec doc and its Journal tab.
 - Nothing else for the journal: the hooks keep the facts in `~/.bnaas/journal/buffer.jsonl` until the session appends them to the Journal tab, and log their errors to `~/.bnaas/journal/errors.log`; they never stop a session.
 - These skill sets, installed at user scope at the versions in use today. A bump of one is a setup PR.
-  - scality-skills (`review-pr`, for the local review gate): the `scality-skills` plugin of the `scality-agent-hub` marketplace, `claude plugin marketplace add https://github.com/scality/agent-hub.git` then `claude plugin install scality-skills@scality-agent-hub`, kept at the version that the Code Review workflow installs (`claude-code-review.yml` of `scality/workflows`).
-  - superpowers (`brainstorming`, `test-driven-development`, `systematic-debugging`, `verification-before-completion`): the Claude Code plugin from https://github.com/obra/superpowers, at commit `2ce8aa15d05bd57213e6f746f953aafb7ded7a8b`.
-  - Matt Pocock's skills (`grill-with-docs`, `implement`, `retro`, `handoff`): `git clone https://github.com/mattpocock/skills ~/.claude/skills/matt && git -C ~/.claude/skills/matt checkout 5beb35b040e3de97e54fa9e386d7e42d15c295c2` on Linux and macOS, then follow its README.
+  - scality-skills (`review-pr`, for the local review gate): the `scality-skills` plugin of the `scality-agent-hub` marketplace, `claude plugin marketplace add https://github.com/scality/agent-hub.git` then `claude plugin install scality-skills@scality-agent-hub`. `claude plugin install` takes the version that the marketplace has today, so check that `claude plugin list` shows 1.8.0; if it shows another version, stop and open a setup PR for the bump.
+  - superpowers (`brainstorming`, `test-driven-development`, `systematic-debugging`, `verification-before-completion`): the plugin `superpowers@claude-plugins-official`, at version 7.0.0. If `claude plugin list` shows a superpowers plugin from another marketplace (an older version of this README installed it from https://github.com/obra/superpowers), remove it first with `claude plugin uninstall superpowers@<that marketplace>`, or every skill shows up twice. Then: `claude plugin marketplace add anthropics/claude-plugins-official` (skip it when `claude plugin marketplace list` already shows that marketplace), then `claude plugin install superpowers@claude-plugins-official`, and check that `claude plugin list` shows 7.0.0; if it shows another version, stop and open a setup PR for the bump.
+  - Matt Pocock's skills (`grill-with-docs`, `implement`, `retro`, `handoff`), at commit `5beb35b040e3de97e54fa9e386d7e42d15c295c2`. The repository keeps them under `skills/<group>/<name>/`, and Claude Code finds a user skill only directly under `~/.claude/skills/<name>/`, so copy the four folders there, on Linux and macOS. The first line removes the clone that an older version of this README put one level too deep, and each folder is removed before its copy, so that a second run leaves no old file behind:
+
+    ```
+    rm -rf ~/.claude/skills/matt
+    tmp=$(mktemp -d)
+    git clone -q https://github.com/mattpocock/skills "$tmp/skills"
+    git -C "$tmp/skills" checkout -q 5beb35b040e3de97e54fa9e386d7e42d15c295c2
+    mkdir -p ~/.claude/skills
+    for s in engineering/grill-with-docs engineering/implement engineering/retro productivity/handoff; do
+      rm -rf ~/.claude/skills/"${s#*/}"
+      cp -R "$tmp/skills/skills/$s" ~/.claude/skills/
+    done
+    rm -rf "$tmp"
+    ```
 
 ## Install
 
