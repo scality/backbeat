@@ -13,6 +13,7 @@ const LogReader = require('../../../../lib/queuePopulator/LogReader');
 const KafkaLogReader = require('../../../../lib/queuePopulator/KafkaLogReader');
 const BucketFileLogReader = require('../../../../lib/queuePopulator/BucketFileLogReader');
 const RaftLogReader = require('../../../../lib/queuePopulator/RaftLogReader');
+const ShadowedMasterFilter = require('../../../../lib/queuePopulator/ShadowedMasterFilter');
 
 
 class MockLogConsumer {
@@ -318,6 +319,48 @@ describe('LogReader', () => {
                             ...params.overhead,
                         },
                     }));
+                    done();
+                });
+            });
+        });
+
+        describe('shadowed master', () => {
+            const record = { db: 'example-bucket', timestamp: Date.now() };
+            const value = JSON.stringify({ key: 'example-key', versionId: 'vid', isNull: true });
+            const versionEntry = { type: 'put', key: '\x7fVexample-key\x00vid', value };
+            const masterEntry = { type: 'put', key: '\x7fMexample-key', value };
+
+            const processBoth = (reader, cb) => {
+                reader._processLogEntry({}, record, versionEntry, err => {
+                    assert.ifError(err);
+                    reader._processLogEntry({}, record, masterEntry, cb);
+                });
+            };
+
+            it('should drop the master entry when a twin filter is set', done => {
+                const filter = sinon.stub().returns();
+                const reader = new LogReader({
+                    logId: 'test-log-reader',
+                    zkClient: zkMock.createClient('localhost:2181'),
+                    logConsumer: new MockLogConsumer(),
+                    logger: new Logger('test:LogReader'),
+                    extensions: [{ filter }],
+                    shadowedMasterFilter: new ShadowedMasterFilter(),
+                });
+                processBoth(reader, err => {
+                    assert.ifError(err);
+                    assert.strictEqual(filter.callCount, 1);
+                    assert.strictEqual(filter.args[0][0].key, 'example-key\x00vid');
+                    done();
+                });
+            });
+
+            it('should pass both entries without a twin filter', done => {
+                const filter = sinon.stub().returns();
+                logReader._extensions = [{ filter }];
+                processBoth(logReader, err => {
+                    assert.ifError(err);
+                    assert.strictEqual(filter.callCount, 2);
                     done();
                 });
             });
