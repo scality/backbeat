@@ -4,16 +4,34 @@
 // - deduplicate with Vault's seed script at https://github.com/scality/Vault/pull/1627
 // - add permission boundaries to user when https://scality.atlassian.net/browse/VAULT-4 is implemented
 const fs = require('fs');
+const util = require('util');
 
 const { errors, errorUtils } = require('@scality/arsenal');
 const { program } = require('commander');
 const werelogs = require('werelogs');
 const version = require('../package.json').version;
 const async = require('async');
-const { IAMClient, GetUserCommand, CreateUserCommand, ListPoliciesCommand, CreatePolicyCommand,
-        ListAttachedUserPoliciesCommand, AttachUserPolicyCommand, GetRoleCommand, CreateRoleCommand,
-        ListAttachedRolePoliciesCommand, AttachRolePolicyCommand, ListAccessKeysCommand, CreateAccessKeyCommand,
-        NoSuchEntityException,
+const {
+    IAMClient,
+    GetUserCommand,
+    CreateUserCommand,
+    DeleteUserCommand,
+    ListPoliciesCommand,
+    CreatePolicyCommand,
+    DeletePolicyCommand,
+    ListAttachedUserPoliciesCommand,
+    AttachUserPolicyCommand,
+    DetachUserPolicyCommand,
+    GetRoleCommand,
+    CreateRoleCommand,
+    DeleteRoleCommand,
+    ListAttachedRolePoliciesCommand,
+    AttachRolePolicyCommand,
+    DetachRolePolicyCommand,
+    ListAccessKeysCommand,
+    CreateAccessKeyCommand,
+    DeleteAccessKeyCommand,
+    NoSuchEntityException,
 } = require('@aws-sdk/client-iam');
 const { STSClient, GetCallerIdentityCommand } = require('@aws-sdk/client-sts');
 
@@ -133,6 +151,13 @@ class UserHandler extends BaseHandler {
         return res.User;
     }
 
+    async delete() {
+        const command = new DeleteUserCommand({
+            UserName: this.resourceName,
+        });
+        await this.iamClient.send(command);
+    }
+
     conflicts(u) {
         return u.Path !== systemPrefix;
     }
@@ -184,6 +209,13 @@ class PolicyHandler extends BaseHandler {
         return res.Policy;
     }
 
+    async delete(p) {
+        const command = new DeletePolicyCommand({
+            PolicyArn: p.Arn,
+        });
+        await this.iamClient.send(command);
+    }
+
     conflicts(p) {
         return p.Path !== systemPrefix;
     }
@@ -215,6 +247,13 @@ class RoleHandler extends BaseHandler {
         return res.Role;
     }
 
+    async delete() {
+        const command = new DeleteRoleCommand({
+            RoleName: this.resourceName,
+        });
+        await this.iamClient.send(command);
+    }
+
     conflicts(p) {
         return p.Path !== systemPrefix;
     }
@@ -240,6 +279,16 @@ class PolicyUserAttachmentHandler extends BaseHandler {
             UserName: this.resourceName,
         });
         await this.iamClient.send(command);
+    }
+
+    async delete(attachedPolicies) {
+        for (const p of attachedPolicies) {
+            const command = new DetachUserPolicyCommand({
+                PolicyArn: p.PolicyArn,
+                UserName: this.resourceName,
+            });
+            await this.iamClient.send(command);
+        }
     }
 
     conflicts() {
@@ -269,6 +318,16 @@ class PolicyRoleAttachmentHandler extends BaseHandler {
         await this.iamClient.send(command);
     }
 
+    async delete(attachedPolicies) {
+        for (const p of attachedPolicies) {
+            const command = new DetachRolePolicyCommand({
+                PolicyArn: p.PolicyArn,
+                RoleName: this.resourceName,
+            });
+            await this.iamClient.send(command);
+        }
+    }
+
     conflicts() {
         return false;
     }
@@ -296,20 +355,36 @@ class AccessKeyHandler extends BaseHandler {
         return res.AccessKey;
     }
 
+    async delete(accessKeys) {
+        for (const k of accessKeys) {
+            const command = new DeleteAccessKeyCommand({
+                AccessKeyId: k.AccessKeyId,
+                UserName: this.resourceName,
+            });
+            await this.iamClient.send(command);
+        }
+    }
+
     conflicts() {
         return false;
     }
 }
 
+async function collectResourceOrNull(v) {
+    try {
+        return await v.collect();
+    } catch (err) {
+        if (err instanceof NoSuchEntityException) {
+            return null;
+        }
+        throw err;
+    }
+}
+
 function collectResource(v, done) {
-    v.collect()
+    collectResourceOrNull(v)
         .then(res => done(null, res))
-        .catch(err => {
-            if (err instanceof NoSuchEntityException) {
-                return done(null, null);
-            }
-            done(err);
-        });
+        .catch(done);
 }
 
 function collectResourcesFromHandlers(handlers, cb) {
@@ -371,6 +446,46 @@ function apply(iamClient, stsClient, serviceName, policyFile, log, cb) {
     ], cb);
 }
 
+function buildServiceUserDeleteHandlers(serviceName, iamClient, log) {
+    // Order matters !
+    return [
+        new AccessKeyHandler(serviceName, iamClient, log),
+        new PolicyUserAttachmentHandler(serviceName, iamClient, log),
+        new PolicyRoleAttachmentHandler(serviceName, iamClient, log),
+        new RoleHandler(serviceName, iamClient, log),
+        new PolicyHandler(serviceName, iamClient, log, { name: 'role' }),
+        new PolicyHandler(serviceName, iamClient, log, { name: 'user' }),
+        new UserHandler(serviceName, iamClient, log),
+    ];
+}
+
+async function deleteServiceUser(iamClient, stsClient, serviceName, policyFile, log) {
+    const handlers = buildServiceUserDeleteHandlers(serviceName, iamClient, log);
+
+    // look everything up first: nothing is deleted if one of them was not created by apply
+    const toDelete = [];
+    for (const handler of handlers) {
+        const resource = await collectResourceOrNull(handler);
+
+        if (needsCreation(resource)) {
+            log.debug('nothing to delete', { type: handler.fqResourceType });
+            continue;
+        }
+
+        if (handler.conflicts(resource)) {
+            throw new Error(`${handler.fqResourceType} ${handler.resourceName} is not under ${systemPrefix}, ` +
+                'it was not created by this tool: refusing to delete it.');
+        }
+
+        toDelete.push({ handler, resource });
+    }
+
+    for (const { handler, resource } of toDelete) {
+        log.debug('deleting', { resource, type: handler.fqResourceType });
+        await handler.delete(resource);
+    }
+}
+
 function wrapAction(actionFunc, serviceName, _, cmd) {
     const options = cmd.optsWithGlobals();
 
@@ -389,9 +504,6 @@ function wrapAction(actionFunc, serviceName, _, cmd) {
                 data,
                 error: errorUtils.reshapeExceptionError(err),
             });
-            if (err.EntityAlreadyExists) {
-                log.error(`run "${process.argv[1]} purge ${serviceName}" to fix.`);
-            }
             process.exit(1);
         }
         log.info('success', { data });
@@ -414,6 +526,11 @@ program
         ' and attach it to a role that the service user is allowed to assume, instead' +
         ' of only allowing the user to assume one (seeded) role named <service-name> in all accounts.')
     .action(wrapAction.bind(null, apply));
+
+program
+    .command('delete <service-name>')
+    .description('Delete the service user, its access keys, and the policies and role apply created for it')
+    .action(wrapAction.bind(null, util.callbackify(deleteServiceUser)));
 
 const validCommands = program.commands.map(n => n._name);
 
