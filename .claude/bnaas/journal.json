@@ -2,6 +2,7 @@
  "doc": "https://claude.ai/artifact/QhKsCqtGNzaVice35nvip9",
  "journal": {
   "tab": "Journal",
+  "doc_id": "bfe390f9-d819-4a93-9050-ffd5eee1b80a",
   "file": "b251bb0a-d91f",
   "body": "267e707b-5e7b"
  },
@@ -16,6 +17,8 @@
   "3f2545f6-66f2": "Progress by area chart",
   "cc8fba76-a760": "Scope and pivots chart",
   "b251bb0a-d91f": "Journal tab",
-  "267e707b-5e7b": "Journal tab body"
+  "267e707b-5e7b": "Journal tab body",
+  "ea8d9e59-81fe": "Journal practice tab",
+  "f093d6dc-8533": "Journal practice tab body"
  }
 }

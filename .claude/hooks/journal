@@ -3,8 +3,10 @@
 
 Usage:
   journal note [--decision] [--why <text>] [--tasks <ids>] "<one sentence>"
-  journal flush                   (prints the facts that wait, to append by hand)
-  journal flushed [session]       (the facts are in the doc: drop them)
+  journal take [session]          (puts the facts that wait in a new batch, prints its id)
+  journal batch <batch>           (prints a batch as the journal agent appends it)
+  journal flushed <batch>         (the batch is in the Log: drop its file)
+  journal flush                   (take a batch and print the Stop request, by hand)
   journal tail [n] --doc <export> | tail --new --doc <export>
                                   (newest first; --new: the bullets whose fact id
                                    the last mark-read has not seen)
@@ -13,14 +15,15 @@ Usage:
   journal hook-flush    (the Stop hook; JSON on stdin)
 
 The journal lives in the Journal tab of the tech spec doc, named in
-.claude/bnaas/journal.json.
+.claude/bnaas/journal.json (BNAAS_JOURNAL_CONFIG names another one).
 The hooks append one JSON fact per line to ~/.bnaas/journal/buffer.jsonl
 (BNAAS_JOURNAL_DIR moves the folder). A shell hook cannot write a Claude
-Doc, so on Stop the hook moves the buffer to the pending file of the
-session and blocks the stop once, asking the session to append the facts
-to the Log section and then to run `journal flushed <session>`. If that
-write fails, the facts stay pending, and the next Stop shows them again.
-Pending facts of a session that went quiet go to the next flush.
+Doc, so on Stop the hook moves the buffer into a new batch file,
+pending.<session>.<batch>.jsonl, and blocks the stop once, asking the
+session to start the bnaas-journal agent in the background on that
+batch. The agent appends it to the Log and runs `journal flushed
+<batch>`. A batch still there after an hour is taken over by the next
+batch, its facts marked as shown before.
 
 Each fact has an id, the first 10 hex of the sha1 of its event's natural
 key (a commit's repository and sha, a push's branch and sha, a PR link,
@@ -58,7 +61,9 @@ import time
 import traceback
 
 HERE = os.path.dirname(os.path.realpath(__file__))
-CONFIG = os.path.join(HERE, "..", "bnaas", "journal.json")
+# BNAAS_JOURNAL_CONFIG points the journal at another target, such as a
+# practice tab for tests.
+CONFIG = os.environ.get("BNAAS_JOURNAL_CONFIG") or os.path.join(HERE, "..", "bnaas", "journal.json")
 DIR = os.environ.get("BNAAS_JOURNAL_DIR") or os.path.expanduser("~/.bnaas/journal")
 BUFFER = os.path.join(DIR, "buffer.jsonl")
 ERRORS = os.path.join(DIR, "errors.log")
@@ -800,33 +805,42 @@ def log_text(facts):
     return "\n".join(bullet(f) for f in sorted(facts, key=when))
 
 
-def pending_file(session):
-    return os.path.join(DIR, "pending.%s.jsonl" % re.sub(r"[^\w-]", "_", session or "manual"))
+def batch_file(session, batch):
+    return os.path.join(DIR, "pending.%s.%s.jsonl" % (re.sub(r"[^\w-]", "_", session or "manual"),
+                                                      batch))
+
+
+def batch_files(batch):
+    """The pending file of a batch, whatever session took it."""
+    safe = re.sub(r"[^\w-]", "_", batch or "")
+    return [p for p in glob.glob(os.path.join(DIR, "pending.*.jsonl"))
+            if safe and (p.endswith(".%s.jsonl" % safe) or
+                         os.path.basename(p) == "pending.%s.jsonl" % safe)]
 
 
 def take(session):
-    """Move the buffer into the pending file of this session, under the
-    lock, with the pending facts of sessions that went quiet, and return
-    (facts shown, facts left in the buffer). At most MAX_FACTS are shown;
-    the rest stay in the buffer for the next flush."""
-    mine = pending_file(session)
+    """Move the buffer into a new batch of this session, under the lock,
+    with the batches of any session that went quiet for an hour, and
+    return (batch id, facts shown, facts left in the buffer). Each Stop
+    takes its own batch, so a batch that an agent is still appending is
+    never shown twice; `journal flushed <batch>` removes exactly its file.
+    At most MAX_FACTS are shown; the rest stay in the buffer."""
+    batch = "%s%s" % (now().strftime("%H%M%S"), os.urandom(3).hex())
     with locked():
-        # A pending fact was shown before, to a session that may have
-        # appended it: it is marked, so that the request has it checked.
         raw = []
 
         def load(path, again):
             # A fact with no time gets one now, the time of its file, and
-            # keeps it in the pending file, so that a retry shows it the same.
+            # keeps it in the batch, so that a retry shows it the same.
             mtime = datetime.datetime.fromtimestamp(
                 os.path.getmtime(path), datetime.timezone.utc).isoformat(timespec="seconds")
             with open(path, encoding="utf-8") as f:
                 raw.extend((line, again, mtime) for line in f.read().splitlines())
 
-        if os.path.exists(mine):
-            load(mine, True)
+        # A stale batch was shown to a session that may have appended part
+        # of it: its facts are marked, so that the agent checks the Log.
         for old in glob.glob(os.path.join(DIR, "pending.*.jsonl")):
-            if old != mine and time.time() - os.path.getmtime(old) > STALE:
+            if time.time() - os.path.getmtime(old) > STALE:
                 load(old, True)
                 os.remove(old)
         if os.path.exists(BUFFER):
@@ -849,53 +863,63 @@ def take(session):
             with open(BUFFER, "a", encoding="utf-8") as f:
                 f.writelines(json.dumps(x) + "\n" for x in left)
         if shown:
-            with open(mine, "w", encoding="utf-8") as f:
+            with open(batch_file(session, batch), "w", encoding="utf-8") as f:
                 f.writelines(json.dumps(x) + "\n" for x in shown)
-        elif os.path.exists(mine):
-            os.remove(mine)
-    return shown, left
+    return (batch if shown else None), shown, left
 
 
-def flushed_command(session):
-    return "python3 -I %s flushed %s" % (shlex.quote(os.path.join(HERE, "journal")),
-                                          shlex.quote(session or "manual"))
+def command(*args):
+    return "python3 -I %s %s" % (shlex.quote(os.path.join(HERE, "journal")),
+                                 " ".join(shlex.quote(a) for a in args))
 
 
 def request(session):
-    """The text that asks the session to append the facts, or None."""
-    shown, left = take(session)
-    if not shown:
+    """The text that asks the session to start the journal agent, or None."""
+    batch, shown, left = take(session)
+    if not batch:
         return None
     more = " %d more facts wait for the next turn." % len(left) if left else ""
+    return ("%d journal facts wait in batch %s: start the bnaas-journal agent in the "
+            "background with that batch id, then go on. If the agent cannot reach the "
+            "Claude Docs connector, append them yourself as the agent's instructions say "
+            "(`%s` prints them, then `%s`).%s"
+            % (len(shown), batch, command("batch", batch), command("flushed", batch), more))
+
+
+def batch_text(batch):
+    """A batch as the agent appends it: the target, the bullets to append
+    without a read, and those shown before, to look for in the Log first."""
+    facts = []
+    for path in batch_files(batch):
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                try:
+                    facts.append(json.loads(line))
+                except ValueError:
+                    pass
+    if not facts:
+        return None
     cfg = config()
     tab = cfg.get("journal") or {}
-    first = [f for f in shown if not f.get("again")]
-    again = [f for f in shown if f.get("again")]
-    text = ("Append these journal facts to the Log section of the %s tab of the BNaaS D1 "
-            "tech spec (%s, tab file %s, body node %s) through the Claude Docs connector, "
-            "with one `update` on ref node %s, engine prose, that inserts the bullets "
-            "below, as they are, at the end of the tab: the Log is its last section, one "
-            "append-only list with no heading. Never edit, move or reorder the bullets "
-            "already there, since other sessions append at the same time. No names. "
-            % (tab.get("tab", "Journal"), cfg["doc"], tab.get("file"), tab.get("body"),
-               tab.get("body")))
-    if again:
-        text += ("The bullets under \"Shown before\" were shown to a session that may "
-                 "have appended them already: export the tab first, search the Log for "
-                 "their ids (the second word), and append only those that are not there. "
-                 "Append the others without a read. ")
-    text += "Then run `%s`:%s" % (flushed_command(session), more)
+    first = [f for f in facts if not f.get("again")]
+    again = [f for f in facts if f.get("again")]
+    out = ["Batch %s: %d facts." % (batch, len(facts)),
+           "Target: the %s tab of %s (doc %s, tab file %s, body node %s)."
+           % (tab.get("tab", "Journal"), cfg["doc"], tab.get("doc_id", "-"), tab.get("file"),
+              tab.get("body"))]
     if first:
-        text += "\n\n" + log_text(first)
+        out += ["", "New, to append without a read:", "", log_text(first)]
     if again:
-        text += "\n\nShown before:\n\n" + log_text(again)
-    return text
+        out += ["", "Shown before, to look for in the Log by id first:", "", log_text(again)]
+    out += ["", "Then run: %s" % command("flushed", batch)]
+    return "\n".join(out)
 
 
 def hook_flush(data):
     """The Stop hook. A shell hook cannot write a Claude Doc, so it blocks
-    the stop once and asks the session to append the facts. Only the main
-    session's Stop asks: a subagent may have no Docs connector."""
+    the stop once and asks the session to start the journal agent on a
+    batch. Only the main session's Stop asks: a subagent may have no Docs
+    connector."""
     if data.get("hook_event_name") != "Stop" or data.get("stop_hook_active"):
         return
     reason = request(data.get("session_id"))
@@ -904,19 +928,35 @@ def hook_flush(data):
 
 
 def flush():
-    """By hand: print the request, for a session with no Stop hook."""
-    # Each manual flush has its own pending file: two sessions flushing at
-    # once must not write, or drop, each other's facts.
+    """By hand: take a batch and print the request, for a session with no
+    Stop hook."""
     reason = request("manual-%d" % os.getpid())
     print(reason or "No journal fact waits.")
     return 0
 
 
+def take_batch(args):
+    """`journal take [session]`: put the waiting facts in a new batch, and
+    print its id (nothing when no fact waits)."""
+    batch, _, _ = take(args[0] if args else "manual-%d" % os.getpid())
+    if batch:
+        print(batch)
+    return 0
+
+
+def show_batch(args):
+    text = batch_text(args[0]) if args else None
+    if not text:
+        print("No batch %s." % (args[0] if args else "given"), file=sys.stderr)
+        return 1
+    print(text)
+    return 0
+
+
 def flushed(args):
-    """The facts are in the doc: drop the pending file of that session."""
-    path = pending_file(args[0] if args else "manual")
+    """The facts are in the Log: remove exactly that batch's file."""
     with locked():
-        if os.path.exists(path):
+        for path in batch_files(args[0] if args else ""):
             os.remove(path)
     return 0
 
@@ -1058,17 +1098,20 @@ def mark_read():
 
 
 def note(args):
-    kind, extra = "note", []
-    while args and args[0].startswith("--"):
-        flag = args.pop(0)
-        if flag == "--decision":
+    # The options may come before or after the sentence.
+    kind, extra, words = "note", [], []
+    while args:
+        arg = args.pop(0)
+        if arg == "--decision":
             kind = "decision"
-        elif flag in ("--why", "--tasks") and args:
-            extra.append((flag[2:], args.pop(0)))
-        else:
-            print("unknown option %s" % flag, file=sys.stderr)
+        elif arg in ("--why", "--tasks") and args:
+            extra.append((arg[2:], args.pop(0)))
+        elif arg.startswith("--"):
+            print("unknown option %s" % arg, file=sys.stderr)
             return 2
-    text = " ".join(args).strip()
+        else:
+            words.append(arg)
+    text = " ".join(words).strip()
     if not text:
         print('usage: journal note [--decision] [--why <text>] [--tasks <ids>] "<text>"',
               file=sys.stderr)
@@ -1102,6 +1145,10 @@ def main(argv):
             return flush()
         if cmd == "flushed":
             return flushed(args)
+        if cmd == "take":
+            return take_batch(args)
+        if cmd == "batch":
+            return show_batch(args)
         if cmd == "tail":
             return tail(args)
         if cmd == "mark-read":

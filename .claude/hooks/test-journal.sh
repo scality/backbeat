@@ -342,55 +342,126 @@ check "stop_hook_active skips the flush" test ! -s "$TMP/out" -a -s "$BUF"
 stop '{"hook_event_name":"SubagentStop","session_id":"s1"}'
 check "a subagent stop asks nothing" test ! -s "$TMP/out" -a -s "$BUF"
 
-# A broken line is dropped, and the pending facts of a quiet session are taken over.
+# A broken line is dropped, and the batch of a quiet session is taken over.
 echo 'not json' >> "$BUF"
-echo '{"repo": "backbeat", "branch": "b", "kind": "push", "text": "push from a quiet session"}' > "$BNAAS_JOURNAL_DIR/pending.old.jsonl"
-touch -t 202001010000 "$BNAAS_JOURNAL_DIR/pending.old.jsonl"
-echo '{"repo": "backbeat", "branch": "b", "kind": "push", "text": "push from a live session"}' > "$BNAAS_JOURNAL_DIR/pending.live.jsonl"
+echo '{"repo": "backbeat", "branch": "b", "kind": "push", "text": "push from a quiet session"}' > "$BNAAS_JOURNAL_DIR/pending.old.aaaa.jsonl"
+touch -t 202001010000 "$BNAAS_JOURNAL_DIR/pending.old.aaaa.jsonl"
+echo '{"repo": "backbeat", "branch": "b", "kind": "push", "text": "push from a live session"}' > "$BNAAS_JOURNAL_DIR/pending.live.bbbb.jsonl"
 n=$(($(lines) + 1))
 
+batch_of() { sed -n 's/.* wait in batch \([0-9a-f]*\):.*/\1/p' "$TMP/reason"; }
+show() { python3 -I "$HOOKS/journal" batch "$1" > "$TMP/batch"; }
 stop '{"hook_event_name":"Stop","session_id":"s1","stop_hook_active":false}'
 check "the Stop hook blocks once with a reason" blocks
 reason > "$TMP/reason" 2>/dev/null
-check "the reason names the Journal tab and the connector" \
-  grep -q 'Log section of the Journal tab of the BNaaS D1 tech spec (https://claude.ai/artifact/QhKsCqtGNzaVice35nvip9, tab file b251bb0a-d91f, body node 267e707b-5e7b) through the Claude Docs connector' "$TMP/reason"
-check "the reason appends at the end of the tab, with no heading" \
-  sh -c "grep -q 'at the end of the tab' '$TMP/reason' && ! grep -q '^#' '$TMP/reason'"
-check "the reason names one prose update on the tab body" grep -q 'one `update` on ref node 267e707b-5e7b, engine prose' "$TMP/reason"
-check "the reason gives the flushed command of the session" grep -q "journal flushed s1\`" "$TMP/reason"
+B1=$(batch_of)
+check "the reason names the batch and the background agent" \
+  sh -c "test -n '$B1' && grep -q 'start the bnaas-journal agent in the background with that batch id, then go on' '$TMP/reason'"
+check "the reason says what to do without the connector" grep -q "journal batch $B1\` prints them, then \`.*journal flushed $B1\`" "$TMP/reason"
+check "the batch has a file of its own" test -s "$BNAAS_JOURNAL_DIR/pending.s1.$B1.jsonl"
+show "$B1"
+check "the batch names the Journal tab and its nodes" \
+  grep -q 'Target: the Journal tab of https://claude.ai/artifact/QhKsCqtGNzaVice35nvip9 (doc bfe390f9-d819-4a93-9050-ffd5eee1b80a, tab file b251bb0a-d91f, body node 267e707b-5e7b)' "$TMP/batch"
 check "one bullet per fact: UTC time, fact id, repo and branch" \
-  grep -Eq '^- 20[0-9]{2}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}Z [0-9a-f]{10} backbeat improvement/topic-journal: commit ' "$TMP/reason"
-check "the bullets are oldest first" sh -c "sed '/^Shown before:/,\$d' '$TMP/reason' | grep '^- ' | cut -c3-19 | sort -c"
-grep '^- ' "$TMP/reason" | cut -d' ' -f3 | sort > "$TMP/ids1"
-check "every fact is shown, minus the broken line" test "$(grep -c '^- ' "$TMP/reason")" = "$((n - 1))"
-check "the facts of a quiet session are taken over" grep -q 'push from a quiet session' "$TMP/reason"
-check "taken-over facts are shown before: the session checks the Log for their ids" \
-  sh -c "sed -n '/^Shown before:/,\$p' '$TMP/reason' | grep -q 'push from a quiet session' && grep -q 'search the Log for their ids' '$TMP/reason'"
+  grep -Eq '^- 20[0-9]{2}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}Z [0-9a-f]{10} backbeat improvement/topic-journal: commit ' "$TMP/batch"
+check "the bullets are oldest first" sh -c "sed '/^Shown before/,\$d' '$TMP/batch' | grep '^- ' | cut -c3-19 | sort -c"
+check "every fact is in the batch, minus the broken line" test "$(grep -c '^- ' "$TMP/batch")" = "$((n - 1))"
+check "the batch of a quiet session is taken over" \
+  sh -c "sed -n '/^Shown before/,\$p' '$TMP/batch' | grep -q 'push from a quiet session' && test ! -e '$BNAAS_JOURNAL_DIR/pending.old.aaaa.jsonl'"
 check "first-time facts are appended without a read" \
-  sh -c "sed '/^Shown before:/,\$d' '$TMP/reason' | grep -q '^- .* backbeat improvement/topic-journal: commit '"
-check "the facts of a live session are left to it" sh -c "! grep -q 'push from a live session' '$TMP/reason'"
-check "the buffer is empty and the facts wait as pending" test ! -s "$BUF" -a -s "$BNAAS_JOURNAL_DIR/pending.s1.jsonl"
+  sh -c "sed -n '/^New, to append without a read/,/^Shown before/p' '$TMP/batch' | grep -q '^- .* backbeat improvement/topic-journal: commit '"
+check "the batch of a live session is left to it" \
+  sh -c "! grep -q 'push from a live session' '$TMP/batch' && test -s '$BNAAS_JOURNAL_DIR/pending.live.bbbb.jsonl'"
+check "the buffer is empty" test ! -s "$BUF"
+grep '^- ' "$TMP/batch" | cut -d' ' -f3 | sort > "$TMP/ids1"
 
-# The write failed: the next Stop shows the same facts again, plus new ones.
+# A second Stop of the same session: a new batch with only the new facts,
+# while the agent may still be appending the first one.
 pushed
 bash_ok "$REPO" "git push origin HEAD"
 stop '{"hook_event_name":"Stop","session_id":"s1"}'
 reason > "$TMP/reason" 2>/dev/null
-check "a failed write is retried at the next Stop" test "$(grep -c '^- ' "$TMP/reason")" = "$n"
-grep '^- ' "$TMP/reason" | cut -d' ' -f3 | sort > "$TMP/ids2"
-check "a retried fact keeps its fact id" sh -c "test -s '$TMP/ids1' && test -z \"\$(comm -23 '$TMP/ids1' '$TMP/ids2')\""
-retry_split() { # the facts shown before are the earlier ones; the new push is not
-  test "$(sed -n '/^Shown before:/,$p' "$TMP/reason" | grep -c '^- ')" = "$(wc -l < "$TMP/ids1" | tr -d ' ')" &&
-    sed '/^Shown before:/,$d' "$TMP/reason" | grep -q '^- .*: push$'
+B2=$(batch_of)
+show "$B2"
+check "two batches in one session: the second holds only the new push" \
+  sh -c "test '$B2' != '$B1' && test \$(grep -c '^- ' '$TMP/batch') = 1 && grep -q '^- .*: push$' '$TMP/batch' && test -s '$BNAAS_JOURNAL_DIR/pending.s1.$B1.jsonl'"
+python3 -I "$HOOKS/journal" flushed "$B2"
+check "journal flushed removes exactly that batch" \
+  sh -c "test ! -e '$BNAAS_JOURNAL_DIR/pending.s1.$B2.jsonl' && test -s '$BNAAS_JOURNAL_DIR/pending.s1.$B1.jsonl'"
+
+# The first batch was never flushed: after an hour, the next batch takes
+# it over, its facts marked as shown before, with the same ids.
+touch -t 202001010000 "$BNAAS_JOURNAL_DIR/pending.s1.$B1.jsonl"
+python3 -I "$HOOKS/journal" note "after the takeover"
+stop '{"hook_event_name":"Stop","session_id":"s3"}'
+reason > "$TMP/reason" 2>/dev/null
+B3=$(batch_of)
+show "$B3"
+takeover() {
+  sed -n '/^Shown before/,$p' "$TMP/batch" | grep '^- ' | cut -d' ' -f3 | sort > "$TMP/ids3" &&
+    test -s "$TMP/ids1" && test -z "$(comm -23 "$TMP/ids1" "$TMP/ids3")" &&
+    sed -n '/^New, to append without a read/,/^Shown before/p' "$TMP/batch" | grep -q 'after the takeover' &&
+    test ! -e "$BNAAS_JOURNAL_DIR/pending.s1.$B1.jsonl"
 }
-check "on a retry, only the facts shown before are checked, not the new push" retry_split
-python3 -I "$HOOKS/journal" flushed s1
-check "journal flushed drops the pending facts" test ! -e "$BNAAS_JOURNAL_DIR/pending.s1.jsonl"
+check "a stale batch is taken over as shown before, with the same ids" takeover
+python3 -I "$HOOKS/journal" flushed "$B3"
 python3 -I "$HOOKS/journal" note "a manual flush test"
-python3 -I "$HOOKS/journal" flush > "$TMP/manual"
-check "a manual flush has a pending file of its own" \
-  sh -c "grep -q 'flushed manual-[0-9]*\`' '$TMP/manual' && ls '$BNAAS_JOURNAL_DIR' | grep -q '^pending.manual-[0-9]*.jsonl$'"
-python3 -I "$HOOKS/journal" flushed "$(grep -o 'manual-[0-9]*' "$TMP/manual" | head -1)"
+python3 -I "$HOOKS/journal" flush > "$TMP/reason"
+BM=$(batch_of)
+check "a manual flush takes a batch of its own" \
+  sh -c "test -n '$BM' && ls '$BNAAS_JOURNAL_DIR' | grep -q '^pending.manual-[0-9]*.$BM.jsonl$'"
+python3 -I "$HOOKS/journal" flushed "$BM"
+python3 -I "$HOOKS/journal" note "taken by hand"
+BT=$(python3 -I "$HOOKS/journal" take s4)
+check "journal take prints the id of a new batch" test -s "$BNAAS_JOURNAL_DIR/pending.s4.$BT.jsonl"
+python3 -I "$HOOKS/journal" flushed "$BT"
+python3 -I "$HOOKS/journal" note "for the practice tab"
+BP=$(python3 -I "$HOOKS/journal" take s5)
+practice() {
+  BNAAS_JOURNAL_CONFIG="$HOOKS/../skills/bnaas-journal/evals/fixtures/journal-practice.json" \
+    python3 -I "$HOOKS/journal" batch "$BP" | grep -q 'Target: the Journal practice tab .*body node f093d6dc-8533'
+}
+check "BNAAS_JOURNAL_CONFIG points a batch at the practice tab" practice
+python3 -I "$HOOKS/journal" flushed "$BP"
+# A fact with no time takes the time of its file, once; the facts sort by
+# their parsed time, not by the text of their time.
+echo '{"repo": "backbeat", "branch": "b", "kind": "note", "text": "no time of its own"}' > "$BUF"
+TZ=UTC touch -t 202601020304 "$BUF"
+echo '{"repo": "backbeat", "branch": "b", "kind": "note", "text": "ten at plus two", "t": "2026-01-02T10:00:00+02:00"}' >> "$BUF"
+echo '{"repo": "backbeat", "branch": "b", "kind": "note", "text": "nine at zero", "t": "2026-01-02T09:00:00+00:00"}' >> "$BUF"
+TZ=UTC touch -t 202601020304 "$BUF"
+BS=$(python3 -I "$HOOKS/journal" take s6)
+show "$BS"
+check "a fact with no time takes the time of its file" grep -q '^- 2026-01-02T03:04Z .*no time of its own' "$TMP/batch"
+sorted_by_time() {
+  test "$(grep '^- ' "$TMP/batch" | sed 's/.*: note: //' | tr '\n' '|')" = "no time of its own|ten at plus two|nine at zero|"
+}
+check "the facts sort by their parsed time" sorted_by_time
+grep '^- ' "$TMP/batch" | cut -d' ' -f2 > "$TMP/t1"
+touch "$BNAAS_JOURNAL_DIR"/pending.s6.$BS.jsonl
+sleep 1
+show "$BS"
+check "the time of a fact does not change on a later read" sh -c "grep '^- ' '$TMP/batch' | cut -d' ' -f2 | cmp -s - '$TMP/t1'"
+python3 -I "$HOOKS/journal" flushed "$BS"
+# Two batches wait at once: each prints only its own facts.
+echo '{"repo": "cloudserver", "branch": "z", "kind": "push", "text": "first batch fact", "t": "2026-01-02T11:00:00+00:00"}' > "$BNAAS_JOURNAL_DIR/pending.eval.c1c1c1.jsonl"
+echo '{"repo": "cloudserver", "branch": "z", "kind": "push", "text": "second batch fact", "t": "2026-01-02T11:10:00+00:00"}' > "$BNAAS_JOURNAL_DIR/pending.eval.c2c2c2.jsonl"
+own_facts() {
+  python3 -I "$HOOKS/journal" batch c1c1c1 > "$TMP/b1" && python3 -I "$HOOKS/journal" batch c2c2c2 > "$TMP/b2" &&
+    test "$(grep -c '^- ' "$TMP/b1")" = 1 && grep -q 'first batch fact' "$TMP/b1" &&
+    test "$(grep -c '^- ' "$TMP/b2")" = 1 && grep -q 'second batch fact' "$TMP/b2"
+}
+check "two batch files: each batch prints only its own facts" own_facts
+python3 -I "$HOOKS/journal" flushed c1c1c1
+check "flushing one batch leaves the other" \
+  sh -c "test ! -e '$BNAAS_JOURNAL_DIR/pending.eval.c1c1c1.jsonl' && test -s '$BNAAS_JOURNAL_DIR/pending.eval.c2c2c2.jsonl'"
+python3 -I "$HOOKS/journal" flushed c2c2c2
+(cd "$REPO" && python3 -I "$HOOKS/journal" note --decision "Options after the sentence" --why "the skill writes them so" --tasks 7)
+check "journal note takes its options after the sentence too" \
+  has '"kind": "decision", "text": "Options after the sentence | why: the skill writes them so | tasks: 7"'
+: > "$BUF"
+check "journal batch fails on an unknown batch" sh -c "! python3 -I '$HOOKS/journal' batch nope 2>/dev/null"
+rm -f "$BNAAS_JOURNAL_DIR"/pending.live.*.jsonl
 stop '{"hook_event_name":"Stop","session_id":"s1"}'
 check "nothing waits, so the Stop asks nothing" test ! -s "$TMP/out"
 
@@ -403,6 +474,9 @@ check "a write by the Journal tab file is not logged either" test ! -s "$TMP/out
 python3 -c 'import json; print(json.dumps({"hook_event_name":"PostToolUse","tool_name":"mcp__claude_ai_Claude_Docs__batch","tool_input":{"container":{"kind":"project","id":"bfe390f9-d819-4a93-9050-ffd5eee1b80a"},"batch":[{"op":"insert","content":"- 2026-10-28T09:00Z a1b2c3d4e5 backbeat b: push"}]},"tool_response":"{\"verdict\":\"allow\",\"rev\":9}"}))' | capture
 stop '{"hook_event_name":"Stop","session_id":"s1"}'
 check "a journal append with no node, by container alone, is not logged" test ! -s "$TMP/out"
+python3 -c 'import json; print(json.dumps({"hook_event_name":"PostToolUse","tool_name":"mcp__claude_ai_Claude_Docs__update","tool_input":{"container":{"kind":"project","id":"bfe390f9-d819-4a93-9050-ffd5eee1b80a"},"ref":{"object":"node","id":"f093d6dc-8533"}},"tool_response":"{\"verdict\":\"allow\"}"}))' | capture
+stop '{"hook_event_name":"Stop","session_id":"s1"}'
+check "a write to the practice tab is not logged" test ! -s "$TMP/out"
 python3 -c 'import json; print(json.dumps({"hook_event_name":"PostToolUse","tool_name":"mcp__claude_ai_Claude_Docs__update","tool_input":{"container":{"kind":"project","id":"Bgoru7knkQrfMGVAbDoGEM"},"ref":{"object":"node","id":"x"}},"tool_response":"{\"verdict\":\"allow\"}"}))' | capture
 check "a stray write to the old journal doc is logged" grep -q 'old journal doc write (node x)' "$BUF"
 : > "$BUF"
@@ -411,7 +485,9 @@ check "a stray write to the old journal doc is logged" grep -q 'old journal doc 
 python3 -c 'import json; [print(json.dumps({"repo":"backbeat","branch":"b","kind":"note","text":"x"*290})) for _ in range(300)]' > "$BUF"
 stop '{"hook_event_name":"Stop","session_id":"s2"}'
 reason > "$TMP/reason" 2>/dev/null
-check "a long buffer is cut at 200 facts" test "$(grep -Ec '^- [^ ]+ [0-9a-f]{10} backbeat b: note: ' "$TMP/reason")" = 200
+show "$(batch_of)"
+check "a long buffer is cut at 200 facts" test "$(grep -Ec '^- [^ ]+ [0-9a-f]{10} backbeat b: note: ' "$TMP/batch")" = 200
+check "the reason says that more facts wait" grep -q '100 more facts wait' "$TMP/reason"
 check "the rest stays in the buffer" test "$(lines)" = 100
 
 # journal tail reads the Log section of an export. The dates are

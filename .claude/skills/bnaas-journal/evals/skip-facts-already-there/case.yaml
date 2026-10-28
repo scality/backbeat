@@ -1,0 +1,16 @@
+schema_version: "1.1"
+name: skip-facts-already-there
+expected_outcome: |
+  Precondition, the runner's job and not the skill's: before this run, reset the Log of the
+  "Journal practice" tab (tab file ea8d9e59-81fe, body node f093d6dc-8533) to its two seed
+  bullets, by hand in the doc or with one prose `update` on that node that replaces the
+  Log's list with these two lines, and run the cases one after the other, never at once:
+    - 2026-10-28T09:00Z 1a2b3c4d5e backbeat improvement/ZZ-1-practice: commit 0000001 ZZ-1: First practice commit
+    - 2026-10-28T09:05Z 2b3c4d5e6f backbeat improvement/ZZ-1-practice: push
+  The four facts of batch b0b0b0 were shown before. The agent searches the Log of the "Journal
+  practice" tab for each of their ids, finds the two seed bullets 1a2b3c4d5e and 2b3c4d5e6f already there with the same
+  text, and
+  appends only the two vault facts, at the end of the tab, in one update. It runs
+  `journal flushed b0b0b0` and reports 2 appended, 2 skipped.
+context:
+  scaffold_script: place-files.sh

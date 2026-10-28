@@ -1,0 +1,15 @@
+schema_version: "1.1"
+name: two-batches-wait
+expected_outcome: |
+  Precondition, the runner's job and not the skill's: before this run, reset the Log of the
+  "Journal practice" tab (tab file ea8d9e59-81fe, body node f093d6dc-8533) to its two seed
+  bullets, by hand in the doc or with one prose `update` on that node that replaces the
+  Log's list with these two lines, and run the cases one after the other, never at once:
+    - 2026-10-28T09:00Z 1a2b3c4d5e backbeat improvement/ZZ-1-practice: commit 0000001 ZZ-1: First practice commit
+    - 2026-10-28T09:05Z 2b3c4d5e6f backbeat improvement/ZZ-1-practice: push
+  Two batches wait. The session starts one bnaas-journal agent per batch, both in the
+  background. Each agent appends its own two facts once at the end of the Log of the "Journal
+  practice" tab and runs `journal flushed` on its own batch only; neither batch is appended
+  twice, and both batch files are gone at the end.
+context:
+  scaffold_script: place-files.sh

@@ -19,7 +19,7 @@ In this file, `<base>` is the base directory of this skill. Claude Code prints i
 
 ## 0. Catch up the journal, find who is asking, then delegate the reads
 
-In the main session, before any delegation: write to the journal what this session decided or hit that the hooks could not see. Run `journal note "<one sentence>"` for each blocker or surprise, `journal note --decision "<one sentence>"` (with `--why "<text>"` and `--tasks <ids>` when known) for each decision or change of plan, then `journal flush`: it prints the facts that wait. Append them to the Log section of the Journal tab of the tech spec through the Claude Docs connector, as the request says: one prose `update` that inserts its bullets, as printed, at the end of the tab, then run the `journal flushed` command it prints. If the write fails, leave them: the next Stop or run retries. No names, facts only. Skip it in a fresh session.
+In the main session, before any delegation: write to the journal what this session decided or hit that the hooks could not see. Record each blocker, surprise or decision with `/bnaas-journal`, which notes it and starts the background journal agent on the facts that wait. Do not wait for the agent: a fact that it has not appended yet is read by the next run. No names, facts only. Skip it in a fresh session.
 
 Then start the dog of `/bnaas-watch-flock` (its section 1) if none runs: it watches the developer's PRs for the rest of the session, and a stray PR that it finds gets a shepherd.
 
