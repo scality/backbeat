@@ -1,96 +1,83 @@
 # BNaaS D1 team rules
 
-These rules apply to every Claude Code session on D1, for every developer. They live on the D1 epic branch of backbeat (`epic/*-bnaas-d1`) and are removed before the final merge into development.
+Two developers build D1 in two time zones: Anurag in Paris and Taylor in San Francisco. The work never stops, so each session must be able to start from the shared state alone, with no chat and no meeting. These rules say where that state lives and how a session reads and moves it. They live on the backbeat epic branch, `epic/*-bnaas-d1`, and the final merge removes them.
 
-## Rule 1: Fable advises, subagents do the side work
+## Rule 1: shared state, not shared memory
 
-- The advisor is Fable (`advisorModel` in `.claude/settings.json`). Consult it before a design choice and before a non-trivial change. If you are stuck, consult it too. Fable never writes code and never runs as a subagent.
-- The main session and every subagent use the default model, Opus. Do not set a subagent to Fable.
-- Delegate side work to subagents, so that the main context stays on the task. Run independent subagents in parallel.
-  - Analysis and search across the repositories: the built-in `Explore` agent.
-  - Design of a change: the built-in `Plan` agent.
-  - Review of a diff, and cross-cutting checks (contracts, flags, legacy code, security, conventions): the `bnaas-reviewer` agent, after every code change and before every commit or PR.
-- Report what the subagents found. Do not paste their transcripts.
+Four places hold the truth, and a session reads them before it does anything else:
 
-## Rule 2: plan first, humans review the plan, AI reviews the code
+- The Backlog tab of the tech spec doc: every D1 task with its area, repository, estimate and dependencies, as a table that people edit and scripts read. It was seeded from the breakdown.
+- Jira: who does what, and whether it is done. A task is claimed when a D1 ticket for it exists and is assigned. A task is done when that ticket is Done.
+- GitHub: the code and its review state. A PR exists for every change that reaches an epic.
+- The journal: what moved and what each session decided or hit, as facts with no names. It lives in the journal doc only, named in `.claude/bnaas/journal.json` (added by a later PR of this stack): the current state of each active branch, the pivots, and the log by day.
 
-- Every change starts in plan mode. The plan goes to `.claude/plans/` (`plansDirectory`).
-- When the developer approves the plan in the session, run the `bnaas-plan-pr` skill. It commits the plan and opens a plan PR into the backbeat epic. Write code only after the reviewers approve that plan PR.
-- The code PR links its plan file. If the work moves away from the plan, update the plan on its PR first.
-- AI reviews the code: `bnaas-reviewer` in the session, the review-pr skill on the branch before each push (Rule 7), and the same skill in CI.
+The tech spec doc (https://claude.ai/code/artifact/bfe390f9-d819-4a93-9050-ffd5eee1b80a) also holds the human view: the Tickets tab lists the claimed tasks, and the Progress tab charts the progress and the scope. Claude keeps them current, so that neither developer has to.
 
-## Rule 3: an epic changes only through a reviewed PR
+Session memory, plan files and chat history are not shared state. If something matters to the other developer, it goes into a ticket, a PR, the Backlog tab or the journal.
 
-- Never push to an epic branch (`epic/*`), and never force push one. The epic branches are created once, in task 3, by one push from the pulled development branch.
-- Every change reaches the epic through a PR from a ticket branch, `improvement/<ticket>-<message>`, cut from the epic branch, with at least two approvals.
-- The ticket is a Jira ticket from the repository's own project. Arsenal uses ARSN, vault uses VAULT, cloudserver uses CLDSRV, cloudserverclient uses CLDSRVCLT and backbeat uses BB. Federation uses S3C, ring uses RING, integration uses INTGR and s3utils uses S3UTILS. Plan PRs go to the backbeat epic, so they use a BB ticket.
-- Reviewers: the other developer is mandatory. Taylor (`tmacro`) reviews Anurag's PRs, and Anurag (`anurag4DSB`) reviews Taylor's PRs. Find the author with `gh api user --jq .login`.
-- For the second approval, request Nicolas Humbert (`nicolas2bert`), who volunteered. If he cannot review, request the Hopocalypse team (`scality/hopocalypse`) instead.
-- When a new upstream release lands, the developers decide whether and how the epic takes it in.
-- Ask the developer before any push and before opening a PR.
+## Rule 2: the day starts with what's next, and the journal records as you go
 
-## Rule 4: verify every piece of work against its plan
+- Start every session with `/bnaas-whats-next` (added by a later PR of this stack). It first catches up the journal from the session before it, then reads the journal, the Backlog tab, Jira, GitHub and the local clones, and gives: what moved since your last run, the PRs that wait for your review, the tasks you can take (ready, blocked, or dependencies unknown), and what the other developer is on. It also re-renders the Tickets tab, the charts of the Progress tab and the journal doc.
+- Reviews come first, because the other developer is asleep and blocked on them.
+- Take a task by claiming it (Rule 3), never by starting the code.
+- The journal records as you go. Hooks (added by a later PR of this stack) log commits, pushes, PRs, test and lint results, Jira ticket changes and doc writes, and at the end of each turn the Stop hook asks the session to append them to the Log of the journal doc. When a decision, a blocker or a surprise happens, run `.claude/hooks/journal note "<one sentence>"` from the folder the session started in (the path is relative to it) at that moment (`--decision` for a decision or a change of plan), never at the end of the day. Facts only, no names. The other developer's next run of what's next reads it.
+- While the developer waits on CI, a review or a subagent, the agent ends its waiting message with one line: "Meanwhile you could: <the top next action and why>; say go, or run /bnaas-whats-next for the full picture." The action comes from the last analysis, refreshed only when local work or the PRs changed or the last run is older than 30 minutes.
+- What's next starts the watch-flock dog (`/bnaas-watch-flock`, added by a later PR of this stack), and every PR the session opens gets a shepherd (`/bnaas-shepherd-prs`, added by a later PR of this stack).
+- When a session gets long, use Matt Pocock's `/handoff` to carry the context into a fresh session.
 
-- At the end of each piece of work, a verification subagent checks the result against the approved plan: what matches, what deviated and why, and what is missing.
-- The verifier reads the real state (git remotes, Jira, the tech spec doc, CI, files), not the session's own summary.
-- The verifier runs on Opus (`model: opus`), never on Fable. Its effort follows the Anthropic effort guide:
-  - `medium`, the Opus 5.5 default, for checks of files, records and doc text.
-  - `high` for checks that reason about code behavior, run tests or span many systems.
-  - Before you use `xhigh` or `low`, tell the developer.
-- Report the verdict to the developer, deviations first, before calling the work done.
+## Rule 3: claim before you build
 
-## Rule 5: Jira and tracking
+- A task is claimed by its Jira ticket: Task, parent the D1 epic (its key is in the epic branch name), assigned to you, in the current sprint, moved to In Progress. `/bnaas-whats-next` (added by a later PR of this stack) creates it after one question, and fills the row in the Tickets tab.
+- One task, one owner. Never claim a task that has a ticket assigned to someone else, and never claim a task whose dependencies are not done unless you also own them. If the backlog says "dependencies unknown", read the breakdown comment (https://claude.ai/artifact/QC6Cbrfm7a5hAfRw752c7L, frozen v55) and decide.
+- A dependency or scope fix is an edit of the Backlog tab, with no PR: fix the Depends on cell, or add a row with Origin "new scope". Re-seeding the tab from the breakdown is a deliberate step (`.claude/bnaas/README.md`, added by a later PR of this stack).
+- Before you claim, read Jira again. The other developer may have claimed it an hour ago.
+- Hand a task over by reassigning its ticket and noting it with `journal note`.
+- Jira is read and written only through the Atlassian MCP connector, never through its REST API.
+- Claude does the Jira bookkeeping: the ticket fields (Priority Medium, Severity Medium, Development Type BUILD, Release notes No where the field exists, component S3C in RING and Federation in S3C), the "Done when" list and the row link in the description, the worklog, and the Done transition when the whole scope is done. Each repository uses its own project: ARSN, VAULT, CLDSRV, CLDSRVCLT, BB, S3C (Federation), RING, INTGR, S3UTILS.
 
-Claude does the bookkeeping, so the developer never has to know where things are recorded.
+## Rule 4: where the code goes
 
-- Every PR and every release has a Jira ticket. At the start of the work, create it through the Atlassian connector, in the repository's own project (Rule 3).
-- Ticket fields:
-  - Type Task. Parent: the D1 Jira epic, whose key is in the epic branch name. Assignee: the developer.
-  - Priority Medium, Severity Medium, Development Type BUILD.
-  - Sprint: the active sprint. Read it from an open D1 ticket (`parent = <epic key> AND sprint in openSprints()`).
-  - Release notes: No, wherever the field exists (S3C, RING). Only the epic carries the release note.
-  - Components: RING requires one, so use "S3C". For federation work in S3C, use "Federation".
-- The description lists "Done when" and links the ticket's row in the Tickets tab.
-- When work starts, move the ticket to In Progress. Log the time spent for the work done. Close the ticket only after its whole scope is done. In RING, Done needs Release notes set first.
-- After a branch cut, add a Jira comment. It gives the branch link, the cut sha, the last release tag on that line and the GitHub compare link.
-- Every ticket has a row in the Tickets tab of the tech spec doc: https://claude.ai/code/artifact/bfe390f9-d819-4a93-9050-ffd5eee1b80a. The row gives the ID, To do, Repository, Owner and the ticket as a link. When Claude creates a ticket, it adds or fills the row through the Claude Docs connector.
-- After any change in Jira, the doc or GitHub, tell the developer what changed and where. Give the links to the ticket, the doc tab, the branch and the PR. Name the task they are working on.
-- "What's next", for now: give the Tickets tab link and the rows the developer owns that are not done. Also list the open D1 PRs that wait for their review: `gh search prs --review-requested=@me --state=open --owner=scality --base epic/S3C-10971-bnaas-d1`.
+- Vault, CloudServer and backbeat: the epic branch `epic/S3C-10971-bnaas-d1`. Nothing is released from it. Federation deploys the CI images of its commits (Rule 6).
+- Arsenal and cloudserverclient: the development branches. Their D1 changes are additive (new IAM actions and errors, new client APIs), so they ship in normal releases from their development branches, and the services pin the released npm versions. The breakdown rows that still mention epic prereleases are superseded by the task titles in the Backlog tab.
+- Federation, Integration and RING: their epic branches, for the deployment role, the end-to-end runs and the alert rules.
+- Never push to an epic branch, and never force push one. Every change reaches an epic or a development branch through a PR from a ticket branch, `improvement/<ticket>-<message>`, cut from that branch, with two approvals, one of them from the other developer. Every PR gets three reviewers: the other developer (Taylor `tmacro` for Anurag's PRs, Anurag `anurag4DSB` for Taylor's; find the author with `gh api user --jq .login`), Nicolas Humbert (`nicolas2bert`) and the Hopocalypse team (`scality/hopocalypse`). A draft opens with no reviewers; they are requested when the developer marks the PR ready, by the shepherd when it sees the draft turn ready, so a draft never lands on anyone as review work. Pin PRs (Rule 6), the bot's or a developer's, are the one exception: no shepherd; a pin PR needs its `build-tests` green and one approval from either developer (the other developer when a developer opened it), the watch-flock dog reports an open pin PR, and the first developer to see it marks it ready, reviews it and merges it. Until `/bnaas-shepherd-prs` lands (next PR of this stack), the session requests them with `gh pr edit <n> --add-reviewer <other developer's login>,nicolas2bert,scality/hopocalypse` when the developer says that the PR is ready.
+- Ask the developer before the first push of a branch and before opening a PR. Pushing folded review fixes to your own draft PR, with lease, needs no question. The one exception is the push and the draft PR that a skill makes for its own self-improvement: a draft cannot merge without the approvals.
+- Work in one git worktree per ticket, at `<repo>/.claude/worktrees/<ticket>`. Add `.claude/worktrees/` to `.git/info/exclude` in clones that do not ignore it.
+- Every epic-only change adds its row to the Remove before merge tab, in the same PR, except changes inside a folder that already has its row: backbeat's `.claude/` and each repository's `.claude/plans/` are one row each.
 
-## Rule 6: commits, tags and releases
+## Rule 5: plan in the PR, review by AI then by humans
 
+- A change starts in plan mode. The approved plan goes to `.claude/plans/` and ships as the first commit of the code PR, so the reviewer reads the plan and the code together and nobody waits a day for a plan approval across time zones. Plan mode writes the plan, untracked, into the `.claude/plans/` of the folder the session started in: the setup checkout in the workspace layout, the backbeat clone in the one-repository layout. Move it (not copy) into `<repo>/.claude/worktrees/<ticket>/.claude/plans/` before the plan commit, so that the next update of the setup does not stop on it. In Arsenal and cloudserverclient, paste it into the PR description and delete the file instead.
+- A plan PR comes first only when a change alters the shared contract beyond what the approved tech spec says. A value the spec leaves open (a method key, a monitoring name, a list resource) is proposed in the plan commit, marked provisional, and written into the tech spec before the PR leaves draft; the tech spec is the one place that names the glue between repositories. The shepherd (`/bnaas-shepherd-prs`, added by a later PR of this stack) opens the plan PR, into the backbeat epic.
+- In a repository on an epic branch, the plan file ships in the PR under `.claude/plans/`, and that folder is one Remove before merge row per repository. In Arsenal and cloudserverclient, which work on development branches, the plan goes into the PR description instead of a file.
+- Before a commit, run the `bnaas-reviewer` agent on the diff. Then open the PR as a draft; the Claude Code review on the PR is the review stage, and you fix what it raises before the developer marks the PR ready. There is no other local review.
+- After every push of a PR branch, wait for the Claude Code review workflow on the PR to finish (`gh pr checks <n> --watch`, or poll `gh run list --branch <branch> --workflow 'Code Review'`), read every review comment (`gh api repos/<repo>/pulls/<n>/comments` and the review bodies), address each one: fix it and fold the fix into the commit it belongs to, then push with lease, or reply on the comment with why it stays. When you fix or reply to a comment of the Claude Code review (author `claude[bot]`), also resolve its thread (GraphQL `resolveReviewThread`, with the thread id from `pullRequest.reviewThreads`); never resolve a thread written by a human. The review is the "Claude Code Review" check (`gh pr checks <n> --json name,state,bucket`, or `gh api repos/<repo>/commits/<sha>/check-runs`): `action_required` means read and address its comments, push, and wait again; `success` is Claude Code's LGTM; `failure` or `cancelled` goes to the developer with the run link. On a stack, after any fold or force-push of a lower PR, rebase every PR above it onto the new tip before pushing, and before every push check `gh pr view <n> --json mergeable,mergeStateStatus` on each PR of the stack: a CONFLICTING or DIRTY state is a failure to report and fix at once, like a red CI check. When a lower PR merges, retarget the next PR of the stack to the branch the merged PR targeted (`gh pr edit <n> --base <base>`: the epic, or the development branch in Arsenal and cloudserverclient), and rebase it. Never mark the PR ready yourself: once every comment is addressed, open the PR in the default browser (`open <url>` on macOS, `xdg-open <url>` on Linux) and tell the developer that it is ready for their check; the developer clicks "Ready for review", and the reviewers get it then. After the push, tell the developer the stage in these words: "Waiting for Claude Code's LGTM on <PR>. When it is there, the PR is ready for your review and for you to mark it ready; it is a draft until then. Meanwhile I watch the CI checks and tell you if one fails and what I do about it." Then keep checking the PR's CI checks in the background (`gh pr checks <n>`) until the developer marks the PR ready, and report a failure with its cause and the fix you are making. If the check stays `action_required` only on comments that you answered with why they stay, the AI review is done: tell the developer, with the links to those threads, and do not wait for the LGTM.
+- Delegate side work to subagents: `Explore` for searches, `Plan` for designs, `bnaas-reviewer` for reviews. Report what they found, never paste their transcripts. The advisor is Fable: consult it before a design choice, before a non-trivial change and when stuck. It advises, never writes code and never runs as a subagent.
+- Use the installed skills instead of ad hoc process: `brainstorming` before new work, `test-driven-development` for code, `systematic-debugging` for bugs, `verification-before-completion` before you say that something works, `grill-with-docs` for the implementation specs, `retro` at the end of a long session.
+
+## Rule 6: Federation follows the epics by commit
+
+- Federation pins the images that CI builds for every epic commit: `cloudserver:<sha>-federation`, `backbeat:<sha>-federation` and `vault:<sha>`, where `<sha>` is the full head of each service epic. The three keys in `group_vars/all` are `cloudserver_image_version`, `defaults.vault.og_docker_image_version` and `defaults.backbeat.og_docker_image_version`. scality-kms (`defaults.kms.og_docker_image_version`) stays pinned to a released version such as `9.4.4-federation`, because no scality-kms image exists per commit and D1 does not change it.
+- `/bnaas-pin-federation` (added by a later PR of this stack) updates the pins: it reads the three epic heads, checks that the images exist, edits `group_vars/all` on the branch `improvement/<ticket>-epic-image-pins`, and opens or updates one draft PR into the Federation epic. When the CI pin PR (branch `improvement/<ticket>-epic-image-pins-bot`) is open, review and merge it instead of opening a second one: CI and developers never share a branch. `/bnaas-whats-next` runs it in dry run and says when the pins are behind. The first developer to see an open pin PR marks it ready, reviews it and merges it once its `build-tests` pass, with one approval from either developer (the other developer when a developer opened it; Rule 4).
+- The same script runs in Federation CI as the `bnaas-pins` workflow, from the epic, on its own branch `improvement/<ticket>-epic-image-pins-bot`. Its `setup_ref` input pins the script to a backbeat epic commit: `gh workflow run bnaas-pins.yaml --repo scality/Federation --ref epic/S3C-10971-bnaas-d1 -f setup_ref=$(git ls-remote https://github.com/scality/backbeat refs/heads/epic/S3C-10971-bnaas-d1 | cut -f1)`. A schedule does not fire from an epic branch, so a person or what's next starts it after an epic moves. Once the `notify-federation` job lands (plan, "To apply outside this PR"), each service epic's CI starts it after a push.
+- One manual Integration run uses the artifacts link of the Federation PR build.
+- No tags, no GitHub releases and no npm publish from any epic. A production release goes through the official workflow of its repository, from its development branch.
+
+## Rule 7: commits, PRs and words
+
+- One PR is one logical change. Before any push, the branch tells a commit story: a plan commit when there is a plan, then tests, then code, each commit one step a reviewer can read on its own; review fixes are folded into the commit they fix, never added as fix-the-fix commits. Work in one git worktree per ticket (Rule 4), so that a session never pushes a mix of two changes.
 - A commit message has a subject line, a blank line, then a body. The subject is `<ticket>: <what the commit does>`, at most 55 characters. Wrap the body at 72 characters. Add no AI attribution trailer.
 - A PR title starts with the ticket: `<ticket>: <what the PR is for>`. A plan PR is `<ticket>: plan <topic>`.
-- Ticket keys appear only in branch names, commit messages and PR titles. Never put them in code, code comments or PR comments. Write no em-dashes.
-- A PR description has five `##` sections, each with one to three sentences: Intent, System impact, Preserved behavior, Intended change and Verification. The `bnaas-plan-pr` skill shows the exact headings.
-- An epic tag is `<next version of the base line>-bnaas.<N>`, and N counts up from 1 in each repository. Release a tag from the epic head only for a consumer that needs it. The first tags come at setup, in task 3.
-- Each release is one ticket: a PR that bumps `package.json` to the tag, then the repository's release workflow, run from the epic branch.
-- Chain order:
-  1. Arsenal releases its tag.
-  2. Vault, CloudServer, cloudserverclient and backbeat pin the Arsenal tag and release their own tags.
-  3. Federation pins their images in `group_vars/all`: Vault `<tag>`, CloudServer, scality-kms and backbeat `<tag>-federation`.
-  4. One manual Integration run uses the artifacts link of the Federation PR build.
-- Every bump and pin commit ends with four provenance lines. A pin commit also names the tag it pins and that repository's compare link.
+- A PR description has five sections, each a `##` heading followed by one to three sentences: `## Intent: why does this change exist?`, `## System impact: what's affected, including downstream?`, `## Preserved behavior: what explicitly stays the same?`, `## Intended change: what's different after this PR?` and `## Verification: how do we know this worked, or how would we know if it didn't?`. It links the task row in the Tickets tab. In Arsenal and cloudserverclient, the plan follows the five sections as a `## Plan` section in a collapsed `<details>` block (Rule 5).
+- Ticket keys appear only in branch names, commit messages and PR titles. Never put them in code, code comments, skill text or PR comments. Write no em-dashes.
+- After any change in Jira, the doc or GitHub, tell the developer what changed and where, with the links. After a batch of PRs, give a short Slack message that lists them in reading order.
 
-  ```
-  Epic branch: epic/S3C-10971-bnaas-d1
-  Cut from: <base branch> at <short sha> on <date>
-  Last release on that line: <tag>
-  Changes since that release: https://github.com/scality/<repo>/compare/<tag>...<short sha>
-  ```
+## Rule 8: verify against the plan
 
-- cloudserverclient can release from an epic only after the change to its release workflow, which publishes under the dist-tag `prerelease`.
-- A CloudServer release also starts the scality-kms release, with the same version. scality-kms is part of CloudServer and needs no separate step.
-- The merge decisions (M1 to M9) are in the Merge strategy tab of the tech spec doc.
-
-## Rule 7: review locally before every push
-
-- Before every push, run the CI review on the branch: `.claude/hooks/review-branch.sh <repository>`. It runs the `review-pr` skill of `scality-skills@scality-agent-hub`, the skill that the Code Review workflow runs on each PR. It posts nothing to GitHub. It takes 5 to 15 minutes, so run it in the background.
-- Fix each finding, or tell the developer why it stays, in the same question that asks for the push.
-- The `review-gate.sh` hook refuses a `git push` until a saved review exists for the exact commit being pushed. A new commit needs a new review.
-- The hook runs in each session that loads this setup, in the workspace layout or in the backbeat clone. It reads the target repository from the push command, so it covers every D1 repository of that session. A session started inside another clone does not load it.
-- The hook catches a forgotten review. It is not a security boundary, and a command written to evade it can get through.
+- At the end of each piece of work, a verification subagent on Opus checks the result against the plan: what matches, what deviated and why, and what is missing. It reads the real state (git remotes, Jira, the doc, CI), not the session's summary. Report deviations first.
+- A skill that finds its own instructions wrong fixes them in a worktree of its own, on the standing self-improvement ticket, and opens a draft PR into the backbeat epic. Find the standing self-improvement ticket in Jira with the search `parent = <epic key> AND summary ~ "self-improvements of the D1 skills"`; if there is none, stop and say that the ticket is missing. It never edits the shared setup checkout in place.
+- Every rule and every skill in this setup is self-learning: a skill ends with a Self-improvement section, and a session that finds a rule wrong or missing proposes the change the same way, as a draft PR into the backbeat epic on the standing ticket.
 
 ## Adding a rule
 
-Add the next rule as a new `## Rule N` section in this file, through a plan PR like any other change. Keep each rule short and testable.
+Add the next rule as a new `## Rule N` section in this file, through a PR into the backbeat epic. Keep each rule short and testable.
