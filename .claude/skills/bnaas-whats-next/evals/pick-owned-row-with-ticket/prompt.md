@@ -9,4 +9,4 @@ I'll take row 3.5 next. Create the Jira ticket for me.
 
 Answer as Taylor: GitHub login tmacro, Jira user Taylor McKinnon. The gh and Atlassian tools here are logged in as Anurag, so use Taylor's identity instead of the one they return.
 
-This is a test run: do not create or edit a Jira ticket, do not push, and do not open a PR. The writes allowed are none: a test run writes its renders (the Tickets tab, the charts and the journal doc) to <tmp> only, runs no journal mark-read and no In Review auto-fix. Reading Jira, the doc and GitHub is fine.
+This is a test run: do not create or edit a Jira ticket, do not push, and do not open a PR. The writes allowed are none: a test run writes its renders (the Tickets tab, the charts and the Journal tab) to <tmp> only, runs no journal mark-read and no In Review auto-fix. Reading Jira, the doc and GitHub is fine.

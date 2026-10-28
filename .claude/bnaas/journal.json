@@ -1,14 +1,21 @@
 {
- "doc": "https://claude.ai/artifact/Bgoru7knkQrfMGVAbDoGEM",
+ "doc": "https://claude.ai/artifact/QhKsCqtGNzaVice35nvip9",
+ "journal": {
+  "tab": "Journal",
+  "file": "b251bb0a-d91f",
+  "body": "267e707b-5e7b"
+ },
  "docs": {
   "bfe390f9-d819-4a93-9050-ffd5eee1b80a": "tech spec",
   "QhKsCqtGNzaVice35nvip9": "tech spec",
-  "568a45b7-4c63-45e7-bc63-13fc847dfc92": "journal doc",
-  "Bgoru7knkQrfMGVAbDoGEM": "journal doc"
+  "568a45b7-4c63-45e7-bc63-13fc847dfc92": "old journal doc",
+  "Bgoru7knkQrfMGVAbDoGEM": "old journal doc"
  },
  "renders": {
   "2eb208d1-69b7": "Tickets tab",
   "3f2545f6-66f2": "Progress by area chart",
-  "cc8fba76-a760": "Scope and pivots chart"
+  "cc8fba76-a760": "Scope and pivots chart",
+  "b251bb0a-d91f": "Journal tab",
+  "267e707b-5e7b": "Journal tab body"
  }
 }

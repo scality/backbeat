@@ -12,11 +12,11 @@ The idea is simple. The two developers never work at the same time, so the share
 | `bnaas/` | The importer and backlog scripts: seed the Backlog tab from the breakdown, and list the tasks that are ready, blocked or with dependencies unknown. |
 | `skills/bnaas-whats-next/` | `/bnaas-whats-next`: what moved since your last run, the PRs to review, the work to take next, and the ticket for a new task. |
 | `hooks/journal-capture.sh` | `PostToolUse` hook: logs a fact for each git commit and push, `gh pr create`, `ready`, `merge` and `close`, test and lint run with its exit code, Jira ticket created, moved or edited, and write to the tech spec doc. Repositories outside `github.com/scality` are skipped. |
-| `hooks/journal-flush.sh` | `Stop` hook: asks the session to append the logged facts to the Log of the journal doc, then to run `journal flushed`. |
+| `hooks/journal-flush.sh` | `Stop` hook: asks the session to append the logged facts at the end of the Log of the Journal tab of the tech spec, then to run `journal flushed`. |
 | `hooks/journal` | `journal note "<text>"` (`--decision` for a decision), `journal flush`, `journal flushed`, `journal tail --doc <export>`. |
 | `hooks/test-journal.sh` | Tests the hooks on sample input, without writing to the doc. |
 | `bnaas/scripts/local-review.sh` | The local review gate (Rule 5): runs the `/review-pr` skill of the Code Review workflow on the whole range and on each commit, all in parallel, each in a scratch clone (about 1 USD per run), prints one combined report and posts nothing. It loops (Rule 5): fold what it finds, re-run with `--only <sha>...` on the changed commits, and stop when a round brings no new real finding or after 3 rounds. `--self-test` checks it without calling Claude. |
-| `bnaas/journal.json` | The journal doc, the D1 docs whose writes are logged, and the nodes of the what's next renders (the Tickets tab and the two charts), whose writes are not. |
+| `bnaas/journal.json` | The Journal tab of the tech spec, the D1 docs whose writes are logged, and the nodes of the what's next renders (the Tickets tab, the two charts and the Journal tab), whose writes are not. |
 | `skills/bnaas-shepherd-prs/` | `/bnaas-shepherd-prs`: takes a PR or a stack from open to merged: the Claude Code review loop on the draft, the reviewers and the human comments on the ready PR, the merge call and the stack retarget. It also opens plan PRs. |
 | `skills/bnaas-watch-flock/` | `/bnaas-watch-flock`: the dog, one Monitor per machine that reports each change on the developer's PRs, the PRs they are asked to review, open pin PRs and the PRs with no shepherd. |
 | `skills/bnaas-pin-federation/` | `/bnaas-pin-federation`: pins the CI images of the service epics in Federation and opens the pin PR. |
@@ -32,8 +32,8 @@ The idea is simple. The two developers never work at the same time, so the share
 - `docker`, for the image checks of `/bnaas-pin-federation`.
 - `yarn`, for the repository tests. It may live under nvm and be missing from non-interactive shells, so run `source ~/.nvm/nvm.sh` first. A fresh worktree needs `yarn install` before its tests run.
 - For Vault, a GitHub Packages token in `~/.npmrc`, or `yarn install` fails: `//npm.pkg.github.com/:_authToken=<classic PAT with read:packages, SSO-authorized>`. The Vault tests do run on Node 22 on a Mac, despite what its CLAUDE.md says.
-- The Atlassian connector in Claude Code, for Jira reads and writes. The Claude Docs connector, for the tech spec doc and the journal doc.
-- Nothing else for the journal: the hooks keep the facts in `~/.bnaas/journal/buffer.jsonl` until the session appends them to the journal doc, and log their errors to `~/.bnaas/journal/errors.log`; they never stop a session.
+- The Atlassian connector in Claude Code, for Jira reads and writes. The Claude Docs connector, for the tech spec doc and its Journal tab.
+- Nothing else for the journal: the hooks keep the facts in `~/.bnaas/journal/buffer.jsonl` until the session appends them to the Journal tab, and log their errors to `~/.bnaas/journal/errors.log`; they never stop a session.
 - These skill sets, installed at user scope at the versions in use today. A bump of one is a setup PR.
   - scality-skills (`review-pr`, for the local review gate): the `scality-skills` plugin of the `scality-agent-hub` marketplace, `claude plugin marketplace add https://github.com/scality/agent-hub.git` then `claude plugin install scality-skills@scality-agent-hub`, kept at the version that the Code Review workflow installs (`claude-code-review.yml` of `scality/workflows`).
   - superpowers (`brainstorming`, `test-driven-development`, `systematic-debugging`, `verification-before-completion`): the Claude Code plugin from https://github.com/obra/superpowers, at commit `2ce8aa15d05bd57213e6f746f953aafb7ded7a8b`.
@@ -100,5 +100,5 @@ In the workspace layout, update the worktree: `git -C bnaas-team-setup fetch ori
 
 - Code: the epic branches of Vault, CloudServer, backbeat, Federation, Integration and RING, and the development branches of Arsenal and cloudserverclient.
 - Work: the Backlog, Tickets and Progress tabs of the tech spec doc, and the Jira epic. A dependency or scope fix is an edit of the Backlog tab, with no PR.
-- What moved and what was decided: the journal doc (https://claude.ai/artifact/Bgoru7knkQrfMGVAbDoGEM).
+- What moved and what was decided: the Journal tab of the tech spec doc (https://claude.ai/artifact/QhKsCqtGNzaVice35nvip9). Its Log is one append-only list, oldest first, each bullet with its UTC time and a fact id, so that sessions on both machines can append at once. The log before 2026-10-28 stays in the old journal doc (https://claude.ai/artifact/Bgoru7knkQrfMGVAbDoGEM), read-only.
 - Deployment: the Federation epic, pinned to the CI images of the service epics by commit.

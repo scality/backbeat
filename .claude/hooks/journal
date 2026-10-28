@@ -6,12 +6,14 @@ Usage:
   journal flush                   (prints the facts that wait, to append by hand)
   journal flushed [session]       (the facts are in the doc: drop them)
   journal tail [n] --doc <export> | tail --new --doc <export>
-                                  (--new: the Log bullets since the last mark-read)
+                                  (newest first; --new: the bullets whose fact id
+                                   the last mark-read has not seen)
   journal mark-read               (after a render: the next --new starts there)
   journal capture       (the PostToolUse hook; JSON on stdin)
   journal hook-flush    (the Stop hook; JSON on stdin)
 
-The journal lives in the journal doc named in .claude/bnaas/journal.json.
+The journal lives in the Journal tab of the tech spec doc, named in
+.claude/bnaas/journal.json.
 The hooks append one JSON fact per line to ~/.bnaas/journal/buffer.jsonl
 (BNAAS_JOURNAL_DIR moves the folder). A shell hook cannot write a Claude
 Doc, so on Stop the hook moves the buffer to the pending file of the
@@ -19,6 +21,13 @@ session and blocks the stop once, asking the session to append the facts
 to the Log section and then to run `journal flushed <session>`. If that
 write fails, the facts stay pending, and the next Stop shows them again.
 Pending facts of a session that went quiet go to the next flush.
+
+Each fact has an id, the first 10 hex of the sha1 of its event's natural
+key (a commit's repository and sha, a push's branch and sha, a PR link,
+action and second, and so on), so that one event seen by two sessions has one id.
+The id dedupes three times: at capture, against the facts that wait; at
+append, where the facts shown before are checked against the Log first;
+and at read, where tail --new skips an id read in the last 14 days.
 
 A fact holds no name and never the text of a command or its output, which
 can hold secrets: only the repository, the branch and what happened (a
@@ -75,10 +84,26 @@ CHECKS = [(("yarn", "test"), "yarn test"), (("yarn", "run", "test"), "yarn test"
 MAX_TEXT = 300
 MAX_FACTS = 200  # per Stop, so that a long-failing write cannot grow the request
 STALE = 3600  # seconds before another session's pending facts are taken over
+READ_DAYS = 14  # days that the read set keeps an id, and that tail --new looks back
 
 
 def now():
     return datetime.datetime.now(datetime.timezone.utc)
+
+
+def second():
+    return now().strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def event(fact, *key, when=None):
+    """Give a fact the natural key of its event, from which its id comes,
+    so that the same event seen by two sessions has one id, and the time
+    the event happened (a unix time), when it is not now."""
+    fact["key"] = "\n".join(str(k) for k in (fact["kind"],) + key)
+    if when is not None:
+        fact["t"] = datetime.datetime.fromtimestamp(
+            int(when), datetime.timezone.utc).isoformat(timespec="seconds")
+    return fact
 
 
 def log_error(where):
@@ -173,7 +198,8 @@ def new_commits(where, recorded, branch=None, limit=100):
     same call) at the one that made it, and only the entries of the last RECENT seconds
     count, so that an old commit of a branch seen for the first time is
     not taken for a new one. A pull, rebase or reset entry is not a
-    commit, and a stop out of reach gives none."""
+    commit, and a stop out of reach gives none. Each is (full sha, short
+    sha, subject)."""
     out = git(where, "reflog", "-%d" % limit, "--date=unix",
               "--format=%H %h %gd %gs", "HEAD") or ""
     found = []
@@ -188,7 +214,7 @@ def new_commits(where, recorded, branch=None, limit=100):
         made = entered or (recorded is None and (how.startswith("branch: Created from")
                                                  or not how))
         if full == recorded or made:
-            return [(h, git(where, "log", "-1", "--format=%s", f)) for f, h in reversed(found)]
+            return [(f, h, git(where, "log", "-1", "--format=%s", f)) for f, h in reversed(found)]
         if recorded is None:
             m = re.search(r"\{(\d+)\}", when)
             if not m or int(m.group(1)) < time.time() - RECENT:
@@ -230,7 +256,7 @@ def pushed(where, args):
 
 
 def fresh_push(where, repo, remote, branch):
-    """True once per push: the last move of the remote-tracking branch is
+    """(unix time, sha) once per push, else None: the last move of the remote-tracking branch is
     a push of the last RECENT seconds that no earlier fact logged. A fetch
     or a pull moves it too, and an "Everything up-to-date" push writes no
     new entry, so neither is logged. An entry is its time and its sha:
@@ -239,7 +265,7 @@ def fresh_push(where, repo, remote, branch):
                "refs/remotes/%s/%s" % (remote, branch)) or ""
     m = re.search(r"\{(\d+)\} ([0-9a-f]+) update by push", last)
     if not m or int(m.group(1)) < time.time() - RECENT:
-        return False
+        return None
     key = "%s %s @push" % (repo, branch)
     with locked():
         try:
@@ -249,11 +275,11 @@ def fresh_push(where, repo, remote, branch):
             heads = {}
         entry = "%s %s" % m.groups()
         if heads.get(key) == entry:
-            return False
+            return None
         heads[key] = entry
         with open(HEADS, "w", encoding="utf-8") as f:
             json.dump(heads, f)
-    return True
+    return int(m.group(1)), m.group(2)
 
 
 def repo_flag(words):
@@ -296,18 +322,41 @@ def worktree_path(words, i):
     return None
 
 
+def waiting_ids():
+    """The ids of the facts in the buffer and in every pending file."""
+    ids = set()
+    for path in [BUFFER] + glob.glob(os.path.join(DIR, "pending.*.jsonl")):
+        try:
+            with open(path, encoding="utf-8") as f:
+                for line in f:
+                    try:
+                        ids.add(json.loads(line).get("id"))
+                    except (ValueError, AttributeError):
+                        pass
+        except OSError:
+            pass
+    return ids
+
+
 def append(facts):
     if not facts:
         return
     stamp = now().isoformat(timespec="seconds")
-    lines = []
     for fact in facts:
         fact.setdefault("t", stamp)
-        # One line per fact, so that a flush can count what it puts back.
         fact["text"] = " ".join(str(fact["text"]).split())[:MAX_TEXT]
-        lines.append(json.dumps(fact) + "\n")
-    with locked(), open(BUFFER, "a", encoding="utf-8") as f:
-        f.writelines(lines)
+        fact["id"] = fact_id(fact)
+    with locked():
+        # The same event seen by two sessions, or twice by one, waits once.
+        known = waiting_ids()
+        lines = []
+        for fact in facts:
+            if fact["id"] not in known:
+                known.add(fact["id"])
+                # One line per fact, so that a flush can count what it puts back.
+                lines.append(json.dumps(fact) + "\n")
+        with open(BUFFER, "a", encoding="utf-8") as f:
+            f.writelines(lines)
 
 
 # Bash commands -------------------------------------------------------------
@@ -536,8 +585,17 @@ def from_bash(data):
                 # branch, or of the branch it names.
                 repo = (here[0], branch or (here[1] if target == "?" else "-")) if here else None
             if repo:
-                prs.append({"repo": repo[0], "branch": repo[1], "kind": "pr",
-                            "text": "PR %s %s" % (words[2], target)})
+                fact = {"repo": repo[0], "branch": repo[1], "kind": "pr",
+                        "text": "PR %s %s" % (words[2], target)}
+                link = urls[0] if urls else "https://github.com/scality/%s/pull/%s" % (
+                    repo[0], target) if target.isdigit() else None
+                link = link.lower() if link else None
+                # A PR named by its branch, or by nothing, has no link: its
+                # repository and branch stand for it. The second keeps a
+                # repeated action apart (a ready after an undo, a close after
+                # a reopen); only the session that runs gh logs it.
+                prs.append(event(fact, link, words[2], second()) if link else
+                           event(fact, repo[0], repo[1], target, words[2], second()))
         else:
             name = check_name(words)
             if name:
@@ -558,33 +616,38 @@ def from_bash(data):
             # or lint run is logged, under the repository "unknown".
             if kind == "check" and (("unknown", "-"), kind, text) not in seen:
                 seen.add((("unknown", "-"), kind, text))
-                facts.append({"repo": "unknown", "branch": "-", "kind": kind, "text": text})
+                facts.append(event({"repo": "unknown", "branch": "-", "kind": kind,
+                                    "text": text}, "unknown", "-", "-", text, second()))
             continue
         repo = repo_of(where)
         if not repo:
             continue  # not a scality clone
-        texts = [text]
+        key = "%s %s" % repo
+        head = heads.get(key) or git(where, "rev-parse", "HEAD") or "-"
+        texts = [(text, (repo[0], repo[1], head, text, second()), None)]
         if kind == "commit":
             # Each commit made since an earlier Bash call recorded HEAD, from
             # the reflog: a commit that failed, one on a branch not seen
             # before, or a pull in the same call logs nothing here.
-            key = "%s %s" % repo
             if heads.get(key) is None or heads.get(key) == before.get(key):
                 continue
-            texts = ["commit %s %s" % c
-                     for c in new_commits(where, before.get(key), repo[1])]
+            texts = [("commit %s %s" % (short, subject), (repo[0], full),
+                      git(where, "log", "-1", "--format=%ct", full))
+                     for full, short, subject in new_commits(where, before.get(key), repo[1])]
         elif kind == "push":
             # One fact per branch pushed, under that branch, whichever one
             # is checked out.
             remote, branch = text
-            if not fresh_push(where, repo[0], remote, branch):
+            push = fresh_push(where, repo[0], remote, branch)
+            if not push:
                 continue
-            repo, texts = (repo[0], branch), ["push"]
-        for text in texts:
+            repo, texts = (repo[0], branch), [("push", (repo[0], branch, push[1]), push[0])]
+        for text, natural, when in texts:
             if (repo, kind, text) in seen:
                 continue
             seen.add((repo, kind, text))
-            facts.append({"repo": repo[0], "branch": repo[1], "kind": kind, "text": text})
+            facts.append(event({"repo": repo[0], "branch": repo[1], "kind": kind,
+                                "text": text}, *natural, when=when or None))
     for fact in prs:
         if fact not in facts:
             facts.append(fact)
@@ -597,10 +660,10 @@ def from_bash(data):
                 or heads.get(key) in (None, before[key]):
             continue
         logged.add(repo)
-        facts.append({"repo": repo[0], "branch": repo[1], "kind": "head",
-                      "text": "%s moved HEAD to %s %s" % (
-                          word, git(where, "log", "-1", "--format=%h"),
-                          git(where, "log", "-1", "--format=%s"))})
+        text = "%s moved HEAD to %s %s" % (word, git(where, "log", "-1", "--format=%h"),
+                                           git(where, "log", "-1", "--format=%s"))
+        facts.append(event({"repo": repo[0], "branch": repo[1], "kind": "head", "text": text},
+                           repo[0], repo[1], heads.get(key), text, second()))
     return facts
 
 
@@ -638,7 +701,8 @@ def from_jira(data):
         what = "transitioned (transition %s)" % (tr.get("id") if isinstance(tr, dict) else tr)
     else:
         what = "edited: %s" % ", ".join(sorted((args.get("fields") or {}).keys()))
-    return [{"repo": "jira", "branch": "-", "kind": "jira", "text": "%s %s" % (key, what)}]
+    return [event({"repo": "jira", "branch": "-", "kind": "jira", "text": "%s %s" % (key, what)},
+                  key, what, second()[:16])]
 
 
 def from_docs(data):
@@ -653,19 +717,27 @@ def from_docs(data):
     name = next((n for k, n in docs.items() if k and k in doc_id), None)
     if not name:
         return []  # not a D1 doc
-    if name == "journal doc":
-        return []  # the journal's own writes would feed the next Stop forever
-    node = ref.get("id") if ref.get("object") == "node" else None
+    node = ref.get("id") if ref.get("object") in ("node", "file") else None
     # The renders of what's next (the Tickets tab and the two charts) say
-    # nothing about the work, and every run makes them: skip them too.
+    # nothing about the work, and every run makes them: skip them. The
+    # Journal tab is among them: its own writes would feed the next Stop
+    # forever.
     renders = config().get("renders") or {}
     members = [((m.get("ref") or {}).get("id")) for m in (args.get("batch") or [])
                if isinstance(m, dict)]
     targets = [x for x in [node] + members if x]
     if targets and all(x in renders for x in targets):
         return []
-    return [{"repo": "doc", "branch": "-", "kind": "doc",
-             "text": "%s write%s" % (name, " (node %s)" % node if node else "")}]
+    # A write with no node, such as a batch addressed by its container
+    # alone, that carries Log bullets is a journal append: skip it too.
+    if not targets and re.search(r"\d{4}-\d\d-\d\dT\d\d:\d\dZ [0-9a-f]{8,10} ",
+                                 json.dumps(args)):
+        return []
+    # The rev in the reply names the write; with none, the second does.
+    rev = re.search(r'"rev"\s*:\s*(\d+)', text)
+    return [event({"repo": "doc", "branch": "-", "kind": "doc",
+                   "text": "%s write%s" % (name, " (node %s)" % node if node else "")},
+                  doc_id, ",".join(targets) or "-", rev.group(1) if rev else second())]
 
 
 def capture(data):
@@ -683,20 +755,49 @@ def capture(data):
 
 # Flush and read ------------------------------------------------------------
 
+def stamp(f):
+    """The UTC minute of a fact, as the Log shows it: 2026-10-28T13:05Z."""
+    t = str(f.get("t") or "")
+    try:
+        when = datetime.datetime.fromisoformat(t).astimezone(datetime.timezone.utc)
+        return when.strftime("%Y-%m-%dT%H:%MZ")
+    except ValueError:
+        return t[:16] + "Z" if len(t) >= 16 else now().strftime("%Y-%m-%dT%H:%MZ")
+
+
+def when(f):
+    """The event time of a fact, for sorting: every `t` is an ISO time."""
+    try:
+        return datetime.datetime.fromisoformat(str(f.get("t"))).astimezone(datetime.timezone.utc)
+    except ValueError:
+        return now()
+
+
+def fact_id(f):
+    """The first 10 hex of the sha1 of the event's natural key (`event`),
+    so that one event has one id wherever it was seen. A fact with no key
+    (one that waited from before the keys) hashes its time and words. Two
+    events with the same id would be one fact to every dedupe, so one of
+    them would be dropped: at 10 hex, that takes about a million facts."""
+    if f.get("id"):
+        return f["id"]
+    key = f.get("key") or json.dumps([str(f.get("t")), f.get("repo"), f.get("branch"),
+                                      f.get("kind"), f.get("text")])
+    return hashlib.sha1(key.encode("utf-8")).hexdigest()[:10]
+
+
 def bullet(f):
     kind = "decision: " if f.get("kind") == "decision" else \
         "note: " if f.get("kind") == "note" else ""
-    return "- %s %s: %s%s" % (f["repo"], f["branch"], kind, f["text"])
+    return "- %s %s %s %s: %s%s" % (stamp(f), fact_id(f), f["repo"], f["branch"], kind,
+                                     f["text"])
 
 
 def log_text(facts):
-    """The facts as the Log wants them: a `### <date>` heading per UTC day,
-    newest day first, and one bullet per fact under it."""
-    days = {}
-    for f in facts:
-        days.setdefault(str(f.get("t") or now().isoformat())[:10], []).append(bullet(f))
-    return "\n\n".join("### %s\n\n%s" % (day, "\n".join(days[day]))
-                       for day in sorted(days, reverse=True))
+    """The facts as the Log wants them: one bullet per fact, oldest first,
+    with no heading. Several sessions append at once, so each one only adds
+    at the end, and the time in each bullet gives the order."""
+    return "\n".join(bullet(f) for f in sorted(facts, key=when))
 
 
 def pending_file(session):
@@ -710,25 +811,39 @@ def take(session):
     the rest stay in the buffer for the next flush."""
     mine = pending_file(session)
     with locked():
+        # A pending fact was shown before, to a session that may have
+        # appended it: it is marked, so that the request has it checked.
         raw = []
+
+        def load(path, again):
+            # A fact with no time gets one now, the time of its file, and
+            # keeps it in the pending file, so that a retry shows it the same.
+            mtime = datetime.datetime.fromtimestamp(
+                os.path.getmtime(path), datetime.timezone.utc).isoformat(timespec="seconds")
+            with open(path, encoding="utf-8") as f:
+                raw.extend((line, again, mtime) for line in f.read().splitlines())
+
         if os.path.exists(mine):
-            with open(mine, encoding="utf-8") as f:
-                raw += f.read().splitlines()
+            load(mine, True)
         for old in glob.glob(os.path.join(DIR, "pending.*.jsonl")):
             if old != mine and time.time() - os.path.getmtime(old) > STALE:
-                with open(old, encoding="utf-8") as f:
-                    raw += f.read().splitlines()
+                load(old, True)
                 os.remove(old)
         if os.path.exists(BUFFER):
-            with open(BUFFER, encoding="utf-8") as f:
-                raw += f.read().splitlines()
+            load(BUFFER, False)
             os.remove(BUFFER)
         facts = []
-        for line in raw:
+        for line, again, mtime in raw:
             try:
-                facts.append(json.loads(line))
+                fact = json.loads(line)
             except ValueError:
-                pass  # a broken line is dropped, not shown
+                continue  # a broken line is dropped, not shown
+            if not isinstance(fact, dict):
+                continue
+            fact.setdefault("t", mtime)
+            if again:
+                fact["again"] = True
+            facts.append(fact)
         shown, left = facts[:MAX_FACTS], facts[MAX_FACTS:]
         if left:
             with open(BUFFER, "a", encoding="utf-8") as f:
@@ -752,10 +867,29 @@ def request(session):
     if not shown:
         return None
     more = " %d more facts wait for the next turn." % len(left) if left else ""
-    return ("Append these journal facts to the Log section of the BNaaS D1 journal doc "
-            "(%s) through the Claude Docs connector, newest day first, each bullet under "
-            "its UTC day heading below, no names, then run `%s`:%s\n\n%s"
-            % (config()["doc"], flushed_command(session), more, log_text(shown)))
+    cfg = config()
+    tab = cfg.get("journal") or {}
+    first = [f for f in shown if not f.get("again")]
+    again = [f for f in shown if f.get("again")]
+    text = ("Append these journal facts to the Log section of the %s tab of the BNaaS D1 "
+            "tech spec (%s, tab file %s, body node %s) through the Claude Docs connector, "
+            "with one `update` on ref node %s, engine prose, that inserts the bullets "
+            "below, as they are, at the end of the tab: the Log is its last section, one "
+            "append-only list with no heading. Never edit, move or reorder the bullets "
+            "already there, since other sessions append at the same time. No names. "
+            % (tab.get("tab", "Journal"), cfg["doc"], tab.get("file"), tab.get("body"),
+               tab.get("body")))
+    if again:
+        text += ("The bullets under \"Shown before\" were shown to a session that may "
+                 "have appended them already: export the tab first, search the Log for "
+                 "their ids (the second word), and append only those that are not there. "
+                 "Append the others without a read. ")
+    text += "Then run `%s`:%s" % (flushed_command(session), more)
+    if first:
+        text += "\n\n" + log_text(first)
+    if again:
+        text += "\n\nShown before:\n\n" + log_text(again)
+    return text
 
 
 def hook_flush(data):
@@ -787,12 +921,23 @@ def flushed(args):
     return 0
 
 
+# The id is 10 hex; 8 still reads, the length of the first ids.
+LOG_BULLET = re.compile(r"^(\d{4}-\d\d-\d\dT\d\d:\d\dZ) ([0-9a-f]{8,10}) (.+)$")
+
+
 def log_bullets(path):
-    """(day, bullet) pairs of the Log section of a Markdown export of the
-    journal doc, in the order of the doc."""
+    """(time, id, text) of each bullet of the Log section of a Markdown
+    export of the Journal tab, by time, oldest first, each id once (within
+    one minute, in the order of the tab), and the count of the bullets that
+    it could not read. A bullet
+    is `<UTC time> <fact id> <repo> <branch>: <fact>`. The old layout, with
+    `### <date>` headings and no time or id (the old journal doc), still
+    parses: its bullets take 00:00Z of their day as time and a digest as
+    id, and the bullets under a heading that is not a date take no time,
+    so that they are never new: they are history."""
     with open(path, encoding="utf-8") as f:
         text = f.read()
-    out, in_log, day = [], False, None
+    out, old, in_log, day, bad = [], [], False, None, 0
     for line in text.splitlines():
         m = re.match(r"^(#{1,3})\s+(.*?)\s*$", line)
         if m and len(m.group(1)) <= 2:
@@ -800,9 +945,23 @@ def log_bullets(path):
             day = None
         elif m and in_log:
             day = m.group(2)
-        elif in_log and day and re.match(r"^\s*[-*]\s+\S", line):
-            out.append((day, re.sub(r"^\s*[-*]\s+", "", line).rstrip()))
-    return out
+        elif in_log and re.match(r"^\s*[-*]\s+\S", line):
+            item = re.sub(r"^\s*[-*]\s+", "", line).rstrip()
+            b = LOG_BULLET.match(item)
+            if b:
+                out.append(b.groups())
+            elif day:
+                old.append((day, item))
+            else:
+                bad += 1
+    out += [(d + "T00:00Z" if re.match(r"^\d{4}-\d\d-\d\d$", d) else "", h, t)
+            for (d, t), h in zip(old, digests(old))]
+    seen, unique = set(), []
+    for item in out:
+        if item[1] not in seen:
+            seen.add(item[1])
+            unique.append(item)
+    return sorted(unique, key=lambda x: x[0]), bad
 
 
 def digest(day, text, n=1):
@@ -814,7 +973,8 @@ def digest(day, text, n=1):
 
 
 def digests(items):
-    """The digest of each (day, text) pair, counting repeats in doc order."""
+    """The digest of each (day, text) pair of the old layout, counting
+    repeats in doc order."""
     count, out = {}, []
     for d, t in items:
         count[(d, t)] = count.get((d, t), 0) + 1
@@ -829,6 +989,22 @@ def read_file(path):
         return f.read().strip()
 
 
+def cutoff():
+    """The Log time before which a fact is neither new nor kept as read."""
+    return (now() - datetime.timedelta(days=READ_DAYS)).strftime("%Y-%m-%dT%H:%MZ")
+
+
+def read_set(path):
+    """{id: Log time} of a read file. A line with an id only (an older
+    read file) counts as read today."""
+    out = {}
+    for line in read_file(path).splitlines():
+        parts = line.split()
+        if parts:
+            out[parts[0]] = parts[1] if len(parts) > 1 else now().strftime("%Y-%m-%dT%H:%MZ")
+    return out
+
+
 def tail(args):
     doc, new, count = None, False, 10
     while args:
@@ -840,44 +1016,44 @@ def tail(args):
         elif arg.isdigit():
             count = int(arg)
     if not doc:
-        print("usage: journal tail [n] | tail --new --doc <journal doc export.md>",
+        print("usage: journal tail [n] | tail --new --doc <Journal tab export.md>",
               file=sys.stderr)
         return 2
-    items = log_bullets(doc)
+    items, bad = log_bullets(doc)
+    if bad:
+        print("journal tail: %d Log bullets could not be read" % bad, file=sys.stderr)
     if new:
-        seen = set(read_file(LAST_READ).split())
-        hashes = digests(items)
-        pairs = [(i, h) for i, h in zip(items, hashes) if h not in seen]
-        items = [i for i, _ in pairs]
-        print("Journal facts not read yet: %d" % len(items))
-        # mark-read saves the digests of the whole export, so the list is as
-        # long as the Log and no old bullet comes back as unread, and a fact
+        # An id read in the last READ_DAYS is old news, and a fact older
+        # than that is not news: the read set never has to grow past it.
+        seen, since = read_set(LAST_READ), cutoff()
+        hashes = ["%s %s" % (h, w) for w, h, _ in items]
+        items = [i for i in items if i[1] not in seen and i[0] >= since]
+        print("Journal facts not read yet: %d, newest first" % len(items))
+        # mark-read adds the fact ids of the whole export, so that a fact
         # appended during the run is read by the next run, not skipped.
         os.makedirs(DIR, exist_ok=True)
         with open(LAST_SEEN, "w", encoding="utf-8") as f:
             f.write("\n".join(hashes) + "\n")
     else:
-        items = items[:count]
-    day = None
-    for d, t in items:
-        if d != day:
-            print("\n### %s\n" % d)
-            day = d
-        print("- %s" % t)
+        items = items[-count:] if count else []
+    for at, _, t in reversed(items):
+        # The export escapes Markdown characters; the facts are plain text.
+        print("- %s %s" % (at, re.sub(r"\\([\\`*_{}\[\]()#+.!|<>~-])", r"\1", t)))
     return 0
 
 
 def mark_read():
-    seen = read_file(LAST_SEEN).split()
+    seen = read_set(LAST_SEEN)
     if not seen:
         print("Nothing to mark: run journal tail --new first.")
         return 0
-    known = set(read_file(LAST_READ).split())
+    known = read_set(LAST_READ)
+    since = cutoff()
+    keep = {h: w for h, w in dict(known, **seen).items() if w >= since}
     with open(LAST_READ, "w", encoding="utf-8") as f:
-        # The digests of the whole export: the read list follows the Log.
-        f.write("\n".join(seen) + "\n")
+        f.write("".join("%s %s\n" % (h, w) for h, w in sorted(keep.items())))
     os.remove(LAST_SEEN)
-    print("Journal read: %d more facts." % len(set(seen) - known))
+    print("Journal read: %d more facts." % len(set(seen) - set(known)))
     return 0
 
 
@@ -899,8 +1075,11 @@ def note(args):
         return 2
     for name, value in extra:
         text += " | %s: %s" % (name, value)
-    where = repo_of(os.getcwd()) or ("d1", "-")
-    append([{"repo": where[0], "branch": where[1], "kind": kind, "text": text}])
+    repo = repo_of(os.getcwd())
+    where = repo or ("d1", "-")
+    head = (git(os.getcwd(), "rev-parse", "HEAD") if repo else None) or "-"
+    append([event({"repo": where[0], "branch": where[1], "kind": kind, "text": text},
+                  where[0], where[1], head, text, second())])
     return 0
 
 

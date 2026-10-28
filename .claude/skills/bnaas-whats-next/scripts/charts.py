@@ -18,9 +18,9 @@ someone changed the widget since the read.
 progress replaces every row. scope keeps the history: the widget rows are
 the only record of past weeks, so it rewrites only the breakdown and
 new-scope counts of the current week, and recounts the pivots of every
-week from the Pivots table (<journal.md>, the journal doc exported to
-Markdown). Weeks start on 2026-10-06, a Tuesday, last seven days and follow
-UTC dates: the widget rows already in the doc are keyed to that anchor, so
+week from the Pivots table (<journal.md>, the Journal tab of the tech
+spec exported to Markdown). Weeks start on 2026-10-06, a Tuesday, last
+seven days and follow UTC dates: the widget rows already in the doc are keyed to that anchor, so
 a chart week runs Tuesday to Monday on purpose. When the rows
 do not change, it prints "unchanged" and no payload.
 """
@@ -133,7 +133,7 @@ def main(argv):
                         default=datetime.datetime.now(datetime.timezone.utc).date())
     args = parser.parse_args(argv)
     if args.chart == "scope" and not args.pivots:
-        parser.error("scope needs --pivots <the journal doc exported to Markdown>")
+        parser.error("scope needs --pivots <the Journal tab exported to Markdown>")
     try:
         with open(args.render, encoding="utf-8") as f:
             render = json.load(f)
