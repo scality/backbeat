@@ -15,6 +15,7 @@ The idea is simple. The two developers never work at the same time, so the share
 | `hooks/journal-flush.sh` | `Stop` hook: asks the session to append the logged facts to the Log of the journal doc, then to run `journal flushed`. |
 | `hooks/journal` | `journal note "<text>"` (`--decision` for a decision), `journal flush`, `journal flushed`, `journal tail --doc <export>`. |
 | `hooks/test-journal.sh` | Tests the hooks on sample input, without writing to the doc. |
+| `bnaas/scripts/local-review.sh` | The local review gate (Rule 5): runs the `/review-pr` skill of the Code Review workflow on the whole range and on each commit, all in parallel, each in a scratch clone (about 1 USD per run), prints one combined report and posts nothing. It loops (Rule 5): fold what it finds, re-run with `--only <sha>...` on the changed commits, and stop when a round brings no new real finding or after 3 rounds. `--self-test` checks it without calling Claude. |
 | `bnaas/journal.json` | The journal doc, the D1 docs whose writes are logged, and the nodes of the what's next renders (the Tickets tab and the two charts), whose writes are not. |
 | `skills/bnaas-shepherd-prs/` | `/bnaas-shepherd-prs`: takes a PR or a stack from open to merged: the Claude Code review loop on the draft, the reviewers and the human comments on the ready PR, the merge call and the stack retarget. It also opens plan PRs. |
 | `skills/bnaas-watch-flock/` | `/bnaas-watch-flock`: the dog, one Monitor per machine that reports each change on the developer's PRs, the PRs they are asked to review, open pin PRs and the PRs with no shepherd. |
@@ -33,7 +34,8 @@ The idea is simple. The two developers never work at the same time, so the share
 - For Vault, a GitHub Packages token in `~/.npmrc`, or `yarn install` fails: `//npm.pkg.github.com/:_authToken=<classic PAT with read:packages, SSO-authorized>`. The Vault tests do run on Node 22 on a Mac, despite what its CLAUDE.md says.
 - The Atlassian connector in Claude Code, for Jira reads and writes. The Claude Docs connector, for the tech spec doc and the journal doc.
 - Nothing else for the journal: the hooks keep the facts in `~/.bnaas/journal/buffer.jsonl` until the session appends them to the journal doc, and log their errors to `~/.bnaas/journal/errors.log`; they never stop a session.
-- These skill sets, installed at user scope and pinned to the commits in use today. A bump of either sha is a setup PR.
+- These skill sets, installed at user scope at the versions in use today. A bump of one is a setup PR.
+  - scality-skills (`review-pr`, for the local review gate): the `scality-skills` plugin of the `scality-agent-hub` marketplace, `claude plugin marketplace add https://github.com/scality/agent-hub.git` then `claude plugin install scality-skills@scality-agent-hub`, kept at the version that the Code Review workflow installs (`claude-code-review.yml` of `scality/workflows`).
   - superpowers (`brainstorming`, `test-driven-development`, `systematic-debugging`, `verification-before-completion`): the Claude Code plugin from https://github.com/obra/superpowers, at commit `2ce8aa15d05bd57213e6f746f953aafb7ded7a8b`.
   - Matt Pocock's skills (`grill-with-docs`, `implement`, `retro`, `handoff`): `git clone https://github.com/mattpocock/skills ~/.claude/skills/matt && git -C ~/.claude/skills/matt checkout 5beb35b040e3de97e54fa9e386d7e42d15c295c2` on Linux and macOS, then follow its README.
 
@@ -86,7 +88,7 @@ Then run `.claude/hooks/test-journal.sh`: it ends with "all journal tests passed
 
 1. `/bnaas-whats-next`. Review first, then claim one task. The skill creates the ticket and fills the row, and starts the dog, `/bnaas-watch-flock`, which reports each change on your PRs.
 2. Plan in plan mode, in a worktree of the ticket. The plan ships as the first commit of the PR.
-3. Build with `test-driven-development`, review the diff with `bnaas-reviewer` before each commit, then open a draft PR with no reviewers and hand it to `/bnaas-shepherd-prs` (Rule 5). The shepherd fixes what the Claude Code review raises and tells you when the draft is ready for your check; you mark it ready, the shepherd requests the three reviewers of Rule 4 and from then on asks you before each push, and you merge when it says the PR can merge.
+3. Build with `test-driven-development`, review the diff with `bnaas-reviewer` before each commit, run the local review gate before each push and loop it (Rule 5), then open a draft PR with no reviewers and hand it to `/bnaas-shepherd-prs` (Rule 5). The shepherd fixes what the Claude Code review raises and tells you when the draft is ready for your check; you mark it ready, the shepherd requests the three reviewers of Rule 4 and from then on asks you before each push, and you merge when it says the PR can merge.
 4. When a service epic moves, `/bnaas-pin-federation` updates the Federation pins in one PR.
 5. When a decision, a blocker or a surprise happens, `.claude/hooks/journal note "<one sentence>"` at that moment, from the folder the session started in (the path is relative to it). The hooks log the rest.
 
