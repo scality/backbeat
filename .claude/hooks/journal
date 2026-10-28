@@ -349,7 +349,10 @@ def segments(command):
     out, words, target = [], [], False
     # The fd of a redirection touches its operator (`2>&1`); a number with a
     # blank before the operator is an argument (`gh pr ready 2902 > x`).
-    command = re.sub(r"(?<=\s)\d+(?=[<>])", "", strip_heredocs(command))
+    # A backslash before a newline joins the two lines with nothing
+    # between, as bash does.
+    command = re.sub(r"(?<=\s)\d+(?=[<>])", "",
+                     strip_heredocs(command).replace("\\\n", ""))
     for token in tokens(command) + ["\n"]:
         if token and set(token) <= OPERATORS and set(token) & set("<>"):
             # A redirection: drop its target (`1`, `/dev/null`), and the
@@ -373,13 +376,35 @@ def segments(command):
 
 def git_opts(words):
     """The folder (-C) and the index of the subcommand of a git command,
-    after any -C <dir> and -c k=v options."""
+    after the global options (-C <dir>, -c k=v, --no-pager, ...)."""
     i, where = 1, None
-    while i + 1 < len(words) and words[i] in ("-C", "-c"):
-        if words[i] == "-C":
-            where = words[i + 1]
-        i += 2
+    while i < len(words) and words[i].startswith("-"):
+        if words[i] in ("-C", "-c") and i + 1 < len(words):
+            if words[i] == "-C":
+                where = words[i + 1]
+            i += 2
+        else:
+            i += 1
     return where, i
+
+
+# gh pr options that take a value: the word after them is not the PR.
+GH_VALUED = {"-R", "--repo", "-b", "--body", "-F", "--body-file", "-t", "--subject",
+             "-c", "--comment", "-A", "--author-email", "--match-head-commit"}
+
+
+def pr_argument(words):
+    """The PR that `gh pr <verb>` names (a number, a URL or a branch), or
+    None when it names none."""
+    k = 3
+    while k < len(words):
+        if words[k] in GH_VALUED:
+            k += 2
+        elif words[k].startswith("-"):
+            k += 1
+        else:
+            return words[k]
+    return None
 
 
 def resolve(cwd, path):
@@ -453,9 +478,9 @@ def from_bash(data):
             # worktree add that made it, before its first commit.
             added = worktree_path(words, i)
             folders += [where, resolve(where, added) if added else None]
-        if words[0] == "git" and not (failed and last):
-            path, i = git_opts(words)
-            where = resolve(cwd, path) if path else cwd
+            # A failed git step still logs what happened: a push names each
+            # branch its reflog moved (a stack push can fail for one branch
+            # only), and a commit or a pull is read from HEAD and the reflog.
             sub = words[i] if i < len(words) else None
             if sub == "commit":
                 found.append((where, "commit", None))
@@ -487,8 +512,14 @@ def from_bash(data):
                 creates += 1
             else:
                 urls = [w for w in words if PR_URL.fullmatch(w)]
-            target = urls[0] if urls else next((w for w in words[3:] if w.isdigit()), "?")
+            named = pr_argument(words)
+            target = urls[0] if urls else named or "?"
+            # `gh pr ready <branch>` names the PR by its head branch.
+            branch = named if named and not named.isdigit() and not urls else None
             repo = pr_repo(words, urls[0] if urls else None)
+            # With --repo too, the branch it names is still the PR's branch.
+            if repo and repo[1] == "-" and branch:
+                repo = (repo[0], branch)
             # A create run in the clone of the PR's repository takes the
             # clone's branch, so that the PR joins its branch in the journal.
             here = repo_of(cwd) if repo and repo[1] == "-" and words[2] == "create" else None
@@ -501,8 +532,9 @@ def from_bash(data):
                 # `gh pr ready 2902` in a clone: gh takes the clone's
                 # repository. A --repo outside scality logs nothing.
                 here = repo_of(cwd)
-                # With no number or URL, gh acts on the PR of the clone's branch.
-                repo = (here[0], here[1] if target == "?" else "-") if here else None
+                # With no number or URL, gh acts on the PR of the clone's
+                # branch, or of the branch it names.
+                repo = (here[0], branch or (here[1] if target == "?" else "-")) if here else None
             if repo:
                 prs.append({"repo": repo[0], "branch": repo[1], "kind": "pr",
                             "text": "PR %s %s" % (words[2], target)})
@@ -517,7 +549,7 @@ def from_bash(data):
                     found.append((cwd, "check", "%s may not have run" % name))
                 else:
                     found.append((cwd, "check", "%s exit %s" % (name, code if last else "unknown")))
-    heads, before = observe([f for f in folders if f])
+    heads, before = observe(list(dict.fromkeys(f for f in folders if f)))
     facts, seen = [], set()
     for where, kind, text in found:
         if where is None:

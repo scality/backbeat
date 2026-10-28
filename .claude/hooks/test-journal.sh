@@ -91,6 +91,14 @@ bash_ok "$REPO" "git push --force-with-lease=improvement/topic-stacked:abc origi
 check "a push of another branch than the checked-out one is logged under it" \
   has '"branch": "improvement/topic-stacked", "kind": "push"'
 sed -i.bak '/topic-stacked", "kind": "push"/d' "$BUF" && rm -f "$BUF.bak"
+# A stack push where one lease is rejected still pushed the others.
+git -C "$REPO" branch -q improvement/topic-stacked-2
+git -C "$REPO" branch -q improvement/topic-stacked-3
+git -C "$REPO" update-ref -m "update by push" refs/remotes/origin/improvement/topic-stacked-2 improvement/topic-stacked-2
+bash_fail "$REPO" "git push --force-with-lease origin improvement/topic-stacked-2 improvement/topic-stacked-3" "Exit code 1"
+check "a stack push with one rejected lease logs the branches it pushed" \
+  sh -c "grep -q 'topic-stacked-2\", \"kind\": \"push' '$BUF' && ! grep -q 'topic-stacked-3\", \"kind\": \"push' '$BUF'"
+sed -i.bak '/topic-stacked-2", "kind": "push"/d' "$BUF" && rm -f "$BUF.bak"
 # A pull moved the remote-tracking branch, then a push that sent nothing.
 commit "Pulled from another clone"
 git -C "$REPO" update-ref -m "fetch: fast-forward" refs/remotes/origin/improvement/topic-journal HEAD
@@ -186,6 +194,26 @@ check "a stale recorded sha logs no commit of the branch left behind" \
 bash_ok "$REPO" "gh pr ready"
 check "gh pr ready with no number takes the clone's branch" \
   has '"repo": "backbeat", "branch": "improvement/topic-journal", "kind": "pr", "text": "PR ready ?"'
+bash_ok "$REPO" "gh pr ready improvement/other"
+check "gh pr ready <branch> logs the PR under the branch it names" \
+  has '"repo": "backbeat", "branch": "improvement/other", "kind": "pr", "text": "PR ready improvement/other"'
+bash_ok "$TMP" "gh pr ready improvement/third --repo scality/backbeat"
+check "gh pr ready <branch> --repo logs the PR under the branch it names" \
+  has '"repo": "backbeat", "branch": "improvement/third", "kind": "pr", "text": "PR ready improvement/third"'
+n=$(lines)
+bash_ok "$REPO" "gh pr merge 2902 \\
+  --auto --squash"
+check "a backslash continuation keeps the flags on the same command" test "$(lines)" = "$n"
+bash_ok "$REPO" "gh pr ready improvement/\\
+split"
+check "a backslash continuation joins a word with nothing between, as bash does" \
+  has '"branch": "improvement/split", "kind": "pr", "text": "PR ready improvement/split"'
+bash_ok "$REPO" "gh pr ready 12 \\
+  --repo scality/cloudserver"
+check "a continued --repo names the repository" has '"repo": "cloudserver", "branch": "-", "kind": "pr", "text": "PR ready 12"'
+commit "Committed without a pager"
+bash_ok "$REPO" "git --no-pager commit -m x"
+check "git --no-pager commit is logged" has 'Committed without a pager'
 # A worktree made outside Bash: its first commit is the first Bash call.
 git -C "$REPO" worktree add -q -b improvement/topic-unseen "$TMP/unseen"
 git -C "$TMP/unseen" -c user.email=t@example.com -c user.name=t commit -q --allow-empty -m "First in an unseen worktree"
@@ -270,7 +298,6 @@ python3 -c 'import json; print(json.dumps({"hook_event_name":"PostToolUse","tool
 check "a Jira transition logs the key and transition" has 'ZZ-12 transitioned (transition 31)'
 python3 -c 'import json; print(json.dumps({"hook_event_name":"PostToolUse","tool_name":"mcp__claude_ai_Claude_Docs__update","tool_input":{"container":{"kind":"project","id":"bfe390f9-d819-4a93-9050-ffd5eee1b80a"},"ref":{"object":"node","id":"c9598c30-9a9c"},"payload":{}},"tool_response":[{"type":"text","text":"{\"verdict\":\"allow\",\"rev\":5}"}]}))' | capture
 check "a write to a D1 doc logs the doc and node" has 'tech spec write (node c9598c30-9a9c)'
-n=$(lines)
 n=$(lines)
 python3 -c 'import json; print(json.dumps({"hook_event_name":"PostToolUse","tool_name":"mcp__claude_ai_Claude_Docs__update","tool_input":{"container":{"kind":"project","id":"bfe390f9-d819-4a93-9050-ffd5eee1b80a"},"ref":{"object":"node","id":"2eb208d1-69b7"},"payload":{}},"tool_response":[{"type":"text","text":"{\"verdict\":\"allow\",\"rev\":6}"}]}))' | capture
 check "a render of the Tickets tab or a chart is not logged" test "$(lines)" = "$n"
