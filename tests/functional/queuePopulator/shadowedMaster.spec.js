@@ -287,14 +287,24 @@ function suite() {
         await bucket.drain();
         await bucket.delete('obj', 'null');
         // the version key is deleted with the null version's metadata, then
-        // the master, turned into a placeholder with a version id of its own:
-        // no field relates the two entries, so the filter lets both through
-        // and the consumers tolerate the duplicate. The same placeholder
-        // entry is the only one carrying the metadata when the null version
-        // has no version key, so it cannot be skipped on its own
+        // the master, turned into a placeholder with a version id of its own
+        // and dropped as the placeholder of the null version just deleted
+        assert.deepStrictEqual(await bucket.drain(), [version('delete', { isNull: true })]);
+    });
+
+    it('delete of a non-current null version then of the current version', async () => {
+        await bucket.setVersioning('Suspended');
+        await bucket.put('obj');
+        await bucket.setVersioning('Enabled');
+        const current = await bucket.put('obj');
+        await bucket.drain();
+        await bucket.delete('obj', 'null');
+        await bucket.delete('obj', current);
+        // the placeholder left by the last version is that of the current
+        // version, not of the null version deleted just before
         assert.deepStrictEqual(await bucket.drain(), [
             version('delete', { isNull: true }),
-            master('delete', { isNull: true, isPHD: true }),
+            version('delete'),
         ]);
     });
 

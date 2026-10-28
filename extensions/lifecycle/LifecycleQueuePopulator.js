@@ -1,7 +1,6 @@
 const async = require('async');
 const { constants } = require('@scality/arsenal');
 const { scaleMsPerDay } = require('@scality/arsenal').s3middleware.objectUtils;
-const { isMasterKey } = require('@scality/arsenal').versioning;
 const { mpuBucketPrefix } = constants;
 const QueuePopulatorExtension =
     require('../../lib/queuePopulator/QueuePopulatorExtension');
@@ -527,12 +526,7 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
             return;
         }
 
-        // The version key of a null version is skipped too: deleting the current null version
-        // on MongoDB also deletes the version key it was copied into on a metadata update, and
-        // a second GC request for the same archive fails. The lone delete of a non-current null
-        // version is then missed (BB-870).
-        const isNullVersionKey = !isMasterKey(entry.key) && value.isNull;
-        if (value.isDeleteMarker || isNullVersionKey || isShadowedMaster(entry.key, value)) {
+        if (value.isDeleteMarker || isShadowedMaster(entry.key, value)) {
             this.log.trace('skip processing of object master entry');
             return;
         }
