@@ -1,4 +1,51 @@
 {
   "advisorModel": "fable",
-  "plansDirectory": ".claude/plans"
+  "plansDirectory": ".claude/plans",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/journal-capture.sh",
+            "timeout": 20
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__.*__(createJiraIssue|transitionJiraIssue|editJiraIssue)|mcp__.*Claude_Docs__(update|batch)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/journal-capture.sh",
+            "timeout": 20
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/journal-capture.sh",
+            "timeout": 20
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/journal-flush.sh",
+            "timeout": 40
+          }
+        ]
+      }
+    ]
+  }
 }

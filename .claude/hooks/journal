@@ -1,0 +1,907 @@
+#!/usr/bin/env python3
+"""The D1 journal: facts about the work, logged as it happens.
+
+Usage:
+  journal note [--decision] [--why <text>] [--tasks <ids>] "<one sentence>"
+  journal flush                   (prints the facts that wait, to append by hand)
+  journal flushed [session]       (the facts are in the doc: drop them)
+  journal tail [n] --doc <export> | tail --new --doc <export>
+                                  (--new: the Log bullets since the last mark-read)
+  journal mark-read               (after a render: the next --new starts there)
+  journal capture       (the PostToolUse hook; JSON on stdin)
+  journal hook-flush    (the Stop hook; JSON on stdin)
+
+The journal lives in the journal doc named in .claude/bnaas/journal.json.
+The hooks append one JSON fact per line to ~/.bnaas/journal/buffer.jsonl
+(BNAAS_JOURNAL_DIR moves the folder). A shell hook cannot write a Claude
+Doc, so on Stop the hook moves the buffer to the pending file of the
+session and blocks the stop once, asking the session to append the facts
+to the Log section and then to run `journal flushed <session>`. If that
+write fails, the facts stay pending, and the next Stop shows them again.
+Pending facts of a session that went quiet go to the next flush.
+
+A fact holds no name and never the text of a command or its output, which
+can hold secrets: only the repository, the branch and what happened (a
+commit sha and subject, a push, a PR link, a test command name and its
+exit code, a Jira key and its change, a doc write). A repository whose
+origin is not on github.com/scality is never logged. When a command's
+folder holds a shell expansion, the hook cannot know its repository: it
+logs no commit, push or PR fact then, and a test or lint run is logged
+under the repository "unknown". A commit or a push is logged only when it
+happened (the reflog, the remote-tracking branch), and a PR fact takes
+its repository from the PR, or else from the clone it ran in.
+
+The hook subcommands always exit 0 and log their errors to errors.log in
+the journal folder, so a broken journal never stops a session.
+"""
+import contextlib
+import datetime
+import fcntl
+import glob
+import hashlib
+import json
+import os
+import re
+import shlex
+import subprocess
+import sys
+import time
+import traceback
+
+HERE = os.path.dirname(os.path.realpath(__file__))
+CONFIG = os.path.join(HERE, "..", "bnaas", "journal.json")
+DIR = os.environ.get("BNAAS_JOURNAL_DIR") or os.path.expanduser("~/.bnaas/journal")
+BUFFER = os.path.join(DIR, "buffer.jsonl")
+ERRORS = os.path.join(DIR, "errors.log")
+LAST_READ = os.path.join(DIR, "last-read")
+LAST_SEEN = os.path.join(DIR, "last-seen")
+LOCK = os.path.join(DIR, "lock")
+# HEAD per branch at the last Bash call ("repo branch"), and its
+# last push logged per branch ("repo branch @push", the reflog time).
+HEADS = os.path.join(DIR, "heads.json")
+SCALITY = re.compile(r"^(?:git@github\.com:|(?:https|ssh)://(?:git@)?github\.com/)scality/"
+                     r"([^/]+?)(?:\.git)?/?$", re.I)
+PR_URL = re.compile(r"https://github\.com/scality/[\w.-]+/pull/\d+")
+JIRA_KEY = re.compile(r"\b[A-Z][A-Z0-9]+-\d+\b")
+JIRA_TOOL = re.compile(r"^mcp__.+__(createJiraIssue|transitionJiraIssue|editJiraIssue)$")
+DOCS_TOOL = re.compile(r"^mcp__.+Claude_Docs__(update|batch)$")
+# Test and lint commands: the words that start a segment, and the name logged.
+CHECKS = [(("yarn", "test"), "yarn test"), (("yarn", "run", "test"), "yarn test"),
+          (("npm", "test"), "npm test"), (("npm", "run", "test"), "npm test"),
+          (("yarn", "lint"), "yarn lint"), (("yarn", "run", "lint"), "yarn lint"),
+          (("yarn", "mocha"), "mocha"), (("yarn", "jest"), "jest"),
+          (("yarn", "run", "unit"), "yarn unit"), (("make", "test"), "make test"), (("jest",), "jest"), (("mocha",), "mocha"),
+          (("pytest",), "pytest"), (("python3", "-m", "pytest"), "pytest")]
+MAX_TEXT = 300
+MAX_FACTS = 200  # per Stop, so that a long-failing write cannot grow the request
+STALE = 3600  # seconds before another session's pending facts are taken over
+
+
+def now():
+    return datetime.datetime.now(datetime.timezone.utc)
+
+
+def log_error(where):
+    try:
+        os.makedirs(DIR, exist_ok=True)
+        kind, value, _ = sys.exc_info()
+        # The type and message only: a traceback can quote a command.
+        line = "%s %s: %s: %s\n" % (now().isoformat(timespec="seconds"), where,
+                                     kind.__name__ if kind else "error", str(value)[:200])
+        with open(ERRORS, "a", encoding="utf-8") as f:
+            f.write(line)
+    except OSError:
+        pass
+
+
+def config():
+    with open(CONFIG, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def git(path, *args):
+    try:
+        out = subprocess.run(["git", "-C", path] + list(args), capture_output=True,
+                             text=True, timeout=10)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return out.stdout.strip() if out.returncode == 0 else None
+
+
+def repo_of(path):
+    """(repository, branch) of a scality clone or worktree, else None."""
+    if not path or not os.path.isdir(path):
+        return None
+    m = SCALITY.match(git(path, "remote", "get-url", "origin") or "")
+    if not m:
+        return None
+    return m.group(1).lower(), git(path, "rev-parse", "--abbrev-ref", "HEAD") or "?"
+
+
+@contextlib.contextmanager
+def locked():
+    """An exclusive lock on the journal folder, so that appends from other
+    sessions never land in a buffer that a flush is taking."""
+    os.makedirs(DIR, exist_ok=True)
+    with open(LOCK, "a") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
+
+
+def observe(folders):
+    """Record the HEAD of each scality clone among folders, by "repo
+    branch". Returns the values now and those that the earlier Bash calls
+    recorded, so that a commit needs HEAD to have moved."""
+    now_heads = {}
+    for path in folders:
+        repo = repo_of(path)
+        sha = git(path, "rev-parse", "HEAD") if repo else None
+        if sha:
+            now_heads["%s %s" % repo] = sha
+    if not now_heads:
+        return {}, {}
+    with locked():
+        try:
+            with open(HEADS, encoding="utf-8") as f:
+                before = json.load(f)
+        except (OSError, ValueError):
+            before = {}
+        with open(HEADS, "w", encoding="utf-8") as f:
+            json.dump(dict(before, **now_heads), f)
+    return now_heads, before
+
+
+# Steps that only set up the shell before a test: a failed command after
+# them keeps its exit code on the test.
+SETUP = ("cd", "source", ".", "nvm")
+
+# Seconds back that the reflog of a branch made in the same call is read.
+RECENT = 600
+
+# Git commands that move HEAD without a commit of their own.
+MOVERS = ("pull", "rebase", "merge", "reset")
+
+
+def new_commits(where, recorded, branch=None, limit=100):
+    """The commits made since HEAD was recorded, oldest first, as (short
+    sha, subject): the reflog entries back to the recorded sha that a
+    commit wrote (an amend included). The walk also stops at the entry that
+    entered the branch, and with no recorded sha (a branch made in this
+    same call) at the one that made it, and only the entries of the last RECENT seconds
+    count, so that an old commit of a branch seen for the first time is
+    not taken for a new one. A pull, rebase or reset entry is not a
+    commit, and a stop out of reach gives none."""
+    out = git(where, "reflog", "-%d" % limit, "--date=unix",
+              "--format=%H %h %gd %gs", "HEAD") or ""
+    found = []
+    for line in out.splitlines():
+        full, short, when, how = (line.split(" ", 3) + ["", "", ""])[:4]
+        # The entry that enters the branch stops the walk in both cases: a
+        # stale recorded sha must not pull in the commits of the branch
+        # before it.
+        entered = how.startswith("checkout: moving from ") and how.endswith(" to " + str(branch))
+        # A worktree made outside Bash (EnterWorktree, claude --worktree)
+        # starts its HEAD reflog with an entry that has no message.
+        made = entered or (recorded is None and (how.startswith("branch: Created from")
+                                                 or not how))
+        if full == recorded or made:
+            return [(h, git(where, "log", "-1", "--format=%s", f)) for f, h in reversed(found)]
+        if recorded is None:
+            m = re.search(r"\{(\d+)\}", when)
+            if not m or int(m.group(1)) < time.time() - RECENT:
+                return []
+        if how.startswith("commit"):
+            found.append((full, short))
+    return []
+
+
+def pushed(where, args):
+    """The (remote, branch) pairs that `git push <args>` named and that
+    match after the command: each remote-tracking branch equals what was
+    pushed, or with no refspec the upstream of the checked-out branch
+    equals HEAD. A rejected lease or a failed push leaves them apart, so
+    that branch is not returned. A stack pushed from one worktree names
+    several branches, none of them checked out."""
+    rest = [a for a in args if not a.startswith("-")]
+    if {"--delete", "-d", "--tags", "--all", "--mirror"} & set(args):
+        return []
+    remote = rest[0] if rest else "origin"
+    specs = rest[1:]
+    if not specs:
+        up = git(where, "rev-parse", "--abbrev-ref", "@{upstream}") or ""
+        if not up or git(where, "rev-parse", "@{upstream}") != git(where, "rev-parse", "HEAD"):
+            return []
+        name, _, branch = up.partition("/")
+        return [(name, branch)]
+    out = []
+    for spec in specs:
+        src, _, dst = spec.lstrip("+").partition(":")
+        src = src or "HEAD"
+        if src == "HEAD" and not dst:
+            dst = git(where, "rev-parse", "--abbrev-ref", "HEAD") or ""
+        dst = (dst or src).replace("refs/heads/", "", 1)
+        local = git(where, "rev-parse", src)
+        if local and local == git(where, "rev-parse", "refs/remotes/%s/%s" % (remote, dst)):
+            out.append((remote, dst))
+    return out
+
+
+def fresh_push(where, repo, remote, branch):
+    """True once per push: the last move of the remote-tracking branch is
+    a push of the last RECENT seconds that no earlier fact logged. A fetch
+    or a pull moves it too, and an "Everything up-to-date" push writes no
+    new entry, so neither is logged. An entry is its time and its sha:
+    two pushes in one second are two entries."""
+    last = git(where, "reflog", "-1", "--date=unix", "--format=%gd %H %gs",
+               "refs/remotes/%s/%s" % (remote, branch)) or ""
+    m = re.search(r"\{(\d+)\} ([0-9a-f]+) update by push", last)
+    if not m or int(m.group(1)) < time.time() - RECENT:
+        return False
+    key = "%s %s @push" % (repo, branch)
+    with locked():
+        try:
+            with open(HEADS, encoding="utf-8") as f:
+                heads = json.load(f)
+        except (OSError, ValueError):
+            heads = {}
+        entry = "%s %s" % m.groups()
+        if heads.get(key) == entry:
+            return False
+        heads[key] = entry
+        with open(HEADS, "w", encoding="utf-8") as f:
+            json.dump(heads, f)
+    return True
+
+
+def repo_flag(words):
+    """The value of --repo or -R, in either form (`--repo x`, `--repo=x`),
+    or None when the command has no such flag."""
+    for k, w in enumerate(words):
+        if w in ("--repo", "-R") and k + 1 < len(words):
+            return words[k + 1]
+        if w.startswith(("--repo=", "-R=")):
+            return w.split("=", 1)[1]
+    return None
+
+
+def pr_repo(words, url):
+    """The (repository, branch) of a gh pr command: from --repo/-R or the
+    PR URL. The branch is --head when given, else "-". With neither, the
+    caller falls back to the clone the command ran in, as gh does."""
+    repo = None
+    flag = repo_flag(words)
+    if flag:
+        owner, _, name = flag.partition("/")
+        repo = name.lower() if owner.lower() == "scality" and name else None
+    m = re.match(r"https://github\.com/scality/([\w.-]+)/pull/", url or "")
+    if m:
+        repo = m.group(1).lower()
+    head = next((words[k + 1] for k, w in enumerate(words[:-1]) if w in ("--head", "-H")), "-")
+    return (repo, head) if repo else None
+
+
+def worktree_path(words, i):
+    """The folder of `git worktree add [options] <path>`, or None."""
+    if words[i:i + 2] != ["worktree", "add"]:
+        return None
+    args = iter(words[i + 2:])
+    for arg in args:
+        if arg in ("-b", "-B", "--reason"):
+            next(args, None)
+        elif not arg.startswith("-"):
+            return arg
+    return None
+
+
+def append(facts):
+    if not facts:
+        return
+    stamp = now().isoformat(timespec="seconds")
+    lines = []
+    for fact in facts:
+        fact.setdefault("t", stamp)
+        # One line per fact, so that a flush can count what it puts back.
+        fact["text"] = " ".join(str(fact["text"]).split())[:MAX_TEXT]
+        lines.append(json.dumps(fact) + "\n")
+    with locked(), open(BUFFER, "a", encoding="utf-8") as f:
+        f.writelines(lines)
+
+
+# Bash commands -------------------------------------------------------------
+
+OPERATORS = set("();<>|&\n")
+
+
+def strip_heredocs(command):
+    """The command without its here-document bodies, which are text, not
+    commands."""
+    out, lines, i = [], command.split("\n"), 0
+    while i < len(lines):
+        line = lines[i]
+        out.append(line)
+        # A here-string (<<<) has no body: only << and <<- open one.
+        ends = re.findall(r"(?<!<)<<(?!<)-?\s*['\"]?(\w+)['\"]?", line)
+        i += 1
+        for end in ends:
+            while i < len(lines) and lines[i].strip() != end:
+                i += 1
+            i += 1
+    return "\n".join(out)
+
+
+def tokens(command):
+    lexer = shlex.shlex(command, posix=True, punctuation_chars="();<>|&\n")
+    lexer.whitespace, lexer.whitespace_split = " \t\r", True
+    try:
+        return list(lexer)
+    except ValueError:
+        # An unquoted apostrophe: split on blanks and operators instead.
+        return [t for t in re.split(r"[ \t\r]+|([();<>|&\n]+)", command) if t]
+
+
+def segments(command):
+    """The simple commands of a shell line, as (words, piped) pairs, split
+    at the operators and newlines that are not quoted. piped is true when
+    the output of the command goes into a pipe, so its exit code is lost."""
+    out, words, target = [], [], False
+    # The fd of a redirection touches its operator (`2>&1`); a number with a
+    # blank before the operator is an argument (`gh pr ready 2902 > x`).
+    command = re.sub(r"(?<=\s)\d+(?=[<>])", "", strip_heredocs(command))
+    for token in tokens(command) + ["\n"]:
+        if token and set(token) <= OPERATORS and set(token) & set("<>"):
+            # A redirection: drop its target (`1`, `/dev/null`), and the
+            # command goes on.
+            target = True
+            continue
+        if target and not (token and set(token) <= OPERATORS):
+            target = False
+            continue
+        target = False
+        if token and set(token) <= OPERATORS:
+            while words and re.match(r"^\w+=", words[0]):
+                words = words[1:]  # VAR=value prefixes
+            if words:
+                out.append((words, token == "|"))
+            words = []
+        else:
+            words.append(token)
+    return out
+
+
+def git_opts(words):
+    """The folder (-C) and the index of the subcommand of a git command,
+    after any -C <dir> and -c k=v options."""
+    i, where = 1, None
+    while i + 1 < len(words) and words[i] in ("-C", "-c"):
+        if words[i] == "-C":
+            where = words[i + 1]
+        i += 2
+    return where, i
+
+
+def resolve(cwd, path):
+    """A folder from a command, or None when it holds a shell expansion
+    that the hook cannot know."""
+    if cwd is None or re.search(r"[$`*?]", path):
+        return None
+    return os.path.join(cwd, os.path.expanduser(path))
+
+
+# yarn and npm scripts of the repositories, matched by prefix:
+# test, test:unit, ft_test:replication, bh_test, lint, typecheck.
+SCRIPTS = re.compile(r"^(?:test|ft_test|bh_test|lint|typecheck)(?:$|[:_])")
+
+
+def check_name(words):
+    if words[0] in ("npx", "./node_modules/.bin/mocha", "node_modules/.bin/mocha"):
+        words = words[1:] if words[0] == "npx" else ["mocha"] + words[1:]
+    if not words:
+        return None
+    base = [os.path.basename(words[0])] + words[1:]
+    if base[0] in ("yarn", "npm"):
+        script = base[2] if base[1:2] == ["run"] and len(base) > 2 else (base[1:2] or [""])[0]
+        if SCRIPTS.match(script):
+            return "%s %s" % (base[0], script)
+    for prefix, name in CHECKS:
+        if tuple(base[:len(prefix)]) == prefix:
+            return name
+    return None
+
+
+def from_bash(data):
+    command = (data.get("tool_input") or {}).get("command") or ""
+    response = data.get("tool_response") or {}
+    if isinstance(response, dict) and response.get("backgroundTaskId"):
+        return []  # a background run: its result is not known yet
+    failed = data.get("hook_event_name") == "PostToolUseFailure"
+    code = 0
+    if failed:
+        m = re.search(r"Exit code (\d+)", str(data.get("error") or ""))
+        # No exit code: the call was interrupted or timed out.
+        code = int(m.group(1)) if m else "unknown"
+    stdout = response.get("stdout", "") if isinstance(response, dict) else str(response)
+    cwd = data.get("cwd") or os.getcwd()
+    found = []  # (folder or None, kind, text)
+    folders = [cwd]  # where HEAD is recorded after the command
+    movers = []  # (folder, pull | rebase | merge | reset)
+    prs = []  # PR facts, whose repository comes from the PR, not the folder
+    creates = 0  # gh pr create segments seen, to match them to the URLs printed
+    parts = segments(command)
+    for n, (words, piped) in enumerate(parts):
+        # The exit code is the whole command's: it belongs to the last
+        # segment only, and only when that one is not piped.
+        last = n == len(parts) - 1 and not piped
+        if words[0] == "cd" and len(words) > 1:
+            target = resolve(cwd, words[1])
+            # The hook's cwd can already be the folder the command moved to:
+            # a relative `cd <path>` that does not exist from there, while
+            # cwd already ends with <path>, keeps cwd as it is.
+            rel = os.path.normpath(words[1])
+            if target and cwd and not os.path.isdir(target) and not os.path.isabs(rel) \
+                    and os.path.normpath(cwd).endswith(os.sep + rel):
+                target = cwd
+            cwd = target
+            folders.append(cwd)
+            continue
+        if words[0] == "git":
+            path, i = git_opts(words)
+            where = resolve(cwd, path) if path else cwd
+            # A new branch gets its HEAD from the switch, checkout or
+            # worktree add that made it, before its first commit.
+            added = worktree_path(words, i)
+            folders += [where, resolve(where, added) if added else None]
+        if words[0] == "git" and not (failed and last):
+            path, i = git_opts(words)
+            where = resolve(cwd, path) if path else cwd
+            sub = words[i] if i < len(words) else None
+            if sub == "commit":
+                found.append((where, "commit", None))
+            elif sub in MOVERS and where:
+                movers.append((where, sub))
+            elif sub == "push" and not {"--dry-run", "-n"} & set(words[i:]) and where:
+                for remote, branch in pushed(where, words[i + 1:]):
+                    found.append((where, "push", (remote, branch)))
+        elif words[0] == "gh" and words[1:2] == ["pr"] and len(words) > 2 \
+                and words[2] in ("create", "ready", "merge", "close") \
+                and (not failed or words[2] == "create") and not {"--undo", "--auto"} & set(words):
+            # A failed command may have failed in this very segment, so it
+            # logs no PR fact, except a create whose URL was printed;
+            # --undo and --auto change nothing that happened.
+            if words[2] == "create":
+                # gh prints the URL of each PR it created, in order: the nth
+                # create takes the nth URL, and a create with none failed.
+                made = PR_URL.findall(stdout)
+                error = str(data.get("error") or "")
+                if failed and "already exists" not in error:
+                    # A later step failed: the URL of a create that worked
+                    # is alone on its line. "already exists" quotes the
+                    # old PR the same way, so it counts for nothing.
+                    made += re.findall(r"(?m)^\s*(%s)\s*$" % PR_URL.pattern,
+                                       error)
+                if creates >= len(made):
+                    continue
+                urls = [made[creates]]
+                creates += 1
+            else:
+                urls = [w for w in words if PR_URL.fullmatch(w)]
+            target = urls[0] if urls else next((w for w in words[3:] if w.isdigit()), "?")
+            repo = pr_repo(words, urls[0] if urls else None)
+            # A create run in the clone of the PR's repository takes the
+            # clone's branch, so that the PR joins its branch in the journal.
+            here = repo_of(cwd) if repo and repo[1] == "-" and words[2] == "create" else None
+            if here and here[0] == repo[0]:
+                repo = here
+            # A PR named by a URL outside scality: gh acts on that repository,
+            # so the clone is not a fallback.
+            if not repo and cwd and repo_flag(words) is None \
+                    and not any(w.startswith("https://github.com/") for w in words):
+                # `gh pr ready 2902` in a clone: gh takes the clone's
+                # repository. A --repo outside scality logs nothing.
+                here = repo_of(cwd)
+                # With no number or URL, gh acts on the PR of the clone's branch.
+                repo = (here[0], here[1] if target == "?" else "-") if here else None
+            if repo:
+                prs.append({"repo": repo[0], "branch": repo[1], "kind": "pr",
+                            "text": "PR %s %s" % (words[2], target)})
+        else:
+            name = check_name(words)
+            if name:
+                # A failed command may have failed in an earlier step, before
+                # this one ran: the check surely ran only when every earlier
+                # step is a setup step (cd, or the nvm setup).
+                ran = not failed or all(w[0] in SETUP for w, _ in parts[:n])
+                if not ran:
+                    found.append((cwd, "check", "%s may not have run" % name))
+                else:
+                    found.append((cwd, "check", "%s exit %s" % (name, code if last else "unknown")))
+    heads, before = observe([f for f in folders if f])
+    facts, seen = [], set()
+    for where, kind, text in found:
+        if where is None:
+            # A folder that holds a shell expansion cannot be checked:
+            # neither its owner nor whether its commit happened. Only a test
+            # or lint run is logged, under the repository "unknown".
+            if kind == "check" and (("unknown", "-"), kind, text) not in seen:
+                seen.add((("unknown", "-"), kind, text))
+                facts.append({"repo": "unknown", "branch": "-", "kind": kind, "text": text})
+            continue
+        repo = repo_of(where)
+        if not repo:
+            continue  # not a scality clone
+        texts = [text]
+        if kind == "commit":
+            # Each commit made since an earlier Bash call recorded HEAD, from
+            # the reflog: a commit that failed, one on a branch not seen
+            # before, or a pull in the same call logs nothing here.
+            key = "%s %s" % repo
+            if heads.get(key) is None or heads.get(key) == before.get(key):
+                continue
+            texts = ["commit %s %s" % c
+                     for c in new_commits(where, before.get(key), repo[1])]
+        elif kind == "push":
+            # One fact per branch pushed, under that branch, whichever one
+            # is checked out.
+            remote, branch = text
+            if not fresh_push(where, repo[0], remote, branch):
+                continue
+            repo, texts = (repo[0], branch), ["push"]
+        for text in texts:
+            if (repo, kind, text) in seen:
+                continue
+            seen.add((repo, kind, text))
+            facts.append({"repo": repo[0], "branch": repo[1], "kind": kind, "text": text})
+    for fact in prs:
+        if fact not in facts:
+            facts.append(fact)
+    # HEAD moved by a pull, rebase, merge or reset, and not by a commit fact.
+    logged = {(f["repo"], f["branch"]) for f in facts if f["kind"] == "commit"}
+    for where, word in movers:
+        repo = repo_of(where)
+        key = "%s %s" % repo if repo else None
+        if not repo or repo in logged or key not in before \
+                or heads.get(key) in (None, before[key]):
+            continue
+        logged.add(repo)
+        facts.append({"repo": repo[0], "branch": repo[1], "kind": "head",
+                      "text": "%s moved HEAD to %s %s" % (
+                          word, git(where, "log", "-1", "--format=%h"),
+                          git(where, "log", "-1", "--format=%s"))})
+    return facts
+
+
+# MCP tools -----------------------------------------------------------------
+
+def response_text(response):
+    if isinstance(response, str):
+        return response
+    if isinstance(response, list):
+        return " ".join(response_text(r) for r in response)
+    if isinstance(response, dict):
+        if "text" in response and isinstance(response["text"], str):
+            return response["text"]
+        if "content" in response:
+            return response_text(response["content"])
+    return json.dumps(response)
+
+
+def from_jira(data):
+    tool = JIRA_TOOL.match(data.get("tool_name") or "").group(1)
+    args = data.get("tool_input") or {}
+    text = response_text(data.get("tool_response"))
+    key = args.get("issueIdOrKey") or ""
+    if tool == "createJiraIssue":
+        # The top-level key is the new ticket; the text can name its parent
+        # first, so the regex is only a fallback.
+        found = JIRA_KEY.findall(text)
+        try:
+            key = json.loads(text).get("key") or "?"
+        except (ValueError, AttributeError):
+            key = found[0] if found else "?"
+        what = "created"
+    elif tool == "transitionJiraIssue":
+        tr = args.get("transition") or {}
+        what = "transitioned (transition %s)" % (tr.get("id") if isinstance(tr, dict) else tr)
+    else:
+        what = "edited: %s" % ", ".join(sorted((args.get("fields") or {}).keys()))
+    return [{"repo": "jira", "branch": "-", "kind": "jira", "text": "%s %s" % (key, what)}]
+
+
+def from_docs(data):
+    args = data.get("tool_input") or {}
+    text = response_text(data.get("tool_response"))
+    if '"verdict":"allow"' not in text.replace(" ", ""):
+        return []  # refused: nothing was written
+    container = args.get("container") or {}
+    ref = args.get("ref") or {}
+    doc_id = str(container.get("id") or (ref.get("id") if ref.get("object") == "project" else ""))
+    docs = config().get("docs") or {}
+    name = next((n for k, n in docs.items() if k and k in doc_id), None)
+    if not name:
+        return []  # not a D1 doc
+    if name == "journal doc":
+        return []  # the journal's own writes would feed the next Stop forever
+    node = ref.get("id") if ref.get("object") == "node" else None
+    # The renders of what's next (the Tickets tab and the two charts) say
+    # nothing about the work, and every run makes them: skip them too.
+    renders = config().get("renders") or {}
+    members = [((m.get("ref") or {}).get("id")) for m in (args.get("batch") or [])
+               if isinstance(m, dict)]
+    targets = [x for x in [node] + members if x]
+    if targets and all(x in renders for x in targets):
+        return []
+    return [{"repo": "doc", "branch": "-", "kind": "doc",
+             "text": "%s write%s" % (name, " (node %s)" % node if node else "")}]
+
+
+def capture(data):
+    tool = data.get("tool_name") or ""
+    if tool == "Bash":
+        return from_bash(data)
+    if data.get("hook_event_name") == "PostToolUseFailure":
+        return []
+    if JIRA_TOOL.match(tool):
+        return from_jira(data)
+    if DOCS_TOOL.match(tool):
+        return from_docs(data)
+    return []
+
+
+# Flush and read ------------------------------------------------------------
+
+def bullet(f):
+    kind = "decision: " if f.get("kind") == "decision" else \
+        "note: " if f.get("kind") == "note" else ""
+    return "- %s %s: %s%s" % (f["repo"], f["branch"], kind, f["text"])
+
+
+def log_text(facts):
+    """The facts as the Log wants them: a `### <date>` heading per UTC day,
+    newest day first, and one bullet per fact under it."""
+    days = {}
+    for f in facts:
+        days.setdefault(str(f.get("t") or now().isoformat())[:10], []).append(bullet(f))
+    return "\n\n".join("### %s\n\n%s" % (day, "\n".join(days[day]))
+                       for day in sorted(days, reverse=True))
+
+
+def pending_file(session):
+    return os.path.join(DIR, "pending.%s.jsonl" % re.sub(r"[^\w-]", "_", session or "manual"))
+
+
+def take(session):
+    """Move the buffer into the pending file of this session, under the
+    lock, with the pending facts of sessions that went quiet, and return
+    (facts shown, facts left in the buffer). At most MAX_FACTS are shown;
+    the rest stay in the buffer for the next flush."""
+    mine = pending_file(session)
+    with locked():
+        raw = []
+        if os.path.exists(mine):
+            with open(mine, encoding="utf-8") as f:
+                raw += f.read().splitlines()
+        for old in glob.glob(os.path.join(DIR, "pending.*.jsonl")):
+            if old != mine and time.time() - os.path.getmtime(old) > STALE:
+                with open(old, encoding="utf-8") as f:
+                    raw += f.read().splitlines()
+                os.remove(old)
+        if os.path.exists(BUFFER):
+            with open(BUFFER, encoding="utf-8") as f:
+                raw += f.read().splitlines()
+            os.remove(BUFFER)
+        facts = []
+        for line in raw:
+            try:
+                facts.append(json.loads(line))
+            except ValueError:
+                pass  # a broken line is dropped, not shown
+        shown, left = facts[:MAX_FACTS], facts[MAX_FACTS:]
+        if left:
+            with open(BUFFER, "a", encoding="utf-8") as f:
+                f.writelines(json.dumps(x) + "\n" for x in left)
+        if shown:
+            with open(mine, "w", encoding="utf-8") as f:
+                f.writelines(json.dumps(x) + "\n" for x in shown)
+        elif os.path.exists(mine):
+            os.remove(mine)
+    return shown, left
+
+
+def flushed_command(session):
+    return "python3 -I %s flushed %s" % (shlex.quote(os.path.join(HERE, "journal")),
+                                          shlex.quote(session or "manual"))
+
+
+def request(session):
+    """The text that asks the session to append the facts, or None."""
+    shown, left = take(session)
+    if not shown:
+        return None
+    more = " %d more facts wait for the next turn." % len(left) if left else ""
+    return ("Append these journal facts to the Log section of the BNaaS D1 journal doc "
+            "(%s) through the Claude Docs connector, newest day first, each bullet under "
+            "its UTC day heading below, no names, then run `%s`:%s\n\n%s"
+            % (config()["doc"], flushed_command(session), more, log_text(shown)))
+
+
+def hook_flush(data):
+    """The Stop hook. A shell hook cannot write a Claude Doc, so it blocks
+    the stop once and asks the session to append the facts. Only the main
+    session's Stop asks: a subagent may have no Docs connector."""
+    if data.get("hook_event_name") != "Stop" or data.get("stop_hook_active"):
+        return
+    reason = request(data.get("session_id"))
+    if reason:
+        sys.stdout.write(json.dumps({"decision": "block", "reason": reason}) + "\n")
+
+
+def flush():
+    """By hand: print the request, for a session with no Stop hook."""
+    # Each manual flush has its own pending file: two sessions flushing at
+    # once must not write, or drop, each other's facts.
+    reason = request("manual-%d" % os.getpid())
+    print(reason or "No journal fact waits.")
+    return 0
+
+
+def flushed(args):
+    """The facts are in the doc: drop the pending file of that session."""
+    path = pending_file(args[0] if args else "manual")
+    with locked():
+        if os.path.exists(path):
+            os.remove(path)
+    return 0
+
+
+def log_bullets(path):
+    """(day, bullet) pairs of the Log section of a Markdown export of the
+    journal doc, in the order of the doc."""
+    with open(path, encoding="utf-8") as f:
+        text = f.read()
+    out, in_log, day = [], False, None
+    for line in text.splitlines():
+        m = re.match(r"^(#{1,3})\s+(.*?)\s*$", line)
+        if m and len(m.group(1)) <= 2:
+            in_log = m.group(2).strip().lower() == "log"
+            day = None
+        elif m and in_log:
+            day = m.group(2)
+        elif in_log and day and re.match(r"^\s*[-*]\s+\S", line):
+            out.append((day, re.sub(r"^\s*[-*]\s+", "", line).rstrip()))
+    return out
+
+
+def digest(day, text, n=1):
+    """The id of the nth bullet with this text on this day, so that a fact
+    that repeats word for word (a second push of a branch) is new too. The
+    first one keeps the id it had before the count."""
+    key = "%s\n%s" % (day, text) + ("\n%d" % n if n > 1 else "")
+    return hashlib.sha256(key.encode("utf-8")).hexdigest()[:16]
+
+
+def digests(items):
+    """The digest of each (day, text) pair, counting repeats in doc order."""
+    count, out = {}, []
+    for d, t in items:
+        count[(d, t)] = count.get((d, t), 0) + 1
+        out.append(digest(d, t, count[(d, t)]))
+    return out
+
+
+def read_file(path):
+    if not os.path.exists(path):
+        return ""
+    with open(path, encoding="utf-8") as f:
+        return f.read().strip()
+
+
+def tail(args):
+    doc, new, count = None, False, 10
+    while args:
+        arg = args.pop(0)
+        if arg == "--doc" and args:
+            doc = args.pop(0)
+        elif arg == "--new":
+            new = True
+        elif arg.isdigit():
+            count = int(arg)
+    if not doc:
+        print("usage: journal tail [n] | tail --new --doc <journal doc export.md>",
+              file=sys.stderr)
+        return 2
+    items = log_bullets(doc)
+    if new:
+        seen = set(read_file(LAST_READ).split())
+        hashes = digests(items)
+        pairs = [(i, h) for i, h in zip(items, hashes) if h not in seen]
+        items = [i for i, _ in pairs]
+        print("Journal facts not read yet: %d" % len(items))
+        # mark-read saves the digests of the whole export, so the list is as
+        # long as the Log and no old bullet comes back as unread, and a fact
+        # appended during the run is read by the next run, not skipped.
+        os.makedirs(DIR, exist_ok=True)
+        with open(LAST_SEEN, "w", encoding="utf-8") as f:
+            f.write("\n".join(hashes) + "\n")
+    else:
+        items = items[:count]
+    day = None
+    for d, t in items:
+        if d != day:
+            print("\n### %s\n" % d)
+            day = d
+        print("- %s" % t)
+    return 0
+
+
+def mark_read():
+    seen = read_file(LAST_SEEN).split()
+    if not seen:
+        print("Nothing to mark: run journal tail --new first.")
+        return 0
+    known = set(read_file(LAST_READ).split())
+    with open(LAST_READ, "w", encoding="utf-8") as f:
+        # The digests of the whole export: the read list follows the Log.
+        f.write("\n".join(seen) + "\n")
+    os.remove(LAST_SEEN)
+    print("Journal read: %d more facts." % len(set(seen) - known))
+    return 0
+
+
+def note(args):
+    kind, extra = "note", []
+    while args and args[0].startswith("--"):
+        flag = args.pop(0)
+        if flag == "--decision":
+            kind = "decision"
+        elif flag in ("--why", "--tasks") and args:
+            extra.append((flag[2:], args.pop(0)))
+        else:
+            print("unknown option %s" % flag, file=sys.stderr)
+            return 2
+    text = " ".join(args).strip()
+    if not text:
+        print('usage: journal note [--decision] [--why <text>] [--tasks <ids>] "<text>"',
+              file=sys.stderr)
+        return 2
+    for name, value in extra:
+        text += " | %s: %s" % (name, value)
+    where = repo_of(os.getcwd()) or ("d1", "-")
+    append([{"repo": where[0], "branch": where[1], "kind": kind, "text": text}])
+    return 0
+
+
+def main(argv):
+    cmd, args = (argv[0], argv[1:]) if argv else ("", [])
+    if cmd in ("capture", "hook-flush"):
+        try:
+            data = json.loads(sys.stdin.read() or "{}")
+            if cmd == "capture":
+                append(capture(data))
+            else:
+                hook_flush(data)
+        except Exception:  # a hook never fails the session
+            log_error(cmd)
+        return 0
+    try:
+        if cmd == "note":
+            return note(list(args))
+        if cmd == "flush":
+            return flush()
+        if cmd == "flushed":
+            return flushed(args)
+        if cmd == "tail":
+            return tail(args)
+        if cmd == "mark-read":
+            return mark_read()
+    except Exception as e:
+        log_error(cmd)
+        print("journal %s failed: %s" % (cmd, e), file=sys.stderr)
+        return 1
+    print(__doc__.split("\n\n")[1], file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
