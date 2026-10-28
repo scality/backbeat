@@ -18,7 +18,7 @@ The idea is simple. The two developers never work at the same time, so the share
 | `bnaas/journal.json` | The journal doc, the D1 docs whose writes are logged, and the nodes of the what's next renders (the Tickets tab and the two charts), whose writes are not. |
 | `skills/bnaas-shepherd-prs/` | `/bnaas-shepherd-prs` (next PR): shepherds each PR the session opens through its review loop, and opens a plan PR for a change that alters the shared contract beyond the tech spec. |
 | `skills/bnaas-watch-flock/` | `/bnaas-watch-flock` (next PR): the watch dog that what's next starts over the open PRs. |
-| `skills/bnaas-pin-federation/` | `/bnaas-pin-federation` (added by a later PR of this stack): pins the CI images of the service epics in Federation and opens the pin PR. |
+| `skills/bnaas-pin-federation/` | `/bnaas-pin-federation`: pins the CI images of the service epics in Federation and opens the pin PR. |
 | `agents/bnaas-reviewer.md` | Reviewer for diffs and plans. It runs the diff's tests and dry runs, and never edits files or writes to GitHub, Jira or the doc. |
 | `settings.json` | Fable as the advisor, `plans/` as the plans folder, and the journal hooks. |
 | `plans/` | Approved plans, one file per change. |
@@ -87,7 +87,7 @@ Then run `.claude/hooks/test-journal.sh`: it ends with "all journal tests passed
 1. `/bnaas-whats-next`. Review first, then claim one task. The skill creates the ticket and fills the row.
 2. Plan in plan mode, in a worktree of the ticket. The plan ships as the first commit of the PR.
 3. Build with `test-driven-development`, review the diff with `bnaas-reviewer` before each commit, then open a draft PR with no reviewers. Fix what the Claude Code review on the PR raises (Rule 5); the developer then marks it ready, and the three reviewers of Rule 4 are requested then.
-4. When a service epic moves, `/bnaas-pin-federation` (added by a later PR of this stack) updates the Federation pins in one PR.
+4. When a service epic moves, `/bnaas-pin-federation` updates the Federation pins in one PR.
 5. When a decision, a blocker or a surprise happens, `.claude/hooks/journal note "<one sentence>"` at that moment, from the folder the session started in (the path is relative to it). The hooks log the rest.
 
 ## Update the setup
