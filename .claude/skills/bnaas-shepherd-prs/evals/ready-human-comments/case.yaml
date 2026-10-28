@@ -2,8 +2,8 @@ schema_version: "1.1"
 name: ready-human-comments
 expected_outcome: |
   On a PR marked ready for review, with two approvals that do not include the other developer
-  and two open human threads, the shepherd sorts the comments: the typo is mechanical (fix, fold,
-  push, answer), the question about the poll interval is substantive (diagnosis, proposed fix and
+  and two open human threads, the shepherd sorts the comments: the typo is mechanical (fix and
+  fold in the worktree, push and answer only after the developer's yes), the question about the poll interval is substantive (diagnosis, proposed fix and
   reply, why it was missed) and goes into one question to the developer. It does not call the PR
   ready to merge, and it says that the other developer has not approved. It is read-only.
 tags: [skill-creator, read-only]

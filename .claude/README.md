@@ -86,7 +86,7 @@ Then run `.claude/hooks/test-journal.sh`: it ends with "all journal tests passed
 
 1. `/bnaas-whats-next`. Review first, then claim one task. The skill creates the ticket and fills the row, and starts the dog, `/bnaas-watch-flock`, which reports each change on your PRs.
 2. Plan in plan mode, in a worktree of the ticket. The plan ships as the first commit of the PR.
-3. Build with `test-driven-development`, review the diff with `bnaas-reviewer` before each commit, then open a draft PR with no reviewers and hand it to `/bnaas-shepherd-prs` (Rule 5). The shepherd fixes what the Claude Code review raises and tells you when the draft is ready for your check; you mark it ready, the shepherd requests the three reviewers of Rule 4, and you merge when it says the PR can merge.
+3. Build with `test-driven-development`, review the diff with `bnaas-reviewer` before each commit, then open a draft PR with no reviewers and hand it to `/bnaas-shepherd-prs` (Rule 5). The shepherd fixes what the Claude Code review raises and tells you when the draft is ready for your check; you mark it ready, the shepherd requests the three reviewers of Rule 4 and from then on asks you before each push, and you merge when it says the PR can merge.
 4. When a service epic moves, `/bnaas-pin-federation` updates the Federation pins in one PR.
 5. When a decision, a blocker or a surprise happens, `.claude/hooks/journal note "<one sentence>"` at that moment, from the folder the session started in (the path is relative to it). The hooks log the rest.
 
