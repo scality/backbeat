@@ -312,8 +312,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        profile: [ 's3c' ]
-        cloudserver_tag: [ '9.0.19' ]
+        include:
+          - profile: s3c
+            cloudserver_tag: '9.0.19'
+            s3metadata: scality
+            s3data: file
+          - profile: mongo
+            cloudserver_tag: '9.0.19'
+            s3metadata: mongodb
+            s3data: mem
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -335,6 +342,8 @@ jobs:
           REDIS_IMAGE: redis:alpine
           METADATA_IMAGE: ghcr.io/scality/metadata:7.70.45-standalone
           CLOUDSERVER_IMAGE: ghcr.io/scality/cloudserver:${{ matrix.cloudserver_tag }}
+          S3METADATA: ${{ matrix.s3metadata }}
+          S3DATA: ${{ matrix.s3data }}
         run: |-
           set -e -o pipefail;
           docker compose --profile ${{ matrix.profile }} up -d --quiet-pull --wait

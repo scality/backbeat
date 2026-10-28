@@ -23,19 +23,40 @@ services:
       timeout: 30s
       retries: 12
       start_period: 10s
+  mongo:
+    profiles: ['mongo']
+    build:
+      context: ../mongodb
+    ports:
+      - 27018:27018
+    environment:
+      MONGO_RS_HOST: mongo:27018
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --port 27018 --eval 'rs.status().ok' | grep -q 1"]
+      interval: 5s
+      timeout: 10s
+      retries: 12
+      start_period: 5s
+  # the metadata backend follows the profile: S3METADATA and S3DATA are set
+  # by the caller, and the backend not started is not waited for
   cloudserver:
-    profiles: ['s3c']
+    profiles: ['s3c', 'mongo']
     build:
       context: ../cloudserver
       args:
         CLOUDSERVER_IMAGE: "${CLOUDSERVER_IMAGE}"
     depends_on:
-      - metadata
+      metadata:
+        condition: service_healthy
+        required: false
+      mongo:
+        condition: service_healthy
+        required: false
     ports:
       - 8000:8000
     environment:
-      S3DATA: file
-      S3METADATA: scality
+      S3DATA: ${S3DATA:-file}
+      S3METADATA: ${S3METADATA:-scality}
       S3VAULT: mem
       S3_CONFIG_FILE: /conf/config.json
       REMOTE_MANAGEMENT_DISABLE: 1
@@ -47,12 +68,12 @@ services:
       retries: 12
       start_period: 10s
   redis:
-    profiles: ['s3c']
+    profiles: ['s3c', 'mongo']
     image: ${REDIS_IMAGE}
     ports:
       - 6379:6379
   zookeeper:
-    profiles: ['s3c']
+    profiles: ['s3c', 'mongo']
     image: zookeeper:3.9.4
     ports:
       - 2181:2181
@@ -60,7 +81,7 @@ services:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
   kafka:
-    profiles: ['s3c']
+    profiles: ['s3c', 'mongo']
     image: ${KAFKA_IMAGE}
     depends_on:
       - zookeeper

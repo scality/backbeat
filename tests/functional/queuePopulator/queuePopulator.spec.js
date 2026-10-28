@@ -191,7 +191,8 @@ class S3Helper {
     }
 }
 
-describe('Queue Populator', () => {
+// reads the raft log of the s3c profile
+(process.env.PROFILE === 'mongo' ? describe.skip : describe)('Queue Populator', () => {
     let qp;
     let s3;
     let s3Helper;
