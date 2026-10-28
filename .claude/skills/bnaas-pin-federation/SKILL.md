@@ -38,8 +38,8 @@ Run every `gh` command of this section with `--repo scality/Federation`: the ses
    - `## Intended change: what's different after this PR?`
    - `## Verification: how do we know this worked, or how would we know if it didn't?`
    Link the task row of the ticket in the Tickets tab (Rule 7). Name the three images and their compare links in Intended change. Verification names the Federation build of the PR and the Integration run.
-7. Request no reviewers on the draft: the three reviewers of Rule 4 (the other developer, `nicolas2bert` and the team `scality/hopocalypse`) are requested when the developer marks the PR ready. Tell the developer the branch, the PR and the ticket.
-8. After every push of a PR branch, run the review loop of Rule 5: wait for the Claude Code review, address or answer each comment, keep the stack rebased, never mark the PR ready yourself, and watch the CI checks until the developer marks it ready.
+7. Request only the other developer, when you open the PR: no shepherd runs on a pin PR to request them later, and a pin PR needs one approval (Rule 4), so request neither `nicolas2bert` nor `scality/hopocalypse`. The CI pin PR requests nobody, and the dog reports it. Tell the developer the branch, the PR and the ticket.
+8. Do not start a shepherd on a pin PR (Rule 4). Give the developer the PR link; the dog reports it until it merges, and the first developer to see it, other than its author, marks it ready, reviews it and merges it once build-tests pass.
 
 ## CI
 
