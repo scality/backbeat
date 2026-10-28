@@ -1240,7 +1240,7 @@ describe('LifecycleQueuePopulator', () => {
                 called: false,
             },
             {
-                it: 'should skip null versioned version',
+                it: 'should process null versioned version',
                 type: 'delete',
                 key: 'object\x0098500086134471999999RG001  0',
                 md: {
@@ -1249,7 +1249,8 @@ describe('LifecycleQueuePopulator', () => {
                     isNull: true,
                 },
                 getAccountIdResponse: [null, '1234'],
-                called: false,
+                called: true,
+                objectVersion: 'null',
             },
             {
                 it: 'should skip delete marker',
