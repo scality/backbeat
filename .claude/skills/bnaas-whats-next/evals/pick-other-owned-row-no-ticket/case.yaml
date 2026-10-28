@@ -1,0 +1,8 @@
+schema_version: "1.1"
+name: pick-other-owned-row-no-ticket
+expected_outcome: |
+  The facts below are the live state on 2026-10-22; update them when it moves.
+  Task 28 (arsenal) has no ticket that the Jira search returns, and the prompt says that Anurag has
+  already claimed it in a ticket assigned to Anurag that the search does not show yet. Because someone
+  else owns the task, the skill creates no ticket for Taylor and does not take the task over. It
+  says that Anurag decides. A test run writes nothing live: the renders go to <tmp>, with no journal mark-read and no In Review auto-fix; nothing is written.

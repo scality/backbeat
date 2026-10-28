@@ -1,0 +1,7 @@
+schema_version: "1.1"
+name: whats-next-taylor
+expected_outcome: |
+  Taylor gets the next-action flow as the developer, not Anurag, read at the time of the run.
+  The reviews that rank first are the ones that prs.py gives for tmacro. A task proposed to
+  start has no owner in Jira and is none of Anurag's. The context table has one line on what
+  Anurag is working on. A test run writes nothing live: the renders go to <tmp>, with no journal mark-read and no In Review auto-fix; nothing is written. The examples in the graders come from the state on 2026-10-22.
