@@ -16,8 +16,8 @@ Usage:
 
 The journal lives in the Journal tab of the tech spec doc, named in
 .claude/bnaas/journal.json (BNAAS_JOURNAL_CONFIG names another one).
-The hooks append one JSON fact per line to ~/.bnaas/journal/buffer.jsonl
-(BNAAS_JOURNAL_DIR moves the folder). A shell hook cannot write a Claude
+The hooks append one JSON fact per line to $BNAAS_HOME/journal/buffer.jsonl
+(the folder is required). A shell hook cannot write a Claude
 Doc, so on Stop the hook moves the buffer into a new batch file,
 pending.<session>.<batch>.jsonl, and blocks the stop once, asking the
 session to start the bnaas-journal agent in the background on that
@@ -64,7 +64,15 @@ HERE = os.path.dirname(os.path.realpath(__file__))
 # BNAAS_JOURNAL_CONFIG points the journal at another target, such as a
 # practice tab for tests.
 CONFIG = os.environ.get("BNAAS_JOURNAL_CONFIG") or os.path.join(HERE, "..", "bnaas", "journal.json")
-DIR = os.environ.get("BNAAS_JOURNAL_DIR") or os.path.expanduser("~/.bnaas/journal")
+# The local data folder: BNAAS_HOME, which each developer sets in their
+# shell profile. Never the home folder: without it, main stops. A relative
+# folder counts as none, because it moves with the cwd.
+def absolute(path):
+    return path if path and os.path.isabs(path) else ""
+
+
+DATA = absolute(os.environ.get("BNAAS_HOME"))
+DIR = os.path.join(DATA, "journal") if DATA else ""
 BUFFER = os.path.join(DIR, "buffer.jsonl")
 ERRORS = os.path.join(DIR, "errors.log")
 LAST_READ = os.path.join(DIR, "last-read")
@@ -1128,6 +1136,12 @@ def note(args):
 
 def main(argv):
     cmd, args = (argv[0], argv[1:]) if argv else ("", [])
+    if not DIR and cmd in ("capture", "hook-flush", "note", "flush", "flushed", "take", "batch", "tail", "mark-read"):
+        if cmd in ("capture", "hook-flush"):
+            return 0
+        print("journal: no data folder: set BNAAS_HOME to an absolute path"
+              " in the shell profile", file=sys.stderr)
+        return 2
     if cmd in ("capture", "hook-flush"):
         try:
             data = json.loads(sys.stdin.read() or "{}")

@@ -5,9 +5,18 @@
 #                                      watch (refuses when a dog runs);
 #                                      --fresh, for the first dog of a
 #                                      session only, says every stray again
-#   watch_flock.sh --running           exit 0 when a dog runs on this machine
+#   watch_flock.sh --running           exit 0 when a dog runs on this data folder
 # The state survives a re-arm, so a new dog does not replay old events.
-DIR="${BNAAS_FLOCK_DIR:-$HOME/.bnaas/flock}"
+# The data folder is BNAAS_HOME, which each developer sets in their shell
+# profile; never the home folder. A relative folder counts as none,
+# because it moves with the cwd.
+case $BNAAS_HOME in /*) ;; *) BNAAS_HOME= ;; esac
+if [ -z "$BNAAS_HOME" ]; then
+  echo "flock error: no data folder: set BNAAS_HOME" >&2
+  exit 2
+fi
+export BNAAS_HOME
+DIR=$BNAAS_HOME/flock
 PID="$DIR/dog.pid"
 HERE=$(cd "$(dirname "$0")" && pwd)
 # A dog that died without its trap (SIGKILL, a crash) leaves its pid, which

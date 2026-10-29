@@ -8,14 +8,14 @@ Usage:
 It lists the open D1 PRs with prs.py (the ones the developer wrote, the
 ones that wait for their review and the ones they are requested on), reads
 each with pr_state.py, compares with the last pass in the state file
-(default ~/.bnaas/flock/state-<login>.json), prints one line per change and
+(default $BNAAS_HOME/flock/state-<login>.json), prints one line per change and
 saves the new state. The first pass prints one summary line. A PR that left
 the open lists is read once more, to say whether it merged or closed.
 
 Each line is `<repo>#<n> <event>: <detail> <url>`, with the events review,
 check, thread, mergeable, approval, changes, ready, merged, closed, stale (GitHub's
 updatedAt two days old), stray (an open PR of the developer with no shepherd marker
-younger than three hours in ~/.bnaas/shepherds/<repo>-<n>) and error. It
+younger than three hours in $BNAAS_HOME/shepherds/<repo>-<n>) and error. It
 never writes to GitHub. watch_flock.sh runs it every 120 seconds, with --fresh on
 the first pass of each dog, so that a new dog says every stray again.
 """
@@ -38,7 +38,13 @@ REPOS = ("vault", "cloudserver", "backbeat", "federation", "integration", "ring"
 DEV = ("arsenal", "cloudserverclient")
 STALE = 2 * 86400
 SHEPHERD_FRESH = 3 * 3600
-SHEPHERDS = os.path.expanduser("~/.bnaas/shepherds")
+# The data folder: BNAAS_HOME, which each developer sets in their shell
+# profile; never the home folder. main stops without it. A relative
+# folder counts as none, because it moves with the cwd.
+DATA = os.environ.get("BNAAS_HOME", "")
+if not os.path.isabs(DATA):
+    DATA = ""
+SHEPHERDS = os.path.join(DATA, "shepherds")
 URL = re.compile(r"https://github\.com/([^/]+/[^/]+)/pull/(\d+)")
 # A Federation pin PR, the bot's or a developer's: no shepherd (Rule 4).
 PIN = re.compile(r"-epic-image-pins(-bot)?$")
@@ -369,6 +375,9 @@ def main(argv):
     if argv[:1] == ["--self-test"]:
         self_test()
         return 0
+    if not DATA:
+        print("flock error: no data folder: set BNAAS_HOME", file=sys.stderr)
+        return 2
     opts, args = {}, iter(argv)
     fresh = False
     for a in args:
@@ -385,7 +394,7 @@ def main(argv):
     # The same folder as the pid file of watch_flock.sh, so two dogs with
     # different folders never share one state file.
     path = opts.get("state") or os.path.join(
-        os.environ.get("BNAAS_FLOCK_DIR") or os.path.expanduser("~/.bnaas/flock"),
+        os.path.join(DATA, "flock"),
         "state-%s.json" % login)
     try:
         with open(path) as f:

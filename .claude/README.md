@@ -18,7 +18,7 @@ The idea is simple. The two developers never work at the same time, so the share
 | `bnaas/scripts/local-review.sh` | The local review gate (Rule 5): runs the `/review-pr` skill of the Code Review workflow on the whole range and on each commit, all in parallel, each in a scratch clone (about 1 USD per run), prints one combined report and posts nothing. It loops (Rule 5): fold what it finds, re-run with `--only <sha>...` on the changed commits, and stop when a round brings no new real finding or after 3 rounds. `--self-test` checks it without calling Claude. |
 | `bnaas/journal.json` | The Journal tab of the tech spec, the D1 docs whose writes are logged, and the nodes of the what's next renders (the Tickets tab, the two charts and the Journal tab), whose writes are not. |
 | `skills/bnaas-shepherd-prs/` | `/bnaas-shepherd-prs`: takes a PR or a stack from open to merged: the Claude Code review loop on the draft, the reviewers and the human comments on the ready PR, the merge call and the stack retarget. It also opens plan PRs. |
-| `skills/bnaas-watch-flock/` | `/bnaas-watch-flock`: the dog, one Monitor per machine that reports each change on the developer's PRs, the PRs they are asked to review, open pin PRs and the PRs with no shepherd. |
+| `skills/bnaas-watch-flock/` | `/bnaas-watch-flock`: the dog, one Monitor per `$BNAAS_HOME` (in practice one per machine) that reports each change on the developer's PRs, the PRs they are asked to review, open pin PRs and the PRs with no shepherd. |
 | `skills/bnaas-pin-federation/` | `/bnaas-pin-federation`: pins the CI images of the service epics in Federation and opens the pin PR. |
 | `agents/bnaas-journal.md` | The journal writer: an Opus agent, run in the background, that appends one batch of facts at the end of the Log of the Journal tab, after it checks the Log for the facts shown before. |
 | `skills/bnaas-journal/` | `/bnaas-journal`: records a note or a decision and starts the journal agent; it also answers the Stop message. |
@@ -36,7 +36,7 @@ The idea is simple. The two developers never work at the same time, so the share
 - `yarn`, for the repository tests. It may live under nvm and be missing from non-interactive shells, so run `source ~/.nvm/nvm.sh` first. A fresh worktree needs `yarn install` before its tests run.
 - For Vault, a GitHub Packages token in `~/.npmrc`, or `yarn install` fails: `//npm.pkg.github.com/:_authToken=<classic PAT with read:packages, SSO-authorized>`. The Vault tests do run on Node 22 on a Mac, despite what its CLAUDE.md says.
 - The Atlassian connector in Claude Code, for Jira reads and writes. The Claude Docs connector, for the tech spec doc and its Journal tab.
-- Nothing else for the journal: the hooks keep the facts in `~/.bnaas/journal/buffer.jsonl` until the background journal agent appends them to the Journal tab, and log their errors to `~/.bnaas/journal/errors.log`; they never stop a session.
+- Nothing else for the journal: the hooks keep the facts in `$BNAAS_HOME/journal/buffer.jsonl` until the background journal agent appends them to the Journal tab, and log their errors to `$BNAAS_HOME/journal/errors.log`; they never stop a session.
 - These skill sets, installed at user scope at the versions in use today. A bump of one is a setup PR.
   - scality-skills (`review-pr`, for the local review gate): the `scality-skills` plugin of the `scality-agent-hub` marketplace, `claude plugin marketplace add https://github.com/scality/agent-hub.git` then `claude plugin install scality-skills@scality-agent-hub`. `claude plugin install` takes the version that the marketplace has today, so check that `claude plugin list` shows 1.8.0; if it shows another version, stop and open a setup PR for the bump.
   - superpowers (`brainstorming`, `test-driven-development`, `systematic-debugging`, `verification-before-completion`): the plugin `superpowers@claude-plugins-official`, at version 7.0.0. If `claude plugin list` shows a superpowers plugin from another marketplace (an older version of this README installed it from https://github.com/obra/superpowers), remove it first with `claude plugin uninstall superpowers@<that marketplace>`, or every skill shows up twice. Then: `claude plugin marketplace add anthropics/claude-plugins-official` (skip it when `claude plugin marketplace list` already shows that marketplace), then `claude plugin install superpowers@claude-plugins-official`, and check that `claude plugin list` shows 7.0.0; if it shows another version, stop and open a setup PR for the bump.
@@ -86,6 +86,20 @@ The `hooks` link matters: `settings.json` runs the journal hooks from `.claude/h
 
 Keep personal settings in the workspace `.claude/settings.local.json`. Git never commits it.
 
+### Local data
+
+The hooks and skills keep their local data (the journal buffer, the dog's state, the shepherd markers, the backlog cache) in one folder, `BNAAS_HOME`. Nothing goes to the home folder.
+
+Set it once in your shell profile (`~/.zshenv` for zsh, so that Claude Code started from an IDE or the desktop app sees it too, or `~/.bashrc`), as an absolute path to the `.bnaas` folder of the workspace folder, or of the backbeat clone in the one-repository layout:
+
+```sh
+export BNAAS_HOME="<workspace>/.bnaas"
+```
+
+This step is required. The SessionStart hook creates the folder and puts a `.gitignore` in it, so that git ignores the folder in both layouts. Without an absolute `BNAAS_HOME`, the hook warns the session, the journal logs nothing, the dog does not start and `/bnaas-whats-next` stops: nothing falls back to another folder.
+
+Start every Claude Code session for D1 in the workspace folder, however small the task, never in a subfolder: the project settings, the hooks and the skills load only from the workspace `.claude/`. Remove `BNAAS_JOURNAL_DIR` and `BNAAS_FLOCK_DIR` from the `env` block of your settings if an older setup put them there: nothing reads them anymore.
+
 ## Make sure that it works
 
 Start `claude` in the workspace folder, or in the backbeat clone for the one-repository layout, and run these commands in the session:
@@ -111,6 +125,8 @@ Then run `.claude/hooks/test-journal.sh`: it ends with "all journal tests passed
 ## Update the setup
 
 In the workspace layout, update the worktree: `git -C bnaas-team-setup fetch origin epic/S3C-10971-bnaas-d1 && git -C bnaas-team-setup checkout --detach origin/epic/S3C-10971-bnaas-d1`. Then re-run the `for d in ...` link loop of "Install" from the workspace folder: the update does not create the links of folders that the setup gained since your install, such as `bnaas`. In the one-repository layout, `git pull` on the epic. A change to the setup is a PR into the backbeat epic, like any other change.
+
+If an older setup left a `~/.bnaas` folder, stop its dog (TaskStop) and quit every Claude Code session. If `$BNAAS_HOME` does not exist yet, move the old folder there: `mv ~/.bnaas "$BNAAS_HOME"`. If it exists, add the old journal buffer to the new one, copy the rest without replacing the files already there, then delete the old folder: `mkdir -p "$BNAAS_HOME/journal" && { [ ! -f ~/.bnaas/journal/buffer.jsonl ] || { cat ~/.bnaas/journal/buffer.jsonl >> "$BNAAS_HOME/journal/buffer.jsonl" && rm ~/.bnaas/journal/buffer.jsonl; }; } && rsync -a --ignore-existing ~/.bnaas/ "$BNAAS_HOME"/ && rm -rf ~/.bnaas`. If the folder sits inside a git clone, add a `.gitignore` of `*` to it yourself: the hook adds one only to a folder it creates.
 
 ## Where things live
 
