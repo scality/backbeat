@@ -45,7 +45,9 @@ check "a commit after cd logs the repo, branch, sha and subject" \
   has '"repo": "backbeat", "branch": "improvement/topic-journal", "kind": "commit", "text": "commit [0-9a-f]* Add the journal sample"'
 check "the command text is never logged" sh -c "! grep -q hunter2 '$BUF'"
 SHA=$(git -C "$REPO" rev-parse HEAD)
-ID=$(printf 'commit\nbackbeat\n%s' "$SHA" | shasum | cut -c1-10)
+# sha1sum on Linux, where the Perl shasum may be off PATH; shasum on macOS.
+if command -v sha1sum > /dev/null; then SHA1=sha1sum; else SHA1=shasum; fi
+ID=$(printf 'commit\nbackbeat\n%s' "$SHA" | $SHA1 | cut -c1-10)
 check "a commit's id comes from its repository and sha" has "\"id\": \"$ID\""
 check "a commit's time is its commit time" \
   has "\"t\": \"$(TZ=UTC git -C "$REPO" log -1 --date=format-local:%Y-%m-%dT%H:%M:%S --format=%cd)+00:00\""
@@ -267,6 +269,8 @@ bash_fail "$REPO" "cd $REPO && yarn jest" "Exit code 1"
 check "after only cd steps, a failed check keeps its exit code" sh -c "tail -1 '$BUF' | grep -q 'jest exit 1'"
 bash_fail "$REPO" "source ~/.nvm/nvm.sh && nvm use 22 && yarn mocha tests/x.js" "Exit code 3"
 check "after the nvm setup, a failed check keeps its exit code" sh -c "tail -1 '$BUF' | grep -q 'mocha exit 3'"
+bash_fail "$REPO" 'PATH="$(ls -d ~/.local/share/nvm/v22.* | sort -V | tail -n 1)/bin:$PATH" yarn test' "Exit code 2"
+check "after an nvm.fish PATH prefix, a failed check keeps its exit code" sh -c "tail -1 '$BUF' | grep -q 'yarn test exit 2'"
 n=$(lines)
 commit "It is done"
 bash_ok "$TMP" "git -c core.pager=cat -C $REPO commit -m 'it's done' && git -C $REPO commit --amend --no-edit"

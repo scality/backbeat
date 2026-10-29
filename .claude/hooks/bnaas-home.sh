@@ -7,7 +7,7 @@
 off="Tell the developer now: the D1 journal, the dog and the D1 skills are off in this session"
 case $BNAAS_HOME in
   /*) ;;
-  *) echo "$off, because BNAAS_HOME is not set to an absolute path. Add export BNAAS_HOME=\"$CLAUDE_PROJECT_DIR/.bnaas\" to the shell profile (~/.zshenv or ~/.bashrc), open a new terminal and start Claude Code again in the workspace folder."
+  *) echo "$off, because BNAAS_HOME is not set to an absolute path. Add export BNAAS_HOME=\"$CLAUDE_PROJECT_DIR/.bnaas\" to the shell profile (~/.zshenv, ~/.bashrc or ~/.config/fish/config.fish), open a new terminal and start Claude Code again in the workspace folder."
      exit 0 ;;
 esac
 new=; [ -d "$BNAAS_HOME" ] || new=1
