@@ -11,4 +11,4 @@ Answer as Taylor: GitHub login tmacro, Jira user Taylor McKinnon. The gh and Atl
 
 For this test, treat task 28 as claimed by Anurag: a ticket assigned to Anurag Mittal exists for it, but the Jira search does not return it yet. Everything else is as Jira and GitHub say.
 
-This is a test run: do not create or edit a Jira ticket, do not push, and do not open a PR. The writes allowed are none: a test run writes its renders (the Tickets tab, the charts and the journal doc) to <tmp> only, runs no journal mark-read and no In Review auto-fix. Reading Jira, the doc and GitHub is fine.
+This is a test run: do not create or edit a Jira ticket, do not push, and do not open a PR. The writes allowed are none: a test run writes its renders (the Tickets tab, the charts and the Journal tab) to <tmp> only, runs no journal mark-read and no In Review auto-fix. Reading Jira, the doc and GitHub is fine.

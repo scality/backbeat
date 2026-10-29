@@ -1,6 +1,14 @@
 {
   "advisorModel": "fable",
   "plansDirectory": ".claude/plans",
+  "permissions": {
+    "allow": [
+      "Bash(python3 -I */.claude/hooks/journal *)",
+      "mcp__claude_ai_Claude_Docs__guide",
+      "mcp__claude_ai_Claude_Docs__read",
+      "mcp__claude_ai_Claude_Docs__update"
+    ]
+  },
   "hooks": {
     "PostToolUse": [
       {

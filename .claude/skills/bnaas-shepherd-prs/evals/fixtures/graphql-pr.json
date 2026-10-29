@@ -1,0 +1,203 @@
+{
+ "data": {
+  "repository": {
+   "pullRequest": {
+    "number": 1,
+    "url": "https://github.com/scality/backbeat/pull/1",
+    "title": "ZZ-1: Add the sample change",
+    "isDraft": true,
+    "state": "OPEN",
+    "mergeable": "MERGEABLE",
+    "mergeStateStatus": "BLOCKED",
+    "headRefName": "improvement/ZZ-1-x1",
+    "headRefOid": "0123456789abcdef0123456789abcdef01234567",
+    "baseRefName": "epic/ZZ-0-bnaas-d1",
+    "author": {
+     "login": "anurag4DSB"
+    },
+    "reviews": {
+     "nodes": [
+      {
+       "author": {
+        "login": "claude"
+       },
+       "state": "COMMENTED",
+       "submittedAt": "2026-10-22T08:00:00Z"
+      },
+      {
+       "author": {
+        "login": "tmacro"
+       },
+       "state": "APPROVED",
+       "submittedAt": "2026-10-22T09:00:00Z"
+      },
+      {
+       "author": {
+        "login": "tmacro"
+       },
+       "state": "DISMISSED",
+       "submittedAt": "2026-10-22T10:00:00Z"
+      },
+      {
+       "author": {
+        "login": "nicolas2bert"
+       },
+       "state": "APPROVED",
+       "submittedAt": "2026-10-22T11:00:00Z"
+      },
+      {
+       "author": {
+        "login": "hopocalypse-member"
+       },
+       "state": "APPROVED",
+       "submittedAt": "2026-10-22T12:00:00Z"
+      },
+      {
+       "author": {
+        "login": "copilot-pull-request-reviewer"
+       },
+       "state": "APPROVED",
+       "submittedAt": "2026-10-22T12:30:00Z"
+      },
+      {
+       "author": {
+        "login": "anurag4DSB"
+       },
+       "state": "COMMENTED",
+       "submittedAt": "2026-10-22T13:00:00Z"
+      },
+      {
+       "author": null,
+       "state": "APPROVED",
+       "submittedAt": "2026-10-22T13:30:00Z"
+      }
+     ]
+    },
+    "reviewThreads": {
+     "nodes": [
+      {
+       "id": "T1",
+       "isResolved": false,
+       "comments": {
+        "nodes": [
+         {
+          "author": {
+           "login": "claude"
+          },
+          "body": "The loop never stops when the check is cancelled.",
+          "path": "scripts/a.py",
+          "url": "https://github.com/scality/backbeat/pull/1#discussion_r1",
+          "createdAt": "2026-10-22T08:15:00Z"
+         }
+        ]
+       }
+      },
+      {
+       "id": "T2",
+       "isResolved": false,
+       "comments": {
+        "nodes": [
+         {
+          "author": {
+           "login": "tmacro"
+          },
+          "body": "Why poll every 60 seconds and not 30?",
+          "path": "SKILL.md",
+          "url": "https://github.com/scality/backbeat/pull/1#discussion_r2",
+          "createdAt": "2026-10-22T09:15:00Z"
+         }
+        ]
+       }
+      },
+      {
+       "id": "T3",
+       "isResolved": false,
+       "comments": {
+        "nodes": [
+         {
+          "author": {
+           "login": "anurag4DSB"
+          },
+          "body": "Note to self: rename after the merge.",
+          "path": "SKILL.md",
+          "url": "https://github.com/scality/backbeat/pull/1#discussion_r3",
+          "createdAt": "2026-10-22T10:15:00Z"
+         }
+        ]
+       }
+      },
+      {
+       "id": "T4",
+       "isResolved": true,
+       "comments": {
+        "nodes": [
+         {
+          "author": {
+           "login": "claude"
+          },
+          "body": "Typo.",
+          "path": "README.md",
+          "url": "https://github.com/scality/backbeat/pull/1#discussion_r4",
+          "createdAt": "2026-10-22T11:15:00Z"
+         }
+        ]
+       }
+      }
+     ]
+    },
+    "commits": {
+     "nodes": [
+      {
+       "commit": {
+        "statusCheckRollup": {
+         "contexts": {
+          "nodes": [
+           {
+            "__typename": "CheckRun",
+            "name": "Claude Code Review",
+            "status": "COMPLETED",
+            "conclusion": "ACTION_REQUIRED",
+            "detailsUrl": "https://github.com/scality/backbeat/actions/runs/1"
+           },
+           {
+            "__typename": "CheckRun",
+            "name": "build",
+            "status": "COMPLETED",
+            "conclusion": "SUCCESS",
+            "detailsUrl": "https://github.com/scality/backbeat/actions/runs/2"
+           },
+           {
+            "__typename": "CheckRun",
+            "name": "lint",
+            "status": "COMPLETED",
+            "conclusion": "FAILURE",
+            "detailsUrl": "https://github.com/scality/backbeat/actions/runs/3"
+           },
+           {
+            "__typename": "CheckRun",
+            "name": "tests",
+            "status": "IN_PROGRESS",
+            "conclusion": null,
+            "detailsUrl": "https://github.com/scality/backbeat/actions/runs/4"
+           },
+           {
+            "__typename": "StatusContext",
+            "context": "bert-e",
+            "state": "SUCCESS",
+            "targetUrl": "https://github.com/scality/backbeat"
+           }
+          ]
+         }
+        }
+       }
+      }
+     ]
+    },
+    "updatedAt": "2026-10-22T13:30:00Z",
+    "reviewRequests": {
+     "nodes": []
+    }
+   }
+  }
+ }
+}

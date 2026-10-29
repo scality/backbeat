@@ -1,0 +1,11 @@
+schema_version: "1.1"
+name: start-the-dog
+expected_outcome: |
+  Asked to watch the PRs, the session checks that no dog runs, then gives the exact Monitor
+  call: the command sh <base>/scripts/watch_flock.sh --fresh --login anurag4DSB, a description, and
+  timeout_ms 1800000, and says it re-arms the Monitor when it expires. It is read-only: it starts
+  no Monitor in the test run, and writes nothing to GitHub, Jira or the journal.
+tags: [skill-creator, read-only]
+max_turns: 20
+timeout_seconds: 600
+allowed_tools: [Read, Glob, Grep, Skill, Bash, ToolSearch]

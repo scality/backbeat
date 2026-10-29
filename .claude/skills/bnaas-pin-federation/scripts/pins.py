@@ -326,7 +326,6 @@ def main():
         check_pin_branch(args.federation)
     lines = epic_lines(args.federation, epic)
     rows = survey(lines, epic, args.kms)
-    warning = None if args.kms else kms_warning(lines, rows)
     path = os.path.join(args.federation, GROUP_VARS)
     if args.apply:
         # The pin branch may hold pins the epic does not have yet: rewrite
@@ -336,15 +335,17 @@ def main():
                 lines = handle.read().decode("utf-8").splitlines(keepends=True)
         except OSError as e:
             fail("error: cannot read %s: %s" % (path, e.strerror))
-        # A cloudserver pin that scality-kms follows to a missing image
-        # cannot deploy: pin kms first, with --kms. Only when the cloudserver
-        # pin will move: a cloudserver image not published yet is no reason
-        # to hold back the other pins.
-        if not args.kms and args.only in (None, "cloudserver") and rows[0]["state"] == "exists":
-            blocker = kms_warning(lines, rows)
-            if blocker:
-                fail("error: " + blocker, 1)
     new = apply_pins(lines, only_rows(rows, args.only))
+    # A cloudserver pin that scality-kms follows to a missing image cannot
+    # deploy: pin kms first, with --kms. Judge the file as it will be
+    # written, and only when the cloudserver pin moves, so that a --kms tag
+    # that was not written does not lift the check. The dry run warns on
+    # the same test that --apply refuses on.
+    cloudserver = SERVICES[0][4:]
+    moved = find_pin(new, *cloudserver) != find_pin(lines, *cloudserver)
+    warning = kms_warning(new, rows) if moved else None
+    if args.apply and warning:
+        fail("error: " + warning, 1)
     diff = list(difflib.unified_diff(lines, new, "a/" + GROUP_VARS,
                                      "b/" + GROUP_VARS))
     if args.apply and diff:

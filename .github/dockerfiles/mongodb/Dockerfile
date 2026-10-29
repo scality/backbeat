@@ -1,5 +1,8 @@
 FROM mongo:8.0.32
 
+# Workaround for SERVER-121912, drop when bumping to mongo >= 8.0.35
+ENV GLIBC_TUNABLES=
+
 # Set up directories and permissions
 RUN mkdir -p /data/db /data/configdb && chown -R mongodb:mongodb /data/db /data/configdb
 
