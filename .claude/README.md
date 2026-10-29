@@ -55,6 +55,8 @@ The idea is simple. The two developers never work at the same time, so the share
     rm -rf "$tmp"
     ```
 
+    If Claude Code in auto mode denies this block, run the block yourself in a terminal.
+
 ## Install
 
 Pick the layout that matches how you work.
