@@ -431,14 +431,35 @@ describe('LifecycleQueuePopulator', () => {
                     }),
                 });
 
-                it('should send restore request for the master entry', () => {
-                    handleRestoreOp(getRestoreEntry('object'));
+                [
+                    {
+                        desc: 'no version for a non-versioned object',
+                        key: 'object',
+                        overrides: { isNull: false, versionId: undefined },
+                        expected: undefined,
+                    },
+                    {
+                        desc: 'the encoded version id for a version',
+                        key: `object\x00${versionId}`,
+                        overrides: { isNull: false },
+                        expected: encode(versionId),
+                    },
+                    {
+                        desc: "'null' for the master entry of a null version",
+                        key: 'object',
+                        overrides: {},
+                        expected: 'null',
+                    },
+                ].forEach(({ desc, key, overrides, expected }) => {
+                    it(`should send restore request with ${desc}`, () => {
+                        handleRestoreOp(getRestoreEntry(key, overrides));
 
-                    assert(kafkaSendStub.calledOnce);
-                    assert(!kafkaAdjustSendStub.called);
-                    const message = JSON.parse(kafkaSendStub.args[0][0][0].message);
-                    assert.strictEqual(message.objectKey, 'object');
-                    assert.strictEqual(message.objectVersion, encode(versionId));
+                        assert(kafkaSendStub.calledOnce);
+                        assert(!kafkaAdjustSendStub.called);
+                        const message = JSON.parse(kafkaSendStub.args[0][0][0].message);
+                        assert.strictEqual(message.objectKey, 'object');
+                        assert.strictEqual(message.objectVersion, expected);
+                    });
                 });
 
                 it('should send duration-adjust for the master entry', () => {
@@ -794,7 +815,8 @@ describe('LifecycleQueuePopulator', () => {
             assert(kafkaSendStub.calledOnce);
             const message = JSON.parse(kafkaSendStub.args[0][0][0].message);
             assert.strictEqual(message.objectKey, 'hosts');
-            assert.strictEqual(message.objectVersion, encode(versionId));
+            // the internal version id has no version key to be read from
+            assert.strictEqual(message.objectVersion, 'null');
         });
 
         it('should skip delete markers', () => {
@@ -1244,6 +1266,7 @@ describe('LifecycleQueuePopulator', () => {
                 },
                 getAccountIdResponse: [null, '1234'],
                 called: true,
+                objectVersion: encode('98500086134471999999RG001  0'),
             },
             {
                 it: 'should process non versioned master',
@@ -1254,6 +1277,7 @@ describe('LifecycleQueuePopulator', () => {
                 },
                 getAccountIdResponse: [null, '1234'],
                 called: true,
+                objectVersion: undefined,
             },
             {
                 it: 'should process null versioned master',
@@ -1266,6 +1290,7 @@ describe('LifecycleQueuePopulator', () => {
                 },
                 getAccountIdResponse: [null, '1234'],
                 called: true,
+                objectVersion: 'null',
             },
             {
                 it: 'should still push when we fail to get accountId',
@@ -1278,6 +1303,7 @@ describe('LifecycleQueuePopulator', () => {
                 },
                 getAccountIdResponse: [errors.InternalError, ''],
                 called: true,
+                objectVersion: 'null',
             },
             {
                 it: 'should ignore if producer not found',
@@ -1320,8 +1346,8 @@ describe('LifecycleQueuePopulator', () => {
                     transitionTime: timestamp.toISOString(),
                     accountId: params.getAccountIdResponse[1],
                 };
-                if (params.md.versionId) {
-                    expectedMessage.objectVersion = encode(params.md.versionId);
+                if (params.objectVersion) {
+                    expectedMessage.objectVersion = params.objectVersion;
                 }
                 assert.deepStrictEqual(message, expectedMessage);
             });

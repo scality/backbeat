@@ -1,6 +1,7 @@
 const assert = require('assert');
+const { models: { ObjectMD }, versioning } = require('@scality/arsenal');
 
-const { extractVersionId, hasVersionKey, isShadowedMaster } =
+const { extractVersionId, getEncodedVersionId, hasVersionKey, isShadowedMaster } =
     require('../../../../lib/util/versioning');
 const { listEntries } = require('../../../utils/nullVersionRows');
 
@@ -30,6 +31,24 @@ describe('versioning utils', () => {
 
         it('should be false for a null version', () => {
             assert.strictEqual(hasVersionKey({ versionId: 'vid', isNull: true }), false);
+        });
+    });
+
+    describe('getEncodedVersionId', () => {
+        const versionId = '98500086134471999999RG001  0';
+
+        [
+            { desc: 'a non-versioned object', value: {}, expected: undefined },
+            { desc: 'a version', value: { versionId }, expected: versioning.VersionID.encode(versionId) },
+            { desc: 'a null version', value: { versionId, isNull: true }, expected: 'null' },
+        ].forEach(({ desc, value, expected }) => {
+            it(`should return ${expected} for ${desc}`, () => {
+                assert.strictEqual(getEncodedVersionId(value), expected);
+            });
+
+            it(`should match ObjectMD.getEncodedVersionId() for ${desc}`, () => {
+                assert.strictEqual(getEncodedVersionId(value), new ObjectMD(value).getEncodedVersionId());
+            });
         });
     });
 
