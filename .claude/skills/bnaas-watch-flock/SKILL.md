@@ -5,18 +5,18 @@ description: Start the dog that watches every open D1 PR of the developer, and t
 
 # Watch the flock
 
-The dog watches and barks; it never acts. The shepherd (`/bnaas-shepherd-prs`) acts on what it reports. One dog per machine: what's next starts it at the start of a session when none runs, and the shepherd starts it when it opens a PR. A second session on the same machine starts none, and its shepherd watches its own PRs (shepherd section 0).
+The dog watches and barks; it never acts. The shepherd (`/bnaas-shepherd-prs`) acts on what it reports. One dog per data folder (`$BNAAS_HOME`, in practice one per machine): what's next starts it at the start of a session when none runs, and the shepherd starts it when it opens a PR. A second session starts none, and its shepherd watches its own PRs (shepherd section 0).
 
 `<base>` is the base directory of this skill, which Claude Code prints when it loads the skill.
 
 ## 1. Start the dog
 
-1. Check that none runs: `sh <base>/scripts/watch_flock.sh --running` exits 0 when one does. If one runs and this session did not start it, another session on this machine owns it: say so, and start none.
+1. Check that none runs: `sh <base>/scripts/watch_flock.sh --running` exits 0 when one does, 1 when none does, and 2 when there is no data folder (`BNAAS_HOME` is not set): on 2, say so and start none. If one runs and this session did not start it, another session of this workspace owns it: say so, and start none.
 2. Start it with the Monitor tool, with these arguments:
    - `command`: `sh <base>/scripts/watch_flock.sh --fresh --login <login>` for the first dog of the session, with the GitHub login of `gh api user --jq .login`. `--fresh` makes its first pass say every stray again.
    - `description`: `D1 PRs of <login>`.
    - `timeout_ms`: 1800000. If the tool caps it lower, it says so when the monitor expires; re-arm it then.
-3. When the Monitor reports that it expired, start it again with the same arguments without `--fresh`, so that a re-arm does not repeat the strays. The dog keeps its state in `~/.bnaas/flock/state-<login>.json` (in `$BNAAS_FLOCK_DIR` when set, next to its pid file), so a new one does not repeat the old events. Stop it with TaskStop when the developer asks.
+3. When the Monitor reports that it expired, start it again with the same arguments without `--fresh`, so that a re-arm does not repeat the strays. The dog keeps its state in `$BNAAS_HOME/flock/state-<login>.json` (next to its pid file), so a new one does not repeat the old events. Stop it with TaskStop when the developer asks.
 
 The first pass prints one line, `flock: watching <n> PRs: <numbers>`, and the strays. After that, the dog stays quiet until something changes.
 
@@ -39,7 +39,7 @@ Each line is `<repo>#<n> <event>: <detail> <url>`:
 | `new` | a PR joined the flock after the first pass |
 | `pin` | an open Federation pin PR (branch `-epic-image-pins` or `-bot`), said once: no shepherd (Rule 4) |
 | `stale` | no change on GitHub (its `updatedAt`) for two days; said once per update |
-| `stray` | an open PR of the developer, not a pin PR, with no shepherd: no marker `~/.bnaas/shepherds/<repo>-<n>` (repository in lower case) written in the last three hours, and no `~/.bnaas/shepherds/<repo>-<n>.stopped` (the developer stopped its shepherd) |
+| `stray` | an open PR of the developer, not a pin PR, with no shepherd: no marker `$BNAAS_HOME/shepherds/<repo>-<n>` (repository in lower case) written in the last three hours, and no `$BNAAS_HOME/shepherds/<repo>-<n>.stopped` (the developer stopped its shepherd) |
 | `error` | GitHub, or one repository, did not answer; said once until it answers again, and the PRs of that repository keep their last state |
 
 ## 3. What the session does with a line

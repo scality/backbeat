@@ -4,7 +4,7 @@ This is the loop of the shepherd's subagent, for every draft of the stack, botto
 
 ## One pass
 
-1. Write the shepherd marker again for every open PR of the stack: `for n in <open PR numbers>; do date +%s > ~/.bnaas/shepherds/<repo>-$n; done`.
+1. Write the shepherd marker again for every open PR of the stack: `for n in <open PR numbers>; do date +%s > "${BNAAS_HOME:?}"/shepherds/<repo>-$n; done`.
 2. Read the state: `python3 -I <base>/scripts/pr_state.py --repo scality/<repo> --pr <n> --stack`.
 3. Act on every draft of the stack whose review has landed, as soon as it lands, bottom first; never wait for the reviews of the other PRs, and never wait for the long CI checks before a fold (they matter only for `draft_goal`):
    - `mergeable` is CONFLICTING (or `merge_state` DIRTY): treat it like a red check. Rebase the branch onto its base in its worktree, solve the conflict and run the tests of that repository; the push goes with the batch of step 4. If the conflict changes what the PR does, stop and ask the developer.
@@ -18,7 +18,7 @@ This is the loop of the shepherd's subagent, for every draft of the stack, botto
 6. While some PR still in the loop has its review pending and none needs action, poll the whole stack every 120 seconds with the foreground `until` loop below, under a Bash timeout of ten minutes, then start the next pass. The loop writes the shepherd marker of every open PR at each poll, so that the dog never takes a waiting shepherd for a dead one. A PR leaves the loop when it is handed to its author (`draft_goal`, or answered comments only) or given up after the 15 minutes of `missing`; testing only the PRs still in the loop keeps a handed-off PR from making the wait spin:
 
    ```
-   until python3 -I <base>/scripts/pr_state.py --repo scality/<repo> --pr <n> --stack | python3 -c 'import json, sys; w = {<PR numbers still in the loop>}; r = [s["review_check"]["state"] for s in json.load(sys.stdin) if s["number"] in w]; sys.exit(any(x in ("pending", "missing") for x in r) and not any(x in ("action_required", "failure", "cancelled") for x in r))'; do for m in <open PR numbers>; do date +%s > ~/.bnaas/shepherds/<repo>-$m; done; sleep 120; done
+   until python3 -I <base>/scripts/pr_state.py --repo scality/<repo> --pr <n> --stack | python3 -c 'import json, sys; w = {<PR numbers still in the loop>}; r = [s["review_check"]["state"] for s in json.load(sys.stdin) if s["number"] in w]; sys.exit(any(x in ("pending", "missing") for x in r) and not any(x in ("action_required", "failure", "cancelled") for x in r))'; do for m in <open PR numbers>; do date +%s > "${BNAAS_HOME:?}"/shepherds/<repo>-$m; done; sleep 120; done
    ```
 
 The loop ends when `draft_goal` is true for every draft of the stack, or when it needs the developer. A review check that stays `action_required` only on comments answered with why they stay also ends it for that PR: the AI review is done, so hand the PR to its author as for `draft_goal`, with the links to those threads, and do not wait for the LGTM. When every review is `success` and only CI checks are pending, wait for them with the same loop, testing `pending_checks` instead.
