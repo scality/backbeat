@@ -1,7 +1,6 @@
 const async = require('async');
 const { constants } = require('@scality/arsenal');
 const { scaleMsPerDay } = require('@scality/arsenal').s3middleware.objectUtils;
-const { encode } = require('@scality/arsenal').versioning.VersionID;
 const { isMasterKey } = require('@scality/arsenal').versioning;
 const { mpuBucketPrefix } = constants;
 const QueuePopulatorExtension =
@@ -9,7 +8,7 @@ const QueuePopulatorExtension =
 const { authTypeAssumeRole } = require('../../lib/constants');
 const { v4: uuid } = require('uuid');
 const safeJsonParse = require('../../lib/util/safeJsonParse');
-const { isShadowedMaster } = require('../../lib/util/versioning');
+const { getEncodedVersionId, isShadowedMaster } = require('../../lib/util/versioning');
 const { LifecycleMetrics } = require('./LifecycleMetrics');
 const LIFECYCLE_BUCKETS_ZK_PATH = '/data/buckets';
 const LIFEYCLE_POPULATOR_CLIENT_ID = 'lifecycle-populator';
@@ -327,18 +326,13 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
             const topic = `${coldStorageArchiveTopicPrefix}${coldLocation}`;
             const key = `${entry.bucket}/${value.key}`;
 
-            let version;
-            if (value.versionId) {
-                version = encode(value.versionId);
-            }
-
             const transitionTime = this._parseDate(
                 value['x-amz-scal-transition-time'] || value['last-modified']);
             const message = JSON.stringify({
                 accountId,
                 bucketName: entry.bucket,
                 objectKey: value.key,
-                objectVersion: version,
+                objectVersion: getEncodedVersionId(value),
                 requestId: uuid(),
                 size: value['content-length'],
                 eTag: `"${value['content-md5']}"`,
@@ -434,17 +428,12 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
             const topic = `${coldStorageRestoreTopicPrefix}${locationName}`;
             const key = `${entry.bucket}/${entry.key}`;
 
-            let version;
-            if (value.versionId) {
-                version = encode(value.versionId);
-            }
-
             const requestedDurationSecs = value.archive.restoreRequestedDays * nSecsPerDay();
             const transitionTime = this._parseDate(value.archive.restoreRequestedAt);
             const message = JSON.stringify({
                 bucketName: entry.bucket,
                 objectKey: value.key,
-                objectVersion: version,
+                objectVersion: getEncodedVersionId(value),
                 archiveInfo: value.archive.archiveInfo,
                 requestId: uuid(),
                 eTag: value['content-md5'],
@@ -569,15 +558,10 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
             const topic = `${coldStorageGCTopicPrefix}${locationName}`;
             const key = `${entry.bucket}/${entry.key}`;
 
-            let version;
-            if (value.versionId) {
-                version = encode(value.versionId);
-            }
-
             const message = JSON.stringify({
                 bucketName: entry.bucket,
                 objectKey: value.key,
-                objectVersion: version,
+                objectVersion: getEncodedVersionId(value),
                 archiveInfo: value.archive.archiveInfo,
                 requestId: uuid(),
                 transitionTime: new Date(entry.overheadFields.commitTimestamp).toISOString(),
