@@ -13,7 +13,7 @@ The hooks log the facts as work happens (Rule 2); this skill writes them, and th
 
 ## The developer asks to record something
 
-1. Write it as one sentence of fact, with no names, and run one of these, as is (no `--help` first), from the folder of the repository it is about, so that the note takes its repository and branch:
+1. Write it as one sentence of fact, with no names, with the sentence, `--why` and `--tasks` under 280 characters together (the journal joins them as `<sentence> | why: ... | tasks: ...` and cuts the result at 300, `MAX_TEXT`, so a longer note loses its end), and run one of these, as is (no `--help` first), from the folder of the repository it is about, so that the note takes its repository and branch:
 
    ```
    python3 -I <setup>/.claude/hooks/journal note "<sentence>"
