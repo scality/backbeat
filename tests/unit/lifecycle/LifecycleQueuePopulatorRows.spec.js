@@ -62,10 +62,7 @@ describe('LifecycleQueuePopulator: master versus version entries', () => {
         });
 
         listEntries(archivedMd).forEach(({ desc, key, value, shadowed }) => {
-            // the version key of a null version is skipped on top of the
-            // shared rule, see _handleDeleteOp
-            const isNullVersionKey = key.includes('\x00') && value.isNull;
-            const expected = !shadowed && !value.isDeleteMarker && !isNullVersionKey;
+            const expected = !shadowed && !value.isDeleteMarker;
             it(`should ${expected ? 'publish a GC request' : 'skip'} for ${desc}`, () => {
                 lcqp._handleDeleteOp({
                     type: 'delete',
