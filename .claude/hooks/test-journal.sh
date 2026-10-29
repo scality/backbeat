@@ -271,6 +271,28 @@ bash_fail "$REPO" "source ~/.nvm/nvm.sh && nvm use 22 && yarn mocha tests/x.js" 
 check "after the nvm setup, a failed check keeps its exit code" sh -c "tail -1 '$BUF' | grep -q 'mocha exit 3'"
 bash_fail "$REPO" 'PATH="$(ls -d ~/.local/share/nvm/v22.* | sort -V | tail -n 1)/bin:$PATH" yarn test' "Exit code 2"
 check "after an nvm.fish PATH prefix, a failed check keeps its exit code" sh -c "tail -1 '$BUF' | grep -q 'yarn test exit 2'"
+# A check inside a shell's -c string is logged as if it ran outside it.
+bash_fail "$REPO" "fish -c 'nvm use 22; and yarn test'" "Exit code 4"
+check "a check inside fish -c, after the nvm setup, keeps its exit code" sh -c "tail -1 '$BUF' | grep -q 'yarn test exit 4'"
+bash_fail "$TMP" "bash -lc 'cd $REPO && yarn lint'" "Exit code 5"
+check "a check inside bash -lc logs in the folder that its cd moved to" \
+  sh -c "tail -1 '$BUF' | grep -q '\"repo\": \"backbeat\".*yarn lint exit 5'"
+bash_ok "$REPO" "sh -c 'yarn lint:md' | tail -3"
+check "a piped shell -c string logs its check with exit unknown" sh -c "tail -1 '$BUF' | grep -q 'yarn lint:md exit unknown'"
+bash_fail "$REPO" "fish -c 'nvm use 22; and S3BACKEND=mem yarn mocha tests/x.js'" "Exit code 6"
+check "a VAR=value prefix after fish's and is dropped too" sh -c "tail -1 '$BUF' | grep -q 'mocha exit 6'"
+bash_fail "$REPO" "fish -c 'nvm use 22; and bash -c \"yarn test:nested\"'" "Exit code 8"
+check "a shell after fish's and is unwrapped too" sh -c "tail -1 '$BUF' | grep -q 'yarn test:nested exit 8'"
+bash_ok "$REPO" "bash -c 'cat <<EOF
+not a command
+EOF
+yarn typecheck:heredoc'"
+check "a check after a heredoc inside bash -c is logged" sh -c "tail -1 '$BUF' | grep -q 'yarn typecheck:heredoc exit 0'"
+bash_ok "$REPO" "bash -c < x.sh && yarn test:after"
+check "a shell with no string after -c stays one step, and the rest is read" sh -c "tail -1 '$BUF' | grep -q 'yarn test:after exit 0'"
+n=$(lines)
+bash_ok "$REPO" "echo \"fish -c 'yarn test'\""
+check "a shell -c string that is only an argument logs nothing" test "$(lines)" = "$n"
 n=$(lines)
 commit "It is done"
 bash_ok "$TMP" "git -c core.pager=cat -C $REPO commit -m 'it's done' && git -C $REPO commit --amend --no-edit"
@@ -334,6 +356,28 @@ check "bad input went to errors.log" grep -q capture "$BNAAS_HOME/journal/errors
 
 (cd "$REPO" && python3 -I "$HOOKS/journal" note --decision --tasks 22b "Pivots move to the Journal tab")
 check "journal note --decision logs a decision" has '"kind": "decision", "text": "Pivots move to the Journal tab | tasks: 22b"'
+# A note over the 300 characters of a fact is refused, not cut.
+n=$(lines)
+long=$(python3 -c 'print("x" * 301)')
+check "journal note refuses a note over 300 characters" \
+  sh -c "cd '$REPO' && python3 -I '$HOOKS/journal' note '$long' 2> '$TMP/err'; test \$? -eq 2"
+check "the refusal names the length and the limit" sh -c "grep -q 301 '$TMP/err' && grep -q 300 '$TMP/err'"
+check "a refused note leaves the buffer as it was" test "$(lines)" = "$n"
+half=$(python3 -c 'print("x" * 200)')
+check "the limit counts the note and its --why together" \
+  sh -c "cd '$REPO' && python3 -I '$HOOKS/journal' note '$half' --why '$half' 2> /dev/null; test \$? -eq 2"
+near=$(python3 -c 'print("x" * 290)')
+check "the limit counts the --tasks text too" \
+  sh -c "cd '$REPO' && python3 -I '$HOOKS/journal' note '$near' --tasks 22b 2> /dev/null; test \$? -eq 2"
+check "a note refused for its --why or --tasks leaves the buffer as it was" test "$(lines)" = "$n"
+full=$(python3 -c 'print("y" * 300)')
+(cd "$REPO" && python3 -I "$HOOKS/journal" note "$full")
+check "a note of 300 characters lands whole" has "\"text\": \"$full\""
+spaced=$(python3 -c 'print("xx  " * 100)')
+check "a note is measured with its blanks folded" \
+  sh -c "cd '$REPO' && python3 -I '$HOOKS/journal' note '$spaced' 2> /dev/null"
+folded=$(python3 -c 'print(" ".join(["xx"] * 100))')
+check "a note whose blanks fold under 300 lands whole" has "\"text\": \"$folded\""
 
 stop() { # <json> : run the Stop hook, output in $TMP/out
   echo "$1" | "$HOOKS/journal-flush.sh" > "$TMP/out"
