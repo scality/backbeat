@@ -375,6 +375,9 @@ def append(facts):
 # Bash commands -------------------------------------------------------------
 
 OPERATORS = set("();<>|&\n")
+# Shells whose -c string runs commands of its own: `fish -c 'nvm use 22;
+# and yarn test'` runs a check like any other.
+SHELLS = ("sh", "bash", "zsh", "dash", "fish")
 
 
 def strip_heredocs(command):
@@ -404,17 +407,19 @@ def tokens(command):
         return [t for t in re.split(r"[ \t\r]+|([();<>|&\n]+)", command) if t]
 
 
-def segments(command):
+def segments(command, stripped=False):
     """The simple commands of a shell line, as (words, piped) pairs, split
     at the operators and newlines that are not quoted. piped is true when
-    the output of the command goes into a pipe, so its exit code is lost."""
+    the output of the command goes into a pipe, so its exit code is lost.
+    stripped is true when the here-documents are already out of the line,
+    as in a shell's -c string, which the outer pass has stripped."""
     out, words, target = [], [], False
     # The fd of a redirection touches its operator (`2>&1`); a number with a
     # blank before the operator is an argument (`gh pr ready 2902 > x`).
     # A backslash before a newline joins the two lines with nothing
     # between, as bash does.
     command = re.sub(r"(?<=\s)\d+(?=[<>])", "",
-                     strip_heredocs(command).replace("\\\n", ""))
+                     (command if stripped else strip_heredocs(command)).replace("\\\n", ""))
     for token in tokens(command) + ["\n"]:
         if token and set(token) <= OPERATORS and set(token) & set("<>"):
             # A redirection: drop its target (`1`, `/dev/null`), and the
@@ -429,11 +434,40 @@ def segments(command):
             while words and re.match(r"^\w+=", words[0]):
                 words = words[1:]  # VAR=value prefixes
             if words:
-                out.append((words, token == "|"))
+                out += unwrap(words, token == "|")
             words = []
         else:
             words.append(token)
     return out
+
+
+def unwrap(words, piped):
+    """The segments of a shell's -c string, in place of the shell that runs
+    it, the last one piped as the shell was. A `cd` in the string still
+    carries over to the segments after it, as one inside `( ... )` does,
+    although a child shell's cd does not move its parent. fish chains with
+    `and` and `or`, which lead their segment."""
+    shell = os.path.basename(words[0])
+    if shell in SHELLS and len(words) > 2 and re.fullmatch(r"-[a-z]*c", words[1]):
+        inner = segments(words[2], stripped=True)
+        if shell == "fish":
+            # A shell behind `and` was not seen as one: unwrap it now.
+            inner = [s for w, p in inner for s in unwrap(fish_words(w), p)]
+        if inner:
+            inner[-1] = (inner[-1][0], inner[-1][1] or piped)
+            return inner
+    return [(words, piped)]
+
+
+def fish_words(words):
+    """A fish segment without its leading `and` or `or`, and without the
+    VAR=value prefixes after it, which segments() saw only behind the
+    `and`."""
+    if words[0] in ("and", "or") and len(words) > 1:
+        words = words[1:]
+    while len(words) > 1 and re.match(r"^\w+=", words[0]):
+        words = words[1:]
+    return words
 
 
 def git_opts(words):
@@ -1126,6 +1160,13 @@ def note(args):
         return 2
     for name, value in extra:
         text += " | %s: %s" % (name, value)
+    # append() cuts a fact at MAX_TEXT, which suits the hooks, which must
+    # never fail; a note is refused instead, so that its writer shortens it.
+    size = len(" ".join(text.split()))
+    if size > MAX_TEXT:
+        print("journal note: %d characters, more than the %d of a fact; shorten it"
+              % (size, MAX_TEXT), file=sys.stderr)
+        return 2
     repo = repo_of(os.getcwd())
     where = repo or ("d1", "-")
     head = (git(os.getcwd(), "rev-parse", "HEAD") if repo else None) or "-"
