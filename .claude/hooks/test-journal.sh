@@ -5,8 +5,8 @@
 HOOKS=$(cd "$(dirname "$0")" && pwd)
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
-export BNAAS_JOURNAL_DIR="$TMP/journal"
-BUF="$BNAAS_JOURNAL_DIR/buffer.jsonl"
+export BNAAS_HOME="$TMP"
+BUF="$BNAAS_HOME/journal/buffer.jsonl"
 FAIL=0
 
 check() { # <description> <test command...>
@@ -326,7 +326,7 @@ check "a render of the Tickets tab or a chart is not logged" test "$(lines)" = "
 python3 -c 'import json; print(json.dumps({"hook_event_name":"PostToolUse","tool_name":"mcp__claude_ai_Claude_Docs__update","tool_input":{"container":{"kind":"project","id":"another-doc"},"ref":{"object":"node","id":"x"}},"tool_response":"{\"verdict\":\"allow\"}"}))' | capture
 echo 'not json' | capture
 check "another doc and bad input log nothing" test "$(lines)" = "$n"
-check "bad input went to errors.log" grep -q capture "$BNAAS_JOURNAL_DIR/errors.log"
+check "bad input went to errors.log" grep -q capture "$BNAAS_HOME/journal/errors.log"
 
 (cd "$REPO" && python3 -I "$HOOKS/journal" note --decision --tasks 22b "Pivots move to the Journal tab")
 check "journal note --decision logs a decision" has '"kind": "decision", "text": "Pivots move to the Journal tab | tasks: 22b"'
@@ -344,9 +344,9 @@ check "a subagent stop asks nothing" test ! -s "$TMP/out" -a -s "$BUF"
 
 # A broken line is dropped, and the batch of a quiet session is taken over.
 echo 'not json' >> "$BUF"
-echo '{"repo": "backbeat", "branch": "b", "kind": "push", "text": "push from a quiet session"}' > "$BNAAS_JOURNAL_DIR/pending.old.aaaa.jsonl"
-touch -t 202001010000 "$BNAAS_JOURNAL_DIR/pending.old.aaaa.jsonl"
-echo '{"repo": "backbeat", "branch": "b", "kind": "push", "text": "push from a live session"}' > "$BNAAS_JOURNAL_DIR/pending.live.bbbb.jsonl"
+echo '{"repo": "backbeat", "branch": "b", "kind": "push", "text": "push from a quiet session"}' > "$BNAAS_HOME/journal/pending.old.aaaa.jsonl"
+touch -t 202001010000 "$BNAAS_HOME/journal/pending.old.aaaa.jsonl"
+echo '{"repo": "backbeat", "branch": "b", "kind": "push", "text": "push from a live session"}' > "$BNAAS_HOME/journal/pending.live.bbbb.jsonl"
 n=$(($(lines) + 1))
 
 batch_of() { sed -n 's/.* wait in batch \([0-9a-f]*\):.*/\1/p' "$TMP/reason"; }
@@ -358,7 +358,7 @@ B1=$(batch_of)
 check "the reason names the batch and the background agent" \
   sh -c "test -n '$B1' && grep -q 'start the bnaas-journal agent in the background with that batch id, then go on' '$TMP/reason'"
 check "the reason says what to do without the connector" grep -q "journal batch $B1\` prints them, then \`.*journal flushed $B1\`" "$TMP/reason"
-check "the batch has a file of its own" test -s "$BNAAS_JOURNAL_DIR/pending.s1.$B1.jsonl"
+check "the batch has a file of its own" test -s "$BNAAS_HOME/journal/pending.s1.$B1.jsonl"
 show "$B1"
 check "the batch names the Journal tab and its nodes" \
   grep -q 'Target: the Journal tab of https://claude.ai/artifact/QhKsCqtGNzaVice35nvip9 (doc bfe390f9-d819-4a93-9050-ffd5eee1b80a, tab file b251bb0a-d91f, body node 267e707b-5e7b)' "$TMP/batch"
@@ -367,11 +367,11 @@ check "one bullet per fact: UTC time, fact id, repo and branch" \
 check "the bullets are oldest first" sh -c "sed '/^Shown before/,\$d' '$TMP/batch' | grep '^- ' | cut -c3-19 | sort -c"
 check "every fact is in the batch, minus the broken line" test "$(grep -c '^- ' "$TMP/batch")" = "$((n - 1))"
 check "the batch of a quiet session is taken over" \
-  sh -c "sed -n '/^Shown before/,\$p' '$TMP/batch' | grep -q 'push from a quiet session' && test ! -e '$BNAAS_JOURNAL_DIR/pending.old.aaaa.jsonl'"
+  sh -c "sed -n '/^Shown before/,\$p' '$TMP/batch' | grep -q 'push from a quiet session' && test ! -e '$BNAAS_HOME/journal/pending.old.aaaa.jsonl'"
 check "first-time facts are appended without a read" \
   sh -c "sed -n '/^New, to append without a read/,/^Shown before/p' '$TMP/batch' | grep -q '^- .* backbeat improvement/topic-journal: commit '"
 check "the batch of a live session is left to it" \
-  sh -c "! grep -q 'push from a live session' '$TMP/batch' && test -s '$BNAAS_JOURNAL_DIR/pending.live.bbbb.jsonl'"
+  sh -c "! grep -q 'push from a live session' '$TMP/batch' && test -s '$BNAAS_HOME/journal/pending.live.bbbb.jsonl'"
 check "the buffer is empty" test ! -s "$BUF"
 grep '^- ' "$TMP/batch" | cut -d' ' -f3 | sort > "$TMP/ids1"
 
@@ -384,14 +384,14 @@ reason > "$TMP/reason" 2>/dev/null
 B2=$(batch_of)
 show "$B2"
 check "two batches in one session: the second holds only the new push" \
-  sh -c "test '$B2' != '$B1' && test \$(grep -c '^- ' '$TMP/batch') = 1 && grep -q '^- .*: push$' '$TMP/batch' && test -s '$BNAAS_JOURNAL_DIR/pending.s1.$B1.jsonl'"
+  sh -c "test '$B2' != '$B1' && test \$(grep -c '^- ' '$TMP/batch') = 1 && grep -q '^- .*: push$' '$TMP/batch' && test -s '$BNAAS_HOME/journal/pending.s1.$B1.jsonl'"
 python3 -I "$HOOKS/journal" flushed "$B2"
 check "journal flushed removes exactly that batch" \
-  sh -c "test ! -e '$BNAAS_JOURNAL_DIR/pending.s1.$B2.jsonl' && test -s '$BNAAS_JOURNAL_DIR/pending.s1.$B1.jsonl'"
+  sh -c "test ! -e '$BNAAS_HOME/journal/pending.s1.$B2.jsonl' && test -s '$BNAAS_HOME/journal/pending.s1.$B1.jsonl'"
 
 # The first batch was never flushed: after an hour, the next batch takes
 # it over, its facts marked as shown before, with the same ids.
-touch -t 202001010000 "$BNAAS_JOURNAL_DIR/pending.s1.$B1.jsonl"
+touch -t 202001010000 "$BNAAS_HOME/journal/pending.s1.$B1.jsonl"
 python3 -I "$HOOKS/journal" note "after the takeover"
 stop '{"hook_event_name":"Stop","session_id":"s3"}'
 reason > "$TMP/reason" 2>/dev/null
@@ -401,7 +401,7 @@ takeover() {
   sed -n '/^Shown before/,$p' "$TMP/batch" | grep '^- ' | cut -d' ' -f3 | sort > "$TMP/ids3" &&
     test -s "$TMP/ids1" && test -z "$(comm -23 "$TMP/ids1" "$TMP/ids3")" &&
     sed -n '/^New, to append without a read/,/^Shown before/p' "$TMP/batch" | grep -q 'after the takeover' &&
-    test ! -e "$BNAAS_JOURNAL_DIR/pending.s1.$B1.jsonl"
+    test ! -e "$BNAAS_HOME/journal/pending.s1.$B1.jsonl"
 }
 check "a stale batch is taken over as shown before, with the same ids" takeover
 python3 -I "$HOOKS/journal" flushed "$B3"
@@ -409,11 +409,11 @@ python3 -I "$HOOKS/journal" note "a manual flush test"
 python3 -I "$HOOKS/journal" flush > "$TMP/reason"
 BM=$(batch_of)
 check "a manual flush takes a batch of its own" \
-  sh -c "test -n '$BM' && ls '$BNAAS_JOURNAL_DIR' | grep -q '^pending.manual-[0-9]*.$BM.jsonl$'"
+  sh -c "test -n '$BM' && ls '$BNAAS_HOME/journal' | grep -q '^pending.manual-[0-9]*.$BM.jsonl$'"
 python3 -I "$HOOKS/journal" flushed "$BM"
 python3 -I "$HOOKS/journal" note "taken by hand"
 BT=$(python3 -I "$HOOKS/journal" take s4)
-check "journal take prints the id of a new batch" test -s "$BNAAS_JOURNAL_DIR/pending.s4.$BT.jsonl"
+check "journal take prints the id of a new batch" test -s "$BNAAS_HOME/journal/pending.s4.$BT.jsonl"
 python3 -I "$HOOKS/journal" flushed "$BT"
 python3 -I "$HOOKS/journal" note "for the practice tab"
 BP=$(python3 -I "$HOOKS/journal" take s5)
@@ -438,14 +438,14 @@ sorted_by_time() {
 }
 check "the facts sort by their parsed time" sorted_by_time
 grep '^- ' "$TMP/batch" | cut -d' ' -f2 > "$TMP/t1"
-touch "$BNAAS_JOURNAL_DIR"/pending.s6.$BS.jsonl
+touch "$BNAAS_HOME/journal"/pending.s6.$BS.jsonl
 sleep 1
 show "$BS"
 check "the time of a fact does not change on a later read" sh -c "grep '^- ' '$TMP/batch' | cut -d' ' -f2 | cmp -s - '$TMP/t1'"
 python3 -I "$HOOKS/journal" flushed "$BS"
 # Two batches wait at once: each prints only its own facts.
-echo '{"repo": "cloudserver", "branch": "z", "kind": "push", "text": "first batch fact", "t": "2026-01-02T11:00:00+00:00"}' > "$BNAAS_JOURNAL_DIR/pending.eval.c1c1c1.jsonl"
-echo '{"repo": "cloudserver", "branch": "z", "kind": "push", "text": "second batch fact", "t": "2026-01-02T11:10:00+00:00"}' > "$BNAAS_JOURNAL_DIR/pending.eval.c2c2c2.jsonl"
+echo '{"repo": "cloudserver", "branch": "z", "kind": "push", "text": "first batch fact", "t": "2026-01-02T11:00:00+00:00"}' > "$BNAAS_HOME/journal/pending.eval.c1c1c1.jsonl"
+echo '{"repo": "cloudserver", "branch": "z", "kind": "push", "text": "second batch fact", "t": "2026-01-02T11:10:00+00:00"}' > "$BNAAS_HOME/journal/pending.eval.c2c2c2.jsonl"
 own_facts() {
   python3 -I "$HOOKS/journal" batch c1c1c1 > "$TMP/b1" && python3 -I "$HOOKS/journal" batch c2c2c2 > "$TMP/b2" &&
     test "$(grep -c '^- ' "$TMP/b1")" = 1 && grep -q 'first batch fact' "$TMP/b1" &&
@@ -454,14 +454,14 @@ own_facts() {
 check "two batch files: each batch prints only its own facts" own_facts
 python3 -I "$HOOKS/journal" flushed c1c1c1
 check "flushing one batch leaves the other" \
-  sh -c "test ! -e '$BNAAS_JOURNAL_DIR/pending.eval.c1c1c1.jsonl' && test -s '$BNAAS_JOURNAL_DIR/pending.eval.c2c2c2.jsonl'"
+  sh -c "test ! -e '$BNAAS_HOME/journal/pending.eval.c1c1c1.jsonl' && test -s '$BNAAS_HOME/journal/pending.eval.c2c2c2.jsonl'"
 python3 -I "$HOOKS/journal" flushed c2c2c2
 (cd "$REPO" && python3 -I "$HOOKS/journal" note --decision "Options after the sentence" --why "the skill writes them so" --tasks 7)
 check "journal note takes its options after the sentence too" \
   has '"kind": "decision", "text": "Options after the sentence | why: the skill writes them so | tasks: 7"'
 : > "$BUF"
 check "journal batch fails on an unknown batch" sh -c "! python3 -I '$HOOKS/journal' batch nope 2>/dev/null"
-rm -f "$BNAAS_JOURNAL_DIR"/pending.live.*.jsonl
+rm -f "$BNAAS_HOME/journal"/pending.live.*.jsonl
 stop '{"hook_event_name":"Stop","session_id":"s1"}'
 check "nothing waits, so the Stop asks nothing" test ! -s "$TMP/out"
 
@@ -531,7 +531,7 @@ check "the old layout: a fact repeated word for word on one day is new again" \
   sh -c "test \$(grep -c '^- ' '$TMP/out') = 1 && grep -q 'test exit 0' '$TMP/out'"
 python3 -I "$HOOKS/journal" mark-read > /dev/null
 check "the read set holds each id once, with its time" \
-  sh -c "test \$(wc -l < '$BNAAS_JOURNAL_DIR/last-read' | tr -d ' ') = 5 && ! grep -qv ' ' '$BNAAS_JOURNAL_DIR/last-read'"
+  sh -c "test \$(wc -l < '$BNAAS_HOME/journal/last-read' | tr -d ' ') = 5 && ! grep -qv ' ' '$BNAAS_HOME/journal/last-read'"
 printf '\n%s\n\n%s\n' '### Earlier' '- vault b: history under no date' >> "$TMP/doc.md"
 python3 -I "$HOOKS/journal" tail --new --doc "$TMP/doc.md" > "$TMP/out"
 check "the old layout: a bullet under a heading that is no date is never new" test "$(grep -c '^- ' "$TMP/out")" = 0
@@ -557,13 +557,13 @@ Newest facts at the end.
 - ${D1}T11:30Z e5f6a7b8c9 vault b: push
 - ${OLD}T08:00Z 9999999999 vault b: an old fact
 EOF
-rm -f "$BNAAS_JOURNAL_DIR/last-read"
+rm -f "$BNAAS_HOME/journal/last-read"
 python3 -I "$HOOKS/journal" tail --new --doc "$TMP/tab.md" > "$TMP/out"
 check "tail --new reads the bullets of the tab" test "$(grep -c '^- ' "$TMP/out")" = 2
 check "a fact older than 14 days is not new" sh -c "! grep -q 'an old fact' '$TMP/out'"
 python3 -I "$HOOKS/journal" mark-read > /dev/null
 check "the read set keeps no id older than 14 days" \
-  sh -c "test -s '$BNAAS_JOURNAL_DIR/last-read' && ! grep -q '^9999999999 ' '$BNAAS_JOURNAL_DIR/last-read'"
+  sh -c "test -s '$BNAAS_HOME/journal/last-read' && ! grep -q '^9999999999 ' '$BNAAS_HOME/journal/last-read'"
 printf '%s\n' "- ${D0}T00:10Z 0f0f0f0f0f backbeat b: test exit 0" \
   "- ${D1}T10:05Z 1a1a1a1a1a cloudserver b: push" \
   "- ${D1}T11:30Z e5f6a7b8c9 vault b: push" >> "$TMP/tab.md"
@@ -590,6 +590,36 @@ printf '%s\n' "- ${D0}T00:30Z 3d3d3d3d backbeat b: an id of 8 hex" >> "$TMP/tab.
 python3 -I "$HOOKS/journal" tail --new --doc "$TMP/tab.md" > "$TMP/out" 2> /dev/null
 check "a bullet with an id of 8 hex still reads" grep -q 'an id of 8 hex' "$TMP/out"
 check "every hook exits 0 on garbage" sh -c "echo '{' | '$HOOKS/journal-flush.sh' && echo '{' | '$HOOKS/journal-capture.sh'"
+
+# The local data folder is $BNAAS_HOME, absolute, which each developer
+# sets in their shell profile. Nothing else: not the folder where Claude
+# Code started, and never the home folder.
+bare() { env -u BNAAS_HOME HOME="$TMP/home" CLAUDE_PROJECT_DIR="$TMP/proj" "$@"; }
+(cd "$REPO" && bare BNAAS_HOME="$TMP/data" python3 -I "$HOOKS/journal" note "a note under BNAAS_HOME" 2> /dev/null)
+check "BNAAS_HOME holds the journal" grep -q 'under BNAAS_HOME' "$TMP/data/journal/buffer.jsonl"
+(cd "$REPO" && bare BNAAS_HOME=relative python3 -I "$HOOKS/journal" note "a note with a relative home" > /dev/null 2> "$TMP/err")
+check "a relative BNAAS_HOME counts as unset" test $? -ne 0
+(cd "$REPO" && bare python3 -I "$HOOKS/journal" note "a note with no folder" > /dev/null 2> "$TMP/err")
+check "with no folder, the journal stops" test $? -ne 0
+check "with no folder, the journal says why" grep -q 'BNAAS_HOME' "$TMP/err"
+python3 -c 'import json; print(json.dumps({"hook_event_name":"PostToolUse","tool_name":"mcp__x__createJiraIssue","tool_input":{"projectKey":"ZZ","summary":"s"},"tool_response":[{"type":"text","text":"{\"key\":\"ZZ-13\",\"id\":\"1\"}"}]}))' | (cd "$REPO" && bare BNAAS_HOME="$TMP/data5" "$HOOKS/journal-capture.sh")
+check "the capture hook logs under BNAAS_HOME" grep -q 'ZZ-13 created' "$TMP/data5/journal/buffer.jsonl"
+python3 -c 'import json; print(json.dumps({"hook_event_name":"PostToolUse","tool_name":"mcp__x__createJiraIssue","tool_input":{"projectKey":"ZZ","summary":"s"},"tool_response":[{"type":"text","text":"{\"key\":\"ZZ-14\",\"id\":\"1\"}"}]}))' | (cd "$REPO" && bare "$HOOKS/journal-capture.sh") && echo '{"hook_event_name":"Stop","session_id":"nf"}' | (cd "$REPO" && bare "$HOOKS/journal-flush.sh") > /dev/null
+check "every hook exits 0 with no folder" test $? -eq 0
+check "with no folder, nothing lands anywhere" sh -c "test ! -e '$REPO/.bnaas' && test ! -e '$REPO/relative' && test ! -e '$TMP/proj/.bnaas' && test ! -e '$TMP/home/.bnaas'"
+
+# The SessionStart hook checks BNAAS_HOME and never sets it.
+(cd "$TMP" && bare BNAAS_HOME="$TMP/data7" "$HOOKS/bnaas-home.sh" < /dev/null > "$TMP/out")
+check "the session hook creates the folder and its .gitignore" grep -qx '\*' "$TMP/data7/.gitignore"
+check "the session hook is quiet when BNAAS_HOME is set" test ! -s "$TMP/out"
+(cd "$TMP" && bare "$HOOKS/bnaas-home.sh" < /dev/null > "$TMP/out")
+check "the session hook exits 0 without BNAAS_HOME" test $? -eq 0
+check "the session hook creates nothing without BNAAS_HOME" sh -c "test ! -e '$TMP/proj/.bnaas' && test ! -e '$TMP/home/.bnaas'"
+check "the session hook warns without BNAAS_HOME" grep -q 'BNAAS_HOME is not set' "$TMP/out"
+mkdir -p "$TMP/repo9" && (cd "$TMP" && bare BNAAS_HOME="$TMP/repo9" "$HOOKS/bnaas-home.sh" < /dev/null)
+check "the session hook adds no .gitignore to a folder that existed" test ! -e "$TMP/repo9/.gitignore"
+check "the session hook warns when the folder cannot be made" sh -c "cd '$TMP' && BNAAS_HOME=/dev/null/bnaas '$HOOKS/bnaas-home.sh' < /dev/null | grep -q 'cannot be created'"
+check "the session hook warns with a relative BNAAS_HOME" sh -c "cd '$TMP' && BNAAS_HOME=relative '$HOOKS/bnaas-home.sh' < /dev/null | grep -q 'BNAAS_HOME is not set' && test ! -e '$TMP/relative'"
 
 [ $FAIL = 0 ] && echo "all journal tests passed" || echo "some journal tests failed"
 exit $FAIL
