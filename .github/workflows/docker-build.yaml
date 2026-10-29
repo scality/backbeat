@@ -13,7 +13,7 @@ on:
         type: string
 
 env:
-  TAG: ${{ inputs.tag || github.sha }}
+  TAG: ${{ inputs.tag }}
 
 jobs:
   build:
@@ -21,6 +21,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - name: Set up Docker Buildk
         uses: docker/setup-buildx-action@v4
@@ -32,23 +34,63 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ github.token }}
 
+      - name: Export build information
+        run: |
+          echo "SOURCE_DATE_EPOCH=$(git log -1 --pretty=%ct)" >> $GITHUB_ENV
+
+          echo "EXTRA_LABELS<<EOF
+            org.opencontainers.image.created={{commit_date 'YYYY-MM-DDTHH:mm:ssZ'}}
+            org.opencontainers.image.vendor=${{ github.repository_owner }}
+          EOF" >> $GITHUB_ENV
+
+          # Use version input if available, otherwise an dev build for the next the git SHA
+          if [ -z "${TAG}" ]; then
+            LATEST_TAG=$(git describe --tags --abbrev=0 --match '[0-9]*.[0-9]*.[0-9]*' --exclude '*-*')
+            MAJOR=$(echo "$LATEST_TAG" | cut -d. -f1)
+            MINOR=$(echo "$LATEST_TAG" | cut -d. -f2)
+            PATCH=$(echo "$LATEST_TAG" | cut -d. -f3)
+            COUNT=$(git rev-list --count "${LATEST_TAG}..HEAD")
+            # the count sorts dev builds; 'sha-' keeps the sha from parsing as a number
+            echo "TAG=${MAJOR}.${MINOR}.$((PATCH + 1))-dev.${COUNT}.sha-${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+          fi
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        env:
+          # the pushed tag is an index (provenance attestations), annotate it too
+          DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=${{ env.TAG }}
+            type=raw,value=latest,enable=${{ inputs.tag && '{{is_default_branch}}' || 'false' }}
+          labels: ${{ env.EXTRA_LABELS }}
+          annotations: ${{ env.EXTRA_LABELS }}
+
       - name: Build and push
         uses: docker/build-push-action@v7
         with:
-          context: .
           push: true
-          tags: ghcr.io/${{ github.repository }}:${{ env.TAG }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          build-args: |
+            SOURCE_DATE_EPOCH=${{ env.SOURCE_DATE_EPOCH }}
 
       - name: Build and push federation image
         uses: docker/build-push-action@v7
         with:
           context: images/federation
           push: true
-          build-args:
+          build-args: |
             BACKBEAT_VERSION=${{ env.TAG }}
+            SOURCE_DATE_EPOCH=${{ env.SOURCE_DATE_EPOCH }}
           tags: ghcr.io/${{ github.repository }}:${{ env.TAG }}-federation
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
           cache-from: type=gha,scope=federation
           cache-to: type=gha,scope=federation,mode=max
 
