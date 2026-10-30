@@ -28,17 +28,19 @@ The idea is simple. The two developers never work at the same time, so the share
 
 ## Before you start
 
+The command blocks of this README are bash, and fish cannot parse them: from fish, run `bash` first.
+
 - Claude Code, logged in with a claude.ai account, in a version that has the Monitor tool (the dog of `/bnaas-watch-flock` runs in one), and with access to Fable, the advisor of `settings.json`.
 - `git` with SSH access to the scality repositories, and `gh` logged in to GitHub.
 - `python3` (3.10 or later), for the skill scripts. No package is needed.
 - `docker`, logged in once with `docker login ghcr.io`, for the image checks of `/bnaas-pin-federation`.
 - In the workspace layout, one clone per D1 repository, in folders with these names: `arsenal`, `vault`, `cloudserver`, `cloudserverclient`, `backbeat`, `federation`, `integration`, `ring` and `s3utils`.
-- `yarn`, for the repository tests. It may live under nvm and be missing from non-interactive shells, so run `source ~/.nvm/nvm.sh` first. A fresh worktree needs `yarn install` before its tests run.
+- `yarn`, for the repository tests. It may live under nvm and be missing from non-interactive shells, so run `source ~/.nvm/nvm.sh` first. With nvm.fish, the nvm of the fish shell, there is no `~/.nvm/nvm.sh` and `nvm` runs only inside fish, so put the `bin` folder of the newest installed Node of the major version that the repository's CI uses (the `node-version` of its workflows) first on `PATH` instead, here for Node 22: `PATH="$(ls -d ~/.local/share/nvm/v22.* | sort -V | tail -n 1)/bin:$PATH" yarn test`. The journal hooks see a test run in this form, but not one inside `fish -c`. A fresh worktree needs `yarn install` before its tests run.
 - For Vault, a GitHub Packages token in `~/.npmrc`, or `yarn install` fails: `//npm.pkg.github.com/:_authToken=<classic PAT with read:packages, SSO-authorized>`. The Vault tests do run on Node 22 on a Mac, despite what its CLAUDE.md says.
 - The Atlassian connector in Claude Code, for Jira reads and writes. The Claude Docs connector, for the tech spec doc and its Journal tab.
 - Nothing else for the journal: the hooks keep the facts in `$BNAAS_HOME/journal/buffer.jsonl` until the background journal agent appends them to the Journal tab, and log their errors to `$BNAAS_HOME/journal/errors.log`; they never stop a session.
 - These skill sets, installed at user scope at the versions in use today. A bump of one is a setup PR.
-  - scality-skills (`review-pr`, for the local review gate): the `scality-skills` plugin of the `scality-agent-hub` marketplace, `claude plugin marketplace add https://github.com/scality/agent-hub.git` then `claude plugin install scality-skills@scality-agent-hub`. `claude plugin install` takes the version that the marketplace has today, so check that `claude plugin list` shows 1.8.0; if it shows another version, stop and open a setup PR for the bump.
+  - scality-skills (`review-pr`, for the local review gate): the `scality-skills` plugin of the `scality-agent-hub` marketplace, `claude plugin marketplace add git@github.com:scality/agent-hub.git` (the repository is private, so use the SSH URL: the HTTPS one fails where git has no HTTPS credentials) then `claude plugin install scality-skills@scality-agent-hub`. `claude plugin install` takes the version that the marketplace has today, so check that `claude plugin list` shows 1.8.0; if it shows another version, stop and open a setup PR for the bump.
   - superpowers (`brainstorming`, `test-driven-development`, `systematic-debugging`, `verification-before-completion`): the plugin `superpowers@claude-plugins-official`, at version 7.0.0. If `claude plugin list` shows a superpowers plugin from another marketplace (an older version of this README installed it from https://github.com/obra/superpowers), remove it first with `claude plugin uninstall superpowers@<that marketplace>`, or every skill shows up twice. Then: `claude plugin marketplace add anthropics/claude-plugins-official` (skip it when `claude plugin marketplace list` already shows that marketplace), then `claude plugin install superpowers@claude-plugins-official`, and check that `claude plugin list` shows 7.0.0; if it shows another version, stop and open a setup PR for the bump.
   - Matt Pocock's skills (`grill-with-docs`, `implement`, `retro`, `handoff`), at commit `5beb35b040e3de97e54fa9e386d7e42d15c295c2`. The repository keeps them under `skills/<group>/<name>/`, and Claude Code finds a user skill only directly under `~/.claude/skills/<name>/`, so copy the four folders there, on Linux and macOS. The first line removes the clone that an older version of this README put one level too deep, and each folder is removed before its copy, so that a second run leaves no old file behind:
 
@@ -55,7 +57,7 @@ The idea is simple. The two developers never work at the same time, so the share
     rm -rf "$tmp"
     ```
 
-    If Claude Code in auto mode denies this block, run the block yourself in a terminal.
+If Claude Code in auto mode denies one of these installs, a plugin command or the skill block, run it yourself in a terminal, or with `!` in front of it in the Claude Code prompt.
 
 ## Install
 
@@ -92,7 +94,7 @@ Keep personal settings in the workspace `.claude/settings.local.json`. Git never
 
 The hooks and skills keep their local data (the journal buffer, the dog's state, the shepherd markers, the backlog cache) in one folder, `BNAAS_HOME`. Nothing goes to the home folder.
 
-Set it once in your shell profile (`~/.zshenv` for zsh, so that Claude Code started from an IDE or the desktop app sees it too, or `~/.bashrc`), as an absolute path to the `.bnaas` folder of the workspace folder, or of the backbeat clone in the one-repository layout:
+Set it once in your shell profile (`~/.zshenv` for zsh, so that Claude Code started from an IDE or the desktop app sees it too, `~/.config/fish/config.fish` for fish, where the same `export` line works, or `~/.bashrc`), as an absolute path to the `.bnaas` folder of the workspace folder, or of the backbeat clone in the one-repository layout:
 
 ```sh
 export BNAAS_HOME="<workspace>/.bnaas"
@@ -109,8 +111,8 @@ Start `claude` in the workspace folder, or in the backbeat clone for the one-rep
 | Command | Expected result |
 |---|---|
 | `/memory` | `rules/bnaas-d1.md` is in the list. |
-| `/agents` | `bnaas-reviewer` and `bnaas-journal` are in the list. |
-| `/advisor` | The advisor is Fable. |
+| Ask "which agent types can you start?" (`/agents` no longer lists them) | `bnaas-reviewer` and `bnaas-journal` are in the answer. |
+| `/advisor` | The advisor is Fable. If it says that Fable bills to usage credits, run `/model fable` once to enable them, then `/advisor` again, then `/model` to set your own model back, since `/model fable` also makes Fable your default model. |
 
 If one is missing, check that Claude started in that folder, and that `ls -l .claude` shows each link pointing into `../bnaas-team-setup/.claude/`; run the `ln` lines of the install again for a broken one.
 
