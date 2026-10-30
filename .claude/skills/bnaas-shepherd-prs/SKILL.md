@@ -1,6 +1,6 @@
 ---
 name: bnaas-shepherd-prs
-description: Take one D1 PR, or a whole stack of them, from open to merged. It runs the Claude Code review loop on a draft until the review gives its LGTM, the checks are green and the stack is rebased, then hands the draft to its author; on a ready PR it prepares the fixes of the review comments and pushes them only after the developer's yes; it says when a PR can merge, and retargets the next PR of the stack after a merge. It also opens a plan PR for a change that alters the shared contract. Use it right after a D1 PR is opened, when the watch-flock dog reports a stray PR, or when the developer says "shepherd", "babysit", "take care of", "watch" or "land" a PR or a stack.
+description: Take one D1 PR, or a whole stack of them, from open to merged. It runs the Claude Code review loop on a draft until the review gives its LGTM, the checks are green and the stack is rebased, then hands the draft to its author; on a ready PR it prepares the fixes of the review comments and pushes them only after the developer's yes; it says when a PR can merge, and retargets the next PR of the stack after a merge. It also opens a plan PR for a change that alters the shared contract, and for every Arsenal or cloudserverclient change. Use it right after a D1 PR is opened, when the watch-flock dog reports a stray PR, or when the developer says "shepherd", "babysit", "take care of", "watch" or "land" a PR or a stack.
 ---
 
 # Shepherd the D1 PRs
@@ -80,13 +80,13 @@ Only the human merges. Keep the shepherd on the PR until it merges or closes.
 
 ## Plan PRs
 
-A plan PR comes first only when a change alters the shared contract beyond the approved tech spec (Rule 5). The shepherd opens it into the backbeat epic, then shepherds it like any other PR.
+A plan PR comes first only when a change alters the shared contract beyond the approved tech spec (Rule 5). Every Arsenal or cloudserverclient change also gets one, opened right after its plan is approved and always before its code PR, because its plan lives only in the backbeat epic (Rule 5). The shepherd opens it into the backbeat epic, then shepherds it like any other PR.
 
-1. The plan file is the newest uncommitted file in `$CLAUDE_PROJECT_DIR/.claude/plans/`, or the path printed when the plan was approved. The setup checkout is `git -C "$CLAUDE_PROJECT_DIR/.claude/plans" rev-parse --show-toplevel`, and the epic ref is `git -C <checkout> branch -r --list 'origin/epic/*-bnaas-d1'`. The ticket is a BB ticket: ask for it if there is none. It goes only in the branch, the commit and the PR title.
+1. The plan file is the path printed when the plan was approved, or else the newest uncommitted file in `$CLAUDE_PROJECT_DIR/.claude/plans/`. When another uncommitted plan in that folder could also match, ask the developer which one, and name the chosen file in the question of step 4. The setup checkout is `git -C "$CLAUDE_PROJECT_DIR/.claude/plans" rev-parse --show-toplevel`, and the epic ref is `git -C <checkout> branch -r --list 'origin/epic/*-bnaas-d1'`. For a contract change the ticket is a BB ticket: ask for it if there is none. For an Arsenal or cloudserverclient change it is the ticket of that change. It goes only in the branch, the commit and the PR title.
 2. Rename the plan to `YYYY-MM-DD-<topic>.md`. Check it for em-dashes, credentials and personal data, and fix only those.
 3. `git -C <checkout> fetch origin`, then `git -C <checkout> worktree add -b improvement/<ticket>-plan-<topic> <checkout>/.claude/worktrees/<ticket>-plan-<topic> <epic ref>`. Move the plan to `.claude/plans/` there (`mv`, as Rule 5 says, so that no untracked copy stays behind), and commit only that file: subject `<ticket>: plan <topic>`, a body that names the file (Rule 7).
-4. Ask one question that names the push and the draft PR. After a yes, push and open the draft PR into the epic: title `<ticket>: plan <topic>`, the five sections of Rule 7 (Intent says what the plan decides, Verification how a reviewer checks it), and no reviewers: section 2 requests them when the developer marks it ready.
-5. Shepherd it from section 0. When it merges, remove the worktree; the plan comes back to the setup checkout with its next update. The code PR links the plan on the epic; if the code moves away from the plan, update the plan PR first.
+4. Ask one question that names the plan file, the push and the draft PR. After a yes, push and open the draft PR into the epic: title `<ticket>: plan <topic>`, the five sections of Rule 7 (Intent says what the plan decides, Verification how a reviewer checks it), and no reviewers: section 2 requests them when the developer marks it ready.
+5. Shepherd it from section 0. When it merges, remove the worktree; the plan comes back to the setup checkout with its next update. The code PR links the plan PR in Arsenal and cloudserverclient, and the plan on the epic elsewhere; if the code moves away from the plan, update the plan PR first.
 
 ## What pr_state.py gives
 

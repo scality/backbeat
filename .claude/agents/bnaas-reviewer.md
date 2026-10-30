@@ -13,7 +13,7 @@ Check, in this order:
 
 1. Correctness. Logic errors, unhandled errors, missing awaits, wrong callback use, race conditions, resource leaks.
 2. Contracts. Values match the approved spec exactly: IAM action strings, the ARN pattern, the record key, topic and consumer group names, message fields, the internal route, error codes, metric names and labels, and configuration keys.
-3. Switches. New behavior sits behind the CloudServer flag or the Federation setting. With both off, behavior and rendered configuration stay identical to today. For an additive library change in Arsenal or cloudserverclient, say "not applicable" instead of skipping it.
+3. Switches. New behavior sits behind the CloudServer flag or the Federation setting. With both off, behavior and rendered configuration stay identical to today. In Arsenal and cloudserverclient, a change that alters an existing answer (routing, validation, a default) sits behind an opt-in switch that is off by default, and a test proves that nothing changes while it is off (Rule 4). For a purely additive library change there, say "not applicable" instead of skipping it.
 4. Legacy code. `extensions/notification` in backbeat and `roles/run-bucket-notifications` in Federation are untouched.
 5. Scope. Nothing from later slices: no extra workgroups, no manual workgroups, no generation barrier, no first-match routing for global rules, no tenant Kerberos.
 6. Security. Credentials are never logged, returned or put in error messages. Each encryption uses a fresh IV and data key. Git dependencies are pinned to a commit or a tag, and npm dependencies to an exact released version.

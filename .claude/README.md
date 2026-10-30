@@ -121,7 +121,7 @@ Then run `.claude/hooks/test-journal.sh`: it ends with "all journal tests passed
 ## Daily flow
 
 1. `/bnaas-whats-next`. Review first, then claim one task. The skill creates the ticket and fills the row, and starts the dog, `/bnaas-watch-flock`, which reports each change on your PRs.
-2. Plan in plan mode, in a worktree of the ticket. The plan ships as the first commit of the PR.
+2. Plan in plan mode, in a worktree of the ticket. The plan ships as the first commit of the PR. In Arsenal and cloudserverclient, the shepherd opens it as a plan PR into the backbeat epic before the code PR, and the code PR links it.
 3. Build with `test-driven-development`, review the diff with `bnaas-reviewer` before each commit, run the local review gate before each push and loop it (Rule 5), then open a draft PR with no reviewers and hand it to `/bnaas-shepherd-prs` (Rule 5). The shepherd fixes what the Claude Code review raises and tells you when the draft is ready for your check; you mark it ready, the shepherd requests the three reviewers of Rule 4 and from then on asks you before each push, and you merge when it says the PR can merge.
 4. When a service epic moves, `/bnaas-pin-federation` updates the Federation pins in one PR.
 5. When a decision, a blocker or a surprise happens, say it to `/bnaas-journal` at that moment. The hooks log the rest, and a background agent writes it all to the Journal tab.
