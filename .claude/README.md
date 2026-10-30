@@ -15,7 +15,7 @@ The idea is simple. The two developers never work at the same time, so the share
 | `hooks/journal-flush.sh` | `Stop` hook: puts the logged facts in a batch and asks the session to start the `bnaas-journal` agent on it in the background. |
 | `hooks/journal` | `journal note "<text>"` (`--decision` for a decision), `journal take`, `journal batch <id>`, `journal flushed <id>`, `journal tail --doc <export>`. `BNAAS_JOURNAL_CONFIG` points it at another `journal.json`, such as the practice tab of the evals. |
 | `hooks/test-journal.sh` | Tests the hooks on sample input, without writing to the doc. |
-| `bnaas/scripts/local-review.sh` | The local review gate (Rule 5): runs the `/review-pr` skill of the Code Review workflow on the whole range and on each commit, all in parallel, each in a scratch clone (about 1 USD per run), prints one combined report and posts nothing. It loops (Rule 5): fold what it finds, re-run with `--only <sha>...` on the changed commits, and stop when a round brings no new real finding or after 3 rounds. `--self-test` checks it without calling Claude. |
+| `bnaas/scripts/local-review.sh` | The local review gate (Rule 5): runs the `/review-pr` skill of the Code Review workflow on the whole range and on each commit, all in parallel, each in a scratch clone (about 1.5 to 5 USD per run), prints one combined report and posts nothing. It loops (Rule 5): fold what it finds, re-run with `--only <sha>...` on the changed commits, and stop when a round brings no new real finding or after 3 rounds. `--self-test` checks it without calling Claude. |
 | `bnaas/journal.json` | The Journal tab of the tech spec, the D1 docs whose writes are logged, and the nodes of the what's next renders (the Tickets tab, the two charts and the Journal tab), whose writes are not. |
 | `skills/bnaas-shepherd-prs/` | `/bnaas-shepherd-prs`: takes a PR or a stack from open to merged: the Claude Code review loop on the draft, the reviewers and the human comments on the ready PR, the merge call and the stack retarget. It also opens plan PRs. |
 | `skills/bnaas-watch-flock/` | `/bnaas-watch-flock`: the dog, one Monitor per `$BNAAS_HOME` (in practice one per machine) that reports each change on the developer's PRs, the PRs they are asked to review, open pin PRs and the PRs with no shepherd. |
@@ -31,7 +31,7 @@ The idea is simple. The two developers never work at the same time, so the share
 The command blocks of this README are bash, and fish cannot parse them: from fish, run `bash` first.
 
 - Claude Code, logged in with a claude.ai account, in a version that has the Monitor tool (the dog of `/bnaas-watch-flock` runs in one), and with access to Fable, the advisor of `settings.json`.
-- `git` with SSH access to the scality repositories, and `gh` logged in to GitHub.
+- `git` with SSH access to the scality repositories, and `gh` 2.97 or later (for `gh api --allow-escape-sequences`), logged in to GitHub.
 - `python3` (3.10 or later), for the skill scripts. No package is needed.
 - `docker`, logged in once with `docker login ghcr.io`, for the image checks of `/bnaas-pin-federation`.
 - In the workspace layout, one clone per D1 repository, in folders with these names: `arsenal`, `vault`, `cloudserver`, `cloudserverclient`, `backbeat`, `federation`, `integration`, `ring` and `s3utils`.

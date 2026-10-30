@@ -21,7 +21,7 @@
   {
    "name": "lint",
    "conclusion": "failure",
-   "url": "https://github.com/scality/backbeat/actions/runs/3"
+   "url": "https://github.com/scality/backbeat/actions/runs/3/job/30"
   }
  ],
  "pending_checks": [

@@ -12,7 +12,7 @@
 # parallel, one review of the whole range and, when the range has more
 # than one commit, one review per commit. --only limits the per-commit
 # runs to the commits named, for the next round after a fold; the whole
-# range always runs. Each run costs about 1 USD.
+# range always runs. Each run costs about 1.5 to 5 USD.
 #
 # <name> labels the output (a branch or a PR). The skill's local mode
 # reviews the commits of the current branch that no other local branch

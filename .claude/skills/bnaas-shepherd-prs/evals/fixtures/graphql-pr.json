@@ -171,7 +171,7 @@
             "name": "lint",
             "status": "COMPLETED",
             "conclusion": "FAILURE",
-            "detailsUrl": "https://github.com/scality/backbeat/actions/runs/3"
+            "detailsUrl": "https://github.com/scality/backbeat/actions/runs/3/job/30"
            },
            {
             "__typename": "CheckRun",

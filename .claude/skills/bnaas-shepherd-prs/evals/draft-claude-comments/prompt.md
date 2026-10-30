@@ -23,7 +23,7 @@ This is a test run, and it is read-only: do not push, do not run any gh command 
   {
    "name": "lint",
    "conclusion": "failure",
-   "url": "https://github.com/scality/backbeat/actions/runs/3"
+   "url": "https://github.com/scality/backbeat/actions/runs/3/job/30"
   }
  ],
  "pending_checks": [
