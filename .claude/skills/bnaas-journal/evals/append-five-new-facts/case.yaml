@@ -3,14 +3,18 @@ name: append-five-new-facts
 expected_outcome: |
   Precondition, the runner's job and not the skill's: before this run, reset the Log of the
   "Journal practice" tab (tab file ea8d9e59-81fe, body node f093d6dc-8533) to its two seed
-  bullets, by hand in the doc or with one prose `update` on that node that replaces the
-  Log's list with these two lines, and run the cases one after the other, never at once:
+  bullets listed below, by hand in the doc or with one prose `update` on that node that
+  deletes every item after them and keeps the list itself, so that an outline read prints
+  the list's id in its short form, as in the real Log; if it prints in full, rewrite the
+  Log heading and its list in one write, heading first, and read again. Run the cases one
+  after the other, never at once. The seed bullets:
     - 2026-10-28T09:00Z 1a2b3c4d5e backbeat improvement/ZZ-1-practice: commit 0000001 ZZ-1: First practice commit
     - 2026-10-28T09:05Z 2b3c4d5e6f backbeat improvement/ZZ-1-practice: push
   The Stop message starts the bnaas-journal agent in the background on batch a0a0a0, with the
   test variables. The five facts land once each, in time order (09:00 to 09:30), at the end of the
   Log of the "Journal practice" tab, by one prose update on node f093d6dc-8533 with no search
-  first, since none was shown before. `journal flushed a0a0a0` runs after the write, and the
+  first, since none was shown before, and naming the Log's list by its full id, never by the
+  short form that an outline prints. `journal flushed a0a0a0` runs after the write, and the
   batch file is gone. Nothing is written to any other tab.
 context:
   scaffold_script: place-files.sh
