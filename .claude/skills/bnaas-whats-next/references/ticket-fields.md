@@ -1,4 +1,4 @@
-# The D1 ticket and the current sprint
+# The D1 ticket and its sprint
 
 The fields of a new D1 ticket, for the "start task" action of `SKILL.md`. `<base>` is the folder of the skill.
 
@@ -16,7 +16,7 @@ The fields of a new D1 ticket, for the "start task" action of `SKILL.md`. `<base
 | Development Type, `customfield_13078` | `{"id": "12026"}` (BUILD) |
 | Release notes, `customfield_12101` | `{"id": "12053"}` (No), only in S3C and RING. The other projects do not have the field, and only the epic carries the release note. |
 | Components | `[{"name": "Federation"}]` in S3C. `[{"name": "S3C"}]` in RING, which requires one. None in the other projects. |
-| Sprint, `customfield_10004` | The id of the current sprint, as a number. |
+| Sprint, `customfield_10004` | The id of a sprint, as a number: the current sprint for work that it planned, or else the next sprint, so that unplanned work does not grow the current one. The claim question names the sprint and why, and the developer can switch it. |
 | Description | What the row asks. Then "Done when:" and a numbered list of results that a reviewer can check. Then the line "Tracked in the Tickets tab of the BNaaS D1 tech spec, row <ID>: <doc link>". `render_tickets.py` finds the task by this line, so never leave it out. If the scope is not clear from the row and the tech spec, ask the developer. |
 
 ## The current sprint
@@ -36,3 +36,7 @@ Find the current sprint in Jira, because the sprint calendar can move:
 3. If Jira still gives no active sprint, ask the developer. Do not create a sprint.
 
 When `matches_dates` is false, because the name or the start or end date of the Jira sprint differs from the date math, Jira wins. Use its sprint, and tell the developer, so that the next setup PR moves the anchor date or the sprint length in `sprint.py`.
+
+## The next sprint
+
+A new task, with no ticket yet, is unplanned unless the developer says that sprint planning took it; a next-step ticket counts as planned when another ticket of its task is in the current sprint (read 1). For unplanned work, find the next sprint: `python3 -I <base>/scripts/sprint.py` prints the current sprint by the date math, and `python3 -I <base>/scripts/sprint.py <its end>` prints the name of the next one (the end date of one sprint is the start date of the next). Use the date math here, not the Jira end date, which can be early or missing. Then search `sprint in futureSprints() AND sprint = "<that name>"`, with `maxResults` 10 and only the field `customfield_10004`, and take the sprint object of that name, state `future`, board 339. If no ticket is in it yet, Jira cannot show its id through a search: ask the developer to add one ticket to it in Jira, or to pick the current sprint. If Jira rejects the search because no sprint has that name (the sprint is not created yet, or its dates moved), tell the developer that the next sprint is missing in Jira and offer the current sprint. Never create a sprint.
