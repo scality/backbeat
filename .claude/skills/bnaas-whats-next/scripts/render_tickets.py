@@ -6,7 +6,8 @@ the Jira export gives who claimed which task, and prs.py gives the PRs.
 The output replaces the whole tab, so nobody edits its cells by hand.
 
     python3 -I render_tickets.py --backlog <backlog.md|backlog.json>
-        --jira <issues.json> --prs <prs.json> [--sprint <name>] [--json]
+        --jira <issues.json> --prs <prs.json> [--sprint <name>]
+        [--next-sprint <name>] [--json]
     python3 -I render_tickets.py --self-test
 
 The backlog is the Backlog tab of the doc exported to Markdown, or the JSON
@@ -60,7 +61,9 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "..", "..", "bnaas", "scripts"))
+sys.path.insert(0, HERE)
 from backlog import is_dropped, load_backlog  # noqa: E402
+from sprint import BOARD, PREFIX, sprint_of  # noqa: E402
 
 BROWSE = "https://scality.atlassian.net/browse/"
 DONE_STATUSES = {"done", "closed", "resolved"}
@@ -135,7 +138,23 @@ def is_done(issue):
     return (status.get("name") or "").lower() in DONE_STATUSES
 
 
-def build(backlog, issues, prs_doc, sprint):
+def next_sprint_name(sprint=None, day=None):
+    """The name of the sprint after the given one, else after today's.
+
+    Jira's active sprint can lag the calendar, so the name of the current
+    sprint wins over the date of today."""
+    if sprint and sprint.startswith(PREFIX):
+        try:
+            start = datetime.date.fromisoformat(sprint[len(PREFIX):])
+        except ValueError:
+            start = None
+        if start:
+            return PREFIX + (start + datetime.timedelta(days=14)).isoformat()
+    current = sprint_of(day or datetime.date.today())
+    return sprint_of(datetime.date.fromisoformat(current["end"]))["name"]
+
+
+def build(backlog, issues, prs_doc, sprint, next_sprint=None):
     areas, tasks = backlog["areas"], backlog["tasks"]
     by_id = {t["id"]: t for t in tasks}
     prs = prs_doc.get("prs", []) if isinstance(prs_doc, dict) else prs_doc
@@ -210,10 +229,15 @@ def build(backlog, issues, prs_doc, sprint):
                 elif closed:
                     out_of_sync.append("%s is %s but its only PR %s is closed, not merged"
                                        % (key, f["status"]["name"], closed[0]["pr"]))
-            sprints = [s.get("name") for s in (f.get("customfield_10004") or [])]
-            if sprint and sprint not in sprints and not is_done(issue):
+            sprints = f.get("customfield_10004") or []
+            names = [s.get("name") for s in sprints]
+            # A ticket in the next sprint of the team board was deferred
+            # there on purpose, for work the current sprint did not plan.
+            deferred = any(s.get("state") == "future" and s.get("boardId") == BOARD
+                           and s.get("name") == next_sprint for s in sprints)
+            if sprint and sprint not in names and not deferred and not is_done(issue):
                 out_of_sync.append("%s is not in sprint %s (has: %s)"
-                                   % (key, sprint, ", ".join(sprints) or "none"))
+                                   % (key, sprint, ", ".join(names) or "none"))
 
     result = []
     for area in areas:
@@ -392,6 +416,23 @@ def self_test():
     # A task with only its own ticket: done when that ticket is Done.
     got = build(backlog, [issue("ZZ-3", "3 the task", "Done")], {"prs": []}, None)
     assert "3" in got["done"], got["done"]
+    # A ticket deferred to a future sprint of the team board is not out of
+    # sync; one in a closed sprint, or in another board's future sprint, is.
+    def in_sprints(key, sprints):
+        ticket = issue(key, "3 the task", "Ongoing")
+        ticket["fields"]["customfield_10004"] = sprints
+        return ticket
+    deferred = in_sprints("ZZ-4", [{"name": "S2", "state": "future", "boardId": BOARD}])
+    got = build(backlog, [deferred], {"prs": []}, "S1", "S2")
+    assert not got["out_of_sync"], got["out_of_sync"]
+    for key, other in (("ZZ-5", {"name": "S0", "state": "closed", "boardId": BOARD}),
+                       ("ZZ-6", {"name": "S0", "state": "future", "boardId": BOARD + 1}),
+                       ("ZZ-7", {"name": "S0", "state": "future", "boardId": BOARD})):
+        got = build(backlog, [in_sprints(key, [other])], {"prs": []}, "S1", "S2")
+        assert got["out_of_sync"] == ["%s is not in sprint S1 (has: S0)" % key], got["out_of_sync"]
+    assert next_sprint_name(day=datetime.date(2026, 10, 30)) == "Hopocalypse 2026-11-02"
+    # Jira still has the old sprint active on the first day of the new one.
+    assert next_sprint_name("Hopocalypse 2026-10-19", datetime.date(2026, 11, 2)) == "Hopocalypse 2026-11-02"
     print("self-test ok")
 
 
@@ -404,6 +445,7 @@ def main(argv):
     parser.add_argument("--jira", required=True)
     parser.add_argument("--prs", required=True)
     parser.add_argument("--sprint")
+    parser.add_argument("--next-sprint")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
     try:
@@ -421,7 +463,7 @@ def main(argv):
     if isinstance(issues, dict):
         # A raw Jira search answer wraps the list in "issues".
         issues = issues.get("issues", [])
-    data = build(backlog, issues, prs_doc, args.sprint)
+    data = build(backlog, issues, prs_doc, args.sprint, args.next_sprint or next_sprint_name(args.sprint))
     if args.json:
         print(json.dumps(data, indent=2))
     else:
