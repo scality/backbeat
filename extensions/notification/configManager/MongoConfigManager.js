@@ -19,6 +19,10 @@ const paramsJoi = joi.object({
     logger: joi.object().required(),
 }).required();
 
+// cached for buckets without notification configuration; truthy, so that the
+// change stream handler replaces it when a configuration is added
+const NO_CONFIG = Object.freeze({});
+
 // should equal true if config manager's cache was hit during a get operation
 const CONFIG_MANAGER_CACHE_HIT = 'cache_hit';
 // Type of operation performed on the cache
@@ -63,8 +67,9 @@ function onConfigManagerConfigGet(cacheHit, delay) {
  * @class MongoConfigManager
  *
  * @classdesc Manages bucket notification configurations, the configurations
- * are directly retrieved from the metastore, and are locally cached. Cache
- * is invalidated using MongoDB change streams.
+ * are directly retrieved from the metastore, and are locally cached, as
+ * NO_CONFIG for buckets without one. Cache is invalidated using MongoDB
+ * change streams.
  */
 class MongoConfigManager extends BaseConfigManager {
     /**
@@ -260,9 +265,12 @@ class MongoConfigManager extends BaseConfigManager {
         const startTime = Date.now();
         // return cached config for bucket if it exists
         const cachedConfig = this._cachedConfigs.get(bucket);
-        if (cachedConfig) {
+        if (cachedConfig !== undefined) {
             const delay = (Date.now() - startTime) / 1000;
             onConfigManagerConfigGet(true, delay);
+            if (cachedConfig === NO_CONFIG) {
+                return undefined;
+            }
             return {
                 bucket,
                 notificationConfiguration: cachedConfig,
@@ -276,6 +284,10 @@ class MongoConfigManager extends BaseConfigManager {
             onConfigManagerConfigGet(false, delay);
             // when disabled after being enabled bucket notification configuration is set to an empty object
             if (!notificationConfiguration || !Object.keys(notificationConfiguration).length) {
+                // caching the absence of configuration too, so that the
+                // entries of buckets without one do not each cost a lookup
+                this._cachedConfigs.add(bucket, NO_CONFIG);
+                onConfigManagerCacheUpdate('add', this._cachedConfigs.count());
                 return undefined;
             }
             // caching the bucket configuration

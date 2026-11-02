@@ -406,6 +406,62 @@ describe('MongoConfigManager ::', () => {
         });
     });
 
+    describe('getConfig of buckets without notification configuration ::', () => {
+        [
+            ['without notification configuration', { value: {} }],
+            ['with a null notification configuration', { value: { notificationConfiguration: null } }],
+            ['with a disabled notification configuration', { value: { notificationConfiguration: {} } }],
+            ['missing', null],
+        ].forEach(([desc, bucketMetadata]) => {
+            it(`should cache the absence of configuration of a bucket ${desc}`, async () => {
+                const manager = new MongoConfigManager(params);
+                const findOne = sinon.stub().resolves(bucketMetadata);
+                manager._metastore = { findOne };
+                assert.strictEqual(await manager.getConfig('example-bucket-1'), undefined);
+                assert.deepStrictEqual(manager._cachedConfigs.get('example-bucket-1'), {});
+                assert.strictEqual(await manager.getConfig('example-bucket-1'), undefined);
+                assert.strictEqual(findOne.callCount, 1);
+            });
+        });
+
+        it('should return a configuration added after the absence was cached', async () => {
+            const manager = new MongoConfigManager(params);
+            const findOne = sinon.stub().resolves({ value: {} });
+            manager._metastore = { findOne };
+            await manager.getConfig('example-bucket-1');
+            manager._handleChangeStreamChangeEvent({
+                _id: 'resumeToken',
+                operationType: 'update',
+                documentKey: { _id: 'example-bucket-1' },
+                fullDocument: {
+                    _id: 'example-bucket-1',
+                    value: { notificationConfiguration },
+                },
+            });
+            assert.deepStrictEqual(await manager.getConfig('example-bucket-1'), {
+                bucket: 'example-bucket-1',
+                notificationConfiguration,
+            });
+            assert.strictEqual(findOne.callCount, 1);
+        });
+
+        it('should look the bucket up again once its cached absence is invalidated', async () => {
+            const manager = new MongoConfigManager(params);
+            const findOne = sinon.stub().resolves({ value: {} });
+            manager._metastore = { findOne };
+            await manager.getConfig('example-bucket-1');
+            assert.strictEqual(manager._cachedConfigs.count(), 1);
+            manager._handleChangeStreamChangeEvent({
+                _id: 'resumeToken',
+                operationType: 'delete',
+                documentKey: { _id: 'example-bucket-1' },
+            });
+            assert.strictEqual(manager._cachedConfigs.count(), 0);
+            await manager.getConfig('example-bucket-1');
+            assert.strictEqual(findOne.callCount, 2);
+        });
+    });
+
     describe('setConfig ::', () =>  {
         it('should always return false', async () => {
             const manager = new MongoConfigManager(params);
