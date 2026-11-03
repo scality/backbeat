@@ -226,6 +226,55 @@ describe('LogConsumer', () => {
             });
         });
 
+        function readWithConsumed(messages, isConnected, cb) {
+            const consumeStub = sinon.stub();
+            if (messages instanceof Error) {
+                consumeStub.callsArgWith(1, messages);
+            } else {
+                consumeStub.callsArgWith(1, null, messages);
+            }
+            logConsumer._consumer = {
+                consume: consumeStub,
+                isConnected: () => isConnected,
+            };
+            logConsumer.readRecords({ limit: 3 }, (err, res) => {
+                assert.ifError(err);
+                const records = [];
+                res.log.on('data', record => records.push(record));
+                res.log.on('end', () => cb(res, records));
+            });
+        }
+
+        it('should report more log when the limit is reached, even if records are dropped', done => {
+            const invalidMessage = { ...getKafkaMessage(0, 2), value: Buffer.from('not json') };
+            readWithConsumed([getKafkaMessage(0, 0), getKafkaMessage(0, 1), invalidMessage], true, (res, records) => {
+                assert.strictEqual(records.length, 2);
+                assert.strictEqual(res.hasMoreLog, true);
+                return done();
+            });
+        });
+
+        it('should not report more log when fewer messages than the limit are consumed', done => {
+            readWithConsumed([getKafkaMessage(0, 0), getKafkaMessage(0, 1)], true, res => {
+                assert.strictEqual(res.hasMoreLog, false);
+                return done();
+            });
+        });
+
+        it('should not report more log when consumption is skipped', done => {
+            readWithConsumed([getKafkaMessage(0, 0)], false, res => {
+                assert.strictEqual(res.hasMoreLog, false);
+                return done();
+            });
+        });
+
+        it('should not report more log when consumption fails', done => {
+            readWithConsumed(new Error('Consumer error'), true, res => {
+                assert.strictEqual(res.hasMoreLog, false);
+                return done();
+            });
+        });
+
         it('should fail if it can\'t consume kafka messages', done => {
             const consumeKafkaStub = sinon.stub(logConsumer, '_consumeKafkaMessages')
                 .callsArgWith(1, errors.InternalError);

@@ -570,6 +570,39 @@ describe('LogReader', () => {
             });
         });
 
+        [true, false].forEach(sourceHasMoreLog => {
+            it(`should ${sourceHasMoreLog ? '' : 'not '}report more log from a non tailable stream ` +
+            `below the limit when the source ${sourceHasMoreLog ? 'does' : 'does not'}`, done => {
+                const batchState = {
+                    logRes: {
+                        log: new MockRecordStream(),
+                        tailable: false,
+                        hasMoreLog: sourceHasMoreLog,
+                    },
+                    logStats: {
+                        nbLogRecordsRead: 0,
+                        nbLogEntriesRead: 0,
+                        hasMoreLog: false,
+                    },
+                    entriesToPublish: {},
+                    publishedEntries: {},
+                    currentRecords: [],
+                    maxRead: 3,
+                    startTime: Date.now(),
+                    timeoutMs: 60000,
+                    logger: logReader.log,
+                };
+                batchState.logRes.log.write({ entries: [] });
+                batchState.logRes.log.end();
+                logReader._processPrepareEntries(batchState, err => {
+                    assert.ifError(err);
+                    assert.strictEqual(batchState.logStats.nbLogRecordsRead, 1);
+                    assert.strictEqual(batchState.logStats.hasMoreLog, sourceHasMoreLog);
+                    done();
+                });
+            });
+        });
+
         it('should consume all logs from a non tailable streams', done => {
             const batchState = {
                 logRes: {
