@@ -30,6 +30,7 @@ const BucketQueueEntry = require('../../../lib/models/BucketQueueEntry');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const MetricsProducer = require('../../../lib/MetricsProducer');
 const libConstants = require('../../../lib/constants');
+const locations = require('../../../conf/locationConfig.json') || {};
 const { wrapCounterInc, wrapHistogramObserve } = require('../../../lib/util/metrics');
 const { http: HttpAgent, https: HttpsAgent } = require('httpagent');
 
@@ -1017,7 +1018,13 @@ class QueueProcessor extends EventEmitter {
         }
         let task;
         if (actionEntry.getActionType() === 'copyLocation') {
-            if (actionEntry.getAttribute('toLocation') === this.site) {
+            // Each data processor performs the copies to its own site, plus the copies
+            // from its site when that site is remote (pull replication): it is the only
+            // one that can read from there.
+            const fromLocation = actionEntry.getAttribute('fromLocation');
+            const siteInCharge = locations[fromLocation]?.isCRR ?
+                fromLocation : actionEntry.getAttribute('toLocation');
+            if (siteInCharge === this.site) {
                 task = new CopyLocationTask(this);
             }
         } else {

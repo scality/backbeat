@@ -3,6 +3,7 @@ const { EventEmitter } = require('events');
 const Redis = require('ioredis');
 const sinon = require('sinon');
 const constants = require('../../../lib/constants');
+const locations = require('../../../conf/locationConfig.json');
 
 const QueueProcessor =
     require('../../../extensions/replication/queueProcessor/QueueProcessor');
@@ -341,6 +342,69 @@ describe('Queue Processor', () => {
                 sinon.assert.calledOnce(qp.dataMoverTaskScheduler.push);
                 sinon.assert.notCalled(qp.taskScheduler.push);
                 done();
+            });
+        });
+
+        describe('copies from a remote location', () => {
+            // this processor's site is a remote (CRR) location, as for pull replication
+            before(() => {
+                locations['site-crr'] = { type: 'scality', isCRR: true };
+            });
+            after(() => {
+                delete locations['site-crr'];
+            });
+
+            [
+                {
+                    desc: 'dispatches a copy from this remote site to a local location',
+                    fromLocation: 'site-crr',
+                    toLocation: 'us-east-1',
+                    dispatched: true,
+                },
+                {
+                    desc: 'skips a copy from another remote site',
+                    fromLocation: 'location-crr-source',
+                    toLocation: 'us-east-1',
+                    dispatched: false,
+                },
+                {
+                    // only the processor of the remote location takes it
+                    desc: 'skips a copy to this site from another remote site',
+                    fromLocation: 'location-crr-source',
+                    toLocation: 'site-crr',
+                    dispatched: false,
+                },
+                {
+                    desc: 'dispatches a copy from a local location to this site',
+                    fromLocation: 'us-east-1',
+                    toLocation: 'site-crr',
+                    dispatched: true,
+                },
+                {
+                    desc: 'skips a copy from a local location to another site',
+                    fromLocation: 'us-east-1',
+                    toLocation: 'us-east-2',
+                    dispatched: false,
+                },
+            ].forEach(({ desc, fromLocation, toLocation, dispatched }) => {
+                it(desc, done => {
+                    const kafkaEntry = {
+                        value: JSON.stringify({
+                            action: 'copyLocation',
+                            fromLocation,
+                            toLocation,
+                            target: {
+                                bucket: 'src-bucket',
+                                key: 'obj',
+                                eTag: '"d41d8cd98f00b204e9800998ecf8427e"',
+                            },
+                        }),
+                    };
+                    qp.processDataMoverEntry(kafkaEntry, () => {
+                        assert.strictEqual(qp.dataMoverTaskScheduler.push.called, dispatched);
+                        done();
+                    });
+                });
             });
         });
     });
