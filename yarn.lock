@@ -1361,10 +1361,10 @@
   resolved "https://registry.yarnpkg.com/@rtsao/scc/-/scc-1.1.0.tgz#927dd2fae9bc3361403ac2c7a00c32ddce9ad7e8"
   integrity sha512-zt6OdqaDoOnJ1ZYsCYGt9YmWzDXl4vQdKTyJev62gFhRGKdx7mcT54V9KIjg+d2wi9EXsPvAPKe7i7WjfVWB8g==
 
-"@scality/arsenal@8.6.0", "@scality/arsenal@^8.6.0", "@scality/arsenal@^8.6.0-0":
-  version "8.6.0"
-  resolved "https://registry.yarnpkg.com/@scality/arsenal/-/arsenal-8.6.0.tgz#7d8422893a6f498894e04509cb07f1bcb224e5ab"
-  integrity sha512-RxYMTZf23vd4P1lQEm/H7Jy0yIFZ+2/uFqpp7tLD4lj8iu6Lj8MsF+KxWfB3QLvwVKx9QPsMqSe06QaOPwqh4Q==
+"@scality/arsenal@8.7.0", "@scality/arsenal@^8.6.0":
+  version "8.7.0"
+  resolved "https://registry.yarnpkg.com/@scality/arsenal/-/arsenal-8.7.0.tgz#ffc1bdb42953818bc2d2f4ac3168ff1db52b4cf5"
+  integrity sha512-2f2Y9Pl2yb82uRCorfsjYkiMrJFuFqQjrnWmvA5exwM6OPJ8+mu26W/TLTy7NIcogZv9kZzOGJsx48/0dzqkYA==
   dependencies:
     "@aws-sdk/client-kms" "^3.975.0"
     "@aws-sdk/client-s3" "^3.975.0"
@@ -1522,7 +1522,7 @@
   resolved "https://codeload.github.com/scality/utapi/tar.gz/0977b6b64d04683182da572be7f0aee524d98cf4"
   dependencies:
     "@aws-sdk/client-iam" "^3.975.0"
-    "@scality/arsenal" "^8.6.0-0"
+    "@scality/arsenal" "^8.6.0"
     "@scality/bucketclient" scality/bucketclient#8.3.0
     "@senx/warp10" "1.0.14"
     async "^3.2.6"
