@@ -173,7 +173,7 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
         const objectWasModified = lastModified !== objMD.getLastModified();
         if (objectWasModified) {
             log.info(
-                'object LastModified date changed during lifecycle ' + 'transition processing',
+                'object LastModified date changed during lifecycle transition processing',
                 Object.assign(
                     {
                         method: 'LifecycleUpdateTransitionTask._wasObjectModified',
@@ -215,7 +215,7 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
                     // updated, rollback if MD5 changed
                     if (eTag !== `"${objMD.getContentMd5()}"`) {
                         log.info(
-                            'object ETag has changed during lifecycle ' + 'transition processing',
+                            'object ETag has changed during lifecycle transition processing',
                             Object.assign(
                                 {
                                     method: 'LifecycleUpdateTransitionTask.processActionEntry',

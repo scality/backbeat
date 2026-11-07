@@ -238,7 +238,7 @@ class ReplicateObject extends BackbeatTask {
             entryRoles = entryRolesString.split(',');
         }
         if (entryRoles === undefined || entryRoles.length !== 2) {
-            log.error('expecting two roles separated by a ' + 'comma in entry replication configuration', {
+            log.error('expecting two roles separated by a comma in entry replication configuration', {
                 method: 'ReplicateObject._setupRolesOnce',
                 entry: entry.getLogInfo(),
                 roles: entryRolesString,
@@ -283,7 +283,7 @@ class ReplicateObject extends BackbeatTask {
         }
         const roles = data.ReplicationConfiguration.Role.split(',');
         if (roles.length > 2) {
-            log.error('expecting one or two roles in bucket ' + 'replication configuration', {
+            log.error('expecting one or two roles in bucket replication configuration', {
                 method: 'ReplicateObject._setupRolesOnce',
                 entry: entry.getLogInfo(),
                 roles,
@@ -292,7 +292,7 @@ class ReplicateObject extends BackbeatTask {
         }
         if (roles[0] !== entryRoles[0]) {
             log.error(
-                'role in replication entry for source does ' + 'not match role in bucket replication configuration ',
+                'role in replication entry for source does not match role in bucket replication configuration ',
                 {
                     method: 'ReplicateObject._setupRolesOnce',
                     entry: entry.getLogInfo(),
@@ -332,7 +332,7 @@ class ReplicateObject extends BackbeatTask {
         }
         if (expectedDestRole !== entryRoles[1]) {
             log.error(
-                'role in replication entry for target does ' + 'not match role in bucket replication configuration ',
+                'role in replication entry for target does not match role in bucket replication configuration ',
                 {
                     method: 'ReplicateObject._setupRolesOnce',
                     entry: entry.getLogInfo(),
@@ -366,7 +366,7 @@ class ReplicateObject extends BackbeatTask {
                     }
                 }
             }
-            log.error('an error occurred when looking up target ' + 'account attributes', {
+            log.error('an error occurred when looking up target account attributes', {
                 method: 'ReplicateObject._setTargetAccountMdOnce',
                 entry: destEntry.getLogInfo(),
                 origin: 'target',
@@ -1009,7 +1009,7 @@ class ReplicateObject extends BackbeatTask {
             return { committable: false };
         }
         if (!err) {
-            log.debug('replication succeeded for object, publishing ' + 'replication status as COMPLETED', {
+            log.debug('replication succeeded for object, publishing replication status as COMPLETED', {
                 entry: sourceEntry.getLogInfo(),
             });
             this._publishReplicationStatus(sourceEntry, 'COMPLETED', { kafkaEntry, log });
@@ -1021,7 +1021,7 @@ class ReplicateObject extends BackbeatTask {
             (err.origin === 'source' &&
                 (err.NoSuchEntity || err.name === 'NoSuchEntity' || err.AccessDenied || err.name === 'AccessDenied'))
         ) {
-            log.error('replication failed permanently for object, ' + 'processing skipped', {
+            log.error('replication failed permanently for object, processing skipped', {
                 failMethod: err.method,
                 entry: sourceEntry.getLogInfo(),
                 origin: err.origin,
@@ -1030,14 +1030,14 @@ class ReplicateObject extends BackbeatTask {
             return null;
         }
         if (err === errorAlreadyCompleted) {
-            log.warn('replication skipped: ' + 'source object version already COMPLETED', {
+            log.warn('replication skipped: source object version already COMPLETED', {
                 entry: sourceEntry.getLogInfo(),
             });
             return null;
         }
         if (err.ObjNotFound || err.name === 'ObjNotFound') {
             if (err.origin === 'source') {
-                log.info('replication skipped: ' + 'source object version does not exist', {
+                log.info('replication skipped: source object version does not exist', {
                     entry: sourceEntry.getLogInfo(),
                 });
                 return null;
@@ -1052,7 +1052,7 @@ class ReplicateObject extends BackbeatTask {
             log.info('replication skipped: invalid object state', { entry: sourceEntry.getLogInfo() });
             return null;
         }
-        log.debug('replication failed permanently for object, ' + 'publishing replication status as FAILED', {
+        log.debug('replication failed permanently for object, publishing replication status as FAILED', {
             failMethod: err.method,
             entry: sourceEntry.getLogInfo(),
             error: err.description,

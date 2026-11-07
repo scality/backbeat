@@ -635,7 +635,7 @@ describe('Lifecycle Conductor', () => {
                 assert.deepStrictEqual(taskVersion, lifecycleTaskVersions.v1);
                 assert(
                     metricsSpy.calledWith(sinon.match.any, 'putBucketIndexesFailed'),
-                    'expected LifecycleMetrics.onLegacyTask to be called with ' + "'putBucketIndexesFailed'",
+                    "expected LifecycleMetrics.onLegacyTask to be called with 'putBucketIndexesFailed'",
                 );
                 assert(
                     !metricsSpy.calledWith(sinon.match.any, 'putBucketIndexes'),
@@ -669,7 +669,7 @@ describe('Lifecycle Conductor', () => {
                 assert.deepStrictEqual(taskVersion, lifecycleTaskVersions.v1);
                 assert(
                     metricsSpy.calledWith(sinon.match.any, 'putBucketIndexes'),
-                    'expected LifecycleMetrics.onLegacyTask to be called with ' + "'putBucketIndexes'",
+                    "expected LifecycleMetrics.onLegacyTask to be called with 'putBucketIndexes'",
                 );
                 assert(
                     !metricsSpy.calledWith(sinon.match.any, 'putBucketIndexesFailed'),

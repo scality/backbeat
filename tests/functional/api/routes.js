@@ -396,7 +396,7 @@ describe('API routes', () => {
             });
         });
 
-        it('should get the right data for route: ' + '/_/metrics/crr/all/backlog', done => {
+        it('should get the right data for route: /_/metrics/crr/all/backlog', done => {
             getRequest('/_/metrics/crr/all/backlog', (err, res) => {
                 assert.ifError(err);
                 const key = Object.keys(res)[0];
@@ -419,7 +419,7 @@ describe('API routes', () => {
             });
         });
 
-        it('should get the right data for route: ' + '/_/metrics/crr/all/completions', done => {
+        it('should get the right data for route: /_/metrics/crr/all/completions', done => {
             getRequest('/_/metrics/crr/all/completions', (err, res) => {
                 assert.ifError(err);
                 const key = Object.keys(res)[0];
@@ -431,7 +431,7 @@ describe('API routes', () => {
             });
         });
 
-        it('should get the right data for route: ' + '/_/metrics/ingestion/all/completions', done => {
+        it('should get the right data for route: /_/metrics/ingestion/all/completions', done => {
             getRequest('/_/metrics/ingestion/all/completions', (err, res) => {
                 assert.ifError(err);
 
@@ -480,7 +480,7 @@ describe('API routes', () => {
             });
         });
 
-        it('should get the right data for route: ' + '/_/metrics/crr/all/failures', done => {
+        it('should get the right data for route: /_/metrics/crr/all/failures', done => {
             getRequest('/_/metrics/crr/all/failures', (err, res) => {
                 assert.ifError(err);
 
@@ -503,7 +503,7 @@ describe('API routes', () => {
             });
         });
 
-        it('should get the right data for route: ' + '/_/metrics/crr/all/throughput', done => {
+        it('should get the right data for route: /_/metrics/crr/all/throughput', done => {
             getRequest('/_/metrics/crr/all/throughput', (err, res) => {
                 assert.ifError(err);
                 const key = Object.keys(res)[0];
@@ -515,7 +515,7 @@ describe('API routes', () => {
             });
         });
 
-        it('should get the right data for route: ' + '/_/metrics/ingestion/all/throughput', done => {
+        it('should get the right data for route: /_/metrics/ingestion/all/throughput', done => {
             getRequest('/_/metrics/ingestion/all/throughput', (err, res) => {
                 assert.ifError(err);
                 const key = Object.keys(res)[0];
@@ -549,7 +549,7 @@ describe('API routes', () => {
             });
         });
 
-        it('should get the right data for route: ' + '/_/metrics/crr/all/pending', done => {
+        it('should get the right data for route: /_/metrics/crr/all/pending', done => {
             getRequest('/_/metrics/crr/all/pending', (err, res) => {
                 assert.ifError(err);
                 const key = Object.keys(res)[0];
@@ -559,7 +559,7 @@ describe('API routes', () => {
             });
         });
 
-        it('should get the right data for route: ' + '/_/metrics/ingestion/all/pending', done => {
+        it('should get the right data for route: /_/metrics/ingestion/all/pending', done => {
             getRequest('/_/metrics/ingestion/all/pending', (err, res) => {
                 assert.ifError(err);
                 const key = Object.keys(res)[0];
@@ -632,7 +632,7 @@ describe('API routes', () => {
             });
         });
 
-        it('should return all metrics for route: ' + '/_/metrics/crr/all', done => {
+        it('should return all metrics for route: /_/metrics/crr/all', done => {
             getRequest('/_/metrics/crr/all', (err, res) => {
                 assert.ifError(err);
                 const keys = Object.keys(res);
@@ -683,7 +683,7 @@ describe('API routes', () => {
             });
         });
 
-        it('should return all metrics for route: ' + '/_/metrics/ingestion/all', done => {
+        it('should return all metrics for route: /_/metrics/ingestion/all', done => {
             getRequest('/_/metrics/ingestion/all', (err, res) => {
                 assert.ifError(err);
 
@@ -784,7 +784,7 @@ describe('API routes', () => {
                 });
             });
 
-            it('should return a response even if redis data does not exist: ' + 'all CRR metrics', done => {
+            it('should return a response even if redis data does not exist: all CRR metrics', done => {
                 getRequest('/_/metrics/crr/all', (err, res) => {
                     assert.ifError(err);
 
@@ -819,7 +819,7 @@ describe('API routes', () => {
                 });
             });
 
-            it('should return a response even if redis data does not exist: ' + 'object progress CRR metrics', done =>
+            it('should return a response even if redis data does not exist: object progress CRR metrics', done =>
                 getRequest(`/_/metrics/crr/${site1}/progress/bucket/object` + '?versionId=version', (err, res) => {
                     assert.ifError(err);
                     assert.deepStrictEqual(res, {
@@ -836,11 +836,11 @@ describe('API routes', () => {
                 }),
             );
 
-            it('should return a response even if redis data does not exist: ' + 'object throughput CRR metrics', done =>
+            it('should return a response even if redis data does not exist: object throughput CRR metrics', done =>
                 getRequest(`/_/metrics/crr/${site1}/throughput/bucket/object` + '?versionId=version', (err, res) => {
                     assert.ifError(err);
                     assert.deepStrictEqual(res, {
-                        description: 'Current throughput for object ' + 'replication in bytes/sec (throughput)',
+                        description: 'Current throughput for object replication in bytes/sec (throughput)',
                         throughput: '0.00',
                     });
                     done();
@@ -926,7 +926,7 @@ describe('API routes', () => {
                         ],
                         err => {
                             if (err) {
-                                process.stdout.write('error occurred in zookeeper' + ' setup for pause/resume');
+                                process.stdout.write('error occurred in zookeeper setup for pause/resume');
                                 return cb(err);
                             }
                             return cb();

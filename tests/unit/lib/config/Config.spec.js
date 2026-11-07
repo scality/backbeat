@@ -21,7 +21,7 @@ describe('Config', () => {
     });
 
     it(
-        'should make the probeserver config in the queuePoulator' + 'required when multiple extensions are configured',
+        'should make the probeserver config in the queuePoulatorrequired when multiple extensions are configured',
         () => {
             delete testConfig.queuePopulator.probeServer;
             assert.throws(() => config._parseConfig(testConfig));

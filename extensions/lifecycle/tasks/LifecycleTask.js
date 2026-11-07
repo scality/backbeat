@@ -494,7 +494,7 @@ class LifecycleTask extends BackbeatTask {
                 });
                 this._sendBucketEntry(entry, err => {
                     if (!err) {
-                        log.debug('sent kafka entry for bucket ' + 'consumption', {
+                        log.debug('sent kafka entry for bucket consumption', {
                             method: 'LifecycleTask._getObjectVersions',
                         });
                     }

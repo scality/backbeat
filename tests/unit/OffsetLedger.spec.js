@@ -81,7 +81,7 @@ describe('OffsetLedger', () => {
         assert.strictEqual(ledger.getProcessingCount('topic', 0), 0);
     });
 
-    it('should get correct offset with ten messages processed intermingled ' + 'with ten new messages consumed', () => {
+    it('should get correct offset with ten messages processed intermingled with ten new messages consumed', () => {
         const ledger = new OffsetLedger();
 
         const finishOrder = [44, 50, 46, 53, 45, 42, 51, 57, 49, 56, 47, 43, 55, 61, 59, 54, 48, 60, 52, 58];
@@ -149,7 +149,7 @@ describe('OffsetLedger', () => {
     });
 
     describe("'empty' event", () => {
-        it('should emit "empty" when the in-flight count for a topic ' + 'transitions to zero', done => {
+        it('should emit "empty" when the in-flight count for a topic transitions to zero', done => {
             const ledger = new OffsetLedger();
             ledger.on('empty', topic => {
                 assert.strictEqual(topic, 'topic');
@@ -160,7 +160,7 @@ describe('OffsetLedger', () => {
             ledger.onOffsetProcessed('topic', 0, 1);
         });
 
-        it('should not emit "empty" when count goes from N to N-1 (still ' + 'non-zero)', done => {
+        it('should not emit "empty" when count goes from N to N-1 (still non-zero)', done => {
             const ledger = new OffsetLedger();
             ledger.on('empty', () => {
                 done(new Error('unexpected empty emit'));
@@ -189,7 +189,7 @@ describe('OffsetLedger', () => {
             });
         });
 
-        it('should defer emit via nextTick so callers can finish their ' + 'synchronous work', done => {
+        it('should defer emit via nextTick so callers can finish their synchronous work', done => {
             const ledger = new OffsetLedger();
             let processedReturned = false;
             ledger.on('empty', () => {
@@ -201,7 +201,7 @@ describe('OffsetLedger', () => {
             processedReturned = true;
         });
 
-        it('should not emit if a new entry is consumed between scheduling ' + 'and firing the deferred emit', done => {
+        it('should not emit if a new entry is consumed between scheduling and firing the deferred emit', done => {
             const ledger = new OffsetLedger();
             ledger.on('empty', () => {
                 done(new Error('emit should have been suppressed'));
@@ -216,7 +216,7 @@ describe('OffsetLedger', () => {
             });
         });
 
-        it('should not schedule a nextTick when no listeners are ' + 'registered (steady-state hot path)', () => {
+        it('should not schedule a nextTick when no listeners are registered (steady-state hot path)', () => {
             const ledger = new OffsetLedger();
             // No listener attached — would-be emits should be skipped
             // entirely. We can't directly observe the absence of the

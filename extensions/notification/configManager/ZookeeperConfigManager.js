@@ -255,7 +255,7 @@ class ZookeeperConfigManager extends BaseConfigManager {
                 next => this._checkNodeExists(zkPath, next),
                 (exists, next) => {
                     if (!exists) {
-                        this.log.debug('parent configuration zookeeper node does ' + 'not exist', { method, zkPath });
+                        this.log.debug('parent configuration zookeeper node does not exist', { method, zkPath });
                         return this._zkClient.mkdirp(zkPath, err => next(err));
                     }
                     this.log.debug('parent configuration zookeeper node exists', { method, zkPath });
@@ -453,7 +453,7 @@ class ZookeeperConfigManager extends BaseConfigManager {
         }
 
         const zookeeperUrl = `${this._zkConfig.connectionString}${this._zkPath}`;
-        this.log.info('opening zookeeper connection for reading ' + 'bucket notification configuration', {
+        this.log.info('opening zookeeper connection for reading bucket notification configuration', {
             zookeeperUrl,
             method: 'ZookeeperConfigManager._setupZookeeper',
         });

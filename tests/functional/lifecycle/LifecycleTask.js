@@ -1017,7 +1017,7 @@ describe('lifecycle task functional tests', function dF() {
             });
         });
 
-        it('should verify changes in lifecycle rules will apply to the ' + 'correct objects', done => {
+        it('should verify changes in lifecycle rules will apply to the correct objects', done => {
             // kafka bucket entry
             const bucketEntry = {
                 action: 'testing-nonversioned',
@@ -1174,7 +1174,7 @@ describe('lifecycle task functional tests', function dF() {
             },
             // expire: basic test using Days
             {
-                message: 'should verify the Expiration rule in Days ' + 'are properly handled',
+                message: 'should verify the Expiration rule in Days are properly handled',
                 bucketLCRules: [
                     new LifecycleRule().addID('task-1').addExpiration('Days', 1).addPrefix('atest/').build(),
                 ],
@@ -1196,7 +1196,7 @@ describe('lifecycle task functional tests', function dF() {
             // expire: pagination, tagging
             {
                 message:
-                    'should verify that EXPIRED objects are sent to ' + 'object kafka topic with pagination, with tags',
+                    'should verify that EXPIRED objects are sent to object kafka topic with pagination, with tags',
                 bucketLCRules: [
                     new LifecycleRule().addID('task-1').addExpiration('Date', PAST).addTag('key1', 'value1').build(),
                 ],
@@ -1217,7 +1217,7 @@ describe('lifecycle task functional tests', function dF() {
             },
             // expire: multiple bucket rules, pagination, tagging, prefix
             {
-                message: 'should verify that multiple EXPIRED rules are ' + 'properly being handled',
+                message: 'should verify that multiple EXPIRED rules are properly being handled',
                 bucketLCRules: [
                     new LifecycleRule().addID('task-1').addExpiration('Date', FUTURE).build(),
                     new LifecycleRule().addID('task-2').addExpiration('Date', FUTURE).addTag('key1', 'value1').build(),
@@ -1373,7 +1373,7 @@ describe('lifecycle task functional tests', function dF() {
             });
         });
 
-        it('should verify changes in lifecycle rules will apply to ' + 'the correct objects', done => {
+        it('should verify changes in lifecycle rules will apply to the correct objects', done => {
             const bucketEntry = {
                 action: 'testing-versioned',
                 target: {
@@ -1452,7 +1452,7 @@ describe('lifecycle task functional tests', function dF() {
             );
         });
 
-        it('should expire a version in a versioning enabled bucket using ' + 'basic expiration rule', done => {
+        it('should expire a version in a versioning enabled bucket using basic expiration rule', done => {
             const bucket = 'test-bucket';
             const keyName = 'test-key1';
             const bucketEntry = {
@@ -1812,7 +1812,7 @@ describe('lifecycle task functional tests', function dF() {
                 },
             },
             {
-                message: 'should not apply ExpiredObjectDeleteMarker rule ' + 'when EODM is set to false',
+                message: 'should not apply ExpiredObjectDeleteMarker rule when EODM is set to false',
                 bucketLCRules: [
                     new LifecycleRule().addID('task-1').addExpiration('ExpiredObjectDeleteMarker', false).build(),
                 ],

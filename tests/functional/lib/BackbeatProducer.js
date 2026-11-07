@@ -48,7 +48,7 @@ const oneBigMessage = [{ key: 'large-foo', message: Buffer.alloc(3000000).fill('
             });
         }).timeout(30000);
 
-        it('should be able to send a batch of messages and get delivery ' + 'reports back', done => {
+        it('should be able to send a batch of messages and get delivery reports back', done => {
             producer.send(multipleMessages, (err, reports) => {
                 assert.ifError(err);
                 assert(Array.isArray(reports));

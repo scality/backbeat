@@ -1041,7 +1041,7 @@ class LifecycleConductor {
                 const doSkip = Object.keys(checkResults).some(checkType => checkResults[checkType] !== undefined);
                 if (doSkip) {
                     this.logger.info(
-                        'skipping lifecycle batch due to ' + 'previous operation still in progress',
+                        'skipping lifecycle batch due to previous operation still in progress',
                         checkResults,
                     );
                     return done(errors.Throttling);

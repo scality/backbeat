@@ -23,7 +23,7 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
         super(params);
         this.notificationConfig = params.config;
         this.bnConfigManager = params.bnConfigManager;
-        assert(this.bnConfigManager, 'bucket notification configuration manager' + ' is not set');
+        assert(this.bnConfigManager, 'bucket notification configuration manager is not set');
         // callbackify functions
         this._processObjectEntryCb = util.callbackify(this._processObjectEntry).bind(this);
         this._metricsStore = params.metricsHandler;
