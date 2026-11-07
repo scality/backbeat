@@ -104,7 +104,7 @@ describe('BackbeatRequest helper class', () => {
         });
 
         ['crr', 'ingestion', 'lifecycle'].forEach(service => {
-            it(`should parse ${service} pause/resume routes and store internallyas route details`, () => {
+            it(`should parse ${service} pause/resume routes and store internally as route details`, () => {
                 const req = new BackbeatRequest({
                     url: `/_/${service}/resume/mysite`,
                     method: 'POST',
