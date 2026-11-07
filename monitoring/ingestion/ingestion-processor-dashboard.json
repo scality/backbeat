@@ -1,974 +1,941 @@
 {
-  "__inputs": [
-    {
-      "name": "DS_PROMETHEUS",
-      "label": "Prometheus",
-      "description": "",
-      "type": "datasource",
-      "pluginId": "prometheus",
-      "pluginName": "Prometheus"
-    },
-    {
-      "name": "namespace",
-      "type": "constant",
-      "label": "namespace",
-      "value": "zenko",
-      "description": ""
-    },
-    {
-      "name": "job_ingestion_processor",
-      "type": "constant",
-      "label": "job_ingestion_processor",
-      "value": "artesca-data-backbeat-ingestion-processor-headless",
-      "description": ""
-    },
-    {
-      "name": "replicas",
-      "type": "constant",
-      "label": "replicas",
-      "value": "1",
-      "description": ""
-    }
-  ],
-  "__elements": [],
-  "annotations": {
-    "list": [
-      {
-        "builtIn": 1,
-        "datasource": "-- Grafana --",
-        "enable": true,
-        "hide": true,
-        "iconColor": "rgba(0, 211, 255, 1)",
-        "name": "Annotations & Alerts",
-        "target": {
-          "limit": 100,
-          "matchAny": false,
-          "tags": [],
-          "type": "dashboard"
-        },
-        "type": "dashboard"
-      }
-    ]
-  },
-  "editable": true,
-  "fiscalYearStartMonth": 0,
-  "graphTooltip": 0,
-  "id": null,
-  "iteration": 1639601404135,
-  "links": [],
-  "liveNow": false,
-  "panels": [
-    {
-      "description": "Recent health status of all ingestion processor pods.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisLabel": "Active pods",
-            "axisPlacement": "auto",
-            "axisSoftMax": "${replicas}",
-            "barAlignment": 0,
-            "drawStyle": "lines",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineInterpolation": "stepBefore",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "decimals": 0,
-          "mappings": [],
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 0
-      },
-      "id": 123133,
-      "options": {
-        "legend": {
-          "calcs": [
-            "last"
-          ],
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "single"
-        }
-      },
-      "targets": [
+    "__inputs": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "exemplar": true,
-          "expr": "sum(up{namespace=\"${namespace}\", job=\"${job_ingestion_processor}\"})",
-          "interval": "",
-          "legendFormat": "Ingestion processor(s)",
-          "refId": "A"
-        }
-      ],
-      "title": "Recent Status",
-      "type": "timeseries"
-    },
-    {
-      "description": "Current health status of all ingestion processor pods.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
-              },
-              {
-                "color": "green",
-                "value": 1
-              }
-            ]
-          },
-          "unit": "/${replicas}"
+            "name": "DS_PROMETHEUS",
+            "label": "Prometheus",
+            "description": "",
+            "type": "datasource",
+            "pluginId": "prometheus",
+            "pluginName": "Prometheus"
         },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 0
-      },
-      "id": 123135,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "last"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "text": {},
-        "textMode": "auto"
-      },
-      "pluginVersion": "8.3.1",
-      "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "exemplar": true,
-          "expr": "sum(up{namespace=\"${namespace}\", job=\"${job_ingestion_processor}\"})",
-          "interval": "",
-          "legendFormat": "Ingestion processor(s)",
-          "refId": "A"
-        }
-      ],
-      "title": "Current Status",
-      "type": "stat"
-    },
-    {
-      "description": "Number of ingestion processor jobs completed successfully per second.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisLabel": "Jobs per second",
-            "axisPlacement": "left",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          }
+            "name": "namespace",
+            "type": "constant",
+            "label": "namespace",
+            "value": "zenko",
+            "description": ""
         },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 8
-      },
-      "id": 123125,
-      "options": {
-        "legend": {
-          "calcs": [
-            "min",
-            "max",
-            "mean",
-            "last"
-          ],
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "single"
-        }
-      },
-      "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "exemplar": true,
-          "expr": "sum(rate(s3_ingestion_mongo_processed_elapsed_seconds_count{status=\"success\", namespace=\"${namespace}\", job=\"${job_ingestion_processor}\"}[$__rate_interval]))",
-          "interval": "",
-          "legendFormat": "Ingestion processor(s)",
-          "refId": "A"
-        }
-      ],
-      "title": "Success jobs",
-      "type": "timeseries"
-    },
-    {
-      "description": "Number of ingestion processor jobs that failed per second.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisLabel": "Jobs per second",
-            "axisPlacement": "left",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          }
+            "name": "job_ingestion_processor",
+            "type": "constant",
+            "label": "job_ingestion_processor",
+            "value": "artesca-data-backbeat-ingestion-processor-headless",
+            "description": ""
         },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 8
-      },
-      "id": 123136,
-      "options": {
-        "legend": {
-          "calcs": [
-            "min",
-            "max",
-            "mean",
-            "last"
-          ],
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "single"
-        }
-      },
-      "pluginVersion": "8.3.1",
-      "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "exemplar": true,
-          "expr": "sum(rate(s3_ingestion_mongo_processed_elapsed_seconds_count{status=\"error\", namespace=\"${namespace}\", job=\"${job_ingestion_processor}\"}[$__rate_interval]))",
-          "interval": "",
-          "legendFormat": "Ingestion processor(s)",
-          "refId": "A"
+            "name": "replicas",
+            "type": "constant",
+            "label": "replicas",
+            "value": "1",
+            "description": ""
         }
-      ],
-      "title": "Error jobs",
-      "type": "timeseries"
-    },
-    {
-      "description": "Recent percentage of successful jobs.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisLabel": "Success rate",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": true,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "max": 100,
-          "min": 0,
-          "thresholds": {
-            "mode": "percentage",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
-              },
-              {
-                "color": "orange",
-                "value": 80
-              },
-              {
-                "color": "green",
-                "value": 90
-              }
-            ]
-          },
-          "unit": "percent"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 16
-      },
-      "id": 123127,
-      "options": {
-        "legend": {
-          "calcs": [
-            "max",
-            "min",
-            "mean",
-            "last"
-          ],
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "single"
-        }
-      },
-      "pluginVersion": "8.3.1",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "exemplar": true,
-          "expr": "sum(s3_ingestion_mongo_processed_elapsed_seconds_count{status=\"success\", namespace=\"${namespace}\", job=\"${job_ingestion_processor}\" }) * 100 / sum(s3_ingestion_mongo_processed_elapsed_seconds_count{namespace=\"${namespace}\", job=\"${job_ingestion_processor}\"})",
-          "interval": "",
-          "legendFormat": "Ingestion processor(s)",
-          "refId": "A"
-        }
-      ],
-      "title": "Recent percentage of successful jobs",
-      "type": "timeseries"
-    },
-    {
-      "description": "Current percentage of successful jobs.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "max": 100,
-          "min": 0,
-          "thresholds": {
-            "mode": "percentage",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
-              },
-              {
-                "color": "orange",
-                "value": 80
-              },
-              {
-                "color": "green",
-                "value": 90
-              }
-            ]
-          },
-          "unit": "percent"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 16
-      },
-      "id": 123137,
-      "options": {
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showThresholdLabels": false,
-        "showThresholdMarkers": true
-      },
-      "pluginVersion": "8.3.1",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "exemplar": true,
-          "expr": "sum(s3_ingestion_mongo_processed_elapsed_seconds_count{status=\"success\", namespace=\"${namespace}\", job=\"${job_ingestion_processor}\" }) * 100 / sum(s3_ingestion_mongo_processed_elapsed_seconds_count{namespace=\"${namespace}\", job=\"${job_ingestion_processor}\"})",
-          "interval": "",
-          "legendFormat": "Ingestion processor(s)",
-          "refId": "A"
-        }
-      ],
-      "title": "Current percentage of successful jobs",
-      "type": "gauge"
-    },
-    {
-      "description": "How long does it take for successful ingestion processor job to complete.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisLabel": "Latency",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineInterpolation": "stepAfter",
-            "lineStyle": {
-              "fill": "solid"
-            },
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": true,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "s"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 24
-      },
-      "id": 123131,
-      "options": {
-        "legend": {
-          "calcs": [
-            "min",
-            "max",
-            "mean",
-            "last"
-          ],
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "single"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "exemplar": true,
-          "expr": "sum(rate(s3_ingestion_mongo_processed_elapsed_seconds_sum{status=\"success\", namespace=\"${namespace}\", job=\"${job_ingestion_processor}\"}[$__rate_interval])) / sum(rate(s3_ingestion_mongo_processed_elapsed_seconds_count{status=\"success\", namespace=\"${namespace}\", job=\"${job_ingestion_processor}\"}[$__rate_interval]))",
-          "interval": "",
-          "legendFormat": "Ingestion processor(s)",
-          "refId": "A"
-        }
-      ],
-      "title": "Jobs latency",
-      "type": "timeseries"
-    },
-    {
-      "description": "Number of Kafka entries pulled by the ingestion processor per second.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisLabel": "Entries per second",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 24
-      },
-      "id": 123129,
-      "options": {
-        "legend": {
-          "calcs": [
-            "mean",
-            "last",
-            "min",
-            "max"
-          ],
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "single"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "exemplar": true,
-          "expr": "sum(rate(s3_ingestion_kafka_messages_pulled_total{namespace=\"${namespace}\", job=\"${job_ingestion_processor}\"}[$__rate_interval]))",
-          "interval": "",
-          "legendFormat": "Ingestion processor(s)",
-          "refId": "A"
-        }
-      ],
-      "title": "Kafka entries pulled for ingestion",
-      "type": "timeseries"
-    },
-    {
-      "cacheTimeout": null,
-      "datasource": "${DS_PROMETHEUS}",
-      "description": null,
-      "editable": true,
-      "error": false,
-      "fieldConfig": {
-        "defaults": {
-          "calcs": [
-            "mean"
-          ],
-          "decimals": null,
-          "limit": null,
-          "links": [],
-          "mappings": [
+    ],
+    "__elements": [],
+    "annotations": {
+        "list": [
             {
-              "options": {
-                "from": 0,
-                "result": {
-                  "color": "green",
-                  "index": 0,
-                  "text": "OK"
+                "builtIn": 1,
+                "datasource": "-- Grafana --",
+                "enable": true,
+                "hide": true,
+                "iconColor": "rgba(0, 211, 255, 1)",
+                "name": "Annotations & Alerts",
+                "target": {
+                    "limit": 100,
+                    "matchAny": false,
+                    "tags": [],
+                    "type": "dashboard"
                 },
-                "to": 2
-              },
-              "type": "range"
-            },
-            {
-              "options": {
-                "from": 2,
-                "result": {
-                  "color": "orange",
-                  "index": 1,
-                  "text": "Throttled"
-                },
-                "to": 10
-              },
-              "type": "range"
-            },
-            {
-              "options": {
-                "from": 10,
-                "result": {
-                  "color": "red",
-                  "index": 2,
-                  "text": "Stalled"
-                },
-                "to": 20
-              },
-              "type": "range"
+                "type": "dashboard"
             }
-          ],
-          "max": 20,
-          "min": 0,
-          "override": {},
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "index": 0,
-                "line": true,
-                "op": "gt",
-                "value": "null",
-                "yaxis": "left"
-              },
-              {
-                "color": "orange",
-                "index": 1,
-                "line": true,
-                "op": "gt",
-                "value": 2.0,
-                "yaxis": "left"
-              },
-              {
-                "color": "red",
-                "index": 2,
-                "line": true,
-                "op": "gt",
-                "value": 10.0,
-                "yaxis": "left"
-              }
-            ]
-          },
-          "title": null,
-          "unit": "none",
-          "values": false
-        },
-        "showThresholdLabels": false,
-        "showThresholdMarkers": true
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 24,
-        "x": 0,
-        "y": 32
-      },
-      "height": null,
-      "hideTimeOverride": false,
-      "id": 47,
-      "interval": null,
-      "links": [],
-      "maxDataPoints": 100,
-      "maxPerRow": null,
-      "minSpan": null,
-      "repeat": null,
-      "repeatDirection": null,
-      "span": null,
-      "targets": [
+        ]
+    },
+    "editable": true,
+    "fiscalYearStartMonth": 0,
+    "graphTooltip": 0,
+    "id": null,
+    "iteration": 1639601404135,
+    "links": [],
+    "liveNow": false,
+    "panels": [
         {
-          "datasource": null,
-          "expr": "avg(s3_circuit_breaker{namespace=\"${namespace}\",job=\"${job_ingestion_processor}\"})*10",
-          "format": "time_series",
-          "hide": false,
-          "instant": false,
-          "interval": "",
-          "intervalFactor": 1,
-          "legendFormat": "",
-          "metric": "",
-          "query": "avg(s3_circuit_breaker{namespace=\"${namespace}\",job=\"${job_ingestion_processor}\"})*10",
-          "refId": "",
-          "step": 10,
-          "target": ""
+            "description": "Recent health status of all ingestion processor pods.",
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "axisLabel": "Active pods",
+                        "axisPlacement": "auto",
+                        "axisSoftMax": "${replicas}",
+                        "barAlignment": 0,
+                        "drawStyle": "lines",
+                        "fillOpacity": 0,
+                        "gradientMode": "none",
+                        "hideFrom": {
+                            "legend": false,
+                            "tooltip": false,
+                            "viz": false
+                        },
+                        "lineInterpolation": "stepBefore",
+                        "lineWidth": 2,
+                        "pointSize": 5,
+                        "scaleDistribution": {
+                            "type": "linear"
+                        },
+                        "showPoints": "auto",
+                        "spanNulls": false,
+                        "stacking": {
+                            "group": "A",
+                            "mode": "none"
+                        },
+                        "thresholdsStyle": {
+                            "mode": "off"
+                        }
+                    },
+                    "decimals": 0,
+                    "mappings": [],
+                    "min": 0,
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            }
+                        ]
+                    },
+                    "unit": "short"
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 0
+            },
+            "id": 123133,
+            "options": {
+                "legend": {
+                    "calcs": ["last"],
+                    "displayMode": "list",
+                    "placement": "bottom"
+                },
+                "tooltip": {
+                    "mode": "single"
+                }
+            },
+            "targets": [
+                {
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${DS_PROMETHEUS}"
+                    },
+                    "exemplar": true,
+                    "expr": "sum(up{namespace=\"${namespace}\", job=\"${job_ingestion_processor}\"})",
+                    "interval": "",
+                    "legendFormat": "Ingestion processor(s)",
+                    "refId": "A"
+                }
+            ],
+            "title": "Recent Status",
+            "type": "timeseries"
+        },
+        {
+            "description": "Current health status of all ingestion processor pods.",
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "thresholds"
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "red",
+                                "value": null
+                            },
+                            {
+                                "color": "green",
+                                "value": 1
+                            }
+                        ]
+                    },
+                    "unit": "/${replicas}"
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 0
+            },
+            "id": 123135,
+            "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "justifyMode": "center",
+                "orientation": "auto",
+                "reduceOptions": {
+                    "calcs": ["last"],
+                    "fields": "",
+                    "values": false
+                },
+                "text": {},
+                "textMode": "auto"
+            },
+            "pluginVersion": "8.3.1",
+            "targets": [
+                {
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${DS_PROMETHEUS}"
+                    },
+                    "exemplar": true,
+                    "expr": "sum(up{namespace=\"${namespace}\", job=\"${job_ingestion_processor}\"})",
+                    "interval": "",
+                    "legendFormat": "Ingestion processor(s)",
+                    "refId": "A"
+                }
+            ],
+            "title": "Current Status",
+            "type": "stat"
+        },
+        {
+            "description": "Number of ingestion processor jobs completed successfully per second.",
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "axisLabel": "Jobs per second",
+                        "axisPlacement": "left",
+                        "barAlignment": 0,
+                        "drawStyle": "line",
+                        "fillOpacity": 0,
+                        "gradientMode": "none",
+                        "hideFrom": {
+                            "legend": false,
+                            "tooltip": false,
+                            "viz": false
+                        },
+                        "lineInterpolation": "linear",
+                        "lineWidth": 1,
+                        "pointSize": 5,
+                        "scaleDistribution": {
+                            "type": "linear"
+                        },
+                        "showPoints": "auto",
+                        "spanNulls": false,
+                        "stacking": {
+                            "group": "A",
+                            "mode": "none"
+                        },
+                        "thresholdsStyle": {
+                            "mode": "off"
+                        }
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            },
+                            {
+                                "color": "red",
+                                "value": 80
+                            }
+                        ]
+                    }
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 8
+            },
+            "id": 123125,
+            "options": {
+                "legend": {
+                    "calcs": ["min", "max", "mean", "last"],
+                    "displayMode": "list",
+                    "placement": "bottom"
+                },
+                "tooltip": {
+                    "mode": "single"
+                }
+            },
+            "targets": [
+                {
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${DS_PROMETHEUS}"
+                    },
+                    "exemplar": true,
+                    "expr": "sum(rate(s3_ingestion_mongo_processed_elapsed_seconds_count{status=\"success\", namespace=\"${namespace}\", job=\"${job_ingestion_processor}\"}[$__rate_interval]))",
+                    "interval": "",
+                    "legendFormat": "Ingestion processor(s)",
+                    "refId": "A"
+                }
+            ],
+            "title": "Success jobs",
+            "type": "timeseries"
+        },
+        {
+            "description": "Number of ingestion processor jobs that failed per second.",
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "axisLabel": "Jobs per second",
+                        "axisPlacement": "left",
+                        "barAlignment": 0,
+                        "drawStyle": "line",
+                        "fillOpacity": 0,
+                        "gradientMode": "none",
+                        "hideFrom": {
+                            "legend": false,
+                            "tooltip": false,
+                            "viz": false
+                        },
+                        "lineInterpolation": "linear",
+                        "lineWidth": 1,
+                        "pointSize": 5,
+                        "scaleDistribution": {
+                            "type": "linear"
+                        },
+                        "showPoints": "auto",
+                        "spanNulls": false,
+                        "stacking": {
+                            "group": "A",
+                            "mode": "none"
+                        },
+                        "thresholdsStyle": {
+                            "mode": "off"
+                        }
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            },
+                            {
+                                "color": "red",
+                                "value": 80
+                            }
+                        ]
+                    }
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 8
+            },
+            "id": 123136,
+            "options": {
+                "legend": {
+                    "calcs": ["min", "max", "mean", "last"],
+                    "displayMode": "list",
+                    "placement": "bottom"
+                },
+                "tooltip": {
+                    "mode": "single"
+                }
+            },
+            "pluginVersion": "8.3.1",
+            "targets": [
+                {
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${DS_PROMETHEUS}"
+                    },
+                    "exemplar": true,
+                    "expr": "sum(rate(s3_ingestion_mongo_processed_elapsed_seconds_count{status=\"error\", namespace=\"${namespace}\", job=\"${job_ingestion_processor}\"}[$__rate_interval]))",
+                    "interval": "",
+                    "legendFormat": "Ingestion processor(s)",
+                    "refId": "A"
+                }
+            ],
+            "title": "Error jobs",
+            "type": "timeseries"
+        },
+        {
+            "description": "Recent percentage of successful jobs.",
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "axisLabel": "Success rate",
+                        "axisPlacement": "auto",
+                        "barAlignment": 0,
+                        "drawStyle": "line",
+                        "fillOpacity": 0,
+                        "gradientMode": "none",
+                        "hideFrom": {
+                            "legend": false,
+                            "tooltip": false,
+                            "viz": false
+                        },
+                        "lineInterpolation": "linear",
+                        "lineWidth": 1,
+                        "pointSize": 5,
+                        "scaleDistribution": {
+                            "type": "linear"
+                        },
+                        "showPoints": "auto",
+                        "spanNulls": true,
+                        "stacking": {
+                            "group": "A",
+                            "mode": "none"
+                        },
+                        "thresholdsStyle": {
+                            "mode": "off"
+                        }
+                    },
+                    "mappings": [],
+                    "max": 100,
+                    "min": 0,
+                    "thresholds": {
+                        "mode": "percentage",
+                        "steps": [
+                            {
+                                "color": "red",
+                                "value": null
+                            },
+                            {
+                                "color": "orange",
+                                "value": 80
+                            },
+                            {
+                                "color": "green",
+                                "value": 90
+                            }
+                        ]
+                    },
+                    "unit": "percent"
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 16
+            },
+            "id": 123127,
+            "options": {
+                "legend": {
+                    "calcs": ["max", "min", "mean", "last"],
+                    "displayMode": "list",
+                    "placement": "bottom"
+                },
+                "tooltip": {
+                    "mode": "single"
+                }
+            },
+            "pluginVersion": "8.3.1",
+            "targets": [
+                {
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${DS_PROMETHEUS}"
+                    },
+                    "exemplar": true,
+                    "expr": "sum(s3_ingestion_mongo_processed_elapsed_seconds_count{status=\"success\", namespace=\"${namespace}\", job=\"${job_ingestion_processor}\" }) * 100 / sum(s3_ingestion_mongo_processed_elapsed_seconds_count{namespace=\"${namespace}\", job=\"${job_ingestion_processor}\"})",
+                    "interval": "",
+                    "legendFormat": "Ingestion processor(s)",
+                    "refId": "A"
+                }
+            ],
+            "title": "Recent percentage of successful jobs",
+            "type": "timeseries"
+        },
+        {
+            "description": "Current percentage of successful jobs.",
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "thresholds"
+                    },
+                    "mappings": [],
+                    "max": 100,
+                    "min": 0,
+                    "thresholds": {
+                        "mode": "percentage",
+                        "steps": [
+                            {
+                                "color": "red",
+                                "value": null
+                            },
+                            {
+                                "color": "orange",
+                                "value": 80
+                            },
+                            {
+                                "color": "green",
+                                "value": 90
+                            }
+                        ]
+                    },
+                    "unit": "percent"
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 16
+            },
+            "id": 123137,
+            "options": {
+                "orientation": "auto",
+                "reduceOptions": {
+                    "calcs": ["lastNotNull"],
+                    "fields": "",
+                    "values": false
+                },
+                "showThresholdLabels": false,
+                "showThresholdMarkers": true
+            },
+            "pluginVersion": "8.3.1",
+            "targets": [
+                {
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${DS_PROMETHEUS}"
+                    },
+                    "exemplar": true,
+                    "expr": "sum(s3_ingestion_mongo_processed_elapsed_seconds_count{status=\"success\", namespace=\"${namespace}\", job=\"${job_ingestion_processor}\" }) * 100 / sum(s3_ingestion_mongo_processed_elapsed_seconds_count{namespace=\"${namespace}\", job=\"${job_ingestion_processor}\"})",
+                    "interval": "",
+                    "legendFormat": "Ingestion processor(s)",
+                    "refId": "A"
+                }
+            ],
+            "title": "Current percentage of successful jobs",
+            "type": "gauge"
+        },
+        {
+            "description": "How long does it take for successful ingestion processor job to complete.",
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "axisLabel": "Latency",
+                        "axisPlacement": "auto",
+                        "barAlignment": 0,
+                        "drawStyle": "line",
+                        "fillOpacity": 0,
+                        "gradientMode": "none",
+                        "hideFrom": {
+                            "legend": false,
+                            "tooltip": false,
+                            "viz": false
+                        },
+                        "lineInterpolation": "stepAfter",
+                        "lineStyle": {
+                            "fill": "solid"
+                        },
+                        "lineWidth": 1,
+                        "pointSize": 5,
+                        "scaleDistribution": {
+                            "type": "linear"
+                        },
+                        "showPoints": "auto",
+                        "spanNulls": true,
+                        "stacking": {
+                            "group": "A",
+                            "mode": "none"
+                        },
+                        "thresholdsStyle": {
+                            "mode": "off"
+                        }
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            },
+                            {
+                                "color": "red",
+                                "value": 80
+                            }
+                        ]
+                    },
+                    "unit": "s"
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 24
+            },
+            "id": 123131,
+            "options": {
+                "legend": {
+                    "calcs": ["min", "max", "mean", "last"],
+                    "displayMode": "list",
+                    "placement": "bottom"
+                },
+                "tooltip": {
+                    "mode": "single"
+                }
+            },
+            "targets": [
+                {
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${DS_PROMETHEUS}"
+                    },
+                    "exemplar": true,
+                    "expr": "sum(rate(s3_ingestion_mongo_processed_elapsed_seconds_sum{status=\"success\", namespace=\"${namespace}\", job=\"${job_ingestion_processor}\"}[$__rate_interval])) / sum(rate(s3_ingestion_mongo_processed_elapsed_seconds_count{status=\"success\", namespace=\"${namespace}\", job=\"${job_ingestion_processor}\"}[$__rate_interval]))",
+                    "interval": "",
+                    "legendFormat": "Ingestion processor(s)",
+                    "refId": "A"
+                }
+            ],
+            "title": "Jobs latency",
+            "type": "timeseries"
+        },
+        {
+            "description": "Number of Kafka entries pulled by the ingestion processor per second.",
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "axisLabel": "Entries per second",
+                        "axisPlacement": "auto",
+                        "barAlignment": 0,
+                        "drawStyle": "line",
+                        "fillOpacity": 0,
+                        "gradientMode": "none",
+                        "hideFrom": {
+                            "legend": false,
+                            "tooltip": false,
+                            "viz": false
+                        },
+                        "lineInterpolation": "linear",
+                        "lineWidth": 1,
+                        "pointSize": 5,
+                        "scaleDistribution": {
+                            "type": "linear"
+                        },
+                        "showPoints": "auto",
+                        "spanNulls": false,
+                        "stacking": {
+                            "group": "A",
+                            "mode": "none"
+                        },
+                        "thresholdsStyle": {
+                            "mode": "off"
+                        }
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            },
+                            {
+                                "color": "red",
+                                "value": 80
+                            }
+                        ]
+                    }
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 24
+            },
+            "id": 123129,
+            "options": {
+                "legend": {
+                    "calcs": ["mean", "last", "min", "max"],
+                    "displayMode": "list",
+                    "placement": "bottom"
+                },
+                "tooltip": {
+                    "mode": "single"
+                }
+            },
+            "targets": [
+                {
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${DS_PROMETHEUS}"
+                    },
+                    "exemplar": true,
+                    "expr": "sum(rate(s3_ingestion_kafka_messages_pulled_total{namespace=\"${namespace}\", job=\"${job_ingestion_processor}\"}[$__rate_interval]))",
+                    "interval": "",
+                    "legendFormat": "Ingestion processor(s)",
+                    "refId": "A"
+                }
+            ],
+            "title": "Kafka entries pulled for ingestion",
+            "type": "timeseries"
+        },
+        {
+            "cacheTimeout": null,
+            "datasource": "${DS_PROMETHEUS}",
+            "description": null,
+            "editable": true,
+            "error": false,
+            "fieldConfig": {
+                "defaults": {
+                    "calcs": ["mean"],
+                    "decimals": null,
+                    "limit": null,
+                    "links": [],
+                    "mappings": [
+                        {
+                            "options": {
+                                "from": 0,
+                                "result": {
+                                    "color": "green",
+                                    "index": 0,
+                                    "text": "OK"
+                                },
+                                "to": 2
+                            },
+                            "type": "range"
+                        },
+                        {
+                            "options": {
+                                "from": 2,
+                                "result": {
+                                    "color": "orange",
+                                    "index": 1,
+                                    "text": "Throttled"
+                                },
+                                "to": 10
+                            },
+                            "type": "range"
+                        },
+                        {
+                            "options": {
+                                "from": 10,
+                                "result": {
+                                    "color": "red",
+                                    "index": 2,
+                                    "text": "Stalled"
+                                },
+                                "to": 20
+                            },
+                            "type": "range"
+                        }
+                    ],
+                    "max": 20,
+                    "min": 0,
+                    "override": {},
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "index": 0,
+                                "line": true,
+                                "op": "gt",
+                                "value": "null",
+                                "yaxis": "left"
+                            },
+                            {
+                                "color": "orange",
+                                "index": 1,
+                                "line": true,
+                                "op": "gt",
+                                "value": 2.0,
+                                "yaxis": "left"
+                            },
+                            {
+                                "color": "red",
+                                "index": 2,
+                                "line": true,
+                                "op": "gt",
+                                "value": 10.0,
+                                "yaxis": "left"
+                            }
+                        ]
+                    },
+                    "title": null,
+                    "unit": "none",
+                    "values": false
+                },
+                "showThresholdLabels": false,
+                "showThresholdMarkers": true
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 24,
+                "x": 0,
+                "y": 32
+            },
+            "height": null,
+            "hideTimeOverride": false,
+            "id": 47,
+            "interval": null,
+            "links": [],
+            "maxDataPoints": 100,
+            "maxPerRow": null,
+            "minSpan": null,
+            "repeat": null,
+            "repeatDirection": null,
+            "span": null,
+            "targets": [
+                {
+                    "datasource": null,
+                    "expr": "avg(s3_circuit_breaker{namespace=\"${namespace}\",job=\"${job_ingestion_processor}\"})*10",
+                    "format": "time_series",
+                    "hide": false,
+                    "instant": false,
+                    "interval": "",
+                    "intervalFactor": 1,
+                    "legendFormat": "",
+                    "metric": "",
+                    "query": "avg(s3_circuit_breaker{namespace=\"${namespace}\",job=\"${job_ingestion_processor}\"})*10",
+                    "refId": "",
+                    "step": 10,
+                    "target": ""
+                }
+            ],
+            "timeFrom": null,
+            "timeShift": null,
+            "title": "Flow Control",
+            "transformations": [],
+            "transparent": false,
+            "type": "gauge"
         }
-      ],
-      "timeFrom": null,
-      "timeShift": null,
-      "title": "Flow Control",
-      "transformations": [],
-      "transparent": false,
-      "type": "gauge"
-    }
-  ],
-  "refresh": "",
-  "schemaVersion": 33,
-  "style": "dark",
-  "tags": [],
-  "templating": {
-    "list": [
-      {
-        "current": {
-          "selected": false,
-          "text": "Prometheus",
-          "value": "Prometheus"
-        },
-        "hide": 0,
-        "includeAll": false,
-        "label": "Prometheus",
-        "multi": false,
-        "name": "DS_PROMETHEUS",
-        "options": [],
-        "query": "prometheus",
-        "refresh": 1,
-        "regex": "",
-        "skipUrlSync": false,
-        "type": "datasource"
-      },
-      {
-        "description": "Namespace associated with the Zenko instance",
-        "hide": 2,
-        "label": "namespace",
-        "name": "namespace",
-        "query": "${namespace}",
-        "skipUrlSync": false,
-        "type": "constant",
-        "current": {
-          "value": "${namespace}",
-          "text": "${namespace}",
-          "selected": false
-        },
-        "options": [
-          {
-            "value": "${namespace}",
-            "text": "${namespace}",
-            "selected": false
-          }
+    ],
+    "refresh": "",
+    "schemaVersion": 33,
+    "style": "dark",
+    "tags": [],
+    "templating": {
+        "list": [
+            {
+                "current": {
+                    "selected": false,
+                    "text": "Prometheus",
+                    "value": "Prometheus"
+                },
+                "hide": 0,
+                "includeAll": false,
+                "label": "Prometheus",
+                "multi": false,
+                "name": "DS_PROMETHEUS",
+                "options": [],
+                "query": "prometheus",
+                "refresh": 1,
+                "regex": "",
+                "skipUrlSync": false,
+                "type": "datasource"
+            },
+            {
+                "description": "Namespace associated with the Zenko instance",
+                "hide": 2,
+                "label": "namespace",
+                "name": "namespace",
+                "query": "${namespace}",
+                "skipUrlSync": false,
+                "type": "constant",
+                "current": {
+                    "value": "${namespace}",
+                    "text": "${namespace}",
+                    "selected": false
+                },
+                "options": [
+                    {
+                        "value": "${namespace}",
+                        "text": "${namespace}",
+                        "selected": false
+                    }
+                ]
+            },
+            {
+                "description": "Name of the Backbeat ingestion processor Kubernetes service",
+                "hide": 2,
+                "label": "job_ingestion_processor",
+                "name": "job_ingestion_processor",
+                "query": "${job_ingestion_processor}",
+                "skipUrlSync": false,
+                "type": "constant",
+                "current": {
+                    "value": "${job_ingestion_processor}",
+                    "text": "${job_ingestion_processor}",
+                    "selected": false
+                },
+                "options": [
+                    {
+                        "value": "${job_ingestion_processor}",
+                        "text": "${job_ingestion_processor}",
+                        "selected": false
+                    }
+                ]
+            },
+            {
+                "description": "Number of backbeat processes replicas.",
+                "hide": 2,
+                "label": "replicas",
+                "name": "replicas",
+                "query": "${replicas}",
+                "skipUrlSync": false,
+                "type": "constant",
+                "current": {
+                    "value": "${replicas}",
+                    "text": "${replicas}",
+                    "selected": false
+                },
+                "options": [
+                    {
+                        "value": "${replicas}",
+                        "text": "${replicas}",
+                        "selected": false
+                    }
+                ]
+            }
         ]
-      },
-      {
-        "description": "Name of the Backbeat ingestion processor Kubernetes service",
-        "hide": 2,
-        "label": "job_ingestion_processor",
-        "name": "job_ingestion_processor",
-        "query": "${job_ingestion_processor}",
-        "skipUrlSync": false,
-        "type": "constant",
-        "current": {
-          "value": "${job_ingestion_processor}",
-          "text": "${job_ingestion_processor}",
-          "selected": false
-        },
-        "options": [
-          {
-            "value": "${job_ingestion_processor}",
-            "text": "${job_ingestion_processor}",
-            "selected": false
-          }
-        ]
-      },
-      {
-        "description": "Number of backbeat processes replicas.",
-        "hide": 2,
-        "label": "replicas",
-        "name": "replicas",
-        "query": "${replicas}",
-        "skipUrlSync": false,
-        "type": "constant",
-        "current": {
-          "value": "${replicas}",
-          "text": "${replicas}",
-          "selected": false
-        },
-        "options": [
-          {
-            "value": "${replicas}",
-            "text": "${replicas}",
-            "selected": false
-          }
-        ]
-      }
-    ]
-  },
-  "time": {
-    "from": "now-24h",
-    "to": "now"
-  },
-  "timepicker": {},
-  "timezone": "browser",
-  "title": "OOB Ingestion Processor",
-  "uid": null,
-  "version": 12,
-  "weekStart": ""
+    },
+    "time": {
+        "from": "now-24h",
+        "to": "now"
+    },
+    "timepicker": {},
+    "timezone": "browser",
+    "title": "OOB Ingestion Processor",
+    "uid": null,
+    "version": 12,
+    "weekStart": ""
 }

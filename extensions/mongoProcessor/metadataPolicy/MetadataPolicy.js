@@ -23,9 +23,7 @@ class MetadataPolicy {
      */
     // eslint-disable-next-line no-unused-vars
     skipsMetadataFetch(entry, bucketInfo) {
-        assert(false,
-            'sub-classes of MetadataPolicy must implement ' +
-            'the skipsMetadataFetch() method');
+        assert(false, 'sub-classes of MetadataPolicy must implement ' + 'the skipsMetadataFetch() method');
     }
 
     /**
@@ -38,9 +36,7 @@ class MetadataPolicy {
      */
     // eslint-disable-next-line no-unused-vars
     targetVersionId(entry) {
-        assert(false,
-            'sub-classes of MetadataPolicy must implement ' +
-            'the targetVersionId() method');
+        assert(false, 'sub-classes of MetadataPolicy must implement ' + 'the targetVersionId() method');
     }
 
     /**
@@ -63,9 +59,7 @@ class MetadataPolicy {
      */
     // eslint-disable-next-line no-unused-vars
     apply(entry, objMD, location, bucketInfo) {
-        assert(false,
-            'sub-classes of MetadataPolicy must implement ' +
-            'the apply() method');
+        assert(false, 'sub-classes of MetadataPolicy must implement ' + 'the apply() method');
     }
 
     /**
@@ -79,9 +73,7 @@ class MetadataPolicy {
      */
     // eslint-disable-next-line no-unused-vars
     skipsDelete(entry, objMD, location) {
-        assert(false,
-            'sub-classes of MetadataPolicy must implement ' +
-            'the skipsDelete() method');
+        assert(false, 'sub-classes of MetadataPolicy must implement ' + 'the skipsDelete() method');
     }
 }
 

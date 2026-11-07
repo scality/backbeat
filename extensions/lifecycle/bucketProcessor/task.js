@@ -5,11 +5,8 @@ tracing.init();
 const async = require('async');
 const werelogs = require('werelogs');
 const { errors } = require('@scality/arsenal');
-const {
-    DEFAULT_LIVE_ROUTE,
-    DEFAULT_READY_ROUTE,
-    DEFAULT_METRICS_ROUTE,
-} = require('@scality/arsenal').network.probe.ProbeServer;
+const { DEFAULT_LIVE_ROUTE, DEFAULT_READY_ROUTE, DEFAULT_METRICS_ROUTE } =
+    require('@scality/arsenal').network.probe.ProbeServer;
 const { sendSuccess, sendError } = require('@scality/arsenal').network.probe.Utils;
 const { ZenkoMetrics } = require('@scality/arsenal').metrics;
 
@@ -31,11 +28,7 @@ werelogs.configure({
 
 const logger = new werelogs.Logger('Backbeat:Lifecycle:Producer');
 
-const {
-    expireOneDayEarlier,
-    transitionOneDayEarlier,
-    timeProgressionFactor,
-} = config.getTimeOptions();
+const { expireOneDayEarlier, transitionOneDayEarlier, timeProgressionFactor } = config.getTimeOptions();
 
 const lcOptions = {
     expireOneDayEarlier,
@@ -44,7 +37,14 @@ const lcOptions = {
 };
 
 const bucketProcessor = new LifecycleBucketProcessor(
-    zookeeper, kafka, lcConfig, repConfig, s3, mongoConfig, lcConfig.transport, lcOptions,
+    zookeeper,
+    kafka,
+    lcConfig,
+    repConfig,
+    s3,
+    mongoConfig,
+    lcConfig.transport,
+    lcOptions,
 );
 
 function livenessCheck(res, log) {
@@ -62,7 +62,7 @@ function livenessCheck(res, log) {
  * @param {Logger} log - Logger
  * @returns {undefined}
  */
- async function handleMetrics(res, log) {
+async function handleMetrics(res, log) {
     log.debug('metrics requested');
     res.writeHead(200, {
         'Content-Type': ZenkoMetrics.asPrometheusContentType(),
@@ -98,35 +98,40 @@ function updateBootstrapList() {
 }
 
 function loadManagementDatabase(cb) {
-    return initManagement({
-        serviceName: 'lifecycle',
-        serviceAccount: extensions.lifecycle.auth.account,
-        applyBucketWorkflows: applyBucketLifecycleWorkflows,
-    }, error => {
-        if (error) {
-            logger.error('could not load management db', { error });
-            setTimeout(loadManagementDatabase, 5000, cb);
+    return initManagement(
+        {
+            serviceName: 'lifecycle',
+            serviceAccount: extensions.lifecycle.auth.account,
+            applyBucketWorkflows: applyBucketLifecycleWorkflows,
+        },
+        error => {
+            if (error) {
+                logger.error('could not load management db', { error });
+                setTimeout(loadManagementDatabase, 5000, cb);
+                return;
+            }
+            logger.info('management init done');
+            updateBootstrapList();
+            cb();
             return;
-        }
-        logger.info('management init done');
-        updateBootstrapList();
-        cb();
-        return;
-    });
+        },
+    );
 }
 
-async.waterfall([
-    done => loadManagementDatabase(done),
-    done => bucketProcessor.start(err => done(err)),
-    done => probeServerSetup(lcConfig.bucketProcessor.probeServer, done),
-], err => {
-    if (err) {
-        logger.error('error during lifecycle bucket processor initialization',
-            { error: err.message });
-        process.exit(1);
-    }
-    logger.info('lifecycle bucket processor running!');
-});
+async.waterfall(
+    [
+        done => loadManagementDatabase(done),
+        done => bucketProcessor.start(err => done(err)),
+        done => probeServerSetup(lcConfig.bucketProcessor.probeServer, done),
+    ],
+    err => {
+        if (err) {
+            logger.error('error during lifecycle bucket processor initialization', { error: err.message });
+            process.exit(1);
+        }
+        logger.info('lifecycle bucket processor running!');
+    },
+);
 
 process.on('SIGTERM', () => {
     logger.info('received SIGTERM, exiting');

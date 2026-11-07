@@ -30,16 +30,14 @@ class ZKStateHelper {
         const path = `${this.statePath}/${site}`;
         this.zkClient.getData(path, (err, data) => {
             if (err) {
-                process.stdout.write('Zookeeper test helper error in ' +
-                'ZKStateHelper.get at zkClient.getData');
+                process.stdout.write('Zookeeper test helper error in ' + 'ZKStateHelper.get at zkClient.getData');
                 return cb(err);
             }
             let state;
             try {
                 state = JSON.parse(data.toString());
             } catch (parseErr) {
-                process.stdout.write('Zookeeper test helper error in ' +
-                'ZKStateHelper.get at JSON.parse');
+                process.stdout.write('Zookeeper test helper error in ' + 'ZKStateHelper.get at JSON.parse');
                 return cb(parseErr);
             }
             return cb(null, state);
@@ -67,65 +65,73 @@ class ZKStateHelper {
         this.zkClient = zookeeper.createClient(connectionString);
         this.zkClient.connect();
         this.zkClient.once('connected', () => {
-            async.series([
-                next => this.zkClient.mkdirp(this.statePath, err => {
-                    if (err && err.name !== 'NODE_EXISTS') {
-                        return next(err);
+            async.series(
+                [
+                    next =>
+                        this.zkClient.mkdirp(this.statePath, err => {
+                            if (err && err.name !== 'NODE_EXISTS') {
+                                return next(err);
+                            }
+                            return next();
+                        }),
+                    next => {
+                        // emulate first site to be active (not paused)
+                        const data = Buffer.from(JSON.stringify({ paused: false }));
+                        this.zkClient.create(this.firstPath, data, EPHEMERAL_NODE, next);
+                    },
+                    next => {
+                        // emulate second site to be paused
+                        const data = Buffer.from(
+                            JSON.stringify({
+                                paused: true,
+                                scheduledResume: this.futureDate.toString(),
+                            }),
+                        );
+                        this.zkClient.create(this.secondPath, data, EPHEMERAL_NODE, next);
+                    },
+                ],
+                err => {
+                    if (err) {
+                        process.stdout.write('Zookeeper test helper error in ' + 'ZKStateHelper.init');
+                        return cb(err);
                     }
-                    return next();
-                }),
-                next => {
-                    // emulate first site to be active (not paused)
-                    const data =
-                        Buffer.from(JSON.stringify({ paused: false }));
-                    this.zkClient.create(this.firstPath, data, EPHEMERAL_NODE,
-                        next);
+                    return cb();
                 },
-                next => {
-                    // emulate second site to be paused
-                    const data = Buffer.from(JSON.stringify({
-                        paused: true,
-                        scheduledResume: this.futureDate.toString(),
-                    }));
-                    this.zkClient.create(this.secondPath, data, EPHEMERAL_NODE,
-                        next);
-                },
-            ], err => {
-                if (err) {
-                    process.stdout.write('Zookeeper test helper error in ' +
-                    'ZKStateHelper.init');
-                    return cb(err);
-                }
-                return cb();
-            });
+            );
         });
     }
 
     reset(cb) {
         // reset state, just overwrite regardless of current state
-        async.parallel([
-            next => {
-                const data = Buffer.from(JSON.stringify({
-                    paused: false,
-                    scheduledResume: null,
-                }));
-                this.zkClient.setData(this.firstPath, data, next);
+        async.parallel(
+            [
+                next => {
+                    const data = Buffer.from(
+                        JSON.stringify({
+                            paused: false,
+                            scheduledResume: null,
+                        }),
+                    );
+                    this.zkClient.setData(this.firstPath, data, next);
+                },
+                next => {
+                    const data = Buffer.from(
+                        JSON.stringify({
+                            paused: true,
+                            scheduledResume: this.futureDate.toString(),
+                        }),
+                    );
+                    this.zkClient.setData(this.secondPath, data, next);
+                },
+            ],
+            err => {
+                if (err) {
+                    process.stdout.write('Zookeeper test helper error in ' + 'ZKStateHelper.reset');
+                    return cb(err);
+                }
+                return cb();
             },
-            next => {
-                const data = Buffer.from(JSON.stringify({
-                    paused: true,
-                    scheduledResume: this.futureDate.toString(),
-                }));
-                this.zkClient.setData(this.secondPath, data, next);
-            },
-        ], err => {
-            if (err) {
-                process.stdout.write('Zookeeper test helper error in ' +
-                'ZKStateHelper.reset');
-                return cb(err);
-            }
-            return cb();
-        });
+        );
     }
 
     close() {
@@ -135,6 +141,5 @@ class ZKStateHelper {
         }
     }
 }
-
 
 module.exports = ZKStateHelper;

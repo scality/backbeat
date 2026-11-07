@@ -21,8 +21,7 @@ const { DEFAULT_LIVE_ROUTE, DEFAULT_METRICS_ROUTE, DEFAULT_READY_ROUTE } =
     require('@scality/arsenal').network.probe.ProbeServer;
 const log = new werelogs.Logger('Backbeat:QueuePopulator');
 
-werelogs.configure({ level: config.log.logLevel,
-    dump: config.log.dumpLevel });
+werelogs.configure({ level: config.log.logLevel, dump: config.log.dumpLevel });
 
 /* eslint-disable no-param-reassign */
 function queueBatch(queuePopulator, taskState) {
@@ -49,48 +48,58 @@ function queueBatch(queuePopulator, taskState) {
 }
 /* eslint-enable no-param-reassign */
 
-const queuePopulator = new QueuePopulator(zkConfig, kafkaConfig,
-    qpConfig, httpsConfig, mConfig, rConfig, vConfig, extConfigs);
+const queuePopulator = new QueuePopulator(
+    zkConfig,
+    kafkaConfig,
+    qpConfig,
+    httpsConfig,
+    mConfig,
+    rConfig,
+    vConfig,
+    extConfigs,
+);
 
-async.waterfall([
-    done => queuePopulator.open(done),
-    done => startProbeServer(qpConfig.probeServer, (err, probeServer) => {
-        if (err) {
-            log.error('error starting probe server', {
-                error: err,
-                method: 'QueuePopulator::startProbeServer',
+async.waterfall(
+    [
+        done => queuePopulator.open(done),
+        done =>
+            startProbeServer(qpConfig.probeServer, (err, probeServer) => {
+                if (err) {
+                    log.error('error starting probe server', {
+                        error: err,
+                        method: 'QueuePopulator::startProbeServer',
+                    });
+                    done(err);
+                    return;
+                }
+                if (probeServer !== undefined) {
+                    probeServer.addHandler([DEFAULT_LIVE_ROUTE, DEFAULT_READY_ROUTE], (res, log) =>
+                        queuePopulator.handleLiveness(res, log),
+                    );
+                    probeServer.addHandler(DEFAULT_METRICS_ROUTE, (res, log) => queuePopulator.handleMetrics(res, log));
+                }
+                done();
+            }),
+        done => {
+            const taskState = {
+                batchInProgress: false,
+            };
+            schedule.scheduleJob(qpConfig.cronRule, () => {
+                queueBatch(queuePopulator, taskState);
             });
-            done(err);
-            return;
+            done();
+        },
+    ],
+    err => {
+        if (err) {
+            log.error('error during queue populator initialization', {
+                method: 'QueuePopulator::task',
+                error: err,
+            });
+            process.exit(1);
         }
-        if (probeServer !== undefined) {
-            probeServer.addHandler([DEFAULT_LIVE_ROUTE, DEFAULT_READY_ROUTE],
-                (res, log) => queuePopulator.handleLiveness(res, log)
-            );
-            probeServer.addHandler(DEFAULT_METRICS_ROUTE,
-                (res, log) => queuePopulator.handleMetrics(res, log)
-            );
-        }
-        done();
-    }),
-    done => {
-        const taskState = {
-            batchInProgress: false,
-        };
-        schedule.scheduleJob(qpConfig.cronRule, () => {
-            queueBatch(queuePopulator, taskState);
-        });
-        done();
     },
-], err => {
-    if (err) {
-        log.error('error during queue populator initialization', {
-            method: 'QueuePopulator::task',
-            error: err,
-        });
-        process.exit(1);
-    }
-});
+);
 
 process.on('SIGTERM', () => {
     log.info('received SIGTERM, exiting');

@@ -89,9 +89,12 @@ class OplogPopulatorMetrics {
      */
     onOplogEventProcessed(opType, delta) {
         try {
-            this.acknowledgementLag.observe({
-                opType,
-            }, delta);
+            this.acknowledgementLag.observe(
+                {
+                    opType,
+                },
+                delta,
+            );
         } catch (error) {
             this._logger.error('An error occured while pushing metric', {
                 method: 'OplogPopulatorMetrics.onOplogEventProcessed',
@@ -111,18 +114,27 @@ class OplogPopulatorMetrics {
      */
     onConnectorConfigured(connector, opType, buckets = 1) {
         try {
-            this.connectorConfiguration.inc({
-                connector: connector.name,
-                opType,
-            }, buckets);
+            this.connectorConfiguration.inc(
+                {
+                    connector: connector.name,
+                    opType,
+                },
+                buckets,
+            );
             const reqSize = getStringSizeInBytes(JSON.stringify(connector.config));
-            this.requestSize.inc({
-                connector: connector.name,
-            }, reqSize);
+            this.requestSize.inc(
+                {
+                    connector: connector.name,
+                },
+                reqSize,
+            );
             const pipelineSize = getStringSizeInBytes(JSON.stringify(connector.config.pipeline));
-            this.mongoPipelineSize.set({
-                connector: connector.name,
-            }, pipelineSize);
+            this.mongoPipelineSize.set(
+                {
+                    connector: connector.name,
+                },
+                pipelineSize,
+            );
         } catch (error) {
             this._logger.error('An error occured while pushing metrics', {
                 method: 'OplogPopulatorMetrics.onConnectorConfigured',
@@ -180,19 +192,28 @@ class OplogPopulatorMetrics {
                 success,
             });
             if (success) {
-                this.reconfigurationLag.observe({
-                    connector: connector.name,
-                }, delta);
-                if (connector.bucketCount !== undefined) {
-                    this.buckets.set({
+                this.reconfigurationLag.observe(
+                    {
                         connector: connector.name,
-                    }, connector.bucketCount);
+                    },
+                    delta,
+                );
+                if (connector.bucketCount !== undefined) {
+                    this.buckets.set(
+                        {
+                            connector: connector.name,
+                        },
+                        connector.bucketCount,
+                    );
                 }
             }
             if (requestBytes !== null) {
-                this.requestSize.inc({
-                    connector: connector.name,
-                }, requestBytes);
+                this.requestSize.inc(
+                    {
+                        connector: connector.name,
+                    },
+                    requestBytes,
+                );
             }
         } catch (error) {
             this._logger.error('An error occured while pushing metrics', {
@@ -274,9 +295,14 @@ class OplogPopulatorMetrics {
     onHashedConnectorsStarted(specs) {
         try {
             this.expectedConnectors.set(specs.length);
-            specs.forEach(({ name, config }) => this.mongoPipelineSize.set({
-                connector: name,
-            }, getStringSizeInBytes(JSON.stringify(config.pipeline))));
+            specs.forEach(({ name, config }) =>
+                this.mongoPipelineSize.set(
+                    {
+                        connector: name,
+                    },
+                    getStringSizeInBytes(JSON.stringify(config.pipeline)),
+                ),
+            );
         } catch (error) {
             this._logger.error('An error occured while pushing metrics', {
                 method: 'OplogPopulatorMetrics.onHashedConnectorsStarted',

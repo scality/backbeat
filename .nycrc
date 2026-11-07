@@ -1,15 +1,5 @@
 {
     "all": true,
-    "include": [
-        "bin/**/*.js",
-        "bin/**/*.ts",
-        "lib/**/*.js",
-        "lib/**/*.ts",
-        "extensions/**/*.js",
-        "extensions/**/*.ts"
-    ],
-    "exclude": [
-        "**/*.spec.js",
-        "**/*.spec.ts"
-    ]
+    "include": ["bin/**/*.js", "bin/**/*.ts", "lib/**/*.js", "lib/**/*.ts", "extensions/**/*.js", "extensions/**/*.ts"],
+    "exclude": ["**/*.spec.js", "**/*.spec.ts"]
 }

@@ -10,17 +10,18 @@ const TOP_LEVEL_DEST = `arn:aws:s3:::${TOP_LEVEL_BUCKET}`;
 const TOP_LEVEL_ROLE = 'arn:aws:iam::111:role/src,arn:aws:iam::222:role/dst';
 
 function _makeEntryWithBackends(backends, topLevel = {}) {
-    return new ObjectQueueEntry(
-        'bucket',
-        'key', {
+    return new ObjectQueueEntry('bucket', 'key', {
         'md-model-version': 2,
-        'replicationInfo': Object.assign({
-            status: 'PENDING',
-            content: ['DATA', 'METADATA'],
-            destination: TOP_LEVEL_DEST,
-            role: TOP_LEVEL_ROLE,
-            backends,
-        }, topLevel),
+        'replicationInfo': Object.assign(
+            {
+                status: 'PENDING',
+                content: ['DATA', 'METADATA'],
+                destination: TOP_LEVEL_DEST,
+                role: TOP_LEVEL_ROLE,
+                backends,
+            },
+            topLevel,
+        ),
     });
 }
 
@@ -35,10 +36,7 @@ describe('ObjectQueueEntry', () => {
                 },
             ]);
 
-            assert.strictEqual(
-                entry.getReplicationTargetBucket({ site: 'siteA' }),
-                TOP_LEVEL_BUCKET,
-            );
+            assert.strictEqual(entry.getReplicationTargetBucket({ site: 'siteA' }), TOP_LEVEL_BUCKET);
         });
 
         it('returns per-backend destination when present', () => {
@@ -72,10 +70,7 @@ describe('ObjectQueueEntry', () => {
                 },
             ]);
 
-            assert.strictEqual(
-                entry.getReplicationRoles({ site: 'siteA' }),
-                TOP_LEVEL_ROLE,
-            );
+            assert.strictEqual(entry.getReplicationRoles({ site: 'siteA' }), TOP_LEVEL_ROLE);
         });
 
         it('composes source role + per-backend destination role', () => {
@@ -113,7 +108,7 @@ describe('ObjectQueueEntry', () => {
                     status: 'PENDING',
                     dataStoreVersionId: '',
                     destination: 'arn:aws:s3:::bucket-a',
-                    role: 'arn:aws:iam::222:role/dst'
+                    role: 'arn:aws:iam::222:role/dst',
                 },
             ]);
 
@@ -153,7 +148,9 @@ describe('ObjectQueueEntry', () => {
 
             const replica = entry.toReplicaEntry({ site: 'siteB' });
             assert.deepStrictEqual(
-                replica.getReplicationBackends().map(b => b.site), ['siteB']);
+                replica.getReplicationBackends().map(b => b.site),
+                ['siteB'],
+            );
             assert.strictEqual(replica.getReplicationSiteStatus({ site: 'siteB' }), 'REPLICA');
             assert.strictEqual(replica.getReplicationStatus(), 'REPLICA');
             assert.strictEqual(entry.getReplicationBackends().length, 2);
@@ -162,22 +159,23 @@ describe('ObjectQueueEntry', () => {
     });
 
     describe('same-site backend disambiguation', () => {
-        const _makeMultiDest = () => _makeEntryWithBackends([
-            {
-                site: 'siteA',
-                status: 'PENDING',
-                dataStoreVersionId: '',
-                destination: 'arn:aws:s3:::bucket-a',
-                role: 'arn:aws:iam::222:role/dst',
-            },
-            {
-                site: 'siteA',
-                status: 'PENDING',
-                dataStoreVersionId: '',
-                destination: 'arn:aws:s3:::bucket-b',
-                role: 'arn:aws:iam::333:role/dst',
-            },
-        ]);
+        const _makeMultiDest = () =>
+            _makeEntryWithBackends([
+                {
+                    site: 'siteA',
+                    status: 'PENDING',
+                    dataStoreVersionId: '',
+                    destination: 'arn:aws:s3:::bucket-a',
+                    role: 'arn:aws:iam::222:role/dst',
+                },
+                {
+                    site: 'siteA',
+                    status: 'PENDING',
+                    dataStoreVersionId: '',
+                    destination: 'arn:aws:s3:::bucket-b',
+                    role: 'arn:aws:iam::333:role/dst',
+                },
+            ]);
 
         it('site-only lookup returns first match (legacy behaviour)', () => {
             const entry = _makeMultiDest();
@@ -224,10 +222,13 @@ describe('ObjectQueueEntry', () => {
 
         it('setReplicationSiteStatus updates the right backend', () => {
             const entry = _makeMultiDest();
-            entry.setReplicationSiteStatus({
-                site: 'siteA',
-                destination: 'arn:aws:s3:::bucket-b',
-            }, 'COMPLETED');
+            entry.setReplicationSiteStatus(
+                {
+                    site: 'siteA',
+                    destination: 'arn:aws:s3:::bucket-b',
+                },
+                'COMPLETED',
+            );
             const backends = entry.getReplicationBackends();
 
             assert.strictEqual(backends[0].status, 'PENDING');
@@ -254,10 +255,13 @@ describe('ObjectQueueEntry', () => {
 
         it('toPendingEntry only marks the targeted backend', () => {
             const entry = _makeMultiDest();
-            entry.setReplicationSiteStatus({
-                site: 'siteA',
-                destination: 'arn:aws:s3:::bucket-b'
-            }, 'FAILED');
+            entry.setReplicationSiteStatus(
+                {
+                    site: 'siteA',
+                    destination: 'arn:aws:s3:::bucket-b',
+                },
+                'FAILED',
+            );
             const pending = entry.toPendingEntry({ site: 'siteA', destination: 'arn:aws:s3:::bucket-b' });
             const backends = pending.getReplicationBackends();
 
@@ -267,10 +271,13 @@ describe('ObjectQueueEntry', () => {
 
         it('set/getReplicationSiteDataStoreVersionId targets the right backend', () => {
             const entry = _makeMultiDest();
-            entry.setReplicationSiteDataStoreVersionId({
-                site: 'siteA',
-                destination: 'arn:aws:s3:::bucket-b'
-            }, 'v-b');
+            entry.setReplicationSiteDataStoreVersionId(
+                {
+                    site: 'siteA',
+                    destination: 'arn:aws:s3:::bucket-b',
+                },
+                'v-b',
+            );
             const backends = entry.getReplicationBackends();
 
             assert.strictEqual(backends[0].dataStoreVersionId, '');
@@ -400,8 +407,7 @@ describe('ObjectQueueEntry', () => {
             assert.deepStrictEqual(entry.getOverheadField('foo'), 'bar');
         });
 
-        it('should create a DeleteOpQueueEntry with object overhead fields',
-        () => {
+        it('should create a DeleteOpQueueEntry with object overhead fields', () => {
             const entry = QueueEntry.createFromKafkaEntry({
                 value: JSON.stringify({
                     type: 'del',

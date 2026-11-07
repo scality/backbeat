@@ -12,9 +12,7 @@
                 "s3:AbortMultipartUpload",
                 "s3:ReplicateObject"
             ],
-            "Resource": [
-                "*"
-            ]
+            "Resource": ["*"]
         }
     ]
 }

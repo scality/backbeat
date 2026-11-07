@@ -72,10 +72,16 @@ class ReplicationMetric {
         const message = this._createProducerMessage();
         return this._producer.send([{ message }], err => {
             if (err) {
-                this._log.error('error publishing metric', Object.assign({
-                    error: err,
-                    metricsType: this._metricsType,
-                }, this._entry.getLogInfo()));
+                this._log.error(
+                    'error publishing metric',
+                    Object.assign(
+                        {
+                            error: err,
+                            metricsType: this._metricsType,
+                        },
+                        this._entry.getLogInfo(),
+                    ),
+                );
             }
         });
     }

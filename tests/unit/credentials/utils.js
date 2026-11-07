@@ -1,4 +1,3 @@
-
 function stsResponseToXML(stsResponse) {
     const resp = [
         '<AssumeRoleResponse xmlns="https://iam.amazonaws.com/doc/2010-05-08/">',

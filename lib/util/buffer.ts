@@ -10,7 +10,7 @@ function readUInt64BE(buf: Buffer): number {
     // parsed separately and joined into a single Number.
     const msb = buf.readUInt32BE(0);
     const lsb = buf.readUInt32BE(4);
-    return msb * (2 ** 32) + lsb;
+    return msb * 2 ** 32 + lsb;
 }
 
 /**

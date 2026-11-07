@@ -34,8 +34,8 @@ describe('IngestionReader', () => {
                 name: 'example-bucket-to-ingest-to',
             },
             ingestionConfig: {
-                zookeeperPath: 'example-zookeeper-path'
-            }
+                zookeeperPath: 'example-zookeeper-path',
+            },
         });
         const record = {
             db: 'example-ingestion-bucket',
@@ -43,12 +43,12 @@ describe('IngestionReader', () => {
         const masterEntry = {
             type: 'example-type',
             key: '\x7fMexample-key',
-            value: 'example-value'
+            value: 'example-value',
         };
         const versionEntry = {
             type: 'example-type',
             key: '\x7fMexample-key',
-            value: 'example-value'
+            value: 'example-value',
         };
         ingestionReader._processLogEntry({}, record, masterEntry);
         ingestionReader._processLogEntry({}, record, versionEntry);
@@ -78,8 +78,8 @@ describe('IngestionReader', () => {
                 name: 'example-bucket-to-ingest-to',
             },
             ingestionConfig: {
-                zookeeperPath: 'example-zookeeper-path'
-            }
+                zookeeperPath: 'example-zookeeper-path',
+            },
         });
         const record = {
             db: 'example-ingestion-bucket',
@@ -87,12 +87,12 @@ describe('IngestionReader', () => {
         const masterEntry = {
             type: 'example-type',
             key: 'fMexample-key',
-            value: 'example-value'
+            value: 'example-value',
         };
         const versionEntry = {
             type: 'example-type',
             key: 'fVexample-key',
-            value: 'example-value'
+            value: 'example-value',
         };
         ingestionReader._processLogEntry({}, record, masterEntry);
         ingestionReader._processLogEntry({}, record, versionEntry);
@@ -107,5 +107,4 @@ describe('IngestionReader', () => {
         assert(mockExtension.filter.secondCall.calledWith(expectedArgs));
         done();
     });
-
 });

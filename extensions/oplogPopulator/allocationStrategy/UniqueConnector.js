@@ -9,7 +9,6 @@ const AllocationStrategy = require('./AllocationStrategy');
  * connector.
  */
 class UniqueConnector extends AllocationStrategy {
-
     /**
      * Get best connector to assign a bucket to.
      * If no connector is available, null is returned.

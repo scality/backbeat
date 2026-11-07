@@ -3,14 +3,9 @@ const werelogs = require('werelogs');
 
 const { ObjectMD } = require('@scality/arsenal').models;
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
-const LifecycleUpdateTransitionTask = require(
-    '../../../extensions/lifecycle/tasks/LifecycleUpdateTransitionTask');
+const LifecycleUpdateTransitionTask = require('../../../extensions/lifecycle/tasks/LifecycleUpdateTransitionTask');
 
-const {
-    GarbageCollectorProducerMock,
-    BackbeatMetadataProxyMock,
-    ProcessorMock,
-} = require('../mocks');
+const { GarbageCollectorProducerMock, BackbeatMetadataProxyMock, ProcessorMock } = require('../mocks');
 const { errors } = require('@scality/arsenal');
 
 describe('LifecycleUpdateTransitionTask', () => {
@@ -23,24 +18,28 @@ describe('LifecycleUpdateTransitionTask', () => {
     let newLocation;
     let task;
     beforeEach(() => {
-        oldLocation = [{
-            key: 'oldLocationKey',
-            size: 10,
-            start: 0,
-            dataStoreName: 'oldLocationName',
-            dataStoreType: 'aws_s3',
-            dataStoreETag: 'oldETag',
-            dataStoreVersionId: 'oldVersionId',
-        }];
-        newLocation = [{
-            key: 'newLocationKey',
-            size: 20,
-            start: 0,
-            dataStoreName: 'newLocationName',
-            dataStoreType: 'gcp',
-            dataStoreETag: 'newETag',
-            dataStoreVersionId: 'newVersionId',
-        }];
+        oldLocation = [
+            {
+                key: 'oldLocationKey',
+                size: 10,
+                start: 0,
+                dataStoreName: 'oldLocationName',
+                dataStoreType: 'aws_s3',
+                dataStoreETag: 'oldETag',
+                dataStoreVersionId: 'oldVersionId',
+            },
+        ];
+        newLocation = [
+            {
+                key: 'newLocationKey',
+                size: 20,
+                start: 0,
+                dataStoreName: 'newLocationName',
+                dataStoreType: 'gcp',
+                dataStoreETag: 'newETag',
+                dataStoreVersionId: 'newVersionId',
+            },
+        ];
 
         backbeatMetadataProxyClient = new BackbeatMetadataProxyMock();
         gcProducer = new GarbageCollectorProducerMock();
@@ -52,9 +51,11 @@ describe('LifecycleUpdateTransitionTask', () => {
             gcProducer,
             null,
             null,
-            new werelogs.Logger('test:LifecycleUpdateTransitionTask'));
+            new werelogs.Logger('test:LifecycleUpdateTransitionTask'),
+        );
         mdObj = new ObjectMD();
-        mdObj.setLocation(oldLocation)
+        mdObj
+            .setLocation(oldLocation)
             .setTransitionInProgress(true)
             .setContentMd5('1ccc7006b902a4d30ec26e9ddcf759d8')
             .setLastModified('1970-01-01T00:00:00.000Z');
@@ -64,7 +65,7 @@ describe('LifecycleUpdateTransitionTask', () => {
                 bucket: 'somebucket',
                 key: 'somekey',
                 eTag: '"1ccc7006b902a4d30ec26e9ddcf759d8"',
-                lastModified: '1970-01-01T00:00:00.000Z'
+                lastModified: '1970-01-01T00:00:00.000Z',
             })
             .setSuccess({ location: newLocation });
         task = new LifecycleUpdateTransitionTask(objectProcessor);
@@ -77,30 +78,25 @@ describe('LifecycleUpdateTransitionTask', () => {
             assert.deepStrictEqual(receivedMd.location, newLocation);
             const receivedGcEntry = gcProducer.getReceivedEntry();
             assert.strictEqual(receivedGcEntry.getActionType(), 'deleteData');
-            assert.deepStrictEqual(
-                receivedGcEntry.getAttribute('target.locations'), oldLocation);
+            assert.deepStrictEqual(receivedGcEntry.getAttribute('target.locations'), oldLocation);
             done();
         });
     });
 
-    it('should not transition location in metadata and should GC new ' +
-    'location if eTag does not match', done => {
-        actionEntry.setAttribute('target.eTag',
-                                 '"6713e7cf89b6b16d5abf11d1fabac587"');
+    it('should not transition location in metadata and should GC new ' + 'location if eTag does not match', done => {
+        actionEntry.setAttribute('target.eTag', '"6713e7cf89b6b16d5abf11d1fabac587"');
         task.processActionEntry(actionEntry, err => {
             assert.ifError(err);
             const receivedMd = backbeatMetadataProxyClient.getReceivedMd();
             assert.strictEqual(receivedMd, null);
             const receivedGcEntry = gcProducer.getReceivedEntry();
             assert.strictEqual(receivedGcEntry.getActionType(), 'deleteData');
-            assert.deepStrictEqual(
-                receivedGcEntry.getAttribute('target.locations'), newLocation);
+            assert.deepStrictEqual(receivedGcEntry.getAttribute('target.locations'), newLocation);
             done();
         });
     });
 
-    it('should not update metadata nor GC anything if location does not change',
-    done => {
+    it('should not update metadata nor GC anything if location does not change', done => {
         mdObj.setLocation(newLocation);
         task.processActionEntry(actionEntry, err => {
             assert.ifError(err);
@@ -112,24 +108,23 @@ describe('LifecycleUpdateTransitionTask', () => {
         });
     });
 
-    it('should not transition location in metadata and should GC new ' +
-    'location if LastModified does not match', done => {
-        actionEntry.setAttribute('target.lastModified',
-                                 '1970-01-01T00:00:00.001Z');
-        task.processActionEntry(actionEntry, err => {
-            assert.ifError(err);
-            const receivedMd = backbeatMetadataProxyClient.getReceivedMd();
-            assert.strictEqual(receivedMd, null);
-            const receivedGcEntry = gcProducer.getReceivedEntry();
-            assert.strictEqual(receivedGcEntry.getActionType(), 'deleteData');
-            assert.deepStrictEqual(
-                receivedGcEntry.getAttribute('target.locations'), newLocation);
-            done();
-        });
-    });
+    it(
+        'should not transition location in metadata and should GC new ' + 'location if LastModified does not match',
+        done => {
+            actionEntry.setAttribute('target.lastModified', '1970-01-01T00:00:00.001Z');
+            task.processActionEntry(actionEntry, err => {
+                assert.ifError(err);
+                const receivedMd = backbeatMetadataProxyClient.getReceivedMd();
+                assert.strictEqual(receivedMd, null);
+                const receivedGcEntry = gcProducer.getReceivedEntry();
+                assert.strictEqual(receivedGcEntry.getActionType(), 'deleteData');
+                assert.deepStrictEqual(receivedGcEntry.getAttribute('target.locations'), newLocation);
+                done();
+            });
+        },
+    );
 
-    it('should transition location in metadata if LastModified is not ' +
-    'provided as a check', done => {
+    it('should transition location in metadata if LastModified is not ' + 'provided as a check', done => {
         actionEntry.setAttribute('target', {
             bucket: 'somebucket',
             key: 'somekey',
@@ -142,16 +137,13 @@ describe('LifecycleUpdateTransitionTask', () => {
             assert.deepStrictEqual(receivedMd.location, newLocation);
             const receivedGcEntry = gcProducer.getReceivedEntry();
             assert.strictEqual(receivedGcEntry.getActionType(), 'deleteData');
-            assert.deepStrictEqual(
-                receivedGcEntry.getAttribute('target.locations'), oldLocation);
+            assert.deepStrictEqual(receivedGcEntry.getAttribute('target.locations'), oldLocation);
             done();
         });
     });
 
-    it('should update metadata but not GC the from-location when it is a CRR ' +
-    'location', done => {
-        const crrLocation = [Object.assign({}, oldLocation[0],
-            { dataStoreName: 'location-crr-source' })];
+    it('should update metadata but not GC the from-location when it is a CRR ' + 'location', done => {
+        const crrLocation = [Object.assign({}, oldLocation[0], { dataStoreName: 'location-crr-source' })];
         mdObj.setLocation(crrLocation);
         task.processActionEntry(actionEntry, err => {
             assert.ifError(err);
@@ -163,8 +155,7 @@ describe('LifecycleUpdateTransitionTask', () => {
     });
 
     it('should not GC anything for a multipart object on a CRR location', done => {
-        const crrPart = Object.assign({}, oldLocation[0],
-            { key: 'crrKey', dataStoreName: 'location-crr-source' });
+        const crrPart = Object.assign({}, oldLocation[0], { key: 'crrKey', dataStoreName: 'location-crr-source' });
         const secondCrrPart = Object.assign({}, crrPart, { key: 'crrKey2', start: 10 });
         mdObj.setLocation([crrPart, secondCrrPart]);
         task.processActionEntry(actionEntry, err => {
@@ -174,18 +165,14 @@ describe('LifecycleUpdateTransitionTask', () => {
         });
     });
 
-    it('should still GC the new location on rollback even if the ' +
-    'from-location is a CRR location', done => {
-        mdObj.setLocation([Object.assign({}, oldLocation[0],
-            { dataStoreName: 'location-crr-source' })]);
-        actionEntry.setAttribute('target.eTag',
-                                 '"6713e7cf89b6b16d5abf11d1fabac587"');
+    it('should still GC the new location on rollback even if the ' + 'from-location is a CRR location', done => {
+        mdObj.setLocation([Object.assign({}, oldLocation[0], { dataStoreName: 'location-crr-source' })]);
+        actionEntry.setAttribute('target.eTag', '"6713e7cf89b6b16d5abf11d1fabac587"');
         task.processActionEntry(actionEntry, err => {
             assert.ifError(err);
             assert.strictEqual(backbeatMetadataProxyClient.getReceivedMd(), null);
             const receivedGcEntry = gcProducer.getReceivedEntry();
-            assert.deepStrictEqual(
-                receivedGcEntry.getAttribute('target.locations'), newLocation);
+            assert.deepStrictEqual(receivedGcEntry.getAttribute('target.locations'), newLocation);
             done();
         });
     });
@@ -231,25 +218,19 @@ describe('LifecycleUpdateTransitionTask', () => {
             task.processActionEntry(actionEntry, err => {
                 assert.ifError(err);
                 assert.strictEqual(objectProcessor.accountIdLookups, 1);
-                assert.strictEqual(
-                    actionEntry.getAttribute('target.accountId'),
-                    '000000000042');
+                assert.strictEqual(actionEntry.getAttribute('target.accountId'), '000000000042');
                 // the garbage collection entry must not resolve it again
                 const receivedGcEntry = gcProducer.getReceivedEntry();
-                assert.strictEqual(
-                    receivedGcEntry.getAttribute('target.accountId'),
-                    '000000000042');
+                assert.strictEqual(receivedGcEntry.getAttribute('target.accountId'), '000000000042');
                 done();
             });
         });
 
-        it('should fail the entry when the account id cannot be resolved',
-        done => {
+        it('should fail the entry when the account id cannot be resolved', done => {
             actionEntry.setAttribute('target.owner', 'unknown-canonical-id');
             task.processActionEntry(actionEntry, err => {
                 assert(err);
-                assert.strictEqual(
-                    backbeatMetadataProxyClient.getReceivedMd(), null);
+                assert.strictEqual(backbeatMetadataProxyClient.getReceivedMd(), null);
                 done();
             });
         });

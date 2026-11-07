@@ -88,13 +88,13 @@ Replace existing `./locationConfig.json` with:
 ```json
 {
     "us-east-1": {
-      "details": {
-        "supportsVersioning": true
-      },
-      "isTransient": false,
-      "legacyAwsBehavior": false,
-      "objectId": "0b1d9226-a694-11eb-bc21-baec55d199cd",
-      "type": "file"
+        "details": {
+            "supportsVersioning": true
+        },
+        "isTransient": false,
+        "legacyAwsBehavior": false,
+        "objectId": "0b1d9226-a694-11eb-bc21-baec55d199cd",
+        "type": "file"
     },
     "aws-location": {
         "type": "aws_s3",
@@ -152,16 +152,17 @@ Update `conf/authdata.json` with bart informations and keys.
 
 ```json
 {
-    "accounts": [{
-        "name": "bart",
-        "arn": "aws:iam::331457510670:/bart",
-        "canonicalID": "2083781e15384e30f48c651a948ec2dc1e1801c4af24c2750a166823e28ca570",
-        "displayName": "bart",
-        "keys": {
-            "access": "20TNCD06HOCSLQSABFZP",
-            "secret": "1P43SL0ekJjXnQvliV0KgMibZ=N2lKZO4dpnWzbF"
+    "accounts": [
+        {
+            "name": "bart",
+            "arn": "aws:iam::331457510670:/bart",
+            "canonicalID": "2083781e15384e30f48c651a948ec2dc1e1801c4af24c2750a166823e28ca570",
+            "displayName": "bart",
+            "keys": {
+                "access": "20TNCD06HOCSLQSABFZP",
+                "secret": "1P43SL0ekJjXnQvliV0KgMibZ=N2lKZO4dpnWzbF"
+            }
         }
-    }
     ]
 }
 ```

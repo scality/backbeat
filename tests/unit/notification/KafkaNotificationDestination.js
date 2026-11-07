@@ -3,10 +3,8 @@ const sinon = require('sinon');
 
 const FakeLogger = require('../../utils/fakeLogger');
 
-const KafkaNotificationDestination =
-    require('../../../extensions/notification/destination/KafkaNotificationDestination');
-const KafkaProducer =
-    require('../../../extensions/notification/destination/KafkaProducer');
+const KafkaNotificationDestination = require('../../../extensions/notification/destination/KafkaNotificationDestination');
+const KafkaProducer = require('../../../extensions/notification/destination/KafkaProducer');
 
 describe('KafkaNotificationDestination ::', () => {
     afterEach(() => {
@@ -43,10 +41,13 @@ describe('KafkaNotificationDestination ::', () => {
         const destConfig = { host: 'localhost', port: 9092, topic: 'test', resource: 'res' };
         const dest = new KafkaNotificationDestination({ destConfig, logger: FakeLogger });
         let captured;
-        dest._notificationProducer = { send: (msgs, cb) => { captured = msgs; cb(null); } };
-        const messages = [
-            { key: 'k', message: 'v', headers: [{ traceparent: '00-abc-def-01' }] },
-        ];
+        dest._notificationProducer = {
+            send: (msgs, cb) => {
+                captured = msgs;
+                cb(null);
+            },
+        };
+        const messages = [{ key: 'k', message: 'v', headers: [{ traceparent: '00-abc-def-01' }] }];
         dest.send(messages, () => {
             assert.strictEqual(captured.length, 1);
             assert.strictEqual(captured[0].headers, undefined);

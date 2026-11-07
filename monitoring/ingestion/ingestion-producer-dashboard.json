@@ -1,788 +1,784 @@
 {
-  "__inputs": [
-    {
-      "name": "DS_PROMETHEUS",
-      "label": "Prometheus",
-      "description": "",
-      "type": "datasource",
-      "pluginId": "prometheus",
-      "pluginName": "Prometheus"
-    },
-    {
-      "name": "job_ingestion_producer",
-      "type": "constant",
-      "label": "job_ingestion_producer",
-      "value": "artesca-data-backbeat-ingestion-producer-headless",
-      "description": ""
-    },
-    {
-      "name": "namespace",
-      "type": "constant",
-      "label": "namespace",
-      "value": "zenko",
-      "description": ""
-    }
-  ],
-  "__requires": [
-    {
-      "type": "grafana",
-      "id": "grafana",
-      "name": "Grafana",
-      "version": "7.5.7"
-    },
-    {
-      "type": "panel",
-      "id": "graph",
-      "name": "Graph",
-      "version": ""
-    },
-    {
-      "type": "datasource",
-      "id": "prometheus",
-      "name": "Prometheus",
-      "version": "1.0.0"
-    },
-    {
-      "type": "panel",
-      "id": "stat",
-      "name": "Stat",
-      "version": ""
-    }
-  ],
-  "annotations": {
-    "list": [
-      {
-        "builtIn": 1,
-        "datasource": "-- Grafana --",
-        "enable": true,
-        "hide": true,
-        "iconColor": "rgba(0, 211, 255, 1)",
-        "limit": 100,
-        "name": "Annotations & Alerts",
-        "showIn": 0,
-        "type": "dashboard"
-      }
-    ]
-  },
-  "editable": true,
-  "gnetId": null,
-  "graphTooltip": 0,
-  "id": null,
-  "iteration": 1639611339285,
-  "links": [],
-  "panels": [
-    {
-      "collapsed": false,
-      "datasource": null,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 0
-      },
-      "id": 6,
-      "panels": [],
-      "title": "Status",
-      "type": "row"
-    },
-    {
-      "aliasColors": {},
-      "bars": false,
-      "dashLength": 10,
-      "dashes": false,
-      "datasource": "${DS_PROMETHEUS}",
-      "decimals": 0,
-      "description": "Recent status for ingestion producers.",
-      "fieldConfig": {
-        "defaults": {
-          "links": []
-        },
-        "overrides": []
-      },
-      "fill": 0,
-      "fillGradient": 0,
-      "gridPos": {
-        "h": 7,
-        "w": 12,
-        "x": 0,
-        "y": 1
-      },
-      "hiddenSeries": false,
-      "id": 10,
-      "legend": {
-        "alignAsTable": true,
-        "avg": false,
-        "current": true,
-        "max": false,
-        "min": false,
-        "rightSide": false,
-        "show": true,
-        "total": false,
-        "values": true
-      },
-      "lines": true,
-      "linewidth": 1,
-      "nullPointMode": "null as zero",
-      "options": {
-        "alertThreshold": true
-      },
-      "percentage": false,
-      "pluginVersion": "7.5.7",
-      "pointradius": 2,
-      "points": false,
-      "renderer": "flot",
-      "seriesOverrides": [],
-      "spaceLength": 10,
-      "stack": true,
-      "steppedLine": true,
-      "targets": [
+    "__inputs": [
         {
-          "exemplar": true,
-          "expr": "sum(up{job=\"${job_ingestion_producer}\", namespace=\"${namespace}\"})",
-          "interval": "",
-          "legendFormat": "ingestion producer(s)",
-          "refId": "A"
+            "name": "DS_PROMETHEUS",
+            "label": "Prometheus",
+            "description": "",
+            "type": "datasource",
+            "pluginId": "prometheus",
+            "pluginName": "Prometheus"
+        },
+        {
+            "name": "job_ingestion_producer",
+            "type": "constant",
+            "label": "job_ingestion_producer",
+            "value": "artesca-data-backbeat-ingestion-producer-headless",
+            "description": ""
+        },
+        {
+            "name": "namespace",
+            "type": "constant",
+            "label": "namespace",
+            "value": "zenko",
+            "description": ""
         }
-      ],
-      "thresholds": [],
-      "timeFrom": null,
-      "timeRegions": [],
-      "timeShift": null,
-      "title": "Recent Status",
-      "tooltip": {
-        "shared": true,
-        "sort": 0,
-        "value_type": "individual"
-      },
-      "type": "graph",
-      "xaxis": {
-        "buckets": null,
-        "mode": "time",
-        "name": null,
-        "show": true,
-        "values": []
-      },
-      "yaxes": [
+    ],
+    "__requires": [
         {
-          "decimals": 0,
-          "format": "short",
-          "label": "Active Services",
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": true
+            "type": "grafana",
+            "id": "grafana",
+            "name": "Grafana",
+            "version": "7.5.7"
         },
         {
-          "decimals": 0,
-          "format": "short",
-          "label": "Active Services",
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": false
+            "type": "panel",
+            "id": "graph",
+            "name": "Graph",
+            "version": ""
+        },
+        {
+            "type": "datasource",
+            "id": "prometheus",
+            "name": "Prometheus",
+            "version": "1.0.0"
+        },
+        {
+            "type": "panel",
+            "id": "stat",
+            "name": "Stat",
+            "version": ""
         }
-      ],
-      "yaxis": {
-        "align": false,
-        "alignLevel": null
-      }
-    },
-    {
-      "datasource": "${DS_PROMETHEUS}",
-      "description": "Current online or offline status of all ingestion producer pods",
-      "fieldConfig": {
-        "defaults": {
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
-              },
-              {
-                "color": "green",
-                "value": 1
-              }
-            ]
-          },
-          "unit": "/1"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 7,
-        "w": 12,
-        "x": 12,
-        "y": 1
-      },
-      "id": 12,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "last"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "text": {},
-        "textMode": "auto"
-      },
-      "pluginVersion": "7.5.7",
-      "targets": [
-        {
-          "exemplar": true,
-          "expr": "sum(up{job=\"${job_ingestion_producer}\", namespace=\"${namespace}\"})",
-          "format": "time_series",
-          "instant": false,
-          "interval": "",
-          "legendFormat": "ingestion producer(s)",
-          "refId": "A"
-        }
-      ],
-      "timeFrom": null,
-      "timeShift": null,
-      "title": "Current Status",
-      "transformations": [],
-      "type": "stat"
-    },
-    {
-      "collapsed": false,
-      "datasource": null,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 8
-      },
-      "id": 22,
-      "panels": [],
-      "title": "Messages",
-      "type": "row"
-    },
-    {
-      "aliasColors": {},
-      "bars": false,
-      "dashLength": 10,
-      "dashes": false,
-      "datasource": "${DS_PROMETHEUS}",
-      "description": "How many objects are being queued by the ingestion producer.",
-      "fieldConfig": {
-        "defaults": {
-          "links": []
-        },
-        "overrides": []
-      },
-      "fill": 1,
-      "fillGradient": 0,
-      "gridPos": {
-        "h": 8,
-        "w": 24,
-        "x": 0,
-        "y": 9
-      },
-      "hiddenSeries": false,
-      "id": 18,
-      "legend": {
-        "alignAsTable": true,
-        "avg": true,
-        "current": true,
-        "max": true,
-        "min": true,
-        "show": true,
-        "total": false,
-        "values": true
-      },
-      "lines": true,
-      "linewidth": 2,
-      "nullPointMode": "null as zero",
-      "options": {
-        "alertThreshold": true
-      },
-      "percentage": false,
-      "pluginVersion": "7.5.7",
-      "pointradius": 2,
-      "points": false,
-      "renderer": "flot",
-      "seriesOverrides": [],
-      "spaceLength": 10,
-      "stack": true,
-      "steppedLine": false,
-      "targets": [
-        {
-          "exemplar": true,
-          "expr": "sum by (locationNameRaftID) (rate(s3_ingestion_objects_queued_total{job=\"${job_ingestion_producer}\", namespace=\"${namespace}\"}[$__rate_interval]))",
-          "format": "time_series",
-          "interval": "",
-          "legendFormat": "Location and raft ID '{{locationNameRaftID}}'",
-          "refId": "A"
-        }
-      ],
-      "thresholds": [],
-      "timeFrom": null,
-      "timeRegions": [],
-      "timeShift": null,
-      "title": "Objects queued",
-      "tooltip": {
-        "shared": true,
-        "sort": 0,
-        "value_type": "individual"
-      },
-      "type": "graph",
-      "xaxis": {
-        "buckets": null,
-        "mode": "time",
-        "name": null,
-        "show": true,
-        "values": []
-      },
-      "yaxes": [
-        {
-          "format": "short",
-          "label": "Objects per second",
-          "logBase": 1,
-          "max": null,
-          "min": "0",
-          "show": true
-        },
-        {
-          "format": "short",
-          "label": null,
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": true
-        }
-      ],
-      "yaxis": {
-        "align": false,
-        "alignLevel": null
-      }
-    },
-    {
-      "collapsed": false,
-      "datasource": null,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 17
-      },
-      "id": 20,
-      "panels": [],
-      "title": "Metadata",
-      "type": "row"
-    },
-    {
-      "aliasColors": {},
-      "bars": false,
-      "dashLength": 10,
-      "dashes": false,
-      "datasource": "${DS_PROMETHEUS}",
-      "description": "How far the ingestion producer is behind in the raft journal.",
-      "fieldConfig": {
-        "defaults": {
-          "links": []
-        },
-        "overrides": []
-      },
-      "fill": 1,
-      "fillGradient": 0,
-      "gridPos": {
-        "h": 7,
-        "w": 12,
-        "x": 0,
-        "y": 18
-      },
-      "hiddenSeries": false,
-      "id": 14,
-      "interval": "",
-      "legend": {
-        "alignAsTable": true,
-        "avg": true,
-        "current": true,
-        "max": true,
-        "min": true,
-        "show": true,
-        "total": false,
-        "values": true
-      },
-      "lines": true,
-      "linewidth": 2,
-      "nullPointMode": "null as zero",
-      "options": {
-        "alertThreshold": true
-      },
-      "percentage": false,
-      "pluginVersion": "7.5.7",
-      "pointradius": 2,
-      "points": false,
-      "renderer": "flot",
-      "seriesOverrides": [],
-      "spaceLength": 10,
-      "stack": true,
-      "steppedLine": false,
-      "targets": [
-        {
-          "exemplar": true,
-          "expr": "sum by (locationNameRaftID) (s3_ingestion_metadata_journal_size{job=\"${job_ingestion_producer}\", namespace=\"${namespace}\"}-s3_ingestion_read_offset{job=\"${job_ingestion_producer}\", namespace=\"${namespace}\"}+1)",
-          "format": "time_series",
-          "instant": false,
-          "interval": "",
-          "legendFormat": "Location and raft ID '{{locationNameRaftID}}'",
-          "refId": "A"
-        }
-      ],
-      "thresholds": [],
-      "timeFrom": null,
-      "timeRegions": [],
-      "timeShift": null,
-      "title": "Ingestion producer metadata journal lag",
-      "tooltip": {
-        "shared": true,
-        "sort": 0,
-        "value_type": "individual"
-      },
-      "type": "graph",
-      "xaxis": {
-        "buckets": null,
-        "mode": "time",
-        "name": null,
-        "show": true,
-        "values": []
-      },
-      "yaxes": [
-        {
-          "format": "none",
-          "label": "Lag",
-          "logBase": 1,
-          "max": null,
-          "min": "0",
-          "show": true
-        },
-        {
-          "format": "none",
-          "label": "",
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": true
-        }
-      ],
-      "yaxis": {
-        "align": false,
-        "alignLevel": null
-      }
-    },
-    {
-      "aliasColors": {},
-      "bars": false,
-      "dashLength": 10,
-      "dashes": false,
-      "datasource": "${DS_PROMETHEUS}",
-      "description": "How many raft journal entries have been processed.",
-      "fieldConfig": {
-        "defaults": {
-          "links": []
-        },
-        "overrides": []
-      },
-      "fill": 1,
-      "fillGradient": 0,
-      "gridPos": {
-        "h": 7,
-        "w": 12,
-        "x": 12,
-        "y": 18
-      },
-      "hiddenSeries": false,
-      "id": 16,
-      "legend": {
-        "alignAsTable": true,
-        "avg": true,
-        "current": true,
-        "max": true,
-        "min": true,
-        "show": true,
-        "total": false,
-        "values": true
-      },
-      "lines": true,
-      "linewidth": 2,
-      "nullPointMode": "null as zero",
-      "options": {
-        "alertThreshold": true
-      },
-      "percentage": false,
-      "pluginVersion": "7.5.7",
-      "pointradius": 2,
-      "points": false,
-      "renderer": "flot",
-      "seriesOverrides": [],
-      "spaceLength": 10,
-      "stack": true,
-      "steppedLine": false,
-      "targets": [
-        {
-          "exemplar": true,
-          "expr": "sum by (locationNameRaftID) (rate(s3_ingestion_journal_entries_processed_total{job=\"${job_ingestion_producer}\", namespace=\"${namespace}\"}[$__rate_interval]))",
-          "format": "time_series",
-          "interval": "",
-          "legendFormat": "Location and raft ID '{{locationNameRaftID}}'",
-          "refId": "A"
-        }
-      ],
-      "thresholds": [],
-      "timeFrom": null,
-      "timeRegions": [],
-      "timeShift": null,
-      "title": "Metadata journal entries processed",
-      "tooltip": {
-        "shared": true,
-        "sort": 0,
-        "value_type": "individual"
-      },
-      "type": "graph",
-      "xaxis": {
-        "buckets": null,
-        "mode": "time",
-        "name": null,
-        "show": true,
-        "values": []
-      },
-      "yaxes": [
-        {
-          "format": "none",
-          "label": "Entries per second",
-          "logBase": 1,
-          "max": null,
-          "min": "0",
-          "show": true
-        },
-        {
-          "format": "short",
-          "label": null,
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": true
-        }
-      ],
-      "yaxis": {
-        "align": false,
-        "alignLevel": null
-      }
-    },
-    {
-      "collapsed": false,
-      "datasource": null,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 25
-      },
-      "id": 50,
-      "panels": [],
-      "title": "Flow Control",
-      "type": "row"
-    },
-    {
-      "cacheTimeout": null,
-      "datasource": "${DS_PROMETHEUS}",
-      "description": null,
-      "editable": true,
-      "error": false,
-      "fieldConfig": {
-        "defaults": {
-          "calcs": [
-            "mean"
-          ],
-          "decimals": null,
-          "limit": null,
-          "links": [],
-          "mappings": [
+    ],
+    "annotations": {
+        "list": [
             {
-              "options": {
-                "from": 0,
-                "result": {
-                  "color": "green",
-                  "index": 0,
-                  "text": "OK"
-                },
-                "to": 2
-              },
-              "type": "range"
-            },
-            {
-              "options": {
-                "from": 2,
-                "result": {
-                  "color": "orange",
-                  "index": 1,
-                  "text": "Throttled"
-                },
-                "to": 10
-              },
-              "type": "range"
-            },
-            {
-              "options": {
-                "from": 10,
-                "result": {
-                  "color": "red",
-                  "index": 2,
-                  "text": "Stalled"
-                },
-                "to": 20
-              },
-              "type": "range"
+                "builtIn": 1,
+                "datasource": "-- Grafana --",
+                "enable": true,
+                "hide": true,
+                "iconColor": "rgba(0, 211, 255, 1)",
+                "limit": 100,
+                "name": "Annotations & Alerts",
+                "showIn": 0,
+                "type": "dashboard"
             }
-          ],
-          "max": 20,
-          "min": 0,
-          "override": {},
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "index": 0,
-                "line": true,
-                "op": "gt",
-                "value": "null",
-                "yaxis": "left"
-              },
-              {
-                "color": "orange",
-                "index": 1,
-                "line": true,
-                "op": "gt",
-                "value": 2.0,
-                "yaxis": "left"
-              },
-              {
-                "color": "red",
-                "index": 2,
-                "line": true,
-                "op": "gt",
-                "value": 10.0,
-                "yaxis": "left"
-              }
-            ]
-          },
-          "title": null,
-          "unit": "none",
-          "values": false
-        },
-        "showThresholdLabels": false,
-        "showThresholdMarkers": true
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 24,
-        "x": 0,
-        "y": 26
-      },
-      "height": null,
-      "hideTimeOverride": false,
-      "id": 47,
-      "interval": null,
-      "links": [],
-      "maxDataPoints": 100,
-      "maxPerRow": null,
-      "minSpan": null,
-      "repeat": null,
-      "repeatDirection": null,
-      "span": null,
-      "targets": [
+        ]
+    },
+    "editable": true,
+    "gnetId": null,
+    "graphTooltip": 0,
+    "id": null,
+    "iteration": 1639611339285,
+    "links": [],
+    "panels": [
         {
-          "datasource": null,
-          "expr": "avg(s3_circuit_breaker{namespace=\"${namespace}\",job=\"${job_ingestion_producer}\"})*10",
-          "format": "time_series",
-          "hide": false,
-          "instant": false,
-          "interval": "",
-          "intervalFactor": 1,
-          "legendFormat": "",
-          "metric": "",
-          "query": "avg(s3_circuit_breaker{namespace=\"${namespace}\",job=\"${job_ingestion_producer}\"})*10",
-          "refId": "",
-          "step": 10,
-          "target": ""
+            "collapsed": false,
+            "datasource": null,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 0
+            },
+            "id": 6,
+            "panels": [],
+            "title": "Status",
+            "type": "row"
+        },
+        {
+            "aliasColors": {},
+            "bars": false,
+            "dashLength": 10,
+            "dashes": false,
+            "datasource": "${DS_PROMETHEUS}",
+            "decimals": 0,
+            "description": "Recent status for ingestion producers.",
+            "fieldConfig": {
+                "defaults": {
+                    "links": []
+                },
+                "overrides": []
+            },
+            "fill": 0,
+            "fillGradient": 0,
+            "gridPos": {
+                "h": 7,
+                "w": 12,
+                "x": 0,
+                "y": 1
+            },
+            "hiddenSeries": false,
+            "id": 10,
+            "legend": {
+                "alignAsTable": true,
+                "avg": false,
+                "current": true,
+                "max": false,
+                "min": false,
+                "rightSide": false,
+                "show": true,
+                "total": false,
+                "values": true
+            },
+            "lines": true,
+            "linewidth": 1,
+            "nullPointMode": "null as zero",
+            "options": {
+                "alertThreshold": true
+            },
+            "percentage": false,
+            "pluginVersion": "7.5.7",
+            "pointradius": 2,
+            "points": false,
+            "renderer": "flot",
+            "seriesOverrides": [],
+            "spaceLength": 10,
+            "stack": true,
+            "steppedLine": true,
+            "targets": [
+                {
+                    "exemplar": true,
+                    "expr": "sum(up{job=\"${job_ingestion_producer}\", namespace=\"${namespace}\"})",
+                    "interval": "",
+                    "legendFormat": "ingestion producer(s)",
+                    "refId": "A"
+                }
+            ],
+            "thresholds": [],
+            "timeFrom": null,
+            "timeRegions": [],
+            "timeShift": null,
+            "title": "Recent Status",
+            "tooltip": {
+                "shared": true,
+                "sort": 0,
+                "value_type": "individual"
+            },
+            "type": "graph",
+            "xaxis": {
+                "buckets": null,
+                "mode": "time",
+                "name": null,
+                "show": true,
+                "values": []
+            },
+            "yaxes": [
+                {
+                    "decimals": 0,
+                    "format": "short",
+                    "label": "Active Services",
+                    "logBase": 1,
+                    "max": null,
+                    "min": null,
+                    "show": true
+                },
+                {
+                    "decimals": 0,
+                    "format": "short",
+                    "label": "Active Services",
+                    "logBase": 1,
+                    "max": null,
+                    "min": null,
+                    "show": false
+                }
+            ],
+            "yaxis": {
+                "align": false,
+                "alignLevel": null
+            }
+        },
+        {
+            "datasource": "${DS_PROMETHEUS}",
+            "description": "Current online or offline status of all ingestion producer pods",
+            "fieldConfig": {
+                "defaults": {
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "red",
+                                "value": null
+                            },
+                            {
+                                "color": "green",
+                                "value": 1
+                            }
+                        ]
+                    },
+                    "unit": "/1"
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 7,
+                "w": 12,
+                "x": 12,
+                "y": 1
+            },
+            "id": 12,
+            "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "justifyMode": "center",
+                "orientation": "auto",
+                "reduceOptions": {
+                    "calcs": ["last"],
+                    "fields": "",
+                    "values": false
+                },
+                "text": {},
+                "textMode": "auto"
+            },
+            "pluginVersion": "7.5.7",
+            "targets": [
+                {
+                    "exemplar": true,
+                    "expr": "sum(up{job=\"${job_ingestion_producer}\", namespace=\"${namespace}\"})",
+                    "format": "time_series",
+                    "instant": false,
+                    "interval": "",
+                    "legendFormat": "ingestion producer(s)",
+                    "refId": "A"
+                }
+            ],
+            "timeFrom": null,
+            "timeShift": null,
+            "title": "Current Status",
+            "transformations": [],
+            "type": "stat"
+        },
+        {
+            "collapsed": false,
+            "datasource": null,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 8
+            },
+            "id": 22,
+            "panels": [],
+            "title": "Messages",
+            "type": "row"
+        },
+        {
+            "aliasColors": {},
+            "bars": false,
+            "dashLength": 10,
+            "dashes": false,
+            "datasource": "${DS_PROMETHEUS}",
+            "description": "How many objects are being queued by the ingestion producer.",
+            "fieldConfig": {
+                "defaults": {
+                    "links": []
+                },
+                "overrides": []
+            },
+            "fill": 1,
+            "fillGradient": 0,
+            "gridPos": {
+                "h": 8,
+                "w": 24,
+                "x": 0,
+                "y": 9
+            },
+            "hiddenSeries": false,
+            "id": 18,
+            "legend": {
+                "alignAsTable": true,
+                "avg": true,
+                "current": true,
+                "max": true,
+                "min": true,
+                "show": true,
+                "total": false,
+                "values": true
+            },
+            "lines": true,
+            "linewidth": 2,
+            "nullPointMode": "null as zero",
+            "options": {
+                "alertThreshold": true
+            },
+            "percentage": false,
+            "pluginVersion": "7.5.7",
+            "pointradius": 2,
+            "points": false,
+            "renderer": "flot",
+            "seriesOverrides": [],
+            "spaceLength": 10,
+            "stack": true,
+            "steppedLine": false,
+            "targets": [
+                {
+                    "exemplar": true,
+                    "expr": "sum by (locationNameRaftID) (rate(s3_ingestion_objects_queued_total{job=\"${job_ingestion_producer}\", namespace=\"${namespace}\"}[$__rate_interval]))",
+                    "format": "time_series",
+                    "interval": "",
+                    "legendFormat": "Location and raft ID '{{locationNameRaftID}}'",
+                    "refId": "A"
+                }
+            ],
+            "thresholds": [],
+            "timeFrom": null,
+            "timeRegions": [],
+            "timeShift": null,
+            "title": "Objects queued",
+            "tooltip": {
+                "shared": true,
+                "sort": 0,
+                "value_type": "individual"
+            },
+            "type": "graph",
+            "xaxis": {
+                "buckets": null,
+                "mode": "time",
+                "name": null,
+                "show": true,
+                "values": []
+            },
+            "yaxes": [
+                {
+                    "format": "short",
+                    "label": "Objects per second",
+                    "logBase": 1,
+                    "max": null,
+                    "min": "0",
+                    "show": true
+                },
+                {
+                    "format": "short",
+                    "label": null,
+                    "logBase": 1,
+                    "max": null,
+                    "min": null,
+                    "show": true
+                }
+            ],
+            "yaxis": {
+                "align": false,
+                "alignLevel": null
+            }
+        },
+        {
+            "collapsed": false,
+            "datasource": null,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 17
+            },
+            "id": 20,
+            "panels": [],
+            "title": "Metadata",
+            "type": "row"
+        },
+        {
+            "aliasColors": {},
+            "bars": false,
+            "dashLength": 10,
+            "dashes": false,
+            "datasource": "${DS_PROMETHEUS}",
+            "description": "How far the ingestion producer is behind in the raft journal.",
+            "fieldConfig": {
+                "defaults": {
+                    "links": []
+                },
+                "overrides": []
+            },
+            "fill": 1,
+            "fillGradient": 0,
+            "gridPos": {
+                "h": 7,
+                "w": 12,
+                "x": 0,
+                "y": 18
+            },
+            "hiddenSeries": false,
+            "id": 14,
+            "interval": "",
+            "legend": {
+                "alignAsTable": true,
+                "avg": true,
+                "current": true,
+                "max": true,
+                "min": true,
+                "show": true,
+                "total": false,
+                "values": true
+            },
+            "lines": true,
+            "linewidth": 2,
+            "nullPointMode": "null as zero",
+            "options": {
+                "alertThreshold": true
+            },
+            "percentage": false,
+            "pluginVersion": "7.5.7",
+            "pointradius": 2,
+            "points": false,
+            "renderer": "flot",
+            "seriesOverrides": [],
+            "spaceLength": 10,
+            "stack": true,
+            "steppedLine": false,
+            "targets": [
+                {
+                    "exemplar": true,
+                    "expr": "sum by (locationNameRaftID) (s3_ingestion_metadata_journal_size{job=\"${job_ingestion_producer}\", namespace=\"${namespace}\"}-s3_ingestion_read_offset{job=\"${job_ingestion_producer}\", namespace=\"${namespace}\"}+1)",
+                    "format": "time_series",
+                    "instant": false,
+                    "interval": "",
+                    "legendFormat": "Location and raft ID '{{locationNameRaftID}}'",
+                    "refId": "A"
+                }
+            ],
+            "thresholds": [],
+            "timeFrom": null,
+            "timeRegions": [],
+            "timeShift": null,
+            "title": "Ingestion producer metadata journal lag",
+            "tooltip": {
+                "shared": true,
+                "sort": 0,
+                "value_type": "individual"
+            },
+            "type": "graph",
+            "xaxis": {
+                "buckets": null,
+                "mode": "time",
+                "name": null,
+                "show": true,
+                "values": []
+            },
+            "yaxes": [
+                {
+                    "format": "none",
+                    "label": "Lag",
+                    "logBase": 1,
+                    "max": null,
+                    "min": "0",
+                    "show": true
+                },
+                {
+                    "format": "none",
+                    "label": "",
+                    "logBase": 1,
+                    "max": null,
+                    "min": null,
+                    "show": true
+                }
+            ],
+            "yaxis": {
+                "align": false,
+                "alignLevel": null
+            }
+        },
+        {
+            "aliasColors": {},
+            "bars": false,
+            "dashLength": 10,
+            "dashes": false,
+            "datasource": "${DS_PROMETHEUS}",
+            "description": "How many raft journal entries have been processed.",
+            "fieldConfig": {
+                "defaults": {
+                    "links": []
+                },
+                "overrides": []
+            },
+            "fill": 1,
+            "fillGradient": 0,
+            "gridPos": {
+                "h": 7,
+                "w": 12,
+                "x": 12,
+                "y": 18
+            },
+            "hiddenSeries": false,
+            "id": 16,
+            "legend": {
+                "alignAsTable": true,
+                "avg": true,
+                "current": true,
+                "max": true,
+                "min": true,
+                "show": true,
+                "total": false,
+                "values": true
+            },
+            "lines": true,
+            "linewidth": 2,
+            "nullPointMode": "null as zero",
+            "options": {
+                "alertThreshold": true
+            },
+            "percentage": false,
+            "pluginVersion": "7.5.7",
+            "pointradius": 2,
+            "points": false,
+            "renderer": "flot",
+            "seriesOverrides": [],
+            "spaceLength": 10,
+            "stack": true,
+            "steppedLine": false,
+            "targets": [
+                {
+                    "exemplar": true,
+                    "expr": "sum by (locationNameRaftID) (rate(s3_ingestion_journal_entries_processed_total{job=\"${job_ingestion_producer}\", namespace=\"${namespace}\"}[$__rate_interval]))",
+                    "format": "time_series",
+                    "interval": "",
+                    "legendFormat": "Location and raft ID '{{locationNameRaftID}}'",
+                    "refId": "A"
+                }
+            ],
+            "thresholds": [],
+            "timeFrom": null,
+            "timeRegions": [],
+            "timeShift": null,
+            "title": "Metadata journal entries processed",
+            "tooltip": {
+                "shared": true,
+                "sort": 0,
+                "value_type": "individual"
+            },
+            "type": "graph",
+            "xaxis": {
+                "buckets": null,
+                "mode": "time",
+                "name": null,
+                "show": true,
+                "values": []
+            },
+            "yaxes": [
+                {
+                    "format": "none",
+                    "label": "Entries per second",
+                    "logBase": 1,
+                    "max": null,
+                    "min": "0",
+                    "show": true
+                },
+                {
+                    "format": "short",
+                    "label": null,
+                    "logBase": 1,
+                    "max": null,
+                    "min": null,
+                    "show": true
+                }
+            ],
+            "yaxis": {
+                "align": false,
+                "alignLevel": null
+            }
+        },
+        {
+            "collapsed": false,
+            "datasource": null,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 25
+            },
+            "id": 50,
+            "panels": [],
+            "title": "Flow Control",
+            "type": "row"
+        },
+        {
+            "cacheTimeout": null,
+            "datasource": "${DS_PROMETHEUS}",
+            "description": null,
+            "editable": true,
+            "error": false,
+            "fieldConfig": {
+                "defaults": {
+                    "calcs": ["mean"],
+                    "decimals": null,
+                    "limit": null,
+                    "links": [],
+                    "mappings": [
+                        {
+                            "options": {
+                                "from": 0,
+                                "result": {
+                                    "color": "green",
+                                    "index": 0,
+                                    "text": "OK"
+                                },
+                                "to": 2
+                            },
+                            "type": "range"
+                        },
+                        {
+                            "options": {
+                                "from": 2,
+                                "result": {
+                                    "color": "orange",
+                                    "index": 1,
+                                    "text": "Throttled"
+                                },
+                                "to": 10
+                            },
+                            "type": "range"
+                        },
+                        {
+                            "options": {
+                                "from": 10,
+                                "result": {
+                                    "color": "red",
+                                    "index": 2,
+                                    "text": "Stalled"
+                                },
+                                "to": 20
+                            },
+                            "type": "range"
+                        }
+                    ],
+                    "max": 20,
+                    "min": 0,
+                    "override": {},
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "index": 0,
+                                "line": true,
+                                "op": "gt",
+                                "value": "null",
+                                "yaxis": "left"
+                            },
+                            {
+                                "color": "orange",
+                                "index": 1,
+                                "line": true,
+                                "op": "gt",
+                                "value": 2.0,
+                                "yaxis": "left"
+                            },
+                            {
+                                "color": "red",
+                                "index": 2,
+                                "line": true,
+                                "op": "gt",
+                                "value": 10.0,
+                                "yaxis": "left"
+                            }
+                        ]
+                    },
+                    "title": null,
+                    "unit": "none",
+                    "values": false
+                },
+                "showThresholdLabels": false,
+                "showThresholdMarkers": true
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 24,
+                "x": 0,
+                "y": 26
+            },
+            "height": null,
+            "hideTimeOverride": false,
+            "id": 47,
+            "interval": null,
+            "links": [],
+            "maxDataPoints": 100,
+            "maxPerRow": null,
+            "minSpan": null,
+            "repeat": null,
+            "repeatDirection": null,
+            "span": null,
+            "targets": [
+                {
+                    "datasource": null,
+                    "expr": "avg(s3_circuit_breaker{namespace=\"${namespace}\",job=\"${job_ingestion_producer}\"})*10",
+                    "format": "time_series",
+                    "hide": false,
+                    "instant": false,
+                    "interval": "",
+                    "intervalFactor": 1,
+                    "legendFormat": "",
+                    "metric": "",
+                    "query": "avg(s3_circuit_breaker{namespace=\"${namespace}\",job=\"${job_ingestion_producer}\"})*10",
+                    "refId": "",
+                    "step": 10,
+                    "target": ""
+                }
+            ],
+            "timeFrom": null,
+            "timeShift": null,
+            "title": "Flow Control",
+            "transformations": [],
+            "transparent": false,
+            "type": "gauge"
         }
-      ],
-      "timeFrom": null,
-      "timeShift": null,
-      "title": "Flow Control",
-      "transformations": [],
-      "transparent": false,
-      "type": "gauge"
-    }
-  ],
-  "refresh": "5s",
-  "schemaVersion": 27,
-  "style": "dark",
-  "tags": [],
-  "templating": {
-    "list": [
-      {
-        "description": "Name of the backbeat ingestion producer job",
-        "error": null,
-        "hide": 2,
-        "label": "job_ingestion_producer",
-        "name": "job_ingestion_producer",
-        "query": "${job_ingestion_producer}",
-        "skipUrlSync": false,
-        "type": "constant",
-        "current": {
-          "value": "${job_ingestion_producer}",
-          "text": "${job_ingestion_producer}",
-          "selected": false
-        },
-        "options": [
-          {
-            "value": "${job_ingestion_producer}",
-            "text": "${job_ingestion_producer}",
-            "selected": false
-          }
+    ],
+    "refresh": "5s",
+    "schemaVersion": 27,
+    "style": "dark",
+    "tags": [],
+    "templating": {
+        "list": [
+            {
+                "description": "Name of the backbeat ingestion producer job",
+                "error": null,
+                "hide": 2,
+                "label": "job_ingestion_producer",
+                "name": "job_ingestion_producer",
+                "query": "${job_ingestion_producer}",
+                "skipUrlSync": false,
+                "type": "constant",
+                "current": {
+                    "value": "${job_ingestion_producer}",
+                    "text": "${job_ingestion_producer}",
+                    "selected": false
+                },
+                "options": [
+                    {
+                        "value": "${job_ingestion_producer}",
+                        "text": "${job_ingestion_producer}",
+                        "selected": false
+                    }
+                ]
+            },
+            {
+                "description": "Namespace",
+                "error": null,
+                "hide": 2,
+                "label": null,
+                "name": "namespace",
+                "query": "${namespace}",
+                "skipUrlSync": false,
+                "type": "constant",
+                "current": {
+                    "value": "${namespace}",
+                    "text": "${namespace}",
+                    "selected": false
+                },
+                "options": [
+                    {
+                        "value": "${namespace}",
+                        "text": "${namespace}",
+                        "selected": false
+                    }
+                ]
+            }
         ]
-      },
-      {
-        "description": "Namespace",
-        "error": null,
-        "hide": 2,
-        "label": null,
-        "name": "namespace",
-        "query": "${namespace}",
-        "skipUrlSync": false,
-        "type": "constant",
-        "current": {
-          "value": "${namespace}",
-          "text": "${namespace}",
-          "selected": false
-        },
-        "options": [
-          {
-            "value": "${namespace}",
-            "text": "${namespace}",
-            "selected": false
-          }
-        ]
-      }
-    ]
-  },
-  "time": {
-    "from": "now-24h",
-    "to": "now"
-  },
-  "timepicker": {},
-  "timezone": "",
-  "title": "OOB Ingestion Producer",
-  "uid": null,
-  "version": 44
+    },
+    "time": {
+        "from": "now-24h",
+        "to": "now"
+    },
+    "timepicker": {},
+    "timezone": "",
+    "title": "OOB Ingestion Producer",
+    "uid": null,
+    "version": 44
 }

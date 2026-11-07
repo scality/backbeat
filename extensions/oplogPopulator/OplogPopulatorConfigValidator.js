@@ -9,10 +9,15 @@ const joiSchema = joi.object({
     ingestion: joi.string().valid('hashed', 'perBucket').default('perBucket'),
     // number of hashed connectors in hashed ingestion (0 meaning 1);
     // per-bucket ingestion listens to all buckets with one connector when 0
-    numberOfConnectors: joi.number().integer().min(0).required().when('ingestion', {
-        is: 'hashed',
-        then: joi.number().empty(0).default(1).optional(),
-    }),
+    numberOfConnectors: joi
+        .number()
+        .integer()
+        .min(0)
+        .required()
+        .when('ingestion', {
+            is: 'hashed',
+            then: joi.number().empty(0).default(1).optional(),
+        }),
     locationStrippingBytesThreshold: joi.number().min(0).default(0),
     prefix: joi.string().optional(),
     probeServer: probeServerJoi.default(),
@@ -26,5 +31,5 @@ const joiSchema = joi.object({
 
 module.exports = {
     OplogPopulatorConfigJoiSchema: joiSchema,
-    OplogPopulatorConfigValidator: extensionConfigValidator('oplogPopulator', joiSchema)
+    OplogPopulatorConfigValidator: extensionConfigValidator('oplogPopulator', joiSchema),
 };

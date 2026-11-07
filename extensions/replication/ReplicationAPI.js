@@ -105,24 +105,42 @@ class ReplicationAPI {
             kafkaEntry.message = JSON.stringify(message);
         }
         return producer.sendToTopic(topic, [kafkaEntry], (err, reports) => {
-            LifecycleMetrics.onKafkaPublish(log,
+            LifecycleMetrics.onKafkaPublish(
+                log,
                 locationConfig.isCold ? 'ColdStorageArchiveTopic' : 'DataMoverTopic',
-                'bucket', err, 1);
+                'bucket',
+                err,
+                1,
+            );
             if (err) {
-                log.error('could not send data mover action',
-                    Object.assign({
-                        method: 'ReplicationAPI.sendDataMoverAction',
-                        error: err,
-                    }, action.getLogInfo()));
+                log.error(
+                    'could not send data mover action',
+                    Object.assign(
+                        {
+                            method: 'ReplicationAPI.sendDataMoverAction',
+                            error: err,
+                        },
+                        action.getLogInfo(),
+                    ),
+                );
                 return cb(err);
             }
-            log.debug('sent action to the data mover',
-                Object.assign({
-                    method: 'ReplicationAPI.sendDataMoverAction',
-                }, action.getLogInfo()));
+            log.debug(
+                'sent action to the data mover',
+                Object.assign(
+                    {
+                        method: 'ReplicationAPI.sendDataMoverAction',
+                    },
+                    action.getLogInfo(),
+                ),
+            );
             ReplicationMetrics.onReplicationQueued(
-                origin, fromLocation, toLocation,
-                contentLength, reports[0].partition);
+                origin,
+                fromLocation,
+                toLocation,
+                contentLength,
+                reports[0].partition,
+            );
             return cb();
         });
     }

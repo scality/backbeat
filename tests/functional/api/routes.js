@@ -8,8 +8,7 @@ const { RedisClient } = require('@scality/arsenal').metrics;
 const { StatsModel } = require('@scality/arsenal').metrics;
 
 const config = require('../../../lib/Config');
-const { makeRequest, getRequest, getResponseBody } =
-    require('../utils/httpHelpers');
+const { makeRequest, getRequest, getResponseBody } = require('../utils/httpHelpers');
 const getUrl = require('../utils/getUrl');
 const fakeLogger = require('../../utils/fakeLogger');
 const { addMembers } = require('../utils/sortedSetHelpers');
@@ -28,10 +27,8 @@ const redisConfig = {
     host: config.redis.host,
     port: config.redis.port,
 };
-const ZK_TEST_CRR_STATE_PATH =
-    `${zookeeperReplicationNamespace}${zkReplicationStatePath}`;
-const ZK_TEST_INGESTION_STATE_PATH =
-    `${zookeeperIngestionNamespace}${zkIngestionStatePath}`;
+const ZK_TEST_CRR_STATE_PATH = `${zookeeperReplicationNamespace}${zkReplicationStatePath}`;
+const ZK_TEST_INGESTION_STATE_PATH = `${zookeeperIngestionNamespace}${zkIngestionStatePath}`;
 const EPHEMERAL_NODE = 1;
 
 const defaultOptions = {
@@ -97,36 +94,46 @@ describe('API routes', () => {
         }
 
         before(done => {
-            async.series([
-                next => {
-                    testProducer = new Producer({
-                        'metadata.broker.list': config.kafka.hosts,
-                    });
-                    testProducer.connect();
-                    testProducer.on('ready', () => next());
-                    testProducer.on('event.error', error => {
-                        assert.ifError(error);
-                    });
-                },
-                // create topics by fetching metadata from these topics
-                // (works if auto.create.topics.enabled is true)
-                next => testProducer.getMetadata({
-                    topic: config.extensions.replication.topic,
-                    timeout: 10000,
-                }, next),
-                next => testProducer.getMetadata({
-                    topic: config.extensions.replication.replicationStatusTopic,
-                    timeout: 10000,
-                }, next),
-                next => {
-                    _doHealthcheckRequest(next);
-                    // refresh healthcheck result, as after creating
-                    // topics they take some time to appear in the
-                    // healthcheck results
-                    healthcheckTimer = setInterval(_doHealthcheckRequest,
-                                                   2000);
-                },
-            ], done);
+            async.series(
+                [
+                    next => {
+                        testProducer = new Producer({
+                            'metadata.broker.list': config.kafka.hosts,
+                        });
+                        testProducer.connect();
+                        testProducer.on('ready', () => next());
+                        testProducer.on('event.error', error => {
+                            assert.ifError(error);
+                        });
+                    },
+                    // create topics by fetching metadata from these topics
+                    // (works if auto.create.topics.enabled is true)
+                    next =>
+                        testProducer.getMetadata(
+                            {
+                                topic: config.extensions.replication.topic,
+                                timeout: 10000,
+                            },
+                            next,
+                        ),
+                    next =>
+                        testProducer.getMetadata(
+                            {
+                                topic: config.extensions.replication.replicationStatusTopic,
+                                timeout: 10000,
+                            },
+                            next,
+                        ),
+                    next => {
+                        _doHealthcheckRequest(next);
+                        // refresh healthcheck result, as after creating
+                        // topics they take some time to appear in the
+                        // healthcheck results
+                        healthcheckTimer = setInterval(_doHealthcheckRequest, 2000);
+                    },
+                ],
+                done,
+            );
         });
 
         after(() => {
@@ -143,8 +150,7 @@ describe('API routes', () => {
             assert(data.topics);
             let timer = undefined;
             function _checkValidKeys() {
-                const repTopic =
-                          data.topics[config.extensions.replication.topic];
+                const repTopic = data.topics[config.extensions.replication.topic];
                 if (!repTopic) {
                     return undefined;
                 }
@@ -154,10 +160,8 @@ describe('API routes', () => {
                 // NOTE: isrHealth is not checked here because circleci
                 // kafka will have one ISR only. Maybe isrHealth should
                 // be a test for end-to-end
-                assert.strictEqual(
-                    data.internalConnections.zookeeper.status, 'ok');
-                assert.strictEqual(
-                    data.internalConnections.kafkaProducer.status, 'ok');
+                assert.strictEqual(data.internalConnections.zookeeper.status, 'ok');
+                assert.strictEqual(data.internalConnections.kafkaProducer.status, 'ok');
                 return done();
             }
             timer = setInterval(_checkValidKeys, 1000);
@@ -186,13 +190,14 @@ describe('API routes', () => {
         const site1 = destconfig.bootstrapList[0].site;
         const site2 = destconfig.bootstrapList[1].site;
         statsClient.reportNewRequest(`${site1}:${BYTES}`, 2198);
-        statsClient.reportNewRequest(`${site1}:${BUCKET_NAME}:` +
-            `${OBJECT_KEY}:${VERSION_ID}:${OBJECT_BYTES}`, 100);
+        statsClient.reportNewRequest(`${site1}:${BUCKET_NAME}:` + `${OBJECT_KEY}:${VERSION_ID}:${OBJECT_BYTES}`, 100);
         statsClient.reportNewRequest(`${site1}:${OPS_DONE}`, 450);
         statsClient.reportNewRequest(`${site1}:${OPS_FAIL}`, 150);
         statsClient.reportNewRequest(`${site1}:${BYTES_DONE}`, 1027);
-        statsClient.reportNewRequest(`${site1}:${BUCKET_NAME}:` +
-            `${OBJECT_KEY}:${VERSION_ID}:${OBJECT_BYTES_DONE}`, 50);
+        statsClient.reportNewRequest(
+            `${site1}:${BUCKET_NAME}:` + `${OBJECT_KEY}:${VERSION_ID}:${OBJECT_BYTES_DONE}`,
+            50,
+        );
         statsClient.reportNewRequest(`${site1}:${BYTES_FAIL}`, 375);
 
         statsClient.reportNewRequest(`${site2}:${OPS}`, 900);
@@ -207,49 +212,60 @@ describe('API routes', () => {
         statsClient.reportNewRequest(`${ingestSite1}:${OPS_DONE}`, 100);
         statsClient.reportNewRequest(`${ingestSite2}:${OPS_DONE}`, 200);
 
-        const testVersionId =
-            '3938353030303836313334343731393939393939524730303120203';
+        const testVersionId = '3938353030303836313334343731393939393939524730303120203';
         const members = [
             `test-bucket:test-key:${testVersionId}0:${site1}`,
             `test-bucket:test-key:${testVersionId}1:${site2}`,
         ];
 
         before(done =>
-            async.parallel([
-                next => addMembers(redisClient, site1, members, next),
-                next => redisClient.incrby(`${site1}:${OPS_PENDING}`, 2, next),
-                next => redisClient.incrby(`${site1}:${BYTES_PENDING}`, 1024,
-                    next),
-                next => redisClient.incrby(`${site2}:${OPS_PENDING}`, 2, next),
-                next => redisClient.incrby(`${site2}:${BYTES_PENDING}`, 1024,
-                    next),
-                next => redisClient.incrby(`${ingestSite1}:${OPS_PENDING}`,
-                    12, next),
-                next => redisClient.incrby(`${ingestSite2}:${OPS_PENDING}`,
-                    30, next),
-                next => {
-                    // site1
-                    const timestamps = statsClient.getSortedSetHours(
-                        testStartTime);
-                    async.each(timestamps, (ts, tsCB) =>
-                        async.times(10, (n, timeCB) => {
-                            const key = `${TEST_REDIS_KEY_FAILED_CRR}:` +
-                                `${site1}:${ts}`;
-                            redisClient.zadd(key, 10 + n, `test-${n}`, timeCB);
-                        }, tsCB), next);
-                },
-                next => {
-                    // site2
-                    const timestamps = statsClient.getSortedSetHours(
-                        testStartTime);
-                    async.each(timestamps, (ts, tsCB) =>
-                        async.times(10, (n, timeCB) => {
-                            const key = `${TEST_REDIS_KEY_FAILED_CRR}:` +
-                                `${site2}:${ts}`;
-                            redisClient.zadd(key, 10 + n, `test-${n}`, timeCB);
-                        }, tsCB), next);
-                },
-            ], done));
+            async.parallel(
+                [
+                    next => addMembers(redisClient, site1, members, next),
+                    next => redisClient.incrby(`${site1}:${OPS_PENDING}`, 2, next),
+                    next => redisClient.incrby(`${site1}:${BYTES_PENDING}`, 1024, next),
+                    next => redisClient.incrby(`${site2}:${OPS_PENDING}`, 2, next),
+                    next => redisClient.incrby(`${site2}:${BYTES_PENDING}`, 1024, next),
+                    next => redisClient.incrby(`${ingestSite1}:${OPS_PENDING}`, 12, next),
+                    next => redisClient.incrby(`${ingestSite2}:${OPS_PENDING}`, 30, next),
+                    next => {
+                        // site1
+                        const timestamps = statsClient.getSortedSetHours(testStartTime);
+                        async.each(
+                            timestamps,
+                            (ts, tsCB) =>
+                                async.times(
+                                    10,
+                                    (n, timeCB) => {
+                                        const key = `${TEST_REDIS_KEY_FAILED_CRR}:` + `${site1}:${ts}`;
+                                        redisClient.zadd(key, 10 + n, `test-${n}`, timeCB);
+                                    },
+                                    tsCB,
+                                ),
+                            next,
+                        );
+                    },
+                    next => {
+                        // site2
+                        const timestamps = statsClient.getSortedSetHours(testStartTime);
+                        async.each(
+                            timestamps,
+                            (ts, tsCB) =>
+                                async.times(
+                                    10,
+                                    (n, timeCB) => {
+                                        const key = `${TEST_REDIS_KEY_FAILED_CRR}:` + `${site2}:${ts}`;
+                                        redisClient.zadd(key, 10 + n, `test-${n}`, timeCB);
+                                    },
+                                    tsCB,
+                                ),
+                            next,
+                        );
+                    },
+                ],
+                done,
+            ),
+        );
 
         after(done => {
             const redis = new Redis();
@@ -264,8 +280,7 @@ describe('API routes', () => {
             '/_/metrics/crr/all/throughput',
             '/_/metrics/crr/all/pending',
             `/_/metrics/crr/${site1}/progress/bucket/object?versionId=version`,
-            `/_/metrics/crr/${site1}/throughput/bucket/object` +
-                '?versionId=version',
+            `/_/metrics/crr/${site1}/throughput/bucket/object` + '?versionId=version',
         ];
         metricsPaths.forEach(path => {
             it(`should get a 200 response for route: ${path}`, done => {
@@ -282,16 +297,14 @@ describe('API routes', () => {
                     assert.ifError(err);
                     // Object-level throughput route.
                     if (res.description && res.throughput) {
-                        assert.deepEqual(Object.keys(res), ['description',
-                            'throughput']);
+                        assert.deepEqual(Object.keys(res), ['description', 'throughput']);
                         assert.equal(typeof res.description, 'string');
                         assert.equal(typeof res.throughput, 'string');
                         return done();
                     }
                     // Object-level progress route.
                     if (res.description && res.progress) {
-                        assert.deepEqual(Object.keys(res), ['description',
-                            'pending', 'completed', 'progress']);
+                        assert.deepEqual(Object.keys(res), ['description', 'pending', 'completed', 'progress']);
                         assert.equal(typeof res.description, 'string');
                         assert.equal(typeof res.pending, 'number');
                         assert.equal(typeof res.completed, 'number');
@@ -304,8 +317,7 @@ describe('API routes', () => {
                     assert.equal(typeof res[key].description, 'string');
                     if (res[key].results) {
                         assert(res[key].results);
-                        assert.deepEqual(Object.keys(res[key].results),
-                            ['count', 'size']);
+                        assert.deepEqual(Object.keys(res[key].results), ['count', 'size']);
                     }
                     return done();
                 });
@@ -373,8 +385,7 @@ describe('API routes', () => {
             });
         });
 
-        it('should get the right data for route: ' +
-        `/_/metrics/crr/${site1}/backlog`, done => {
+        it('should get the right data for route: ' + `/_/metrics/crr/${site1}/backlog`, done => {
             getRequest(`/_/metrics/crr/${site1}/backlog`, (err, res) => {
                 assert.ifError(err);
                 const key = Object.keys(res)[0];
@@ -385,8 +396,7 @@ describe('API routes', () => {
             });
         });
 
-        it('should get the right data for route: ' +
-        '/_/metrics/crr/all/backlog', done => {
+        it('should get the right data for route: ' + '/_/metrics/crr/all/backlog', done => {
             getRequest('/_/metrics/crr/all/backlog', (err, res) => {
                 assert.ifError(err);
                 const key = Object.keys(res)[0];
@@ -397,8 +407,7 @@ describe('API routes', () => {
             });
         });
 
-        it('should get the right data for route: ' +
-        `/_/metrics/crr/${site1}/completions`, done => {
+        it('should get the right data for route: ' + `/_/metrics/crr/${site1}/completions`, done => {
             getRequest(`/_/metrics/crr/${site1}/completions`, (err, res) => {
                 assert.ifError(err);
                 const key = Object.keys(res)[0];
@@ -410,8 +419,7 @@ describe('API routes', () => {
             });
         });
 
-        it('should get the right data for route: ' +
-        '/_/metrics/crr/all/completions', done => {
+        it('should get the right data for route: ' + '/_/metrics/crr/all/completions', done => {
             getRequest('/_/metrics/crr/all/completions', (err, res) => {
                 assert.ifError(err);
                 const key = Object.keys(res)[0];
@@ -423,8 +431,7 @@ describe('API routes', () => {
             });
         });
 
-        it('should get the right data for route: ' +
-        '/_/metrics/ingestion/all/completions', done => {
+        it('should get the right data for route: ' + '/_/metrics/ingestion/all/completions', done => {
             getRequest('/_/metrics/ingestion/all/completions', (err, res) => {
                 assert.ifError(err);
 
@@ -437,10 +444,8 @@ describe('API routes', () => {
             });
         });
 
-        it('should get the right data for route: ' +
-        `/_/metrics/ingestion/${ingestSite1}/completions`, done => {
-            getRequest(`/_/metrics/ingestion/${ingestSite1}/completions`,
-            (err, res) => {
+        it('should get the right data for route: ' + `/_/metrics/ingestion/${ingestSite1}/completions`, done => {
+            getRequest(`/_/metrics/ingestion/${ingestSite1}/completions`, (err, res) => {
                 assert.ifError(err);
 
                 const key = Object.keys(res)[0];
@@ -452,13 +457,11 @@ describe('API routes', () => {
             });
         });
 
-        it('should get the right data for route: ' +
-        `/_/metrics/crr/${site1}/failures`, done => {
+        it('should get the right data for route: ' + `/_/metrics/crr/${site1}/failures`, done => {
             getRequest(`/_/metrics/crr/${site1}/failures`, (err, res) => {
                 assert.ifError(err);
 
-                const testTime = statsClient.getSortedSetCurrentHour(
-                    testStartTime);
+                const testTime = statsClient.getSortedSetCurrentHour(testStartTime);
                 const current = statsClient.getSortedSetCurrentHour(Date.now());
 
                 // Need to adjust results if oldest set already expired
@@ -477,13 +480,11 @@ describe('API routes', () => {
             });
         });
 
-        it('should get the right data for route: ' +
-        '/_/metrics/crr/all/failures', done => {
+        it('should get the right data for route: ' + '/_/metrics/crr/all/failures', done => {
             getRequest('/_/metrics/crr/all/failures', (err, res) => {
                 assert.ifError(err);
 
-                const testTime = statsClient.getSortedSetCurrentHour(
-                    testStartTime);
+                const testTime = statsClient.getSortedSetCurrentHour(testStartTime);
                 const current = statsClient.getSortedSetCurrentHour(Date.now());
 
                 // Need to adjust results if oldest set already expired
@@ -502,8 +503,7 @@ describe('API routes', () => {
             });
         });
 
-        it('should get the right data for route: ' +
-        '/_/metrics/crr/all/throughput', done => {
+        it('should get the right data for route: ' + '/_/metrics/crr/all/throughput', done => {
             getRequest('/_/metrics/crr/all/throughput', (err, res) => {
                 assert.ifError(err);
                 const key = Object.keys(res)[0];
@@ -515,8 +515,7 @@ describe('API routes', () => {
             });
         });
 
-        it('should get the right data for route: ' +
-        '/_/metrics/ingestion/all/throughput', done => {
+        it('should get the right data for route: ' + '/_/metrics/ingestion/all/throughput', done => {
             getRequest('/_/metrics/ingestion/all/throughput', (err, res) => {
                 assert.ifError(err);
                 const key = Object.keys(res)[0];
@@ -528,10 +527,8 @@ describe('API routes', () => {
             });
         });
 
-        it('should get the right data for route: ' +
-        `/_/metrics/ingestion/${ingestSite1}/throughput`, done => {
-            getRequest(`/_/metrics/ingestion/${ingestSite1}/throughput`,
-            (err, res) => {
+        it('should get the right data for route: ' + `/_/metrics/ingestion/${ingestSite1}/throughput`, done => {
+            getRequest(`/_/metrics/ingestion/${ingestSite1}/throughput`, (err, res) => {
                 assert.ifError(err);
                 const key = Object.keys(res)[0];
                 // Throughput count = OPS_DONE / EXPIRY
@@ -542,8 +539,7 @@ describe('API routes', () => {
             });
         });
 
-        it('should get the right data for route: ' +
-        `/_/metrics/crr/${site1}/pending`, done => {
+        it('should get the right data for route: ' + `/_/metrics/crr/${site1}/pending`, done => {
             getRequest(`/_/metrics/crr/${site1}/pending`, (err, res) => {
                 assert.ifError(err);
                 const key = Object.keys(res)[0];
@@ -553,8 +549,7 @@ describe('API routes', () => {
             });
         });
 
-        it('should get the right data for route: ' +
-        '/_/metrics/crr/all/pending', done => {
+        it('should get the right data for route: ' + '/_/metrics/crr/all/pending', done => {
             getRequest('/_/metrics/crr/all/pending', (err, res) => {
                 assert.ifError(err);
                 const key = Object.keys(res)[0];
@@ -564,8 +559,7 @@ describe('API routes', () => {
             });
         });
 
-        it('should get the right data for route: ' +
-        '/_/metrics/ingestion/all/pending', done => {
+        it('should get the right data for route: ' + '/_/metrics/ingestion/all/pending', done => {
             getRequest('/_/metrics/ingestion/all/pending', (err, res) => {
                 assert.ifError(err);
                 const key = Object.keys(res)[0];
@@ -576,10 +570,8 @@ describe('API routes', () => {
             });
         });
 
-        it('should get the right data for route: ' +
-        `/_/metrics/ingestion/${ingestSite1}/pending`, done => {
-            getRequest(`/_/metrics/ingestion/${ingestSite1}/pending`,
-            (err, res) => {
+        it('should get the right data for route: ' + `/_/metrics/ingestion/${ingestSite1}/pending`, done => {
+            getRequest(`/_/metrics/ingestion/${ingestSite1}/pending`, (err, res) => {
                 assert.ifError(err);
                 const key = Object.keys(res)[0];
                 assert.equal(res[key].results.count, 12);
@@ -589,8 +581,7 @@ describe('API routes', () => {
             });
         });
 
-        it('should return all metrics for route: ' +
-        `/_/metrics/crr/${site1}`, done => {
+        it('should return all metrics for route: ' + `/_/metrics/crr/${site1}`, done => {
             getRequest(`/_/metrics/crr/${site1}`, (err, res) => {
                 assert.ifError(err);
                 const keys = Object.keys(res);
@@ -600,8 +591,7 @@ describe('API routes', () => {
                 assert(keys.includes('failures'));
                 assert(keys.includes('pending'));
 
-                const testTime = statsClient.getSortedSetCurrentHour(
-                    testStartTime);
+                const testTime = statsClient.getSortedSetCurrentHour(testStartTime);
                 const current = statsClient.getSortedSetCurrentHour(Date.now());
 
                 // Need to adjust results if oldest set already expired
@@ -642,8 +632,7 @@ describe('API routes', () => {
             });
         });
 
-        it('should return all metrics for route: ' +
-        '/_/metrics/crr/all', done => {
+        it('should return all metrics for route: ' + '/_/metrics/crr/all', done => {
             getRequest('/_/metrics/crr/all', (err, res) => {
                 assert.ifError(err);
                 const keys = Object.keys(res);
@@ -653,8 +642,7 @@ describe('API routes', () => {
                 assert(keys.includes('failures'));
                 assert(keys.includes('pending'));
 
-                const testTime = statsClient.getSortedSetCurrentHour(
-                    testStartTime);
+                const testTime = statsClient.getSortedSetCurrentHour(testStartTime);
                 const current = statsClient.getSortedSetCurrentHour(Date.now());
 
                 // Need to adjust results if oldest set already expired
@@ -695,8 +683,7 @@ describe('API routes', () => {
             });
         });
 
-        it('should return all metrics for route: ' +
-        '/_/metrics/ingestion/all', done => {
+        it('should return all metrics for route: ' + '/_/metrics/ingestion/all', done => {
             getRequest('/_/metrics/ingestion/all', (err, res) => {
                 assert.ifError(err);
 
@@ -725,8 +712,7 @@ describe('API routes', () => {
             });
         });
 
-        it('should return all metrics for route: ' +
-        `/_/metrics/ingestion/${ingestSite1}`, done => {
+        it('should return all metrics for route: ' + `/_/metrics/ingestion/${ingestSite1}`, done => {
             getRequest(`/_/metrics/ingestion/${ingestSite1}`, (err, res) => {
                 assert.ifError(err);
 
@@ -755,29 +741,37 @@ describe('API routes', () => {
             });
         });
 
-        it(`should return all metrics for route: /_/metrics/crr/${site1}` +
-            `/progress/${BUCKET_NAME}/${OBJECT_KEY}?versionId=${VERSION_ID}`,
+        it(
+            `should return all metrics for route: /_/metrics/crr/${site1}` +
+                `/progress/${BUCKET_NAME}/${OBJECT_KEY}?versionId=${VERSION_ID}`,
             done =>
-            getRequest(`/_/metrics/crr/${site1}/progress/${BUCKET_NAME}/` +
-                `${OBJECT_KEY}?versionId=${VERSION_ID}`, (err, res) => {
-                assert.ifError(err);
-                assert(res.description);
-                assert.strictEqual(res.pending, 50);
-                assert.strictEqual(res.completed, 50);
-                assert.strictEqual(res.progress, '50%');
-                done();
-            }));
+                getRequest(
+                    `/_/metrics/crr/${site1}/progress/${BUCKET_NAME}/` + `${OBJECT_KEY}?versionId=${VERSION_ID}`,
+                    (err, res) => {
+                        assert.ifError(err);
+                        assert(res.description);
+                        assert.strictEqual(res.pending, 50);
+                        assert.strictEqual(res.completed, 50);
+                        assert.strictEqual(res.progress, '50%');
+                        done();
+                    },
+                ),
+        );
 
-        it(`should return all metrics for route: /_/metrics/crr/${site1}` +
-            `/throughput/${BUCKET_NAME}/${OBJECT_KEY}?versionId=${VERSION_ID}`,
+        it(
+            `should return all metrics for route: /_/metrics/crr/${site1}` +
+                `/throughput/${BUCKET_NAME}/${OBJECT_KEY}?versionId=${VERSION_ID}`,
             done =>
-            getRequest(`/_/metrics/crr/${site1}/throughput/${BUCKET_NAME}/` +
-                `${OBJECT_KEY}?versionId=${VERSION_ID}`, (err, res) => {
-                assert.ifError(err);
-                assert(res.description);
-                assert.strictEqual(res.throughput, '0.06');
-                done();
-            }));
+                getRequest(
+                    `/_/metrics/crr/${site1}/throughput/${BUCKET_NAME}/` + `${OBJECT_KEY}?versionId=${VERSION_ID}`,
+                    (err, res) => {
+                        assert.ifError(err);
+                        assert(res.description);
+                        assert.strictEqual(res.throughput, '0.06');
+                        done();
+                    },
+                ),
+        );
 
         describe('No metrics data in Redis', () => {
             before(done => {
@@ -790,8 +784,7 @@ describe('API routes', () => {
                 });
             });
 
-            it('should return a response even if redis data does not exist: ' +
-            'all CRR metrics', done => {
+            it('should return a response even if redis data does not exist: ' + 'all CRR metrics', done => {
                 getRequest('/_/metrics/crr/all', (err, res) => {
                     assert.ifError(err);
 
@@ -826,13 +819,12 @@ describe('API routes', () => {
                 });
             });
 
-            it('should return a response even if redis data does not exist: ' +
-            'object progress CRR metrics', done =>
-                getRequest(`/_/metrics/crr/${site1}/progress/bucket/object` +
-                    '?versionId=version', (err, res) => {
+            it('should return a response even if redis data does not exist: ' + 'object progress CRR metrics', done =>
+                getRequest(`/_/metrics/crr/${site1}/progress/bucket/object` + '?versionId=version', (err, res) => {
                     assert.ifError(err);
                     assert.deepStrictEqual(res, {
-                        description: 'Number of bytes to be replicated ' +
+                        description:
+                            'Number of bytes to be replicated ' +
                             '(pending), number of bytes transferred to the ' +
                             'destination (completed), and percentage of the ' +
                             'object that has completed replication (progress)',
@@ -841,20 +833,19 @@ describe('API routes', () => {
                         progress: '0%',
                     });
                     done();
-                }));
+                }),
+            );
 
-            it('should return a response even if redis data does not exist: ' +
-            'object throughput CRR metrics', done =>
-                getRequest(`/_/metrics/crr/${site1}/throughput/bucket/object` +
-                    '?versionId=version', (err, res) => {
+            it('should return a response even if redis data does not exist: ' + 'object throughput CRR metrics', done =>
+                getRequest(`/_/metrics/crr/${site1}/throughput/bucket/object` + '?versionId=version', (err, res) => {
                     assert.ifError(err);
                     assert.deepStrictEqual(res, {
-                        description: 'Current throughput for object ' +
-                            'replication in bytes/sec (throughput)',
+                        description: 'Current throughput for object ' + 'replication in bytes/sec (throughput)',
                         throughput: '0.00',
                     });
                     done();
-                }));
+                }),
+            );
         });
     });
 
@@ -864,8 +855,7 @@ describe('API routes', () => {
 
         const crrSites = crrConfigs.destination.bootstrapList.map(s => s.site);
         setupIngestionSiteMock();
-        const ingestionSites = config.getIngestionBuckets()
-                                  .map(b => b.locationConstraint);
+        const ingestionSites = config.getIngestionBuckets().map(b => b.locationConstraint);
 
         [
             {
@@ -907,37 +897,41 @@ describe('API routes', () => {
                 zkClient = zookeeper.createClient(connectionString);
                 zkClient.connect();
                 zkClient.once('connected', () => {
-                    async.series([
-                        next => zkClient.mkdirp(svc.baseZkPath, err => {
-                            if (err && err.name !== 'NODE_EXISTS') {
-                                return next(err);
+                    async.series(
+                        [
+                            next =>
+                                zkClient.mkdirp(svc.baseZkPath, err => {
+                                    if (err && err.name !== 'NODE_EXISTS') {
+                                        return next(err);
+                                    }
+                                    return next();
+                                }),
+                            next => {
+                                // emulate first site to be active (not paused)
+                                const path = `${svc.baseZkPath}/${firstSite}`;
+                                const data = Buffer.from(JSON.stringify({ paused: false }));
+                                zkClient.create(path, data, EPHEMERAL_NODE, next);
+                            },
+                            next => {
+                                // emulate second site to be paused
+                                const path = `${svc.baseZkPath}/${secondSite}`;
+                                const data = Buffer.from(
+                                    JSON.stringify({
+                                        paused: true,
+                                        scheduledResume: futureDate.toString(),
+                                    }),
+                                );
+                                zkClient.create(path, data, EPHEMERAL_NODE, next);
+                            },
+                        ],
+                        err => {
+                            if (err) {
+                                process.stdout.write('error occurred in zookeeper' + ' setup for pause/resume');
+                                return cb(err);
                             }
-                            return next();
-                        }),
-                        next => {
-                            // emulate first site to be active (not paused)
-                            const path = `${svc.baseZkPath}/${firstSite}`;
-                            const data = Buffer.from(
-                                JSON.stringify({ paused: false }));
-                            zkClient.create(path, data, EPHEMERAL_NODE, next);
+                            return cb();
                         },
-                        next => {
-                            // emulate second site to be paused
-                            const path = `${svc.baseZkPath}/${secondSite}`;
-                            const data = Buffer.from(JSON.stringify({
-                                paused: true,
-                                scheduledResume: futureDate.toString(),
-                            }));
-                            zkClient.create(path, data, EPHEMERAL_NODE, next);
-                        },
-                    ], err => {
-                        if (err) {
-                            process.stdout.write('error occurred in zookeeper' +
-                            ' setup for pause/resume');
-                            return cb(err);
-                        }
-                        return cb();
-                    });
+                    );
                 });
             }
 
@@ -981,8 +975,7 @@ describe('API routes', () => {
                 { path: `/_/${svc.name}/resume/all`, method: 'GET' },
             ];
             validRequests.forEach(entry => {
-                it(`should get a 200 response for route: ${entry.path}`,
-                done => {
+                it(`should get a 200 response for route: ${entry.path}`, done => {
                     const options = Object.assign({}, defaultOptions, {
                         method: entry.method,
                         path: entry.path,
@@ -1002,24 +995,19 @@ describe('API routes', () => {
                 { path: `/_/${svc.name}/status/invalid-site`, method: 'GET' },
             ];
             if (svc.invalidSites && svc.invalidSites.length > 1) {
-                invalidRequests.push(...[
-                    { path: `/_/${svc.name}/pause/${svc.invalidSites[0]}`,
-                      method: 'POST' },
-                    { path: `/_/${svc.name}/pause/${svc.invalidSites[1]}`,
-                      method: 'POST' },
-                    { path: `/_/${svc.name}/resume/${svc.invalidSites[0]}`,
-                      method: 'POST' },
-                    { path: `/_/${svc.name}/resume/${svc.invalidSites[1]}`,
-                      method: 'POST' },
-                    { path: `/_/${svc.name}/status/${svc.invalidSites[0]}`,
-                      method: 'GET' },
-                    { path: `/_/${svc.name}/status/${svc.invalidSites[1]}`,
-                      method: 'GET' },
-                ]);
+                invalidRequests.push(
+                    ...[
+                        { path: `/_/${svc.name}/pause/${svc.invalidSites[0]}`, method: 'POST' },
+                        { path: `/_/${svc.name}/pause/${svc.invalidSites[1]}`, method: 'POST' },
+                        { path: `/_/${svc.name}/resume/${svc.invalidSites[0]}`, method: 'POST' },
+                        { path: `/_/${svc.name}/resume/${svc.invalidSites[1]}`, method: 'POST' },
+                        { path: `/_/${svc.name}/status/${svc.invalidSites[0]}`, method: 'GET' },
+                        { path: `/_/${svc.name}/status/${svc.invalidSites[1]}`, method: 'GET' },
+                    ],
+                );
             }
             invalidRequests.forEach(entry => {
-                it(`should get a 404 response for route: ${entry.path}`,
-                done => {
+                it(`should get a 404 response for route: ${entry.path}`, done => {
                     const options = Object.assign({}, defaultOptions, {
                         method: entry.method,
                         path: entry.path,
@@ -1035,8 +1023,7 @@ describe('API routes', () => {
                 });
             });
 
-            it('should receive a pause request on all site channels from ' +
-            `route /_/${svc.name}/pause`, done => {
+            it('should receive a pause request on all site channels from ' + `route /_/${svc.name}/pause`, done => {
                 const options = Object.assign({}, defaultOptions, {
                     method: 'POST',
                     path: `/_/${svc.name}/pause`,
@@ -1061,30 +1048,31 @@ describe('API routes', () => {
                 });
             });
 
-            it('should receive a pause request on specified site from route ' +
-            `/_/${svc.name}/pause/${firstSite}`, done => {
-                const options = Object.assign({}, defaultOptions, {
-                    method: 'POST',
-                    path: `/_/${svc.name}/pause/${firstSite}`,
-                });
-                makeRequest(options, emptyBody, err => {
-                    assert.ifError(err);
+            it(
+                'should receive a pause request on specified site from route ' + `/_/${svc.name}/pause/${firstSite}`,
+                done => {
+                    const options = Object.assign({}, defaultOptions, {
+                        method: 'POST',
+                        path: `/_/${svc.name}/pause/${firstSite}`,
+                    });
+                    makeRequest(options, emptyBody, err => {
+                        assert.ifError(err);
 
-                    setTimeout(() => {
-                        assert.strictEqual(cache1.length, 1);
-                        assert.strictEqual(cache2.length, 0);
-                        assert.deepStrictEqual(cache1[0].channel, channel1);
+                        setTimeout(() => {
+                            assert.strictEqual(cache1.length, 1);
+                            assert.strictEqual(cache2.length, 0);
+                            assert.deepStrictEqual(cache1[0].channel, channel1);
 
-                        const message = JSON.parse(cache1[0].message);
-                        const expected = { action: 'pauseService' };
-                        assert.deepStrictEqual(message, expected);
-                        done();
-                    }, 1000);
-                });
-            });
+                            const message = JSON.parse(cache1[0].message);
+                            const expected = { action: 'pauseService' };
+                            assert.deepStrictEqual(message, expected);
+                            done();
+                        }, 1000);
+                    });
+                },
+            );
 
-            it('should receive a resume request on all site channels from ' +
-            `route /_/${svc.name}/resume`, done => {
+            it('should receive a resume request on all site channels from ' + `route /_/${svc.name}/resume`, done => {
                 const options = Object.assign({}, defaultOptions, {
                     method: 'POST',
                     path: `/_/${svc.name}/resume`,
@@ -1108,106 +1096,115 @@ describe('API routes', () => {
                 });
             });
 
-            it('should get scheduled resume jobs for all sites using route ' +
-            `/_/${svc.name}/resume/all/schedule`, done => {
-                getRequest(`/_/${svc.name}/resume/all/schedule`, (err, res) => {
-                    assert.ifError(err);
-                    const expected = {
-                        [firstSite]: 'none',
-                        [secondSite]: futureDate.toString(),
-                    };
-                    assert.deepStrictEqual(expected, res);
-                    done();
-                });
-            });
+            it(
+                'should get scheduled resume jobs for all sites using route ' + `/_/${svc.name}/resume/all/schedule`,
+                done => {
+                    getRequest(`/_/${svc.name}/resume/all/schedule`, (err, res) => {
+                        assert.ifError(err);
+                        const expected = {
+                            [firstSite]: 'none',
+                            [secondSite]: futureDate.toString(),
+                        };
+                        assert.deepStrictEqual(expected, res);
+                        done();
+                    });
+                },
+            );
 
-            it('should receive a scheduled resume request with specified ' +
-            `hours from route /_/${svc.name}/resume/${firstSite}/schedule`,
-            done => {
-                const options = Object.assign({}, defaultOptions, {
-                    method: 'POST',
-                    path: `/_/${svc.name}/resume/${firstSite}/schedule`,
-                });
-                const body = JSON.stringify({ hours: 1 });
-                makeRequest(options, body, (err, res) => {
-                    assert.ifError(err);
-                    setTimeout(() => {
-                        getResponseBody(res, err => {
-                            assert.ifError(err);
+            it(
+                'should receive a scheduled resume request with specified ' +
+                    `hours from route /_/${svc.name}/resume/${firstSite}/schedule`,
+                done => {
+                    const options = Object.assign({}, defaultOptions, {
+                        method: 'POST',
+                        path: `/_/${svc.name}/resume/${firstSite}/schedule`,
+                    });
+                    const body = JSON.stringify({ hours: 1 });
+                    makeRequest(options, body, (err, res) => {
+                        assert.ifError(err);
+                        setTimeout(() => {
+                            getResponseBody(res, err => {
+                                assert.ifError(err);
 
+                                assert.strictEqual(cache1.length, 1);
+                                assert.deepStrictEqual(cache1[0].channel, channel1);
+                                const message = JSON.parse(cache1[0].message);
+                                assert.equal('resumeService', message.action);
+                                const date = new Date();
+                                const scheduleDate = new Date(message.date);
+                                assert(scheduleDate > date);
+                                // check scheduled time does not exceed expected
+                                const millisecondPerHour = 60 * 60 * 1000;
+                                assert(scheduleDate - date <= millisecondPerHour);
+                                done();
+                            });
+                        }, 1000);
+                    });
+                },
+            );
+
+            it(
+                'should receive a scheduled resume request without specified ' +
+                    `hours from route /_/${svc.name}/resume/${firstSite}/schedule`,
+                done => {
+                    const options = Object.assign({}, defaultOptions, {
+                        method: 'POST',
+                        path: `/_/${svc.name}/resume/${firstSite}/schedule`,
+                    });
+                    makeRequest(options, emptyBody, err => {
+                        assert.ifError(err);
+
+                        setTimeout(() => {
                             assert.strictEqual(cache1.length, 1);
                             assert.deepStrictEqual(cache1[0].channel, channel1);
+
                             const message = JSON.parse(cache1[0].message);
                             assert.equal('resumeService', message.action);
+
                             const date = new Date();
                             const scheduleDate = new Date(message.date);
                             assert(scheduleDate > date);
-                            // check scheduled time does not exceed expected
+
+                            // check scheduled time between 5 and 6 hours from now
                             const millisecondPerHour = 60 * 60 * 1000;
-                            assert(scheduleDate - date <= millisecondPerHour);
+                            assert(
+                                scheduleDate - date <= millisecondPerHour * 6 &&
+                                    scheduleDate - date >= millisecondPerHour * 5,
+                            );
                             done();
-                        });
-                    }, 1000);
-                });
-            });
+                        }, 1000);
+                    });
+                },
+            );
 
-            it('should receive a scheduled resume request without specified ' +
-            `hours from route /_/${svc.name}/resume/${firstSite}/schedule`,
-            done => {
-                const options = Object.assign({}, defaultOptions, {
-                    method: 'POST',
-                    path: `/_/${svc.name}/resume/${firstSite}/schedule`,
-                });
-                makeRequest(options, emptyBody, err => {
-                    assert.ifError(err);
+            it(
+                'should remove a scheduled resume request when receiving a ' +
+                    'DELETE request to route' +
+                    `/_/${svc.name}/resume/${secondSite}/schedule`,
+                done => {
+                    const options = Object.assign({}, defaultOptions, {
+                        method: 'DELETE',
+                        path: `/_/${svc.name}/resume/${secondSite}/schedule`,
+                    });
+                    makeRequest(options, emptyBody, (err, res) => {
+                        assert.ifError(err);
 
-                    setTimeout(() => {
-                        assert.strictEqual(cache1.length, 1);
-                        assert.deepStrictEqual(cache1[0].channel, channel1);
+                        setTimeout(() => {
+                            getResponseBody(res, err => {
+                                assert.ifError(err);
 
-                        const message = JSON.parse(cache1[0].message);
-                        assert.equal('resumeService', message.action);
+                                assert.strictEqual(cache2.length, 1);
 
-                        const date = new Date();
-                        const scheduleDate = new Date(message.date);
-                        assert(scheduleDate > date);
+                                const message = JSON.parse(cache2[0].message);
+                                assert.equal('deleteScheduledResumeService', message.action);
+                                done();
+                            });
+                        }, 1000);
+                    });
+                },
+            );
 
-                        // check scheduled time between 5 and 6 hours from now
-                        const millisecondPerHour = 60 * 60 * 1000;
-                        assert((scheduleDate - date <= millisecondPerHour * 6)
-                            && (scheduleDate - date) >= millisecondPerHour * 5);
-                        done();
-                    }, 1000);
-                });
-            });
-
-            it('should remove a scheduled resume request when receiving a ' +
-            'DELETE request to route' +
-            `/_/${svc.name}/resume/${secondSite}/schedule`, done => {
-                const options = Object.assign({}, defaultOptions, {
-                    method: 'DELETE',
-                    path: `/_/${svc.name}/resume/${secondSite}/schedule`,
-                });
-                makeRequest(options, emptyBody, (err, res) => {
-                    assert.ifError(err);
-
-                    setTimeout(() => {
-                        getResponseBody(res, err => {
-                            assert.ifError(err);
-
-                            assert.strictEqual(cache2.length, 1);
-
-                            const message = JSON.parse(cache2[0].message);
-                            assert.equal('deleteScheduledResumeService',
-                                message.action);
-                            done();
-                        });
-                    }, 1000);
-                });
-            });
-
-            it('should receive a status request on all site channels from ' +
-            `route /_/${svc.name}/status`, done => {
+            it('should receive a status request on all site channels from ' + `route /_/${svc.name}/status`, done => {
                 getRequest(`/_/${svc.name}/status`, (err, res) => {
                     assert.ifError(err);
                     const expected = {

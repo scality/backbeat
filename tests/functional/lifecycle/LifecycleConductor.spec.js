@@ -13,10 +13,8 @@ const { indexesForFeature } = require('../../../lib/constants');
 const { mongoConfig } = require('./configObjects');
 const ZookeeperManager = require('../../../lib/clients/ZookeeperManager');
 const BackbeatTestConsumer = require('../../utils/BackbeatTestConsumer');
-const LifecycleConductor = require(
-    '../../../extensions/lifecycle/conductor/LifecycleConductor');
-const configValidator = require(
-    '../../../extensions/lifecycle/LifecycleConfigValidator');
+const LifecycleConductor = require('../../../extensions/lifecycle/conductor/LifecycleConductor');
+const configValidator = require('../../../extensions/lifecycle/LifecycleConfigValidator');
 
 const zkConfig = {
     zookeeper: {
@@ -40,13 +38,11 @@ const s3Config = {
     port: 8000,
 };
 
-const mongoUrl =
-    `mongodb://${mongoConfig.replicaSetHosts}` +
-    `/db?replicaSet=${mongoConfig.replicaSet}`;
+const mongoUrl = `mongodb://${mongoConfig.replicaSetHosts}` + `/db?replicaSet=${mongoConfig.replicaSet}`;
 
 const bucketTasksTopic = 'backbeat-lifecycle-bucket-tasks-spec';
 
-const expected2Messages = (version='v2') => ([
+const expected2Messages = (version = 'v2') => [
     {
         value: {
             action: 'processObjects',
@@ -71,9 +67,9 @@ const expected2Messages = (version='v2') => ([
             details: {},
         },
     },
-]);
+];
 
-const expected4Messages = (version='v2') => ([
+const expected4Messages = (version = 'v2') => [
     {
         value: {
             action: 'processObjects',
@@ -122,7 +118,7 @@ const expected4Messages = (version='v2') => ([
             details: {},
         },
     },
-]);
+];
 
 const baseLCConfig = {
     zookeeperPath: '/test/lifecycle',
@@ -147,7 +143,7 @@ const baseLCConfig = {
         groupId: 'a',
         probeServer: {
             port: 8553,
-        }
+        },
     },
     coldStorageArchiveTopicPrefix: 'cold-archive-req-',
 };
@@ -180,14 +176,14 @@ describe('lifecycle conductor', function lifecycleConductor() {
         let bucketd;
 
         const bucketdHandler = (_, res) => {
-            setTimeout(
-                () => {
-                    res.end(JSON.stringify({
+            setTimeout(() => {
+                res.end(
+                    JSON.stringify({
                         Contents: [],
                         IsTruncated: false,
-                    }));
-                },
-                2000);
+                    }),
+                );
+            }, 2000);
         };
 
         beforeEach(done => {
@@ -236,39 +232,46 @@ describe('lifecycle conductor', function lifecycleConductor() {
                 },
             };
 
-            const lc = new LifecycleConductor(zkConfig.zookeeper,
-                localKafkaConfig, lcConfig, repConfig, s3Config);
+            const lc = new LifecycleConductor(zkConfig.zookeeper, localKafkaConfig, lcConfig, repConfig, s3Config);
 
-            async.series([
-                next => lc.start(next),
-                next => async.parallel([
-                    nextp => lc.processBuckets(nextp),
-                    nextp => setTimeout(() => {
-                        lc.processBuckets(err => {
-                            // test explicitly for the non-backlog-metrics related error
-                            if (err && err.Throttling && err.description === 'Batch in progress') {
-                                return nextp();
-                            }
+            async.series(
+                [
+                    next => lc.start(next),
+                    next =>
+                        async.parallel(
+                            [
+                                nextp => lc.processBuckets(nextp),
+                                nextp =>
+                                    setTimeout(() => {
+                                        lc.processBuckets(err => {
+                                            // test explicitly for the non-backlog-metrics related error
+                                            if (err && err.Throttling && err.description === 'Batch in progress') {
+                                                return nextp();
+                                            }
 
-                            const e = new Error('should have returned a `Throttling` error');
-                            return nextp(e);
-                        });
-                    }, 500),
-                    nextp => setTimeout(() => {
-                        lc.processBuckets(err => {
-                            // test explicitly for the non-backlog-metrics related error
-                            if (err && err.Throttling && err.description === 'Batch in progress') {
-                                return nextp();
-                            }
+                                            const e = new Error('should have returned a `Throttling` error');
+                                            return nextp(e);
+                                        });
+                                    }, 500),
+                                nextp =>
+                                    setTimeout(() => {
+                                        lc.processBuckets(err => {
+                                            // test explicitly for the non-backlog-metrics related error
+                                            if (err && err.Throttling && err.description === 'Batch in progress') {
+                                                return nextp();
+                                            }
 
-                            const e = new Error('should have returned a `Throttling` error');
-                            return nextp(e);
-                        });
-                    }, 1000),
-                ], next),
-                next => lc.stop(next),
-            ],
-            done);
+                                            const e = new Error('should have returned a `Throttling` error');
+                                            return nextp(e);
+                                        });
+                                    }, 1000),
+                            ],
+                            next,
+                        ),
+                    next => lc.stop(next),
+                ],
+                done,
+            );
         });
     });
 
@@ -278,19 +281,19 @@ describe('lifecycle conductor', function lifecycleConductor() {
         let called = false;
 
         const bucketdHandler = (_, res) => {
-            setTimeout(
-                () => {
-                    if (!called) {
-                        called = true;
-                        res.statusCode = 500; // eslint-disable-line no-param-reassign
-                        return res.end();
-                    }
-                    return res.end(JSON.stringify({
+            setTimeout(() => {
+                if (!called) {
+                    called = true;
+                    res.statusCode = 500; // eslint-disable-line no-param-reassign
+                    return res.end();
+                }
+                return res.end(
+                    JSON.stringify({
                         Contents: [],
                         IsTruncated: false,
-                    }));
-                },
-                2000);
+                    }),
+                );
+            }, 2000);
         };
 
         beforeEach(done => {
@@ -339,15 +342,9 @@ describe('lifecycle conductor', function lifecycleConductor() {
                 },
             };
 
-            const lc = new LifecycleConductor(zkConfig.zookeeper,
-                localKafkaConfig, lcConfig, repConfig, s3Config);
+            const lc = new LifecycleConductor(zkConfig.zookeeper, localKafkaConfig, lcConfig, repConfig, s3Config);
 
-            async.series([
-                next => lc.start(next),
-                next => lc.processBuckets(next),
-                next => lc.stop(next),
-            ],
-            done);
+            async.series([next => lc.start(next), next => lc.processBuckets(next), next => lc.stop(next)], done);
         });
     });
 
@@ -417,9 +414,7 @@ describe('lifecycle conductor', function lifecycleConductor() {
             const respond = params => {
                 assert.strictEqual(params.Action, 'GetAccounts');
 
-                const canonicalIds = Array.isArray(params.canonicalIds) ?
-                    params.canonicalIds :
-                    [params.canonicalIds];
+                const canonicalIds = Array.isArray(params.canonicalIds) ? params.canonicalIds : [params.canonicalIds];
                 const accountIds = canonicalIds.map(v => ({
                     id: v.replace('owner', 'account'),
                     canId: v,
@@ -432,8 +427,7 @@ describe('lifecycle conductor', function lifecycleConductor() {
             if (req.method === 'POST') {
                 const chunks = [];
                 req.on('data', chunk => chunks.push(chunk));
-                req.on('end', () => respond(
-                    querystring.parse(Buffer.concat(chunks).toString())));
+                req.on('end', () => respond(querystring.parse(Buffer.concat(chunks).toString())));
                 return;
             }
 
@@ -463,13 +457,15 @@ describe('lifecycle conductor', function lifecycleConductor() {
             const thisListing = [...bucketdListing].splice(0, query.maxKeys);
             bucketdListing = [...bucketdListing].splice(query.maxKeys);
 
-            res.end(JSON.stringify({
-                Contents: thisListing.map(key => ({
-                    key,
-                    value: {},
-                })),
-                IsTruncated: !!bucketdListing.length,
-            }));
+            res.end(
+                JSON.stringify({
+                    Contents: thisListing.map(key => ({
+                        key,
+                        value: {},
+                    })),
+                    IsTruncated: !!bucketdListing.length,
+                }),
+            );
         };
 
         if (mockBucketd) {
@@ -490,22 +486,31 @@ describe('lifecycle conductor', function lifecycleConductor() {
         if (useMongodb) {
             lifecycleConfig.conductor.mongodb = mongoConfig;
 
-            const insertBuckets = buckets => mongoClient
-                .db(mongoConfig.database)
-                .collection('__metastore')
-                .insertMany(buckets.map(([bucketName, owner]) => ({
-                    _id: bucketName,
-                    value: {
-                        owner,
-                        lifecycleConfiguration: { rules: [] },
-                    },
-                })));
+            const insertBuckets = buckets =>
+                mongoClient
+                    .db(mongoConfig.database)
+                    .collection('__metastore')
+                    .insertMany(
+                        buckets.map(([bucketName, owner]) => ({
+                            _id: bucketName,
+                            value: {
+                                owner,
+                                lifecycleConfiguration: { rules: [] },
+                            },
+                        })),
+                    );
 
-            bucketPopulatorStep1 = async () => insertBuckets(
-                [['bucket1', 'owner1'], ['bucket1-2', 'owner1']]);
+            bucketPopulatorStep1 = async () =>
+                insertBuckets([
+                    ['bucket1', 'owner1'],
+                    ['bucket1-2', 'owner1'],
+                ]);
 
-            bucketPopulatorStep2 = async () => insertBuckets(
-                [['bucket3', 'owner3'], ['bucket4', 'owner4']]);
+            bucketPopulatorStep2 = async () =>
+                insertBuckets([
+                    ['bucket3', 'owner3'],
+                    ['bucket4', 'owner4'],
+                ]);
         }
 
         if (mockVault) {
@@ -517,9 +522,7 @@ describe('lifecycle conductor', function lifecycleConductor() {
         }
 
         // the conductor reaches the backbeat index routes through the S3 endpoint
-        const conductorS3Config = mockBackbeat ?
-            { ...s3Config, port: backbeatPort } :
-            s3Config;
+        const conductorS3Config = mockBackbeat ? { ...s3Config, port: backbeatPort } : s3Config;
 
         lifecycleConfig.conductor.concurrency = maxKeys;
         // make topic unique so that different tests' bootstrap messages don't interfere
@@ -533,17 +536,19 @@ describe('lifecycle conductor', function lifecycleConductor() {
             bucketPopulatorStep1 = next => {
                 async.each(
                     ['owner1:uid1:bucket1', 'owner1:uid1-2:bucket1-2'],
-                    (bucket, done) => zkClient.create(
-                        `${validatedLifecycleConfig.zookeeperPath}/data/buckets/${bucket}`, done),
-                    next);
+                    (bucket, done) =>
+                        zkClient.create(`${validatedLifecycleConfig.zookeeperPath}/data/buckets/${bucket}`, done),
+                    next,
+                );
             };
 
             bucketPopulatorStep2 = next => {
                 async.each(
                     ['owner3:uid3:bucket3', 'owner4:uid4:bucket4'],
-                    (bucket, done) => zkClient.create(
-                        `${validatedLifecycleConfig.zookeeperPath}/data/buckets/${bucket}`, done),
-                    next);
+                    (bucket, done) =>
+                        zkClient.create(`${validatedLifecycleConfig.zookeeperPath}/data/buckets/${bucket}`, done),
+                    next,
+                );
             };
         }
 
@@ -553,144 +558,163 @@ describe('lifecycle conductor', function lifecycleConductor() {
             beforeEach(done => {
                 bucketdListing = [];
 
-                lcConductor = new LifecycleConductor(zkConfig.zookeeper,
-                    kafkaConfig, validatedLifecycleConfig, repConfig, conductorS3Config);
+                lcConductor = new LifecycleConductor(
+                    zkConfig.zookeeper,
+                    kafkaConfig,
+                    validatedLifecycleConfig,
+                    repConfig,
+                    conductorS3Config,
+                );
 
-                async.series([
-                    async () => {
-                        if (mockSts) {
-                            sts = http.createServer(stsHandler);
-                            await promisify(cb => sts.listen(stsPort, cb))();
-                        }
-                    },
-                    async () => {
-                        if (mockBackbeat) {
-                            backbeat = http.createServer(backbeatHandler);
-                            await promisify(cb => backbeat.listen(backbeatPort, cb))();
-                        }
-                    },
-                    async () => {
-                        if (useMongodb) {
-                            mongoClient = new MongoClient(mongoUrl);
-                            await mongoClient.connect();
-                        }
-                    },
-                    next => lcConductor.init(next),
-                    next => {
-                        consumer = new BackbeatTestConsumer({
-                            kafka: { hosts: kafkaConfig.hosts },
-                            topic: validatedLifecycleConfig.bucketTasksTopic,
-                            groupId: 'test-consumer-group',
-                        });
-                        consumer.on('ready', next);
-                    },
-                    next => {
-                        consumer.subscribe();
-                        // it seems the consumer needs some extra time to
-                        // start consuming the first messages
-                        setTimeout(next, 2000);
-                    },
-                    next => {
-                        if (mockBucketd) {
-                            bucketd = http.createServer(bucketdHandler);
-                            bucketd.listen(bucketdPort, next);
-                        } else {
-                            process.nextTick(next);
-                        }
-                    },
-                    next => {
-                        if (mockVault) {
-                            vault = http.createServer(vaultHandler);
-                            vault.listen(vaultPort, next);
-                        } else {
-                            process.nextTick(next);
-                        }
-                    },
-                    next => {
-                        if (needsZkPaths) {
-                            zkClient = new ZookeeperManager(
-                                zkConfig.zookeeper.connectionString,
-                                zkConfig.zookeeper,
-                                log
-                            );
-                            zkClient.once('ready', () => {
-                                lcConductor.initZkPaths(next);
+                async.series(
+                    [
+                        async () => {
+                            if (mockSts) {
+                                sts = http.createServer(stsHandler);
+                                await promisify(cb => sts.listen(stsPort, cb))();
+                            }
+                        },
+                        async () => {
+                            if (mockBackbeat) {
+                                backbeat = http.createServer(backbeatHandler);
+                                await promisify(cb => backbeat.listen(backbeatPort, cb))();
+                            }
+                        },
+                        async () => {
+                            if (useMongodb) {
+                                mongoClient = new MongoClient(mongoUrl);
+                                await mongoClient.connect();
+                            }
+                        },
+                        next => lcConductor.init(next),
+                        next => {
+                            consumer = new BackbeatTestConsumer({
+                                kafka: { hosts: kafkaConfig.hosts },
+                                topic: validatedLifecycleConfig.bucketTasksTopic,
+                                groupId: 'test-consumer-group',
                             });
-                        } else {
-                            process.nextTick(next);
-                        }
-                    },
-                ], done);
+                            consumer.on('ready', next);
+                        },
+                        next => {
+                            consumer.subscribe();
+                            // it seems the consumer needs some extra time to
+                            // start consuming the first messages
+                            setTimeout(next, 2000);
+                        },
+                        next => {
+                            if (mockBucketd) {
+                                bucketd = http.createServer(bucketdHandler);
+                                bucketd.listen(bucketdPort, next);
+                            } else {
+                                process.nextTick(next);
+                            }
+                        },
+                        next => {
+                            if (mockVault) {
+                                vault = http.createServer(vaultHandler);
+                                vault.listen(vaultPort, next);
+                            } else {
+                                process.nextTick(next);
+                            }
+                        },
+                        next => {
+                            if (needsZkPaths) {
+                                zkClient = new ZookeeperManager(
+                                    zkConfig.zookeeper.connectionString,
+                                    zkConfig.zookeeper,
+                                    log,
+                                );
+                                zkClient.once('ready', () => {
+                                    lcConductor.initZkPaths(next);
+                                });
+                            } else {
+                                process.nextTick(next);
+                            }
+                        },
+                    ],
+                    done,
+                );
             });
 
             afterEach(done => {
-                async.series([
-                    next => {
-                        if (mockBucketd) {
-                            bucketd.close(next);
-                        } else {
-                            process.nextTick(next);
-                        }
-                    },
-                    next => {
-                        if (mockVault) {
-                            vault.close(next);
-                        } else {
-                            process.nextTick(next);
-                        }
-                    },
-                    async () => {
-                        if (mockSts) {
-                            await promisify(cb => sts.close(cb))();
-                        }
-                    },
-                    async () => {
-                        if (mockBackbeat) {
-                            await promisify(cb => backbeat.close(cb))();
-                        }
-                    },
-                    async () => {
-                        if (useMongodb) {
-                            await mongoClient.db(mongoConfig.database)
-                                .collection('__metastore')
-                                .deleteMany({});
-                            await mongoClient.close();
-                        }
-                    },
-                    next => {
-                        if (needsZkPaths) {
-                            zkClient.removeRecur(validatedLifecycleConfig.zookeeperPath, next);
-                        } else {
-                            process.nextTick(next);
-                        }
-                    },
-                    next => consumer.close(next),
-                    next => lcConductor.stop(next),
-                ], done);
+                async.series(
+                    [
+                        next => {
+                            if (mockBucketd) {
+                                bucketd.close(next);
+                            } else {
+                                process.nextTick(next);
+                            }
+                        },
+                        next => {
+                            if (mockVault) {
+                                vault.close(next);
+                            } else {
+                                process.nextTick(next);
+                            }
+                        },
+                        async () => {
+                            if (mockSts) {
+                                await promisify(cb => sts.close(cb))();
+                            }
+                        },
+                        async () => {
+                            if (mockBackbeat) {
+                                await promisify(cb => backbeat.close(cb))();
+                            }
+                        },
+                        async () => {
+                            if (useMongodb) {
+                                await mongoClient.db(mongoConfig.database).collection('__metastore').deleteMany({});
+                                await mongoClient.close();
+                            }
+                        },
+                        next => {
+                            if (needsZkPaths) {
+                                zkClient.removeRecur(validatedLifecycleConfig.zookeeperPath, next);
+                            } else {
+                                process.nextTick(next);
+                            }
+                        },
+                        next => consumer.close(next),
+                        next => lcConductor.stop(next),
+                    ],
+                    done,
+                );
             });
 
             // scans share the conductor's scan id, so letting one start before
             // the previous has completed makes them clobber each other
-            const runBatch = (expectedMessages, next) => async.parallel([
-                cb => consumer.expectUnorderedMessages(
-                    transformExpectedMessages(expectedMessages),
-                    CONSUMER_TIMEOUT, cb),
-                cb => lcConductor.processBuckets(cb),
-            ], err => next(err));
+            const runBatch = (expectedMessages, next) =>
+                async.parallel(
+                    [
+                        cb =>
+                            consumer.expectUnorderedMessages(
+                                transformExpectedMessages(expectedMessages),
+                                CONSUMER_TIMEOUT,
+                                cb,
+                            ),
+                        cb => lcConductor.processBuckets(cb),
+                    ],
+                    err => next(err),
+                );
 
             it('should populate queue', done => {
                 // series, not waterfall: no step feeds the next one, and
                 // waterfall would pass an async step's result on as the
                 // following step's callback
-                async.series([
-                    bucketPopulatorStep1,
-                    next => runBatch(expected2Messages(expectedTaskVersion), next),
-                    bucketPopulatorStep2,
-                    next => runBatch(expected4Messages(expectedTaskVersion), next),
-                ], err => {
-                    assert.ifError(err);
-                    done();
-                });
+                async.series(
+                    [
+                        bucketPopulatorStep1,
+                        next => runBatch(expected2Messages(expectedTaskVersion), next),
+                        bucketPopulatorStep2,
+                        next => runBatch(expected4Messages(expectedTaskVersion), next),
+                    ],
+                    err => {
+                        assert.ifError(err);
+                        done();
+                    },
+                );
             });
         });
     }

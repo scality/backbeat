@@ -1,6 +1,4 @@
-
 class TestConfigurator {
-
     constructor() {
         this.persistentParams = {};
         this.testParams = {};
@@ -8,11 +6,9 @@ class TestConfigurator {
 
     getParam(paramPath) {
         const testParam = this._lookupParam(paramPath, this.testParams);
-        const persistentParam = this._lookupParam(paramPath,
-                                                  this.persistentParams);
+        const persistentParam = this._lookupParam(paramPath, this.persistentParams);
         if (testParam === undefined && persistentParam === undefined) {
-            throw new Error(`error looking up param '${paramPath}': ` +
-                            'not defined');
+            throw new Error(`error looking up param '${paramPath}': ` + 'not defined');
         }
         return this._mergeParams(testParam, persistentParam);
     }
@@ -48,16 +44,18 @@ class TestConfigurator {
         if (testParam === undefined) {
             return persistentParam;
         }
-        if (typeof testParam !== 'object' || Array.isArray(testParam) ||
+        if (
+            typeof testParam !== 'object' ||
+            Array.isArray(testParam) ||
             typeof persistentParam !== 'object' ||
-            Array.isArray(persistentParam)) {
+            Array.isArray(persistentParam)
+        ) {
             // prioritize test param
             return testParam;
         }
         const mergedObj = Object.assign({}, persistentParam);
         Object.keys(testParam).forEach(key => {
-            mergedObj[key] = this._mergeParams(testParam[key],
-                                               persistentParam[key]);
+            mergedObj[key] = this._mergeParams(testParam[key], persistentParam[key]);
         });
         return mergedObj;
     }

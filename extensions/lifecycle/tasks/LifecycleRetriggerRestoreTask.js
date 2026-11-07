@@ -9,7 +9,7 @@ class LifecycleRetriggerRestoreTask extends LifecycleRequeueTask {
      * @constructor
      * @param {LifecycleObjectProcessor} proc - object processor instance
      */
-     constructor(proc) {
+    constructor(proc) {
         super(proc, 'restore');
     }
 
@@ -33,8 +33,8 @@ class LifecycleRetriggerRestoreTask extends LifecycleRequeueTask {
 
         const isObjectAlreadyRestored = archive.restoreCompletedAt;
         if (isObjectAlreadyRestored) {
-                log.error('object is already restored, skipping');
-                return true;
+            log.error('object is already restored, skipping');
+            return true;
         }
 
         if (new Date(archive.restoreWillExpireAt) < new Date()) {
@@ -52,5 +52,5 @@ class LifecycleRetriggerRestoreTask extends LifecycleRequeueTask {
 }
 
 module.exports = {
-    LifecycleRetriggerRestoreTask
+    LifecycleRetriggerRestoreTask,
 };

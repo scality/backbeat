@@ -55,21 +55,21 @@ class S3ClientMock {
 
     send(command) {
         const commandName = command.constructor.name;
-        
+
         if (!this.calls[commandName]) {
             this.calls[commandName] = 0;
         }
-        
+
         this.calls[commandName]++;
-        
+
         const stubData = this[`_${commandName}Result`];
         const stubError = this[`_${commandName}Error`];
-        
+
         if (this.failures[commandName] >= this.calls[commandName]) {
             const error = stubError || this.makeRetryableError();
             return Promise.reject(error);
         }
-        
+
         return Promise.resolve(stubData);
     }
 
@@ -81,15 +81,13 @@ class S3ClientMock {
 
     verifyRetries() {
         Object.keys(this.failures).forEach(f => {
-            assert.strictEqual(this.calls[f], this.failures[f] + 1,
-                `did not retry ${this.failures[f]} times`);
+            assert.strictEqual(this.calls[f], this.failures[f] + 1, `did not retry ${this.failures[f]} times`);
         });
     }
 
     verifyNoRetries() {
         Object.keys(this.failures).forEach(f => {
-            assert.strictEqual(this.calls[f], 1,
-                `called ${this.calls[f]} times, expected 1`);
+            assert.strictEqual(this.calls[f], 1, `called ${this.calls[f]} times, expected 1`);
         });
     }
 
@@ -130,10 +128,12 @@ class S3ClientMock {
     stubListMpuTruncated() {
         this.stubCommand('ListMultipartUploadsCommand', {
             IsTruncated: true,
-            Uploads: [{
-                Initiated: new Date('2021-10-04T21:46:49.157Z'),
-                Key: 'mpu1',
-            }],
+            Uploads: [
+                {
+                    Initiated: new Date('2021-10-04T21:46:49.157Z'),
+                    Key: 'mpu1',
+                },
+            ],
             UploadIdMarker: 'id',
             NextKeyMarker: 'mpu2',
         });

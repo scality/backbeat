@@ -5,8 +5,7 @@ const sinon = require('sinon');
 const async = require('async');
 
 const LocationStatusStream = require('../../../extensions/utils/LocationStatusStream');
-const LifecycleBucketProcessor = require(
-    '../../../extensions/lifecycle/bucketProcessor/LifecycleBucketProcessor');
+const LifecycleBucketProcessor = require('../../../extensions/lifecycle/bucketProcessor/LifecycleBucketProcessor');
 const { formatSupportedLifecycleRules } = require('../../../extensions/lifecycle/util/rules.js');
 
 const { ValidLifecycleRules } = require('@scality/arsenal').models;
@@ -21,21 +20,24 @@ const {
     timeOptions,
 } = require('../../functional/lifecycle/configObjects');
 
-const {
-    bucketProcessorEntry,
-    bucketProcessorV1Entry,
-    bucketProcessorV2Entry
-} = require('../../utils/kafkaEntries');
+const { bucketProcessorEntry, bucketProcessorV1Entry, bucketProcessorV2Entry } = require('../../utils/kafkaEntries');
 const LifecycleTask = require('../../../extensions/lifecycle/tasks/LifecycleTask');
 const LifecycleTaskV2 = require('../../../extensions/lifecycle/tasks/LifecycleTaskV2');
 const { LifecycleMetrics } = require('../../../extensions/lifecycle/LifecycleMetrics');
-
 
 describe('Lifecycle Bucket Processor', () => {
     let lbp;
     beforeEach(() => {
         lbp = new LifecycleBucketProcessor(
-            zkConfig, kafkaConfig, lcConfig, repConfig, s3Config, mongoConfig, 'http', timeOptions);
+            zkConfig,
+            kafkaConfig,
+            lcConfig,
+            repConfig,
+            s3Config,
+            mongoConfig,
+            'http',
+            timeOptions,
+        );
     });
 
     afterEach(() => {
@@ -63,113 +65,124 @@ describe('Lifecycle Bucket Processor', () => {
                 supportedRules: ValidLifecycleRules,
                 pauseLocations: [],
                 expected: false,
-            }, {
+            },
+            {
                 title: 'should return false if all lifecyle rules are disabled',
                 lcConfig: {
                     Rules: [
                         {
                             Status: 'Disabled',
                             AbortIncompleteMultipartUpload: {
-                                DaysAfterInitiation: 7
+                                DaysAfterInitiation: 7,
                             },
                             NoncurrentVersionExpiration: {
-                                NoncurrentDays: 7
+                                NoncurrentDays: 7,
                             },
                             Expiration: {
-                                Days: 1
+                                Days: 1,
                             },
-                            ID: '64bf6794-55fd-43f4-8d44-54a54cd2bf09'
+                            ID: '64bf6794-55fd-43f4-8d44-54a54cd2bf09',
                         },
                         {
                             Status: 'Disabled',
-                            Transitions: [{
-                                Days: 10,
-                                StorageClass: 'azure'
-                            }],
-                            ID: 'dac36d89-0005-4c78-8e00-7e9ace06a9c4'
-                        }
+                            Transitions: [
+                                {
+                                    Days: 10,
+                                    StorageClass: 'azure',
+                                },
+                            ],
+                            ID: 'dac36d89-0005-4c78-8e00-7e9ace06a9c4',
+                        },
                     ],
                 },
                 supportedRules: ValidLifecycleRules,
                 pauseLocations: [],
                 expected: false,
-            }, {
+            },
+            {
                 title: 'should return true if at least one lifecycle rule is enabled',
                 lcConfig: {
                     Rules: [
                         {
                             Status: 'Disabled',
                             Expiration: {
-                                Days: 1
+                                Days: 1,
                             },
-                            ID: '64bf6794-55fd-43f4-8d44-54a54cd2bf09'
+                            ID: '64bf6794-55fd-43f4-8d44-54a54cd2bf09',
                         },
                         {
                             Status: 'Enabled',
-                            Transitions: [{
-                                Days: 10,
-                                StorageClass: 'azure'
-                            }],
-                            ID: 'dac36d89-0005-4c78-8e00-7e9ace06a9c4'
-                        }
+                            Transitions: [
+                                {
+                                    Days: 10,
+                                    StorageClass: 'azure',
+                                },
+                            ],
+                            ID: 'dac36d89-0005-4c78-8e00-7e9ace06a9c4',
+                        },
                     ],
                 },
                 supportedRules: ValidLifecycleRules,
                 pauseLocations: [],
                 expected: true,
-            }, {
-                title: 'should return false if transition rule\'s location is paused',
+            },
+            {
+                title: "should return false if transition rule's location is paused",
                 lcConfig: {
                     Rules: [
                         {
                             Status: 'Enabled',
-                            Transitions: [{
-                                Days: 10,
-                                StorageClass: 'azure'
-                            }],
-                            ID: 'dac36d89-0005-4c78-8e00-7e9ace06a9c4'
-                        }
+                            Transitions: [
+                                {
+                                    Days: 10,
+                                    StorageClass: 'azure',
+                                },
+                            ],
+                            ID: 'dac36d89-0005-4c78-8e00-7e9ace06a9c4',
+                        },
                     ],
                 },
                 supportedRules: ValidLifecycleRules,
                 pauseLocations: ['azure'],
                 expected: false,
-            }, {
-                title: 'should return false if non current transition rule\'s location is paused',
+            },
+            {
+                title: "should return false if non current transition rule's location is paused",
                 lcConfig: {
                     Rules: [
                         {
                             Status: 'Enabled',
-                            NoncurrentVersionTransitions: [{
-                                NoncurrentDays: 10,
-                                StorageClass: 'azure'
-                            }],
-                            ID: 'dac36d89-0005-4c78-8e00-7e9ace06a9c4'
-                        }
+                            NoncurrentVersionTransitions: [
+                                {
+                                    NoncurrentDays: 10,
+                                    StorageClass: 'azure',
+                                },
+                            ],
+                            ID: 'dac36d89-0005-4c78-8e00-7e9ace06a9c4',
+                        },
                     ],
                 },
                 supportedRules: ValidLifecycleRules,
                 pauseLocations: ['azure'],
                 expected: false,
-            }, {
+            },
+            {
                 title: 'should return false if no supported rule is enabled',
                 lcConfig: {
                     Rules: [
                         {
                             Status: 'Enabled',
-                            Transitions: [{
-                                Days: 10,
-                                StorageClass: 'azure'
-                            }],
-                            ID: 'dac36d89-0005-4c78-8e00-7e9ace06a9c4'
-                        }
+                            Transitions: [
+                                {
+                                    Days: 10,
+                                    StorageClass: 'azure',
+                                },
+                            ],
+                            ID: 'dac36d89-0005-4c78-8e00-7e9ace06a9c4',
+                        },
                     ],
                 },
-                supportedRules: [
-                    'Expiration',
-                    'NoncurrentVersionExpiration',
-                    'AbortIncompleteMultipartUpload',
-                ],
+                supportedRules: ['Expiration', 'NoncurrentVersionExpiration', 'AbortIncompleteMultipartUpload'],
                 pauseLocations: [],
                 expected: false,
             },
@@ -186,30 +199,34 @@ describe('Lifecycle Bucket Processor', () => {
 
     describe('formatSupportedLifecycleRules', () => {
         it('should return the list of supported lifecycle rules', () => {
-            assert.deepStrictEqual(formatSupportedLifecycleRules({
-                supportedLifecycleRules: ValidLifecycleRules
-            }), [
-                'Expiration',
-                'NoncurrentVersionExpiration',
-                'AbortIncompleteMultipartUpload',
-                'Transitions',
-                'NoncurrentVersionTransitions',
-            ]);
+            assert.deepStrictEqual(
+                formatSupportedLifecycleRules({
+                    supportedLifecycleRules: ValidLifecycleRules,
+                }),
+                [
+                    'Expiration',
+                    'NoncurrentVersionExpiration',
+                    'AbortIncompleteMultipartUpload',
+                    'Transitions',
+                    'NoncurrentVersionTransitions',
+                ],
+            );
         });
     });
 
     describe('_processBucketEntry', () => {
-
         [
             {
-                it: 'should use the forceLegacyListing when listing version is not ' +
+                it:
+                    'should use the forceLegacyListing when listing version is not ' +
                     'specified in the Kafka messages (v1 case)',
                 forceLegacyListing: true,
                 kafkaMessage: bucketProcessorEntry,
                 validateTask: task => task instanceof LifecycleTask && !(task instanceof LifecycleTaskV2),
             },
             {
-                it: 'should use the forceLegacyListing when listing version is not ' +
+                it:
+                    'should use the forceLegacyListing when listing version is not ' +
                     'specified in the Kafka messages (v2 case)',
                 forceLegacyListing: false,
                 kafkaMessage: bucketProcessorEntry,
@@ -239,14 +256,18 @@ describe('Lifecycle Bucket Processor', () => {
                 };
 
                 sinon.stub(lbp, '_getBucketLifecycleConfiguration').yields(null, {
-                    Rules: [{
-                        Status: 'Enabled',
-                        Transitions: [{
-                            Days: 10,
-                            StorageClass: 'azure'
-                        }],
-                        ID: 'dac36d89-0005-4c78-8e00-7e9ace06a9c4'
-                    }]
+                    Rules: [
+                        {
+                            Status: 'Enabled',
+                            Transitions: [
+                                {
+                                    Days: 10,
+                                    StorageClass: 'azure',
+                                },
+                            ],
+                            ID: 'dac36d89-0005-4c78-8e00-7e9ace06a9c4',
+                        },
+                    ],
                 });
 
                 const tasks = [];
@@ -275,21 +296,24 @@ describe('Lifecycle Bucket Processor', () => {
                     },
                 }),
             };
-            const metricStub = sinon.stub(
-                LifecycleMetrics, 'onBucketProcessorScanMessageReceived');
+            const metricStub = sinon.stub(LifecycleMetrics, 'onBucketProcessorScanMessageReceived');
             lbp.clientManager = {
                 getS3Client: () => ({}),
                 getBackbeatMetadataProxy: () => ({}),
             };
             sinon.stub(lbp, '_getBucketLifecycleConfiguration').yields(null, {
-                Rules: [{
-                    Status: 'Enabled',
-                    Transitions: [{
-                        Days: 10,
-                        StorageClass: 'azure'
-                    }],
-                    ID: 'dac36d89-0005-4c78-8e00-7e9ace06a9c4'
-                }]
+                Rules: [
+                    {
+                        Status: 'Enabled',
+                        Transitions: [
+                            {
+                                Days: 10,
+                                StorageClass: 'azure',
+                            },
+                        ],
+                        ID: 'dac36d89-0005-4c78-8e00-7e9ace06a9c4',
+                    },
+                ],
             });
             lbp._internalTaskScheduler = async.queue((ctx, cb) => cb(), 1);
 
@@ -346,8 +370,18 @@ describe('Lifecycle Bucket Processor', () => {
             const closeStub = sinon.stub(lbp.clientManager, 'close');
             const consumerClosed = sinon.stub();
             const producerClosed = sinon.stub();
-            lbp._consumer = { close: cb => { consumerClosed(); cb(); } };
-            lbp._producer = { close: cb => { producerClosed(); cb(); } };
+            lbp._consumer = {
+                close: cb => {
+                    consumerClosed();
+                    cb();
+                },
+            };
+            lbp._producer = {
+                close: cb => {
+                    producerClosed();
+                    cb();
+                },
+            };
 
             lbp.close(() => {
                 assert(closeStub.calledOnce);

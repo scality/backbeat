@@ -1,6 +1,5 @@
 const assert = require('assert');
-const MultipleBucketsPipelineFactory =
-    require('../../../../extensions/oplogPopulator/pipeline/MultipleBucketsPipelineFactory');
+const MultipleBucketsPipelineFactory = require('../../../../extensions/oplogPopulator/pipeline/MultipleBucketsPipelineFactory');
 const { constants } = require('@scality/arsenal');
 
 describe('MultipleBucketsPipelineFactory', () => {
@@ -52,14 +51,11 @@ describe('MultipleBucketsPipelineFactory', () => {
             const pipeline = JSON.parse(result);
 
             assert.strictEqual(pipeline.length, 3);
-            assert.deepStrictEqual(pipeline[0], {$match:{'ns.coll':{$in:['bucket1','bucket2']}}});
+            assert.deepStrictEqual(pipeline[0], { $match: { 'ns.coll': { $in: ['bucket1', 'bucket2'] } } });
             assert.deepStrictEqual(pipeline[1], {
                 $addFields: {
                     key: {
-                        $ifNull: [
-                            '$fullDocument.value.key',
-                            '$updateDescription.updatedFields.value.key',
-                        ],
+                        $ifNull: ['$fullDocument.value.key', '$updateDescription.updatedFields.value.key'],
                     },
                 },
             });
@@ -83,14 +79,11 @@ describe('MultipleBucketsPipelineFactory', () => {
             const factory = new MultipleBucketsPipelineFactory(0);
             const pipeline = JSON.parse(factory.getPipeline(['bucket1']));
             assert.strictEqual(pipeline.length, 2);
-            assert.deepStrictEqual(pipeline[0], {$match:{'ns.coll':{$in:['bucket1']}}});
+            assert.deepStrictEqual(pipeline[0], { $match: { 'ns.coll': { $in: ['bucket1'] } } });
             assert.deepStrictEqual(pipeline[1], {
                 $addFields: {
                     key: {
-                        $ifNull: [
-                            '$fullDocument.value.key',
-                            '$updateDescription.updatedFields.value.key',
-                        ],
+                        $ifNull: ['$fullDocument.value.key', '$updateDescription.updatedFields.value.key'],
                     },
                 },
             });
@@ -100,13 +93,15 @@ describe('MultipleBucketsPipelineFactory', () => {
     describe('getOldConnectorBucketList', () => {
         it('should return the list of buckets if the list is valid against the pipeline factory', async () => {
             const config = {
-                pipeline: JSON.stringify([{
-                    $match: {
-                        'ns.coll': {
-                            $in: ['bucket1', 'bucket2'],
+                pipeline: JSON.stringify([
+                    {
+                        $match: {
+                            'ns.coll': {
+                                $in: ['bucket1', 'bucket2'],
+                            },
                         },
                     },
-                }]),
+                ]),
             };
             const result = multipleBucketsPipelineFactory.getOldConnectorBucketList(config);
             assert.deepStrictEqual(result, ['bucket1', 'bucket2']);

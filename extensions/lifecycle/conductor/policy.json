@@ -4,9 +4,7 @@
         {
             "Sid": "ReadAccounts",
             "Effect": "Allow",
-            "Action": [
-                "vaultadmin:GetAccountInfo"
-            ],
+            "Action": ["vaultadmin:GetAccountInfo"],
             "Resource": "arn:aws:iam::*:root"
         }
     ]

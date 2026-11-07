@@ -7,7 +7,7 @@ env:
 on:
   push:
     branches-ignore:
-    - q/*/**
+      - q/*/**
 
 jobs:
   build:
@@ -27,74 +27,74 @@ jobs:
           - name: ci-mongodb
             context: .github/dockerfiles/mongodb
     steps:
-    - name: Checkout
-      uses: actions/checkout@v7
+      - name: Checkout
+        uses: actions/checkout@v7
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
 
-    - name: Login to Registry
-      uses: docker/login-action@v4
-      with:
-        registry: ghcr.io
-        username: ${{ github.repository_owner }}
-        password: ${{ github.token }}
+      - name: Login to Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ github.token }}
 
-    - name: Build and push ${{ matrix.name }}
-      uses: docker/build-push-action@v7
-      with:
-        push: true
-        context: ${{ matrix.context }}
-        tags: ghcr.io/${{ github.repository }}/${{ matrix.name }}:${{ github.sha }}
-        cache-from: type=gha,scope=${{ matrix.name }}
-        cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+      - name: Build and push ${{ matrix.name }}
+        uses: docker/build-push-action@v7
+        with:
+          push: true
+          context: ${{ matrix.context }}
+          tags: ghcr.io/${{ github.repository }}/${{ matrix.name }}:${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
 
   bucket-scanner:
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout
-      uses: actions/checkout@v7
+      - name: Checkout
+        uses: actions/checkout@v7
 
-    - uses: actions/setup-go@v7
-      with:
-        go-version-file: bucket-scanner/go.mod
-        cache-dependency-path: bucket-scanner/go.sum
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: bucket-scanner/go.mod
+          cache-dependency-path: bucket-scanner/go.sum
 
-    - name: Install ginkgo
-      run: go install github.com/onsi/ginkgo/ginkgo@${GINKGO_VERSION}
+      - name: Install ginkgo
+        run: go install github.com/onsi/ginkgo/ginkgo@${GINKGO_VERSION}
 
-    - name: Run bucket scanner unit tests
-      run: >-
-        ginkgo -r --randomizeAllSpecs --randomizeSuites --failOnPending --progress   \
-               --cover --trace --race --covermode=atomic --coverprofile=coverage.out \
-               -nodes 1 -stream -timeout 5m -slowSpecThreshold 60
-      working-directory: bucket-scanner
+      - name: Run bucket scanner unit tests
+        run: >-
+          ginkgo -r --randomizeAllSpecs --randomizeSuites --failOnPending --progress   \
+                 --cover --trace --race --covermode=atomic --coverprofile=coverage.out \
+                 -nodes 1 -stream -timeout 5m -slowSpecThreshold 60
+        working-directory: bucket-scanner
 
-    - uses: codecov/codecov-action@v7
-      with:
-        token: ${{ secrets.CODECOV_TOKEN }}
-        directory: bucket-scanner
-        flags: bucket-scanner
+      - uses: codecov/codecov-action@v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          directory: bucket-scanner
+          flags: bucket-scanner
 
   lint:
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout
-      uses: actions/checkout@v7
-    - uses: actions/setup-node@v7
-      with:
-        node-version: '24'
-        cache: yarn
-    - name: Install node dependencies
-      run: yarn install --frozen-lockfile --network-concurrency 1
-    - name: Lint markdown
-      run: yarn run --silent lint_md
-    - name: Lint Javascript
-      run: yarn run --silent lint --max-warnings 0
-    - name: Check formatting
-      run: yarn run --silent prettier:check
-    - name: Typecheck
-      run: yarn run --silent typecheck
+      - name: Checkout
+        uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: yarn
+      - name: Install node dependencies
+        run: yarn install --frozen-lockfile --network-concurrency 1
+      - name: Lint markdown
+        run: yarn run --silent lint_md
+      - name: Lint Javascript
+        run: yarn run --silent lint --max-warnings 0
+      - name: Check formatting
+        run: yarn run --silent prettier:check
+      - name: Typecheck
+        run: yarn run --silent typecheck
 
   unit:
     needs: build
@@ -103,11 +103,11 @@ jobs:
       redis:
         image: redis:alpine
         ports:
-        - 6379:6379
+          - 6379:6379
       zookeeper:
         image: zookeeper:3.9.4
         ports:
-        - 2181:2181
+          - 2181:2181
         env:
           ZOOKEEPER_CLIENT_PORT: 2181
           ZOOKEEPER_TICK_TIME: 2000
@@ -117,7 +117,7 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ github.token }}
         ports:
-        - 9092:9092
+          - 9092:9092
         env:
           KAFKA_BROKER_ID: 1
           KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
@@ -127,30 +127,30 @@ jobs:
       mongo:
         image: ghcr.io/${{ github.repository}}/ci-mongodb:${{ github.sha }}
         ports:
-        - 27017:27017
-        - 27018:27018
-        - 27019:27019
+          - 27017:27017
+          - 27018:27018
+          - 27019:27019
     steps:
-    - name: Checkout
-      uses: actions/checkout@v7
-    - uses: actions/setup-node@v7
-      with:
-        node-version: '24'
-        cache: yarn
-    - name: Install node dependencies
-      run: yarn install --frozen-lockfile --network-concurrency 1
+      - name: Checkout
+        uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: yarn
+      - name: Install node dependencies
+        run: yarn install --frozen-lockfile --network-concurrency 1
 
-    - name: Run unit tests
-      run: yarn run cover
-      env:
-        BACKBEAT_CONFIG_FILE: tests/config.json
-        TEST_SUITE: test
+      - name: Run unit tests
+        run: yarn run cover
+        env:
+          BACKBEAT_CONFIG_FILE: tests/config.json
+          TEST_SUITE: test
 
-    - uses: codecov/codecov-action@v7
-      with:
-        token: ${{ secrets.CODECOV_TOKEN }}
-        directory: ./coverage/test
-        flags: unit
+      - uses: codecov/codecov-action@v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          directory: ./coverage/test
+          flags: unit
 
   functional-tests:
     needs: build
@@ -180,15 +180,15 @@ jobs:
       redis:
         image: redis:alpine
         ports:
-        - 6379:6379
+          - 6379:6379
       syntheticbucketd:
         image: ghcr.io/${{ github.repository }}/syntheticbucketd:${{ github.sha }}
         ports:
-        - 9001:9001
+          - 9001:9001
       zookeeper:
         image: zookeeper:3.9.4
         ports:
-        - 2181:2181
+          - 2181:2181
         env:
           ZOOKEEPER_CLIENT_PORT: 2181
           ZOOKEEPER_TICK_TIME: 2000
@@ -198,7 +198,7 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ github.token }}
         ports:
-        - 9092:9092
+          - 9092:9092
         env:
           KAFKA_BROKER_ID: 1
           KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
@@ -208,38 +208,38 @@ jobs:
       mongo:
         image: ghcr.io/${{ github.repository}}/ci-mongodb:${{ github.sha }}
         ports:
-        - 27017:27017
-        - 27018:27018
-        - 27019:27019
+          - 27017:27017
+          - 27018:27018
+          - 27019:27019
     steps:
-    - name: Checkout
-      uses: actions/checkout@v7
-    - uses: actions/setup-node@v7
-      with:
-        node-version: '24'
-        cache: yarn
-    - name: Install node dependencies
-      run: yarn install --frozen-lockfile --network-concurrency 1
+      - name: Checkout
+        uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: yarn
+      - name: Install node dependencies
+        run: yarn install --frozen-lockfile --network-concurrency 1
 
-    - name: Wait for services
-      run: |
-        echo "Waiting for Kafka..."
-        timeout 60 bash -c 'until nc -z localhost 9092; do sleep 1; done'
-        echo "Waiting for Zookeeper..."
-        timeout 60 bash -c 'until nc -z localhost 2181; do sleep 1; done'
-        echo "Waiting for Redis..."
-        timeout 60 bash -c 'until nc -z localhost 6379; do sleep 1; done'
-        echo "Waiting for MongoDB..."
-        timeout 60 bash -c 'until nc -z localhost 27017; do sleep 1; done'
-        echo "All services ready"
+      - name: Wait for services
+        run: |
+          echo "Waiting for Kafka..."
+          timeout 60 bash -c 'until nc -z localhost 9092; do sleep 1; done'
+          echo "Waiting for Zookeeper..."
+          timeout 60 bash -c 'until nc -z localhost 2181; do sleep 1; done'
+          echo "Waiting for Redis..."
+          timeout 60 bash -c 'until nc -z localhost 6379; do sleep 1; done'
+          echo "Waiting for MongoDB..."
+          timeout 60 bash -c 'until nc -z localhost 27017; do sleep 1; done'
+          echo "All services ready"
 
-    - name: Run ${{ matrix.testsuite }} tests
-      uses: ./.github/actions/ft-test
-      with:
-        testsuite: ${{ matrix.testsuite }}
-        token: ${{ secrets.CODECOV_TOKEN }}
-        runner: ${{ matrix.runner }}
-      env: ${{ matrix.env || fromJSON('{}') }}
+      - name: Run ${{ matrix.testsuite }} tests
+        uses: ./.github/actions/ft-test
+        with:
+          testsuite: ${{ matrix.testsuite }}
+          token: ${{ secrets.CODECOV_TOKEN }}
+          runner: ${{ matrix.runner }}
+        env: ${{ matrix.env || fromJSON('{}') }}
 
   ft-ballooning:
     needs: build
@@ -248,15 +248,15 @@ jobs:
       redis:
         image: redis:alpine
         ports:
-        - 6379:6379
+          - 6379:6379
       syntheticbucketd:
         image: ghcr.io/${{ github.repository }}/syntheticbucketd:${{ github.sha }}
         ports:
-        - 9001:9001
+          - 9001:9001
       zookeeper:
         image: zookeeper:3.9.4
         ports:
-        - 2181:2181
+          - 2181:2181
         env:
           ZOOKEEPER_CLIENT_PORT: 2181
           ZOOKEEPER_TICK_TIME: 2000
@@ -266,7 +266,7 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ github.token }}
         ports:
-        - 9092:9092
+          - 9092:9092
         env:
           KAFKA_BROKER_ID: 1
           KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
@@ -276,37 +276,37 @@ jobs:
       mongo:
         image: ghcr.io/${{ github.repository}}/ci-mongodb:${{ github.sha }}
         ports:
-        - 27017:27017
-        - 27018:27018
-        - 27019:27019
+          - 27017:27017
+          - 27018:27018
+          - 27019:27019
     steps:
-    - name: Checkout
-      uses: actions/checkout@v7
-    - uses: actions/setup-node@v7
-      with:
-        node-version: '24'
-        cache: yarn
-    - name: Install node dependencies
-      run: yarn install --frozen-lockfile --network-concurrency 1
+      - name: Checkout
+        uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: yarn
+      - name: Install node dependencies
+        run: yarn install --frozen-lockfile --network-concurrency 1
 
-    - name: run ballooning tests for lifecycle conductor
-      run: yarn mocha tests/performance/lifecycle/conductor-check-memory-balloon.js --exit
-      env:
-        # Constrain heap long-lived heap size to 175MB, so that pushing 200K messages
-        # will crash if they end up in memory all at the same time (circuit breaking
-        # ineffective) while waiting to be committed to the kafka topic.
-        NODE_OPTIONS: '--max-old-space-size=175'
+      - name: run ballooning tests for lifecycle conductor
+        run: yarn mocha tests/performance/lifecycle/conductor-check-memory-balloon.js --exit
+        env:
+          # Constrain heap long-lived heap size to 175MB, so that pushing 200K messages
+          # will crash if they end up in memory all at the same time (circuit breaking
+          # ineffective) while waiting to be committed to the kafka topic.
+          NODE_OPTIONS: '--max-old-space-size=175'
 
-    - name: Debug wait
-      uses: scality/actions/action-ssh-to-runner@1.18.0
-      with:
-        tmate-server-host: ${{ secrets.TMATE_SERVER_HOST }}
-        tmate-server-port: ${{ secrets.TMATE_SERVER_PORT }}
-        tmate-server-rsa-fingerprint: ${{ secrets.TMATE_SERVER_RSA_FINGERPRINT }}
-        tmate-server-ed25519-fingerprint: ${{ secrets.TMATE_SERVER_ED25519_FINGERPRINT }}
-      continue-on-error: true
-      timeout-minutes: 60
-      if: failure() && runner.debug == '1'
+      - name: Debug wait
+        uses: scality/actions/action-ssh-to-runner@1.18.0
+        with:
+          tmate-server-host: ${{ secrets.TMATE_SERVER_HOST }}
+          tmate-server-port: ${{ secrets.TMATE_SERVER_PORT }}
+          tmate-server-rsa-fingerprint: ${{ secrets.TMATE_SERVER_RSA_FINGERPRINT }}
+          tmate-server-ed25519-fingerprint: ${{ secrets.TMATE_SERVER_ED25519_FINGERPRINT }}
+        continue-on-error: true
+        timeout-minutes: 60
+        if: failure() && runner.debug == '1'
 
   queue-populator:
     needs: build

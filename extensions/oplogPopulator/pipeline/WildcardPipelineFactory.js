@@ -44,8 +44,8 @@ class WildcardPipelineFactory extends PipelineFactory {
                     $not: {
                         $regex: internalCollectionsRegex,
                     },
-                }
-            }
+                },
+            },
         };
     }
 }

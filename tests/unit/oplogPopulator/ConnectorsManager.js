@@ -3,17 +3,13 @@ const sinon = require('sinon');
 const werelogs = require('werelogs');
 const schedule = require('node-schedule');
 
-const Connector =
-    require('../../../extensions/oplogPopulator/modules/Connector');
-const ConnectorsManager =
-    require('../../../extensions/oplogPopulator/modules/ConnectorsManager');
-const OplogPopulatorMetrics =
-    require('../../../extensions/oplogPopulator/OplogPopulatorMetrics');
+const Connector = require('../../../extensions/oplogPopulator/modules/Connector');
+const ConnectorsManager = require('../../../extensions/oplogPopulator/modules/ConnectorsManager');
+const OplogPopulatorMetrics = require('../../../extensions/oplogPopulator/OplogPopulatorMetrics');
 const RetainBucketsDecorator = require('../../../extensions/oplogPopulator/allocationStrategy/RetainBucketsDecorator');
 const LeastFullConnector = require('../../../extensions/oplogPopulator/allocationStrategy/LeastFullConnector');
 const constants = require('../../../extensions/oplogPopulator/constants');
-const MultipleBucketsPipelineFactory =
-    require('../../../extensions/oplogPopulator/pipeline/MultipleBucketsPipelineFactory');
+const MultipleBucketsPipelineFactory = require('../../../extensions/oplogPopulator/pipeline/MultipleBucketsPipelineFactory');
 
 const logger = new werelogs.Logger('ConnectorsManager');
 
@@ -33,20 +29,28 @@ const connectorConfig = {
     'output.schema.key': JSON.stringify({
         type: 'record',
         name: 'keySchema',
-        fields: [{
-            name: 'ns',
-            type: [{
-                    name: 'ns',
-                    type: 'record',
-                    fields: [{
-                        name: 'coll',
-                        type: ['string', 'null'],
-                    }],
-                }, 'null'],
-        }, {
-            name: 'key',
-            type: ['string', 'null'],
-        }],
+        fields: [
+            {
+                name: 'ns',
+                type: [
+                    {
+                        name: 'ns',
+                        type: 'record',
+                        fields: [
+                            {
+                                name: 'coll',
+                                type: ['string', 'null'],
+                            },
+                        ],
+                    },
+                    'null',
+                ],
+            },
+            {
+                name: 'key',
+                type: ['string', 'null'],
+            },
+        ],
     }),
     'heartbeat.interval.ms': 10000,
 };
@@ -73,14 +77,10 @@ describe('ConnectorsManager', () => {
             kafkaConnectPort: 8083,
             getPipeline: pipelineFactory.getPipeline,
         });
-        connectorCreateStub = sinon.stub(connector1._kafkaConnect, 'createConnector')
-            .resolves();
-        connectorDeleteStub = sinon.stub(connector1._kafkaConnect, 'deleteConnector')
-            .resolves();
-        connectorUpdateStub = sinon.stub(connector1._kafkaConnect, 'updateConnectorConfig')
-            .resolves();
-        connectorRestartStub = sinon.stub(connector1._kafkaConnect, 'restartConnector')
-            .resolves();
+        connectorCreateStub = sinon.stub(connector1._kafkaConnect, 'createConnector').resolves();
+        connectorDeleteStub = sinon.stub(connector1._kafkaConnect, 'deleteConnector').resolves();
+        connectorUpdateStub = sinon.stub(connector1._kafkaConnect, 'updateConnectorConfig').resolves();
+        connectorRestartStub = sinon.stub(connector1._kafkaConnect, 'restartConnector').resolves();
         connectorsManager = new ConnectorsManager({
             nbConnectors: 1,
             database: 'metadata',
@@ -108,8 +108,7 @@ describe('ConnectorsManager', () => {
 
     describe('_getDefaultConnectorConfiguration', () => {
         it('should return default configuration', () => {
-            const config = connectorsManager._getDefaultConnectorConfiguration(
-                'source-connector');
+            const config = connectorsManager._getDefaultConnectorConfiguration('source-connector');
             assert.deepEqual(config, connectorConfig);
         });
     });
@@ -129,10 +128,8 @@ describe('ConnectorsManager', () => {
 
     describe('addConnector', () => {
         it('should create a connector', async () => {
-            sinon.stub(connectorsManager, '_generateConnectorName')
-                .returns('source-connector');
-            sinon.stub(connectorsManager, '_getDefaultConnectorConfiguration')
-                .returns(connectorConfig);
+            sinon.stub(connectorsManager, '_generateConnectorName').returns('source-connector');
+            sinon.stub(connectorsManager, '_getDefaultConnectorConfiguration').returns(connectorConfig);
             const connector = connectorsManager.addConnector();
             assert(connector instanceof Connector);
             assert.strictEqual(connector.name, 'source-connector');
@@ -149,8 +146,7 @@ describe('ConnectorsManager', () => {
             const config = { ...connectorConfig };
             config['topic.namespace.map'] = 'outdated-topic';
             config['offset.partitiom.name'] = 'partition-name';
-            sinon.stub(connectorsManager._kafkaConnect, 'getConnectorConfig')
-                .resolves(config);
+            sinon.stub(connectorsManager._kafkaConnect, 'getConnectorConfig').resolves(config);
             sinon.stub(connectorsManager._kafkaConnect, 'deleteConnector');
             const connectors = await connectorsManager._processOldConnectors(['source-connector']);
             assert.strictEqual(connectors.length, 0);
@@ -160,8 +156,7 @@ describe('ConnectorsManager', () => {
             const config = { ...connectorConfig };
             config['topic.namespace.map'] = 'outdated-topic';
             config['offset.partitiom.name'] = 'partition-name';
-            sinon.stub(connectorsManager._kafkaConnect, 'getConnectorConfig')
-                .resolves(config);
+            sinon.stub(connectorsManager._kafkaConnect, 'getConnectorConfig').resolves(config);
             sinon.stub(connectorsManager._pipelineFactory, 'getOldConnectorBucketList').returns(['bucket1']);
             sinon.stub(connectorsManager._kafkaConnect, 'deleteConnector');
             const connectors = await connectorsManager._processOldConnectors(['source-connector']);
@@ -177,13 +172,13 @@ describe('ConnectorsManager', () => {
             config['topic.namespace.map'] = 'outdated-topic';
             config['offset.partitiom.name'] = 'partition-name';
             sinon.stub(connectorsManager._allocationStrategy, 'maximumBucketsPerConnector').value(1);
-            sinon.stub(connectorsManager._kafkaConnect, 'getConnectorConfig')
-                .resolves(config);
-            sinon.stub(connectorsManager._pipelineFactory, 'getOldConnectorBucketList')
-                .returns(['bucket1', 'bucket2']);
+            sinon.stub(connectorsManager._kafkaConnect, 'getConnectorConfig').resolves(config);
+            sinon.stub(connectorsManager._pipelineFactory, 'getOldConnectorBucketList').returns(['bucket1', 'bucket2']);
             const warnStub = sinon.stub(connectorsManager._logger, 'warn');
-            const connectors = await connectorsManager.
-                _processOldConnectors(['source-connector', 'source-connector-2']);
+            const connectors = await connectorsManager._processOldConnectors([
+                'source-connector',
+                'source-connector-2',
+            ]);
             assert.strictEqual(connectors.length, 2);
             assert(warnStub.called);
         });
@@ -192,10 +187,8 @@ describe('ConnectorsManager', () => {
     describe('initializeConnectors', () => {
         it('should initialize old connector', async () => {
             connectorsManager._nbConnectors = 1;
-            sinon.stub(connectorsManager._kafkaConnect, 'getConnectors')
-                .resolves(['source-connector']);
-            sinon.stub(connectorsManager, '_processOldConnectors')
-                .resolves([connector1]);
+            sinon.stub(connectorsManager._kafkaConnect, 'getConnectors').resolves(['source-connector']);
+            sinon.stub(connectorsManager, '_processOldConnectors').resolves([connector1]);
             const connectors = await connectorsManager.initializeConnectors();
             assert.deepEqual(connectors, [connector1]);
             assert.deepEqual(connectorsManager._connectors, [connector1]);
@@ -204,13 +197,11 @@ describe('ConnectorsManager', () => {
 
         it('should add more connectors', async () => {
             connectorsManager._nbConnectors = 1;
-            sinon.stub(connectorsManager._kafkaConnect, 'getConnectors')
-                .resolves([]);
-            sinon.stub(connectorsManager, 'addConnector')
-                .callsFake(() => {
-                    connectorsManager._connectors.push(connector1);
-                    return connector1;
-                });
+            sinon.stub(connectorsManager._kafkaConnect, 'getConnectors').resolves([]);
+            sinon.stub(connectorsManager, 'addConnector').callsFake(() => {
+                connectorsManager._connectors.push(connector1);
+                return connector1;
+            });
             const connectors = await connectorsManager.initializeConnectors();
             assert.deepEqual(connectors, [connector1]);
             assert.deepEqual(connectorsManager._connectors, [connector1]);
@@ -244,10 +235,12 @@ describe('ConnectorsManager', () => {
             connector1._buckets = new Set(['bucket1']);
             const updated = await connectorsManager._spawnOrDestroyConnector(connector1);
             assert.strictEqual(updated, true);
-            assert(connectorCreateStub.calledOnceWith({
-                name: connector1.name,
-                config: connector1.config
-            }));
+            assert(
+                connectorCreateStub.calledOnceWith({
+                    name: connector1.name,
+                    config: connector1.config,
+                }),
+            );
             assert(connectorDeleteStub.notCalled);
         });
 
@@ -276,8 +269,7 @@ describe('ConnectorsManager', () => {
             connector1._state.bucketsGotModified = true;
             connector1._buckets = new Set(['bucket1']);
             connector1._liveBuckets = new Set(['bucket1']);
-            sinon.stub(connectorsManager._allocationStrategy, 'canUpdate')
-                .returns(false);
+            sinon.stub(connectorsManager._allocationStrategy, 'canUpdate').returns(false);
             const updated = await connectorsManager._spawnOrDestroyConnector(connector1);
             assert.strictEqual(updated, true);
             assert(connectorUpdateStub.calledOnce);
@@ -290,8 +282,7 @@ describe('ConnectorsManager', () => {
             connector1._state.bucketsGotModified = true;
             connector1._buckets = new Set(['bucket1']);
             connector1._liveBuckets = new Set(['different-bucket']);
-            sinon.stub(connectorsManager._allocationStrategy, 'canUpdate')
-                .returns(false);
+            sinon.stub(connectorsManager._allocationStrategy, 'canUpdate').returns(false);
             const updated = await connectorsManager._spawnOrDestroyConnector(connector1);
             assert.strictEqual(updated, false);
             assert(connectorUpdateStub.notCalled);
@@ -312,12 +303,9 @@ describe('ConnectorsManager', () => {
             await connectorsManager._updateConnectors();
             assert(connectorCreateStub.notCalled);
             assert(connectorDeleteStub.notCalled);
-            assert(connectorUpdateStub.calledOnceWith(
-                connector1.name,
-                connector1.config
-            ));
+            assert(connectorUpdateStub.calledOnceWith(connector1.name, connector1.config));
         });
-        it('should not update a running connector when its buckets didn\'t change', async () => {
+        it("should not update a running connector when its buckets didn't change", async () => {
             connector1._isRunning = true;
             connector1._state.bucketsGotModified = false;
             connector1._buckets = new Set(['bucket1']);
@@ -345,10 +333,12 @@ describe('ConnectorsManager', () => {
             connectorsManager._connectors = [connector1];
             connector1._buckets = new Set(['bucket1']);
             await connectorsManager._updateConnectors();
-            assert(connectorCreateStub.calledOnceWith({
-                name: connector1.name,
-                config: connector1.config
-            }));
+            assert(
+                connectorCreateStub.calledOnceWith({
+                    name: connector1.name,
+                    config: connector1.config,
+                }),
+            );
             assert(connectorDeleteStub.notCalled);
             assert(connectorUpdateStub.notCalled);
         });
@@ -366,25 +356,23 @@ describe('ConnectorsManager', () => {
 
     describe('_validateConnectorState', () => {
         it('should restart a connector when tasks are failed', async () => {
-            const getStatusStub = sinon.stub(connectorsManager._kafkaConnect, 'getConnectorStatus')
-                .resolves({
-                    name: 'connector1',
-                    connector: {
+            const getStatusStub = sinon.stub(connectorsManager._kafkaConnect, 'getConnectorStatus').resolves({
+                name: 'connector1',
+                connector: {
+                    state: 'RUNNING',
+                },
+                tasks: [
+                    {
+                        id: 0,
                         state: 'RUNNING',
                     },
-                    tasks:
-                    [
-                        {
-                            id: 0,
-                            state: 'RUNNING',
-                        },
-                        {
-                            id: 1,
-                            state: 'FAILED',
-                            trace: 'org.apache.kafka.common.errors.RecordTooLargeException\n'
-                        }
-                    ]
-                });
+                    {
+                        id: 1,
+                        state: 'FAILED',
+                        trace: 'org.apache.kafka.common.errors.RecordTooLargeException\n',
+                    },
+                ],
+            });
             connector1._isRunning = true;
             await connectorsManager._validateConnectorState(connector1);
             assert(getStatusStub.called);
@@ -392,14 +380,13 @@ describe('ConnectorsManager', () => {
         });
 
         it('should restart a connector when the connector instance failed', async () => {
-            const getStatusStub = sinon.stub(connectorsManager._kafkaConnect, 'getConnectorStatus')
-                .resolves({
-                    name: 'connector1',
-                    connector: {
-                        state: 'FAILED',
-                    },
-                    tasks: []
-                });
+            const getStatusStub = sinon.stub(connectorsManager._kafkaConnect, 'getConnectorStatus').resolves({
+                name: 'connector1',
+                connector: {
+                    state: 'FAILED',
+                },
+                tasks: [],
+            });
             connector1._isRunning = true;
             await connectorsManager._validateConnectorState(connector1);
             assert(getStatusStub.called);
@@ -407,19 +394,18 @@ describe('ConnectorsManager', () => {
         });
 
         it('should do nothing when connector and tasks are running', async () => {
-            const getStatusStub = sinon.stub(connectorsManager._kafkaConnect, 'getConnectorStatus')
-                .resolves({
-                    name: 'connector1',
-                    connector: {
+            const getStatusStub = sinon.stub(connectorsManager._kafkaConnect, 'getConnectorStatus').resolves({
+                name: 'connector1',
+                connector: {
+                    state: 'RUNNING',
+                },
+                tasks: [
+                    {
+                        id: 0,
                         state: 'RUNNING',
                     },
-                    tasks: [
-                        {
-                            id: 0,
-                            state: 'RUNNING',
-                        },
-                    ]
-                });
+                ],
+            });
             connector1._isRunning = true;
             await connectorsManager._validateConnectorState(connector1);
             assert(getStatusStub.called);
@@ -427,8 +413,7 @@ describe('ConnectorsManager', () => {
         });
 
         it('should do nothing when connector is not spawned', async () => {
-            const getStatusStub = sinon.stub(connectorsManager._kafkaConnect, 'getConnectorStatus')
-                .resolves({});
+            const getStatusStub = sinon.stub(connectorsManager._kafkaConnect, 'getConnectorStatus').resolves({});
             connector1._isRunning = false;
             await connectorsManager._validateConnectorState(connector1);
             assert(getStatusStub.notCalled);
@@ -451,4 +436,3 @@ describe('ConnectorsManager', () => {
         });
     });
 });
-
