@@ -1,8 +1,7 @@
 const assert = require('assert');
 const sinon = require('sinon');
 
-const ReplicationQueuePopulator =
-    require('../../../extensions/replication/ReplicationQueuePopulator');
+const ReplicationQueuePopulator = require('../../../extensions/replication/ReplicationQueuePopulator');
 const fakeLogger = require('../../utils/fakeLogger');
 const { listEntries, VID } = require('../../utils/nullVersionRows');
 

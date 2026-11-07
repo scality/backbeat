@@ -12,8 +12,7 @@ const { initManagement } = require('../../../lib/management/index');
 const { applyBucketReplicationWorkflows } = require('../management');
 const { reshapeExceptionError } = require('@scality/arsenal').errorUtils;
 const ZookeeperManager = require('../../../lib/clients/ZookeeperManager');
-const { zookeeperNamespace, zkStatePath, zkReplayStatePath } =
-    require('../constants');
+const { zookeeperNamespace, zkStatePath, zkReplayStatePath } = require('../constants');
 
 const zkConfig = config.zookeeper;
 const kafkaConfig = config.kafka;
@@ -42,8 +41,7 @@ function getTopic(topic) {
     }
 
     const isTopicUsed = repConfig.replayTopics.some(t => t.topicName === topic);
-    assert(isTopicUsed, 'Invalid topic argument. Topic must match ' +
-            'one of the replay topic defined');
+    assert(isTopicUsed, 'Invalid topic argument. Topic must match ' + 'one of the replay topic defined');
     return topic;
 }
 
@@ -120,12 +118,11 @@ function setupZkSiteNode(qp, zkClient, site, done) {
         if (err && err.name === 'NODE_EXISTS') {
             return zkClient.getData(path, (err, data) => {
                 if (err) {
-                    log.fatal('could not check site status in zookeeper',
-                        {
-                            method: 'QueueProcessor:task',
-                            zookeeperPath: path,
-                            error: err.message
-                        });
+                    log.fatal('could not check site status in zookeeper', {
+                        method: 'QueueProcessor:task',
+                        zookeeperPath: path,
+                        error: err.message,
+                    });
                     return done(err);
                 }
                 let d;
@@ -140,8 +137,7 @@ function setupZkSiteNode(qp, zkClient, site, done) {
                     return done(e);
                 }
                 if (d[RESUME_NODE]) {
-                    return checkAndApplyScheduleResume(qp, d, zkClient,
-                        site, done);
+                    return checkAndApplyScheduleResume(qp, d, zkClient, site, done);
                 }
                 return done(null, d);
             });
@@ -159,54 +155,68 @@ function setupZkSiteNode(qp, zkClient, site, done) {
 }
 
 function initAndStart(zkClient) {
-    initManagement({
-        serviceName: 'replication',
-        serviceAccount: sourceConfig.auth.account,
-        applyBucketWorkflows: applyBucketReplicationWorkflows,
-    }, error => {
-        if (error) {
-            log.error('could not load management db', { error });
-            setTimeout(initAndStart, 5000);
-            return;
-        }
-        log.info('management init done');
-
-        const bootstrapList = config.getBootstrapList();
-        const siteNames = bootstrapList.map(i => i.site);
-
-        // initialize per site destination configs
-        const destConfig = {};
-        siteNames.forEach(site => {
-            destConfig[site] = config.getReplicationSiteDestConfig(site);
-        });
-
-        // Start QueueProcessor for each site
-        async.each(siteNames, (site, next) => {
-            const qp = new QueueProcessor(
-                topic, zkConfig, zkClient, kafkaConfig,
-                sourceConfig, destConfig[site], repConfig, redisConfig,
-                mConfig, httpsConfig, internalHttpsConfig,
-                site, repConfig.queueProcessor.circuitBreaker);
-            activeQProcessors[site] = qp;
-            return setupZkSiteNode(qp, zkClient, site, (err, data) => {
-                if (err) {
-                    return next(err);
-                }
-                qp.start({ paused: data.paused });
-                return next();
-            });
-        }, err => {
-            if (err) {
-                // already logged error in prior function calls
-                process.exit(1);
+    initManagement(
+        {
+            serviceName: 'replication',
+            serviceAccount: sourceConfig.auth.account,
+            applyBucketWorkflows: applyBucketReplicationWorkflows,
+        },
+        error => {
+            if (error) {
+                log.error('could not load management db', { error });
+                setTimeout(initAndStart, 5000);
+                return;
             }
-        });
+            log.info('management init done');
 
-        const replayTopic = topic !== repConfig.topic ? topic : undefined;
+            const bootstrapList = config.getBootstrapList();
+            const siteNames = bootstrapList.map(i => i.site);
 
-        startProbeServer(
-            getReplicationProbeConfig(repConfig, siteNames, replayTopic, log),
-            (err, probeServer) => {
+            // initialize per site destination configs
+            const destConfig = {};
+            siteNames.forEach(site => {
+                destConfig[site] = config.getReplicationSiteDestConfig(site);
+            });
+
+            // Start QueueProcessor for each site
+            async.each(
+                siteNames,
+                (site, next) => {
+                    const qp = new QueueProcessor(
+                        topic,
+                        zkConfig,
+                        zkClient,
+                        kafkaConfig,
+                        sourceConfig,
+                        destConfig[site],
+                        repConfig,
+                        redisConfig,
+                        mConfig,
+                        httpsConfig,
+                        internalHttpsConfig,
+                        site,
+                        repConfig.queueProcessor.circuitBreaker,
+                    );
+                    activeQProcessors[site] = qp;
+                    return setupZkSiteNode(qp, zkClient, site, (err, data) => {
+                        if (err) {
+                            return next(err);
+                        }
+                        qp.start({ paused: data.paused });
+                        return next();
+                    });
+                },
+                err => {
+                    if (err) {
+                        // already logged error in prior function calls
+                        process.exit(1);
+                    }
+                },
+            );
+
+            const replayTopic = topic !== repConfig.topic ? topic : undefined;
+
+            startProbeServer(getReplicationProbeConfig(repConfig, siteNames, replayTopic, log), (err, probeServer) => {
                 if (err) {
                     log.fatal('error creating probe server', {
                         error: err,
@@ -226,33 +236,33 @@ function initAndStart(zkClient) {
                             });
                             if (responses.length > 0) {
                                 const message = JSON.stringify(responses);
-                                log.debug('service unavailable',
-                                    {
-                                        httpCode: 500,
-                                        error: message,
-                                    }
-                                );
+                                log.debug('service unavailable', {
+                                    httpCode: 500,
+                                    error: message,
+                                });
                                 res.writeHead(500);
                                 res.end(message);
                                 return undefined;
                             }
                             sendSuccess(res, log);
                             return undefined;
-                        }
+                        },
                     );
-                    probeServer.addHandler(DEFAULT_METRICS_ROUTE,
-                        (res, log) => QueueProcessor.handleMetrics(res, log)
-                    );
+                    probeServer.addHandler(DEFAULT_METRICS_ROUTE, (res, log) => QueueProcessor.handleMetrics(res, log));
                 }
-            }
-        );
-    });
+            });
+        },
+    );
 }
 
-const zkClient = new ZookeeperManager(connectionString, {
-    autoCreateNamespace,
-    retries,
-}, log);
+const zkClient = new ZookeeperManager(
+    connectionString,
+    {
+        autoCreateNamespace,
+        retries,
+    },
+    log,
+);
 
 zkClient.once('error', err => {
     log.fatal('error connecting to zookeeper', {
@@ -283,7 +293,8 @@ zkClient.once('ready', () => {
 process.on('SIGTERM', () => {
     log.info('received SIGTERM, exiting');
     const sites = Object.keys(activeQProcessors);
-    async.each(sites,
+    async.each(
+        sites,
         (site, done) => activeQProcessors[site].stop(done),
         error => {
             if (error) {
@@ -293,5 +304,6 @@ process.on('SIGTERM', () => {
                 process.exit(1);
             }
             tracing.close().finally(() => process.exit(0));
-        });
+        },
+    );
 });

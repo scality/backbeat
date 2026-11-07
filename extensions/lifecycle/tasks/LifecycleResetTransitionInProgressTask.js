@@ -12,7 +12,7 @@ class LifecycleResetTransitionInProgressTask extends LifecycleRequeueTask {
      * @constructor
      * @param {LifecycleObjectProcessor} proc - object processor instance
      */
-     constructor(proc) {
+    constructor(proc) {
         super(proc, 'transition');
     }
 
@@ -63,8 +63,7 @@ class LifecycleResetTransitionInProgressTask extends LifecycleRequeueTask {
         }
 
         if (!md.getLocation()?.length) {
-            log.info('object already archived with no data to release, completing the transition',
-                logFields);
+            log.info('object already archived with no data to release, completing the transition', logFields);
             const isDirectToCold = md.getAmzStorageClass() === location;
             md.setDataStoreName(location)
                 .setAmzStorageClass(location)
@@ -77,8 +76,13 @@ class LifecycleResetTransitionInProgressTask extends LifecycleRequeueTask {
         // The garbage collector updates the metadata itself once the data is released, which
         // re-drives any restore deferred until then.
         log.info('object already archived, releasing hot data', logFields);
-        garbageCollectArchivedSource(this.gcProducer, { ...target, owner: md.getOwnerId() },
-            md.getDataStoreName(), location, log);
+        garbageCollectArchivedSource(
+            this.gcProducer,
+            { ...target, owner: md.getOwnerId() },
+            md.getDataStoreName(),
+            location,
+            log,
+        );
         return false;
     }
 
@@ -89,8 +93,7 @@ class LifecycleResetTransitionInProgressTask extends LifecycleRequeueTask {
      * @return {boolean} true if this is a pending direct transition
      */
     _isDirectToCold(md) {
-        return locationsConfig[md.getAmzStorageClass()]?.isCold
-            && !locationsConfig[md.getDataStoreName()]?.isCold;
+        return locationsConfig[md.getAmzStorageClass()]?.isCold && !locationsConfig[md.getDataStoreName()]?.isCold;
     }
 
     shouldSkipObject(md, expectedEtag, log) {
@@ -118,5 +121,5 @@ class LifecycleResetTransitionInProgressTask extends LifecycleRequeueTask {
 }
 
 module.exports = {
-    LifecycleResetTransitionInProgressTask
+    LifecycleResetTransitionInProgressTask,
 };

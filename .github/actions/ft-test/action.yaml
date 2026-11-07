@@ -1,6 +1,6 @@
 ---
-name: "run functional tests"
-description: "Run specified functional test with coverage"
+name: 'run functional tests'
+description: 'Run specified functional test with coverage'
 
 inputs:
   testsuite:
@@ -12,7 +12,7 @@ inputs:
   config:
     description: path to the config file
     required: false
-    default: "tests/config.json"
+    default: 'tests/config.json'
   runner:
     description: name to the runner script
     required: false

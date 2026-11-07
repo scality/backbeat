@@ -2,14 +2,11 @@ const assert = require('assert');
 const sinon = require('sinon');
 const werelogs = require('werelogs');
 
-const Connector =
-    require('../../../../extensions/oplogPopulator/modules/Connector');
-const RetainBucketsDecorator =
-    require('../../../../extensions/oplogPopulator/allocationStrategy/RetainBucketsDecorator');
+const Connector = require('../../../../extensions/oplogPopulator/modules/Connector');
+const RetainBucketsDecorator = require('../../../../extensions/oplogPopulator/allocationStrategy/RetainBucketsDecorator');
 const ImmutableConnector = require('../../../../extensions/oplogPopulator/allocationStrategy/ImmutableConnector');
 const LeastFullConnector = require('../../../../extensions/oplogPopulator/allocationStrategy/LeastFullConnector');
-const MultipleBucketsPipelineFactory =
-    require('../../../../extensions/oplogPopulator/pipeline/MultipleBucketsPipelineFactory');
+const MultipleBucketsPipelineFactory = require('../../../../extensions/oplogPopulator/pipeline/MultipleBucketsPipelineFactory');
 
 const logger = new werelogs.Logger('LeastFullConnector');
 
@@ -44,7 +41,7 @@ const connector2 = new Connector({
         strategy: new LeastFullConnector({
             logger,
         }),
-    }
+    },
 ].forEach(({ scenario, strategy }) => {
     describe(`RetainBucketsDecorator with ${scenario}`, () => {
         let decorator;
@@ -67,7 +64,7 @@ const connector2 = new Connector({
         });
 
         describe('getConnector', () => {
-            it('should return the retrained bucket\'s connector if it exists', () => {
+            it("should return the retrained bucket's connector if it exists", () => {
                 decorator._retainedBuckets.set('bucket1', connector1);
                 const result = decorator.getConnector([connector1, connector2], 'bucket1');
                 assert.strictEqual(result, connector1);
@@ -117,5 +114,4 @@ const connector2 = new Connector({
             });
         });
     });
-
 });

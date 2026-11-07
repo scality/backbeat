@@ -1,7 +1,6 @@
 const { errors } = require('@scality/arsenal');
 
 class BaseConfigManager {
-
     /**
      * Setup the config manager
      * @param {Function} cb callback

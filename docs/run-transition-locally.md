@@ -214,10 +214,12 @@ Create `transition.json`
         {
             "Status": "Enabled",
             "Prefix": "",
-            "Transitions": [{
-                "Days": 1,
-                "StorageClass": "aws-location"
-            }],
+            "Transitions": [
+                {
+                    "Days": 1,
+                    "StorageClass": "aws-location"
+                }
+            ],
             "ID": "456"
         }
     ]
@@ -272,14 +274,13 @@ Create `assume.json` policy:
 
 ```json
 {
-   "Version": "2012-10-17",
-   "Statement": {
-     "Effect": "Allow",
-     "Action": "sts:AssumeRole",
-     "Resource": "*"
-   }
- }
-
+    "Version": "2012-10-17",
+    "Statement": {
+        "Effect": "Allow",
+        "Action": "sts:AssumeRole",
+        "Resource": "*"
+    }
+}
 ```
 
 ```sh
@@ -425,16 +426,17 @@ Note: To retreive account1 information, use vaulclient:
 
 ```json
 {
-    "accounts": [{
-        "name": "account1",
-        "arn": "arn:aws:iam::924286670056:/account1/",
-        "canonicalID": "56a321265db286f6045e24cadae44a9f3874dd8deca559a16718f268031d8b18",
-        "displayName": "account1",
-        "keys": {
-            "access": "MC50MQ6FNYPAVCM88PNW",
-            "secret": "/lmgQTi5TqX1o2BMip42nReeecta15RvekzvBDlr"
+    "accounts": [
+        {
+            "name": "account1",
+            "arn": "arn:aws:iam::924286670056:/account1/",
+            "canonicalID": "56a321265db286f6045e24cadae44a9f3874dd8deca559a16718f268031d8b18",
+            "displayName": "account1",
+            "keys": {
+                "access": "MC50MQ6FNYPAVCM88PNW",
+                "secret": "/lmgQTi5TqX1o2BMip42nReeecta15RvekzvBDlr"
+            }
         }
-    }
     ]
 }
 ```

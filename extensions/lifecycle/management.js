@@ -12,8 +12,7 @@ const { TIMEOUT_MS } = require('../../lib/clients/utils');
 const logger = new werelogs.Logger('mdManagement:lifecycle');
 
 function getS3Client(endpoint) {
-    const serviceCredentials =
-          management.getLatestServiceAccountCredentials();
+    const serviceCredentials = management.getLatestServiceAccountCredentials();
     // FIXME
     const keys = serviceCredentials.accounts[0].keys;
     const credentials = {
@@ -54,10 +53,12 @@ function putLifecycleConfiguration(bucketName, workflows, cb) {
                         };
                     }
                     if (wf.type.includes('transition')) {
-                        workflow.Transitions = [{
-                            Days: wf.currentVersionTriggerDelayDays,
-                            StorageClass: wf.currentVersionLocations[0].name,
-                        }];
+                        workflow.Transitions = [
+                            {
+                                Days: wf.currentVersionTriggerDelayDays,
+                                StorageClass: wf.currentVersionLocations[0].name,
+                            },
+                        ];
                     }
                 }
                 if (wf.filter && wf.filter.objectKeyPrefix) {
@@ -78,17 +79,21 @@ function putLifecycleConfiguration(bucketName, workflows, cb) {
             }),
         },
     };
-    
+
     const command = new PutBucketLifecycleConfigurationCommand(params);
-    getS3Client(endpoint).send(command)
+    getS3Client(endpoint)
+        .send(command)
         .then(() => {
             logger.debug('lifecycle configuration apply done', {
-                bucket: bucketName });
+                bucket: bucketName,
+            });
             return cb();
         })
         .catch(err => {
             logger.debug('lifecycle configuration apply done', {
-                bucket: bucketName, error: err });
+                bucket: bucketName,
+                error: err,
+            });
             if (err.name === 'NoSuchBucket') {
                 return cb();
             }
@@ -104,17 +109,21 @@ function deleteLifecycleConfiguration(bucketName, cb) {
     const params = {
         Bucket: bucketName,
     };
-    
+
     const command = new DeleteBucketLifecycleCommand(params);
-    getS3Client(endpoint).send(command)
+    getS3Client(endpoint)
+        .send(command)
         .then(() => {
             logger.debug('lifecycle configuration deleted', {
-                bucket: bucketName });
+                bucket: bucketName,
+            });
             return cb();
         })
         .catch(err => {
             logger.debug('lifecycle configuration deleted', {
-                bucket: bucketName, error: err });
+                bucket: bucketName,
+                error: err,
+            });
             if (err.name === 'NoSuchBucket') {
                 return cb();
             }
@@ -122,8 +131,7 @@ function deleteLifecycleConfiguration(bucketName, cb) {
         });
 }
 
-function applyBucketLifecycleWorkflows(bucketName, bucketWorkflows,
-                                       workflowUpdates, cb) {
+function applyBucketLifecycleWorkflows(bucketName, bucketWorkflows, workflowUpdates, cb) {
     if (bucketWorkflows.length > 0) {
         putLifecycleConfiguration(bucketName, bucketWorkflows, cb);
     } else {

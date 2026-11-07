@@ -7,11 +7,9 @@ const ZookeeperConfigManager = require('./configManager/ZookeeperConfigManager')
  * @classdesc Manages bucket notification configurations
  */
 class NotificationConfigManager {
-
     constructor(params) {
-        const {
-            mongoConfig, bucketMetastore, maxCachedConfigs, zkClient, zkConfig, zkPath, zkConcurrency, logger,
-        } = params;
+        const { mongoConfig, bucketMetastore, maxCachedConfigs, zkClient, zkConfig, zkPath, zkConcurrency, logger } =
+            params;
         if (mongoConfig) {
             this._configManagerBackend = new MongoConfigManager({
                 mongoConfig,

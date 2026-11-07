@@ -23,8 +23,7 @@ const Logger = require('werelogs').Logger;
 const log = new Logger('Backbeat:QueuePopulator');
 
 const s3config = {
-    endpoint: `${testConfig.s3.transport}://` +
-        `${testConfig.s3.host}:${testConfig.s3.port}`,
+    endpoint: `${testConfig.s3.transport}://` + `${testConfig.s3.host}:${testConfig.s3.port}`,
     forcePathStyle: true,
     credentials: {
         accessKeyId: testConfig.s3.accessKey,
@@ -91,111 +90,135 @@ describe('queuePopulator', () => {
 
     beforeEach(function setup(done) {
         this.timeout(30000); // may take some time to keep up with the
-                             // log entries
+        // log entries
 
         s3Client = new S3Client(s3config);
-        async.waterfall([
-            next => {
-                const command = new CreateBucketCommand({
-                    Bucket: testBucket,
-                });
-                s3Client.send(command)
-                    .then(data => next(null, data))
-                    .catch(next);
-            },
-            (data, next) => {
-                const command = new PutBucketVersioningCommand({
-                    Bucket: testBucket,
-                    VersioningConfiguration: {
-                        Status: 'Enabled',
-                    },
-                });
-                s3Client.send(command)
-                    .then(data => next(null, data))
-                    .catch(next);
-            },
-            (data, next) => {
-                const command = new PutBucketReplicationCommand({
-                    Bucket: testBucket,
-                    ReplicationConfiguration: {
-                        Role: 'arn:aws:iam::123456789012:role/backbeat,' +
-                          'arn:aws:iam::123456789012:role/backbeat',
-                        Rules: [{
-                            Destination: {
-                                Bucket: 'arn:aws:s3:::dummy-dest-bucket',
-                            },
-                            Prefix: '',
+        async.waterfall(
+            [
+                next => {
+                    const command = new CreateBucketCommand({
+                        Bucket: testBucket,
+                    });
+                    s3Client
+                        .send(command)
+                        .then(data => next(null, data))
+                        .catch(next);
+                },
+                (data, next) => {
+                    const command = new PutBucketVersioningCommand({
+                        Bucket: testBucket,
+                        VersioningConfiguration: {
                             Status: 'Enabled',
-                        }],
-                    },
-                });
-                s3Client.send(command)
-                    .then(data => next(null, data))
-                    .catch(next);
+                        },
+                    });
+                    s3Client
+                        .send(command)
+                        .then(data => next(null, data))
+                        .catch(next);
+                },
+                (data, next) => {
+                    const command = new PutBucketReplicationCommand({
+                        Bucket: testBucket,
+                        ReplicationConfiguration: {
+                            Role:
+                                'arn:aws:iam::123456789012:role/backbeat,' + 'arn:aws:iam::123456789012:role/backbeat',
+                            Rules: [
+                                {
+                                    Destination: {
+                                        Bucket: 'arn:aws:s3:::dummy-dest-bucket',
+                                    },
+                                    Prefix: '',
+                                    Status: 'Enabled',
+                                },
+                            ],
+                        },
+                    });
+                    s3Client
+                        .send(command)
+                        .then(data => next(null, data))
+                        .catch(next);
+                },
+                (data, next) => {
+                    queuePopulator = new QueuePopulator(
+                        testConfig.zookeeper,
+                        testConfig.kafka,
+                        testConfig.queuePopulator,
+                        undefined,
+                        undefined,
+                        undefined,
+                        undefined,
+                        testConfig.extensions,
+                    );
+                    queuePopulator.open(next);
+                },
+                next => {
+                    queuePopulator.processLogEntries({ maxRead: 10 }, next);
+                },
+                (data, next) => {
+                    const { connectionString } = testConfig.zookeeper;
+                    const zkClient = new ZookeeperManager(
+                        connectionString,
+                        {
+                            autoCreateNamespace: false,
+                        },
+                        log,
+                    );
+                    zkClient.once('error', next);
+                    zkClient.once('ready', () => {
+                        // just in case there would be more 'error' events emitted
+                        zkClient.removeAllListeners('error');
+                        return next();
+                    });
+                },
+            ],
+            err => {
+                assert.ifError(err);
+                done();
             },
-            (data, next) => {
-                queuePopulator = new QueuePopulator(
-                    testConfig.zookeeper,
-                    testConfig.kafka,
-                    testConfig.queuePopulator,
-                    undefined,
-                    undefined,
-                    undefined,
-                    undefined,
-                    testConfig.extensions);
-                queuePopulator.open(next);
-            },
-            next => {
-                queuePopulator.processLogEntries({ maxRead: 10 }, next);
-            },
-            (data, next) => {
-                const { connectionString } = testConfig.zookeeper;
-                const zkClient = new ZookeeperManager(connectionString, {
-                    autoCreateNamespace: false,
-                }, log);
-                zkClient.once('error', next);
-                zkClient.once('ready', () => {
-                    // just in case there would be more 'error' events emitted
-                    zkClient.removeAllListeners('error');
-                    return next();
-                });
-            },
-        ], err => {
-            assert.ifError(err);
-            done();
-        });
+        );
     });
 
     afterEach(done => {
         const command = new ListObjectVersionsCommand({ Bucket: testBucket });
-        s3Client.send(command)
+        s3Client
+            .send(command)
             .then(data => {
-                async.eachLimit(data.Versions || [], 10, (version, next) => {
-                    const deleteCommand = new DeleteObjectCommand({
-                        Bucket: testBucket,
-                        Key: version.Key,
-                        VersionId: version.VersionId,
-                    });
-                    s3Client.send(deleteCommand)
-                        .then(() => next())
-                        .catch(next);
-                }, err => {
-                    if (err) {
-                        return done(err);
-                    }
-                    return async.eachLimit(data.DeleteMarkers || [], 10,
-                        (deleteMarker, next) => {
-                            const deleteCommand = new DeleteObjectCommand({
-                                Bucket: testBucket,
-                                Key: deleteMarker.Key,
-                                VersionId: deleteMarker.VersionId,
-                            });
-                            s3Client.send(deleteCommand)
-                                .then(() => next())
-                                .catch(next);
-                        },
-                    done);
-                });
+                async.eachLimit(
+                    data.Versions || [],
+                    10,
+                    (version, next) => {
+                        const deleteCommand = new DeleteObjectCommand({
+                            Bucket: testBucket,
+                            Key: version.Key,
+                            VersionId: version.VersionId,
+                        });
+                        s3Client
+                            .send(deleteCommand)
+                            .then(() => next())
+                            .catch(next);
+                    },
+                    err => {
+                        if (err) {
+                            return done(err);
+                        }
+                        return async.eachLimit(
+                            data.DeleteMarkers || [],
+                            10,
+                            (deleteMarker, next) => {
+                                const deleteCommand = new DeleteObjectCommand({
+                                    Bucket: testBucket,
+                                    Key: deleteMarker.Key,
+                                    VersionId: deleteMarker.VersionId,
+                                });
+                                s3Client
+                                    .send(deleteCommand)
+                                    .then(() => next())
+                                    .catch(next);
+                            },
+                            done,
+                        );
+                    },
+                );
             })
             .catch(err => {
                 // Bucket was deleted in a test.
@@ -207,124 +230,131 @@ describe('queuePopulator', () => {
     });
 
     it('processLogEntries with nothing to do', done => {
-        queuePopulator.processLogEntries(
-            { maxRead: 10 }, (err, counters) => {
-                assert.ifError(err);
-                assert.deepStrictEqual(counters[0].queuedEntries, {});
-                done();
-            });
+        queuePopulator.processLogEntries({ maxRead: 10 }, (err, counters) => {
+            assert.ifError(err);
+            assert.deepStrictEqual(counters[0].queuedEntries, {});
+            done();
+        });
     });
     it('processLogEntries with an object to replicate', done => {
-        async.waterfall([
-            next => {
-                const command = new PutObjectCommand({
-                    Bucket: testBucket,
-                    Key: 'keyToReplicate',
-                    Body: 'howdy',
-                    Tagging: 'mytag=mytagvalue',
-                });
-                s3Client.send(command)
-                    .then(data => next(null, data))
-                    .catch(next);
-            },
-            (data, next) => {
-                queuePopulator.processLogEntries({ maxRead: 10 }, next);
-            },
-            (counters, next) => {
-                // 2 reads expected: master key and and versioned key
-                // 1 queued: versioned key only
-                assert.strictEqual(counters[0].readEntries, 2);
-                assert.deepStrictEqual(counters[0].queuedEntries,
-                                       { 'backbeat-test-replication': 1 });
-                next();
-            },
-        ], err => {
-            assert.ifError(err);
-            done();
-        });
-    });
-    it('processLogEntries with an object put and delete to replicate',
-    done => {
-        async.waterfall([
-            next => {
-                const command = new PutObjectCommand({
-                    Bucket: testBucket,
-                    Key: 'keyToReplicate',
-                    Body: 'howdy',
-                    Tagging: 'mytag=mytagvalue',
-                });
-                s3Client.send(command)
-                    .then(data => next(null, data))
-                    .catch(next);
-            },
-            (data, next) => {
-                queuePopulator.processLogEntries({ maxRead: 10 }, next);
-            },
-            (counters, next) => {
-                const command = new DeleteObjectCommand({
-                    Bucket: testBucket,
-                    Key: 'keyToReplicate',
-                });
-                s3Client.send(command)
-                    .then(data => next(null, data))
-                    .catch(next);
-            },
-            (data, next) => {
-                queuePopulator.processLogEntries({ maxRead: 10 }, next);
-            },
-            (counters, next) => {
-                // 2 reads expected: master key update + new delete marker
-                // 1 queued: versioned key (delete marker)
-                assert.strictEqual(counters[0].readEntries, 2);
-                assert.deepStrictEqual(counters[0].queuedEntries,
-                                       { 'backbeat-test-replication': 1 });
-                next();
-            },
-        ], err => {
-            assert.ifError(err);
-            done();
-        });
-    });
-    it('processLogEntries with 100 objects to replicate in 20 batches',
-    function test100objects(done) {
-        this.timeout(10000);
-        async.waterfall([
-            next => {
-                let nbDone = 0;
-                function cbPut(err) {
-                    assert.ifError(err);
-                    ++nbDone;
-                    if (nbDone === 100) {
-                        next();
-                    }
-                }
-                for (let i = 0; i < 100; ++i) {
+        async.waterfall(
+            [
+                next => {
                     const command = new PutObjectCommand({
                         Bucket: testBucket,
-                        Key: `keyToReplicate_${i}`,
+                        Key: 'keyToReplicate',
                         Body: 'howdy',
                         Tagging: 'mytag=mytagvalue',
                     });
-                    s3Client.send(command)
-                        .then(() => cbPut())
-                        .catch(cbPut);
-                }
+                    s3Client
+                        .send(command)
+                        .then(data => next(null, data))
+                        .catch(next);
+                },
+                (data, next) => {
+                    queuePopulator.processLogEntries({ maxRead: 10 }, next);
+                },
+                (counters, next) => {
+                    // 2 reads expected: master key and and versioned key
+                    // 1 queued: versioned key only
+                    assert.strictEqual(counters[0].readEntries, 2);
+                    assert.deepStrictEqual(counters[0].queuedEntries, { 'backbeat-test-replication': 1 });
+                    next();
+                },
+            ],
+            err => {
+                assert.ifError(err);
+                done();
             },
-            next => {
-                queuePopulator.processLogEntries({ maxRead: 10 }, next);
+        );
+    });
+    it('processLogEntries with an object put and delete to replicate', done => {
+        async.waterfall(
+            [
+                next => {
+                    const command = new PutObjectCommand({
+                        Bucket: testBucket,
+                        Key: 'keyToReplicate',
+                        Body: 'howdy',
+                        Tagging: 'mytag=mytagvalue',
+                    });
+                    s3Client
+                        .send(command)
+                        .then(data => next(null, data))
+                        .catch(next);
+                },
+                (data, next) => {
+                    queuePopulator.processLogEntries({ maxRead: 10 }, next);
+                },
+                (counters, next) => {
+                    const command = new DeleteObjectCommand({
+                        Bucket: testBucket,
+                        Key: 'keyToReplicate',
+                    });
+                    s3Client
+                        .send(command)
+                        .then(data => next(null, data))
+                        .catch(next);
+                },
+                (data, next) => {
+                    queuePopulator.processLogEntries({ maxRead: 10 }, next);
+                },
+                (counters, next) => {
+                    // 2 reads expected: master key update + new delete marker
+                    // 1 queued: versioned key (delete marker)
+                    assert.strictEqual(counters[0].readEntries, 2);
+                    assert.deepStrictEqual(counters[0].queuedEntries, { 'backbeat-test-replication': 1 });
+                    next();
+                },
+            ],
+            err => {
+                assert.ifError(err);
+                done();
             },
-            (counters, next) => {
-                // 2 reads expected: master key and and versioned key
-                // 1 queued: versioned key only
-                assert.strictEqual(counters[0].readEntries, 200);
-                assert.deepStrictEqual(counters[0].queuedEntries,
-                                       { 'backbeat-test-replication': 100 });
-                next();
+        );
+    });
+    it('processLogEntries with 100 objects to replicate in 20 batches', function test100objects(done) {
+        this.timeout(10000);
+        async.waterfall(
+            [
+                next => {
+                    let nbDone = 0;
+                    function cbPut(err) {
+                        assert.ifError(err);
+                        ++nbDone;
+                        if (nbDone === 100) {
+                            next();
+                        }
+                    }
+                    for (let i = 0; i < 100; ++i) {
+                        const command = new PutObjectCommand({
+                            Bucket: testBucket,
+                            Key: `keyToReplicate_${i}`,
+                            Body: 'howdy',
+                            Tagging: 'mytag=mytagvalue',
+                        });
+                        s3Client
+                            .send(command)
+                            .then(() => cbPut())
+                            .catch(cbPut);
+                    }
+                },
+                next => {
+                    queuePopulator.processLogEntries({ maxRead: 10 }, next);
+                },
+                (counters, next) => {
+                    // 2 reads expected: master key and and versioned key
+                    // 1 queued: versioned key only
+                    assert.strictEqual(counters[0].readEntries, 200);
+                    assert.deepStrictEqual(counters[0].queuedEntries, { 'backbeat-test-replication': 100 });
+                    next();
+                },
+            ],
+            err => {
+                assert.ifError(err);
+                done();
             },
-        ], err => {
-            assert.ifError(err);
-            done();
-        });
+        );
     });
 
     describe('lifecycle extension', () => {
@@ -342,66 +372,67 @@ describe('queuePopulator', () => {
                 const command = new PutBucketLifecycleConfigurationCommand({
                     Bucket: testBucket,
                     LifecycleConfiguration: {
-                        Rules: [{
-                            Expiration: { Date: new Date('2016-01-01T00:00:00.000Z') },
-                            ID: 'Delete 2014 logs in 2016.',
-                            Prefix: 'logs/2014/',
-                            Status: 'Enabled',
-                        }],
+                        Rules: [
+                            {
+                                Expiration: { Date: new Date('2016-01-01T00:00:00.000Z') },
+                                ID: 'Delete 2014 logs in 2016.',
+                                Prefix: 'logs/2014/',
+                                Status: 'Enabled',
+                            },
+                        ],
                     },
                 });
-                s3Client.send(command)
+                s3Client
+                    .send(command)
                     .then(() => done())
                     .catch(done);
             });
 
             it('should have created the lifecycle bucket data path', done =>
-                queuePopulator.processLogEntries({ maxRead: 10 },
-                    (err, counters) => {
-                        if (err) {
-                            return done(err);
-                        }
-                        assert.strictEqual(counters[0].readEntries, 1);
-                        return doesBucketNodeExist(true, zkClient, testBucket,
-                            done);
-                    }));
+                queuePopulator.processLogEntries({ maxRead: 10 }, (err, counters) => {
+                    if (err) {
+                        return done(err);
+                    }
+                    assert.strictEqual(counters[0].readEntries, 1);
+                    return doesBucketNodeExist(true, zkClient, testBucket, done);
+                }));
 
-            it('should delete lifecycle bucket data path if bucket is deleted',
-            done => async.series([
-                next =>
-                    queuePopulator.processLogEntries({ maxRead: 10 }, next),
-                next =>
-                    doesBucketNodeExist(true, zkClient, testBucket, next),
-                next => {
-                    const command = new DeleteBucketCommand({ Bucket: testBucket });
-                    s3Client.send(command)
-                        .then(() => next())
-                        .catch(next);
-                },
-                next =>
-                    queuePopulator.processLogEntries({ maxRead: 10 },
-                        next),
-                next =>
-                    doesBucketNodeExist(false, zkClient, testBucket, next),
-            ], done));
+            it('should delete lifecycle bucket data path if bucket is deleted', done =>
+                async.series(
+                    [
+                        next => queuePopulator.processLogEntries({ maxRead: 10 }, next),
+                        next => doesBucketNodeExist(true, zkClient, testBucket, next),
+                        next => {
+                            const command = new DeleteBucketCommand({ Bucket: testBucket });
+                            s3Client
+                                .send(command)
+                                .then(() => next())
+                                .catch(next);
+                        },
+                        next => queuePopulator.processLogEntries({ maxRead: 10 }, next),
+                        next => doesBucketNodeExist(false, zkClient, testBucket, next),
+                    ],
+                    done,
+                ));
 
-            it('should delete lifecycle bucket data path if lifecycle config ' +
-            'is deleted', done => async.series([
-                next =>
-                    queuePopulator.processLogEntries({ maxRead: 10 }, next),
-                next =>
-                    doesBucketNodeExist(true, zkClient, testBucket, next),
-                next => {
-                    const command = new DeleteBucketLifecycleCommand({ Bucket: testBucket });
-                    s3Client.send(command)
-                        .then(() => next())
-                        .catch(next);
-                },
-                next =>
-                    queuePopulator.processLogEntries({ maxRead: 10 }, next),
-                next =>
-                    doesBucketNodeExist(false, zkClient, testBucket, next),
-            ], done));
+            it('should delete lifecycle bucket data path if lifecycle config ' + 'is deleted', done =>
+                async.series(
+                    [
+                        next => queuePopulator.processLogEntries({ maxRead: 10 }, next),
+                        next => doesBucketNodeExist(true, zkClient, testBucket, next),
+                        next => {
+                            const command = new DeleteBucketLifecycleCommand({ Bucket: testBucket });
+                            s3Client
+                                .send(command)
+                                .then(() => next())
+                                .catch(next);
+                        },
+                        next => queuePopulator.processLogEntries({ maxRead: 10 }, next),
+                        next => doesBucketNodeExist(false, zkClient, testBucket, next),
+                    ],
+                    done,
+                ),
+            );
         });
     });
 });

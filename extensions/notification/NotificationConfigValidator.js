@@ -3,7 +3,7 @@ const { probeServerJoi } = require('../../lib/config/configItems.joi');
 const { extensionConfigValidator } = require('../../lib/config/extensionConfigValidator');
 const { supportedSaslProtocols, supportedScramMechanisms } = require('./constants');
 
-const { MAX_QUEUED_DEFAULT }  = require('../../lib/constants').backbeatConsumer;
+const { MAX_QUEUED_DEFAULT } = require('../../lib/constants').backbeatConsumer;
 
 const sslSchema = joi.object({
     ssl: joi.boolean().default(false),
@@ -14,7 +14,10 @@ const sslSchema = joi.object({
 });
 
 const saslAuthSchema = sslSchema.append({
-    protocol: joi.string().valid(...supportedSaslProtocols).required(),
+    protocol: joi
+        .string()
+        .valid(...supportedSaslProtocols)
+        .required(),
 });
 
 const kerberosAuthSchema = saslAuthSchema.append({
@@ -40,7 +43,10 @@ const basicAuthSchema = joi.alternatives().try(
 
 const scramAuthBaseSchema = saslAuthSchema.append({
     type: joi.string().valid('scram').required(),
-    mechanism: joi.string().valid(...supportedScramMechanisms).required(),
+    mechanism: joi
+        .string()
+        .valid(...supportedScramMechanisms)
+        .required(),
 });
 
 const scramAuthSchema = joi.alternatives().try(

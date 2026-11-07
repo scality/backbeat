@@ -5,8 +5,7 @@ const Redis = require('ioredis');
 const sinon = require('sinon');
 const errors = require('@scality/arsenal').errors;
 const config = require('../../../lib/Config');
-const IngestionPopulator =
-    require('../../../lib/queuePopulator/IngestionPopulator');
+const IngestionPopulator = require('../../../lib/queuePopulator/IngestionPopulator');
 const IngestionReader = require('../../../lib/queuePopulator/IngestionReader');
 const BackbeatProducer = require('../../../lib/BackbeatProducer');
 const fakeLogger = require('../../utils/fakeLogger');
@@ -225,8 +224,7 @@ describe('Ingestion Populator', () => {
     });
 
     describe('applyUpdates helper method', () => {
-        it('should attach configuration properties for each new ingestion ' +
-        'source', () => {
+        it('should attach configuration properties for each new ingestion ' + 'source', () => {
             ip.getAdded().forEach(newSource => {
                 assert(newSource.name);
                 assert(newSource.bucket);
@@ -240,11 +238,8 @@ describe('Ingestion Populator', () => {
             });
         });
 
-        it('should apply default port 80 for a new ingestion source with ' +
-        'no port provided', () => {
-            const source = ip.getAdded().find(newSource =>
-                newSource.name === NEW_BUCKET
-            );
+        it('should apply default port 80 for a new ingestion source with ' + 'no port provided', () => {
+            const source = ip.getAdded().find(newSource => newSource.name === NEW_BUCKET);
             assert.strictEqual(source.port, 80);
         });
 
@@ -264,8 +259,7 @@ describe('Ingestion Populator', () => {
             assert(!wasRemoved);
         });
 
-        it('should remove an ingestion source that is has become inactive',
-        () => {
+        it('should remove an ingestion source that is has become inactive', () => {
             const addedIndex = ip.getAdded().findIndex(r => r.name === OLD_BUCKET);
             const wasRemoved = ip.getRemoved().includes(OLD_BUCKET);
 
@@ -273,8 +267,7 @@ describe('Ingestion Populator', () => {
             assert(wasRemoved);
         });
 
-        it('should update an ingestion reader when the ingestion source ' +
-        'information is updated', () => {
+        it('should update an ingestion reader when the ingestion source ' + 'information is updated', () => {
             assert.deepStrictEqual(ip.getUpdated(), []);
 
             // hack to update a valid editable field
@@ -313,8 +306,7 @@ describe('Ingestion Populator', () => {
 
             ip._setupUpdatedReaders(err => {
                 assert.ifError(err);
-                assert.deepStrictEqual(ip.logReaders,
-                    new Map([['bucket1', logReader]]));
+                assert.deepStrictEqual(ip.logReaders, new Map([['bucket1', logReader]]));
                 assert.deepStrictEqual(ip.logReadersUpdate, new Map());
                 done();
             });
@@ -327,71 +319,80 @@ describe('Ingestion Populator', () => {
             ip._setupUpdatedReaders(err => {
                 assert.ifError(err);
                 assert.deepStrictEqual(ip.logReaders, new Map());
-                assert.deepStrictEqual(ip.logReadersUpdate,
-                    new Map([['bucket1', logReader]]));
+                assert.deepStrictEqual(ip.logReadersUpdate, new Map([['bucket1', logReader]]));
                 done();
             });
         });
 
-        it('should not queue a log reader again when its setup fails and ' +
-        'its source is no longer configured', done => {
-            const logReader = addLogReader('bucket1');
-            logReader.setup.yieldsAsync(errors.InternalError);
-            ip._ingestionSources.delete('bucket1');
+        it(
+            'should not queue a log reader again when its setup fails and ' + 'its source is no longer configured',
+            done => {
+                const logReader = addLogReader('bucket1');
+                logReader.setup.yieldsAsync(errors.InternalError);
+                ip._ingestionSources.delete('bucket1');
 
-            ip._setupUpdatedReaders(err => {
-                assert.ifError(err);
-                assert.deepStrictEqual(ip.logReaders, new Map());
-                assert.deepStrictEqual(ip.logReadersUpdate, new Map());
-                done();
-            });
-        });
+                ip._setupUpdatedReaders(err => {
+                    assert.ifError(err);
+                    assert.deepStrictEqual(ip.logReaders, new Map());
+                    assert.deepStrictEqual(ip.logReadersUpdate, new Map());
+                    done();
+                });
+            },
+        );
 
-        it('should not queue a log reader again when its setup fails and ' +
-        'its source has been registered with another reader', done => {
-            const staleReader = addLogReader('bucket1');
-            staleReader.setup.yieldsAsync(errors.InternalError);
-            const currentReader = sinon.createStubInstance(IngestionReader);
-            currentReader.getTargetZenkoBucketName.returns('bucket1');
-            ip._ingestionSources.set('bucket1', currentReader);
+        it(
+            'should not queue a log reader again when its setup fails and ' +
+                'its source has been registered with another reader',
+            done => {
+                const staleReader = addLogReader('bucket1');
+                staleReader.setup.yieldsAsync(errors.InternalError);
+                const currentReader = sinon.createStubInstance(IngestionReader);
+                currentReader.getTargetZenkoBucketName.returns('bucket1');
+                ip._ingestionSources.set('bucket1', currentReader);
 
-            ip._setupUpdatedReaders(err => {
-                assert.ifError(err);
-                assert.deepStrictEqual(ip.logReaders, new Map());
-                assert.deepStrictEqual(ip.logReadersUpdate, new Map());
-                done();
-            });
-        });
+                ip._setupUpdatedReaders(err => {
+                    assert.ifError(err);
+                    assert.deepStrictEqual(ip.logReaders, new Map());
+                    assert.deepStrictEqual(ip.logReadersUpdate, new Map());
+                    done();
+                });
+            },
+        );
 
-        it('should not activate a log reader when its setup succeeds and ' +
-        'its source is no longer configured', done => {
-            const logReader = addLogReader('bucket1');
-            logReader.setup.yieldsAsync(null);
-            ip._ingestionSources.delete('bucket1');
+        it(
+            'should not activate a log reader when its setup succeeds and ' + 'its source is no longer configured',
+            done => {
+                const logReader = addLogReader('bucket1');
+                logReader.setup.yieldsAsync(null);
+                ip._ingestionSources.delete('bucket1');
 
-            ip._setupUpdatedReaders(err => {
-                assert.ifError(err);
-                assert.deepStrictEqual(ip.logReaders, new Map());
-                assert.deepStrictEqual(ip.logReadersUpdate, new Map());
-                done();
-            });
-        });
+                ip._setupUpdatedReaders(err => {
+                    assert.ifError(err);
+                    assert.deepStrictEqual(ip.logReaders, new Map());
+                    assert.deepStrictEqual(ip.logReadersUpdate, new Map());
+                    done();
+                });
+            },
+        );
 
-        it('should not activate a log reader when its setup succeeds and ' +
-        'its source has been registered with another reader', done => {
-            const staleReader = addLogReader('bucket1');
-            staleReader.setup.yieldsAsync(null);
-            const currentReader = sinon.createStubInstance(IngestionReader);
-            currentReader.getTargetZenkoBucketName.returns('bucket1');
-            ip._ingestionSources.set('bucket1', currentReader);
+        it(
+            'should not activate a log reader when its setup succeeds and ' +
+                'its source has been registered with another reader',
+            done => {
+                const staleReader = addLogReader('bucket1');
+                staleReader.setup.yieldsAsync(null);
+                const currentReader = sinon.createStubInstance(IngestionReader);
+                currentReader.getTargetZenkoBucketName.returns('bucket1');
+                ip._ingestionSources.set('bucket1', currentReader);
 
-            ip._setupUpdatedReaders(err => {
-                assert.ifError(err);
-                assert.deepStrictEqual(ip.logReaders, new Map());
-                assert.deepStrictEqual(ip.logReadersUpdate, new Map());
-                done();
-            });
-        });
+                ip._setupUpdatedReaders(err => {
+                    assert.ifError(err);
+                    assert.deepStrictEqual(ip.logReaders, new Map());
+                    assert.deepStrictEqual(ip.logReadersUpdate, new Map());
+                    done();
+                });
+            },
+        );
 
         it('should keep setting up other log readers when one fails', done => {
             const failingReader = addLogReader('bucket1');
@@ -401,10 +402,8 @@ describe('Ingestion Populator', () => {
 
             ip._setupUpdatedReaders(err => {
                 assert.ifError(err);
-                assert.deepStrictEqual(ip.logReaders,
-                    new Map([['bucket2', workingReader]]));
-                assert.deepStrictEqual(ip.logReadersUpdate,
-                    new Map([['bucket1', failingReader]]));
+                assert.deepStrictEqual(ip.logReaders, new Map([['bucket2', workingReader]]));
+                assert.deepStrictEqual(ip.logReadersUpdate, new Map([['bucket1', failingReader]]));
                 done();
             });
         });
@@ -445,8 +444,7 @@ describe('Ingestion Populator', () => {
             return logReader;
         }
 
-        it('should unregister a source whose reader is still pending setup',
-        () => {
+        it('should unregister a source whose reader is still pending setup', () => {
             const logReader = createReaderMock(PENDING_BUCKET);
             populator._ingestionSources.set(PENDING_BUCKET, logReader);
             populator.logReadersUpdate = new Map([[PENDING_BUCKET, logReader]]);
@@ -454,14 +452,12 @@ describe('Ingestion Populator', () => {
             populator._closeLogState(PENDING_BUCKET);
 
             assert.deepStrictEqual(populator.logReadersUpdate, new Map());
-            assert.strictEqual(populator._ingestionSources.get(PENDING_BUCKET),
-                undefined);
+            assert.strictEqual(populator._ingestionSources.get(PENDING_BUCKET), undefined);
             // zookeeper state is only created once the setup succeeded
             assert.strictEqual(removeReaderState.called, false);
         });
 
-        it('should unregister an active source and clean its zookeeper state',
-        () => {
+        it('should unregister an active source and clean its zookeeper state', () => {
             const logReader = createReaderMock(ACTIVE_BUCKET);
             populator._ingestionSources.set(ACTIVE_BUCKET, logReader);
             populator.logReaders = new Map([[ACTIVE_BUCKET, logReader]]);
@@ -469,14 +465,15 @@ describe('Ingestion Populator', () => {
             populator._closeLogState(ACTIVE_BUCKET);
 
             assert.deepStrictEqual(populator.logReaders, new Map());
-            assert.strictEqual(populator._ingestionSources.get(ACTIVE_BUCKET),
-                undefined);
+            assert.strictEqual(populator._ingestionSources.get(ACTIVE_BUCKET), undefined);
             // the reader is read before being unregistered, as
             // `_removeReaderState` polls it until its batch completes
             assert.strictEqual(removeReaderState.calledOnce, true);
             assert.strictEqual(removeReaderState.firstCall.args[0], logReader);
-            assert.strictEqual(removeReaderState.firstCall.args[1],
-                `${ingestionConfig.zookeeperPath}/${ACTIVE_BUCKET}`);
+            assert.strictEqual(
+                removeReaderState.firstCall.args[1],
+                `${ingestionConfig.zookeeperPath}/${ACTIVE_BUCKET}`,
+            );
         });
 
         it('should unregister a source whose setup is still in flight', () => {
@@ -485,8 +482,7 @@ describe('Ingestion Populator', () => {
 
             populator._closeLogState(PENDING_BUCKET);
 
-            assert.strictEqual(populator._ingestionSources.get(PENDING_BUCKET),
-                undefined);
+            assert.strictEqual(populator._ingestionSources.get(PENDING_BUCKET), undefined);
             assert.strictEqual(removeReaderState.called, false);
         });
 
@@ -505,8 +501,7 @@ describe('Ingestion Populator', () => {
 
             populator._closeLogState(ACTIVE_BUCKET);
 
-            assert.deepStrictEqual(populator._getLocationBuckets('active-ring'),
-                new Set());
+            assert.deepStrictEqual(populator._getLocationBuckets('active-ring'), new Set());
         });
     });
 
@@ -667,8 +662,7 @@ describe('Ingestion Populator', () => {
 
                 ip._processLogEntries({}, err => {
                     assert.ifError(err);
-                    ip.logReaders.forEach(reader =>
-                        assert(reader.processLogEntries.calledOnce));
+                    ip.logReaders.forEach(reader => assert(reader.processLogEntries.calledOnce));
                     done();
                 });
             });
@@ -715,15 +709,18 @@ describe('Ingestion Populator', () => {
                 mConfig,
                 rConfig,
                 { ...ingestionConfig, producerParams: extParams },
-                s3Config
+                s3Config,
             );
 
             populator._setupProducer(() => {});
 
             assert.strictEqual(capturedProducerParams['queue.buffering.max.kbytes'], 1048576);
             assert.strictEqual(capturedProducerParams['queue.buffering.max.messages'], 200000);
-            assert.strictEqual(capturedProducerParams['queue.buffering.max.ms'], 500,
-                'extension producerParams should override global kafka.producerParams');
+            assert.strictEqual(
+                capturedProducerParams['queue.buffering.max.ms'],
+                500,
+                'extension producerParams should override global kafka.producerParams',
+            );
         });
 
         it('should work when only global kafka.producerParams are set', () => {
@@ -737,7 +734,7 @@ describe('Ingestion Populator', () => {
                 mConfig,
                 rConfig,
                 ingestionConfig,
-                s3Config
+                s3Config,
             );
 
             populator._setupProducer(() => {});
@@ -756,7 +753,7 @@ describe('Ingestion Populator', () => {
                 mConfig,
                 rConfig,
                 { ...ingestionConfig, producerParams: extParams },
-                s3Config
+                s3Config,
             );
 
             populator._setupProducer(() => {});

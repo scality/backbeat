@@ -21,120 +21,124 @@ class LifecycleUpdateExpirationTask extends BackbeatTask {
     }
 
     _getMetadata(entry, log, done) {
-        const {
-            accountId,
-            bucket,
-            key,
-            version,
-        } = entry.getAttribute('target');
+        const { accountId, bucket, key, version } = entry.getAttribute('target');
 
         const backbeatClient = this.getBackbeatMetadataProxy(accountId);
         if (!backbeatClient) {
             log.error('failed to get backbeat client', { accountId });
-            done(errors.InternalError.customizeDescription(
-                'Unable to obtain client',
-            ));
+            done(errors.InternalError.customizeDescription('Unable to obtain client'));
             return;
         }
 
-        backbeatClient.getMetadata({
-            bucket,
-            objectKey: key,
-            versionId: version,
-        }, log, (err, blob) => {
-            LifecycleMetrics.onS3Request(log, 'getMetadata', 'restore:delete', err);
-            if (err) {
-                log.error('error getting metadata blob from S3', Object.assign({
-                    method: 'LifecycleUpdateExpirationTask._getMetadata',
-                    error: err.message,
-                }, entry.getLogInfo()));
-                done(err);
-                return;
-            }
-            const res = ObjectMD.createFromBlob(blob.Body);
-            if (res.error) {
-                log.error('error parsing metadata blob', Object.assign({
-                    error: res.error,
-                    method: 'LifecycleUpdateExpirationTask._getMetadata',
-                }, entry.getLogInfo()));
-                done(errors.InternalError.customizeDescription(
-                    'error parsing metadata blob'
-                ));
-            } else {
-                done(null, res.result);
-            }
-        });
+        backbeatClient.getMetadata(
+            {
+                bucket,
+                objectKey: key,
+                versionId: version,
+            },
+            log,
+            (err, blob) => {
+                LifecycleMetrics.onS3Request(log, 'getMetadata', 'restore:delete', err);
+                if (err) {
+                    log.error(
+                        'error getting metadata blob from S3',
+                        Object.assign(
+                            {
+                                method: 'LifecycleUpdateExpirationTask._getMetadata',
+                                error: err.message,
+                            },
+                            entry.getLogInfo(),
+                        ),
+                    );
+                    done(err);
+                    return;
+                }
+                const res = ObjectMD.createFromBlob(blob.Body);
+                if (res.error) {
+                    log.error(
+                        'error parsing metadata blob',
+                        Object.assign(
+                            {
+                                error: res.error,
+                                method: 'LifecycleUpdateExpirationTask._getMetadata',
+                            },
+                            entry.getLogInfo(),
+                        ),
+                    );
+                    done(errors.InternalError.customizeDescription('error parsing metadata blob'));
+                } else {
+                    done(null, res.result);
+                }
+            },
+        );
         return;
     }
 
     _putMetadata(entry, objMD, log, done) {
-        const {
-            accountId,
-            bucket,
-            key,
-            version,
-        } = entry.getAttribute('target');
+        const { accountId, bucket, key, version } = entry.getAttribute('target');
 
         const backbeatClient = this.getBackbeatMetadataProxy(accountId);
         if (!backbeatClient) {
             log.error('failed to get backbeat client', { accountId });
-            done(errors.InternalError.customizeDescription(
-                'Unable to obtain client',
-            ));
+            done(errors.InternalError.customizeDescription('Unable to obtain client'));
             return;
         }
 
-        backbeatClient.putMetadata({
-            bucket,
-            objectKey: key,
-            versionId: version,
-            mdBlob: objMD.getSerialized(),
-        }, log, err => {
-            LifecycleMetrics.onS3Request(log, 'putMetadata', 'restore:delete', err);
-            if (err) {
-                log.error(
-                    'an error occurred when updating metadata for transition',
-                    Object.assign(
-                        {
-                            method: 'LifecycleUpdateExpirationTask._putMetadata',
-                            error: err.message,
-                        },
-                        entry.getLogInfo(),
-                    )
-                );
-                done(err);
-                return;
-            } else {
-                log.end().info('metadata updated for transition', entry.getLogInfo());
-                done();
-                return;
-            }
-        });
+        backbeatClient.putMetadata(
+            {
+                bucket,
+                objectKey: key,
+                versionId: version,
+                mdBlob: objMD.getSerialized(),
+            },
+            log,
+            err => {
+                LifecycleMetrics.onS3Request(log, 'putMetadata', 'restore:delete', err);
+                if (err) {
+                    log.error(
+                        'an error occurred when updating metadata for transition',
+                        Object.assign(
+                            {
+                                method: 'LifecycleUpdateExpirationTask._putMetadata',
+                                error: err.message,
+                            },
+                            entry.getLogInfo(),
+                        ),
+                    );
+                    done(err);
+                    return;
+                } else {
+                    log.end().info('metadata updated for transition', entry.getLogInfo());
+                    done();
+                    return;
+                }
+            },
+        );
     }
 
     _garbageCollectLocation(entry, locations, log, done) {
         const { bucket, key, version, eTag, accountId, owner, location } = entry.getAttribute('target');
         const gcEntry = ActionQueueEntry.create('deleteData')
-              .addContext({
-                  origin: 'lifecycle',
-                  ruleType: 'restore',
-                  reqId: log.getSerializedUids(),
-                  bucketName: bucket,
-                  objectKey: key,
-                  versionId: version,
-                  eTag,
-              })
-              // For restored object expiration, there is no actual `source`: the object to cleanup
-              // is actually the target object itself (the field used by GC is `source`)
-              .setAttribute('source', {
+            .addContext({
+                origin: 'lifecycle',
+                ruleType: 'restore',
+                reqId: log.getSerializedUids(),
+                bucketName: bucket,
+                objectKey: key,
+                versionId: version,
+                eTag,
+            })
+            // For restored object expiration, there is no actual `source`: the object to cleanup
+            // is actually the target object itself (the field used by GC is `source`)
+            .setAttribute('source', {
                 bucket,
                 objectKey: key,
                 storageClass: location,
-              })
-              .setAttribute('serviceName', 'lifecycle-transition')
-              .setAttribute('target.locations', locations)
-              .setAttribute('target.accountId', accountId)
-              .setAttribute('target.owner', owner);
+            })
+            .setAttribute('serviceName', 'lifecycle-transition')
+            .setAttribute('target.locations', locations)
+            .setAttribute('target.accountId', accountId)
+            .setAttribute('target.owner', owner);
 
         this.gcProducer.publishActionEntry(gcEntry);
         return process.nextTick(done);
@@ -157,55 +161,64 @@ class LifecycleUpdateExpirationTask extends BackbeatTask {
         });
         log.addDefaultFields(entry.getLogInfo());
 
-        async.waterfall([
-            next => {
-                const coldLocation = entry.getAttribute('target.location');
-                if (!coldLocation) {
-                    // this should never happen as sorbet always sets the location attribute
-                    log.error('missing target location', {
-                        entry: entry.getLogInfo(),
-                        method: 'LifecycleUpdateExpirationTask.processActionEntry',
+        async.waterfall(
+            [
+                next => {
+                    const coldLocation = entry.getAttribute('target.location');
+                    if (!coldLocation) {
+                        // this should never happen as sorbet always sets the location attribute
+                        log.error('missing target location', {
+                            entry: entry.getLogInfo(),
+                            method: 'LifecycleUpdateExpirationTask.processActionEntry',
+                        });
+                        return next(errors.MissingParameter.customizeDescription('missing target location'));
+                    }
+                    return next(null, coldLocation);
+                },
+                (coldLocation, next) => this._getMetadata(entry, log, (err, objMD) => next(err, coldLocation, objMD)),
+                (coldLocation, objMD, next) => {
+                    const archive = objMD.getArchive();
+
+                    // Confirm the object has indeed expired: it can happen that the
+                    // expiration date is updated while the expiry was "in-flight" (e.g.
+                    // queued for expiry but not yet expired)
+                    const restoreExpirationDate = new Date(archive.restoreWillExpireAt);
+                    if (restoreExpirationDate > new Date() && !entry.getAttribute('bypassExpirationCheck')) {
+                        return process.nextTick(done);
+                    }
+
+                    LifecycleMetrics.onLifecycleStarted(
+                        log,
+                        'restore:delete',
+                        coldLocation,
+                        startTime - restoreExpirationDate,
+                    );
+
+                    // Reset archive flags to no longer show it as restored
+                    const oldLocation = objMD.getLocation();
+                    objMD.setLocation();
+                    objMD.setArchive({
+                        archiveInfo: archive.archiveInfo,
                     });
-                    return next(errors.MissingParameter.customizeDescription('missing target location'));
-                }
-                return next(null, coldLocation);
-            },
-            (coldLocation, next) => this._getMetadata(entry, log, (err, objMD) => next(err, coldLocation, objMD)),
-            (coldLocation, objMD, next) => {
-                const archive = objMD.getArchive();
-
-                // Confirm the object has indeed expired: it can happen that the
-                // expiration date is updated while the expiry was "in-flight" (e.g.
-                // queued for expiry but not yet expired)
-                const restoreExpirationDate = new Date(archive.restoreWillExpireAt);
-                if (restoreExpirationDate > new Date() && !entry.getAttribute('bypassExpirationCheck')) {
-                    return process.nextTick(done);
-                }
-
-                LifecycleMetrics.onLifecycleStarted(log, 'restore:delete',
-                    coldLocation, startTime - restoreExpirationDate);
-
-                // Reset archive flags to no longer show it as restored
-                const oldLocation = objMD.getLocation();
-                objMD.setLocation();
-                objMD.setArchive({
-                    archiveInfo: archive.archiveInfo,
-                });
-                objMD.setAmzRestore();
-                objMD.setDataStoreName(coldLocation);
-                objMD.setAmzStorageClass(coldLocation);
-                objMD.setTransitionInProgress(false);
-                objMD.setOriginOp('s3:ObjectRestore:Delete');
-                return this._putMetadata(entry, objMD, log, err => {
-                    LifecycleMetrics.onLifecycleCompleted(log, 'restore:delete',
-                        coldLocation, Date.now() - restoreExpirationDate);
-                    next(err, objMD, oldLocation);
-                });
-            },
-            (objMD, oldLocation, next) => this._garbageCollectLocation(
-                entry, oldLocation, log, next,
-            ),
-        ], done);
+                    objMD.setAmzRestore();
+                    objMD.setDataStoreName(coldLocation);
+                    objMD.setAmzStorageClass(coldLocation);
+                    objMD.setTransitionInProgress(false);
+                    objMD.setOriginOp('s3:ObjectRestore:Delete');
+                    return this._putMetadata(entry, objMD, log, err => {
+                        LifecycleMetrics.onLifecycleCompleted(
+                            log,
+                            'restore:delete',
+                            coldLocation,
+                            Date.now() - restoreExpirationDate,
+                        );
+                        next(err, objMD, oldLocation);
+                    });
+                },
+                (objMD, oldLocation, next) => this._garbageCollectLocation(entry, oldLocation, log, next),
+            ],
+            done,
+        );
     }
 }
 

@@ -4,10 +4,8 @@ const sinon = require('sinon');
 const events = require('events');
 const MongoClient = require('mongodb').MongoClient;
 
-const NotificationConfigManager
-    = require('../../../extensions/notification/NotificationConfigManager');
-const mongoConfig
-    = require('../../config.json').queuePopulator.mongo;
+const NotificationConfigManager = require('../../../extensions/notification/NotificationConfigManager');
+const mongoConfig = require('../../config.json').queuePopulator.mongo;
 
 const logger = new werelogs.Logger('NotificationConfigManager:test');
 
@@ -46,12 +44,11 @@ describe('NotificationConfigManager ::', () => {
             // mock change stream
             watch: () => new events.EventEmitter(),
             // mock bucket notification configuration
-            findOne: () => (
-                {
-                    value: {
-                        notificationConfiguration,
-                    }
-                }),
+            findOne: () => ({
+                value: {
+                    notificationConfiguration,
+                },
+            }),
         });
         const mongoCommandStub = sinon.stub().returns({
             version: '4.3.17',
@@ -86,19 +83,16 @@ describe('NotificationConfigManager ::', () => {
         // should store new configs in cache
         await manager.getConfig('example-bucket-1');
         assert.strictEqual(backend._cachedConfigs.count(), 1);
-        assert.deepEqual(backend._cachedConfigs.get('example-bucket-1'),
-            notificationConfiguration);
+        assert.deepEqual(backend._cachedConfigs.get('example-bucket-1'), notificationConfiguration);
         await manager.getConfig('example-bucket-2');
-        assert.deepEqual(backend._cachedConfigs.get('example-bucket-2'),
-            notificationConfiguration);
+        assert.deepEqual(backend._cachedConfigs.get('example-bucket-2'), notificationConfiguration);
         assert.strictEqual(backend._cachedConfigs.count(), 2);
         // should retreive config fom cache without re-adding it
         await manager.getConfig('example-bucket-1');
         assert.strictEqual(backend._cachedConfigs.count(), 2);
     });
 
-    it('Cache should be invalidated when change stream event occurs (delete event)',
-        async () => {
+    it('Cache should be invalidated when change stream event occurs (delete event)', async () => {
         const backend = manager._configManagerBackend;
         // adding configs to cache
         await manager.getConfig('example-bucket-1');
@@ -118,8 +112,7 @@ describe('NotificationConfigManager ::', () => {
         assert(backend._cachedConfigs.get('example-bucket-2'));
     });
 
-    it('Cache should be invalidated when change stream event occurs (replace/update events)',
-        async () => {
+    it('Cache should be invalidated when change stream event occurs (replace/update events)', async () => {
         const backend = manager._configManagerBackend;
         // adding configs to cache
         await manager.getConfig('example-bucket-1');
@@ -135,20 +128,18 @@ describe('NotificationConfigManager ::', () => {
                 _id: 'example-bucket-1',
                 value: {
                     notificationConfiguration: notificationConfigurationVariant,
-                }
-            }
+                },
+            },
         };
         backend._metastoreChangeStream._changeStream.emit('change', changeStreamEvent);
         // cached config for "example-bucket-1" should be invalidated
         assert.strictEqual(backend._cachedConfigs.count(), 2);
-        assert.deepEqual(backend._cachedConfigs.get('example-bucket-1'),
-            notificationConfigurationVariant);
+        assert.deepEqual(backend._cachedConfigs.get('example-bucket-1'), notificationConfigurationVariant);
         // update event should yield the same results
         changeStreamEvent.operationType = 'update';
         changeStreamEvent.fullDocument._id = 'example-bucket-2';
         backend._metastoreChangeStream._changeStream.emit('change', changeStreamEvent);
         assert.strictEqual(backend._cachedConfigs.count(), 2);
-        assert.deepEqual(backend._cachedConfigs.get('example-bucket-2'),
-            notificationConfiguration);
+        assert.deepEqual(backend._cachedConfigs.get('example-bucket-2'), notificationConfiguration);
     });
 });

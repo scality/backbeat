@@ -14,13 +14,13 @@ describe('extractBucketProcessorCircuitBreakerConfigs', () => {
     // every location in the config gets the templated probe, so the
     // expectation follows the config rather than restating it
     function formatLocationProbeConfigList(probe) {
-        return Object.keys(locations).map(location =>
-            formatProbeConfig(probe, '${location}', location));
+        return Object.keys(locations).map(location => formatProbeConfig(probe, '${location}', location));
     }
 
     function formatLocationProbeConfigs(probe) {
-        return Object.fromEntries(Object.keys(locations).map(location =>
-            [location, [formatProbeConfig(probe, '${location}', location)]]));
+        return Object.fromEntries(
+            Object.keys(locations).map(location => [location, [formatProbeConfig(probe, '${location}', location)]]),
+        );
     }
 
     function formatProbeConfig(probe, template, value) {
@@ -34,10 +34,12 @@ describe('extractBucketProcessorCircuitBreakerConfigs', () => {
             stabilizingEvaluateIntervalMs: 60000,
             trippedEvaluateIntervalMs: 60000,
             stabilizeAfterNSuccesses: 2,
-            probes: [{
-                ...probe,
-                query
-            }],
+            probes: [
+                {
+                    ...probe,
+                    query,
+                },
+            ],
         };
     }
 
@@ -61,7 +63,8 @@ describe('extractBucketProcessorCircuitBreakerConfigs', () => {
 
     const topicSpecificTemplatedProbe = {
         type: 'prometheusQuery',
-        query: 'when({topic="cold-archive-req-location-dmf-v1"}) ' +
+        query:
+            'when({topic="cold-archive-req-location-dmf-v1"}) ' +
             'and kafka_consumergroup_group_lag{group="${topic}",topic="${topic}"}',
         threshold: 100,
         prometheus: {
@@ -198,11 +201,10 @@ describe('extractBucketProcessorCircuitBreakerConfigs', () => {
                     },
                 },
             },
-        }, {
+        },
+        {
             it: 'should the config of global probes',
-            probes: [
-                globalProbe,
-            ],
+            probes: [globalProbe],
             expected: {
                 global: {
                     nominalEvaluateIntervalMs: 60000,
@@ -211,7 +213,7 @@ describe('extractBucketProcessorCircuitBreakerConfigs', () => {
                     stabilizeAfterNSuccesses: 2,
                     probes: [
                         {
-                            ...globalProbe
+                            ...globalProbe,
                         },
                     ],
                 },
@@ -228,11 +230,10 @@ describe('extractBucketProcessorCircuitBreakerConfigs', () => {
                     },
                 },
             },
-        }, {
+        },
+        {
             it: 'should build circuit breaker for each topic',
-            probes: [
-                topicTemplatedProbe,
-            ],
+            probes: [topicTemplatedProbe],
             expected: {
                 global: {
                     nominalEvaluateIntervalMs: 60000,
@@ -246,25 +247,13 @@ describe('extractBucketProcessorCircuitBreakerConfigs', () => {
                         location: {},
                         topic: {
                             'backbeat-test-dummy-object-task': [
-                                formatProbeConfig(
-                                    topicTemplatedProbe,
-                                    '${topic}',
-                                    'backbeat-test-dummy-object-task',
-                                ),
+                                formatProbeConfig(topicTemplatedProbe, '${topic}', 'backbeat-test-dummy-object-task'),
                             ],
                             'backbeat-data-mover': [
-                                formatProbeConfig(
-                                    topicTemplatedProbe,
-                                    '${topic}',
-                                    'backbeat-data-mover',
-                                ),
+                                formatProbeConfig(topicTemplatedProbe, '${topic}', 'backbeat-data-mover'),
                             ],
                             'cold-archive-req-location-dmf-v1': [
-                                formatProbeConfig(
-                                    topicTemplatedProbe,
-                                    '${topic}',
-                                    'cold-archive-req-location-dmf-v1',
-                                ),
+                                formatProbeConfig(topicTemplatedProbe, '${topic}', 'cold-archive-req-location-dmf-v1'),
                             ],
                         },
                         global: [],
@@ -273,36 +262,23 @@ describe('extractBucketProcessorCircuitBreakerConfigs', () => {
                         location: {},
                         topic: {
                             'backbeat-test-dummy-object-task': [
-                                formatProbeConfig(
-                                    topicTemplatedProbe,
-                                    '${topic}',
-                                    'backbeat-test-dummy-object-task',
-                                ),
+                                formatProbeConfig(topicTemplatedProbe, '${topic}', 'backbeat-test-dummy-object-task'),
                             ],
                             'backbeat-data-mover': [
-                                formatProbeConfig(
-                                    topicTemplatedProbe,
-                                    '${topic}',
-                                    'backbeat-data-mover',
-                                ),
+                                formatProbeConfig(topicTemplatedProbe, '${topic}', 'backbeat-data-mover'),
                             ],
                             'cold-archive-req-location-dmf-v1': [
-                                formatProbeConfig(
-                                    topicTemplatedProbe,
-                                    '${topic}',
-                                    'cold-archive-req-location-dmf-v1',
-                                ),
+                                formatProbeConfig(topicTemplatedProbe, '${topic}', 'cold-archive-req-location-dmf-v1'),
                             ],
                         },
                         global: [],
                     },
                 },
             },
-        }, {
+        },
+        {
             it: 'should build circuit breaker for specified topic and replace template',
-            probes: [
-                topicSpecificTemplatedProbe,
-            ],
+            probes: [topicSpecificTemplatedProbe],
             expected: {
                 global: {
                     nominalEvaluateIntervalMs: 60000,
@@ -340,11 +316,10 @@ describe('extractBucketProcessorCircuitBreakerConfigs', () => {
                     },
                 },
             },
-        }, {
+        },
+        {
             it: 'should build circuit breaker for specified topic when no template set',
-            probes: [
-                topicSpecificNoTemplateProbe,
-            ],
+            probes: [topicSpecificNoTemplateProbe],
             expected: {
                 global: {
                     nominalEvaluateIntervalMs: 60000,
@@ -358,11 +333,7 @@ describe('extractBucketProcessorCircuitBreakerConfigs', () => {
                         location: {},
                         topic: {
                             'cold-archive-req-location-dmf-v1': [
-                                formatProbeConfig(
-                                    topicSpecificNoTemplateProbe,
-                                    '',
-                                    '',
-                                ),
+                                formatProbeConfig(topicSpecificNoTemplateProbe, '', ''),
                             ],
                         },
                         global: [],
@@ -371,22 +342,17 @@ describe('extractBucketProcessorCircuitBreakerConfigs', () => {
                         location: {},
                         topic: {
                             'cold-archive-req-location-dmf-v1': [
-                                formatProbeConfig(
-                                    topicSpecificNoTemplateProbe,
-                                    '',
-                                    '',
-                                ),
+                                formatProbeConfig(topicSpecificNoTemplateProbe, '', ''),
                             ],
                         },
                         global: [],
                     },
                 },
             },
-        }, {
+        },
+        {
             it: 'should build circuit breaker for specified topic and all location when location template set',
-            probes: [
-                topicSpecificLocationTemplateProbe,
-            ],
+            probes: [topicSpecificLocationTemplateProbe],
             expected: {
                 global: {
                     nominalEvaluateIntervalMs: 60000,
@@ -399,26 +365,27 @@ describe('extractBucketProcessorCircuitBreakerConfigs', () => {
                     transition: {
                         location: formatLocationProbeConfigs(topicSpecificLocationTemplateProbe),
                         topic: {
-                            'cold-archive-req-location-dmf-v1':
-                                formatLocationProbeConfigList(topicSpecificLocationTemplateProbe),
+                            'cold-archive-req-location-dmf-v1': formatLocationProbeConfigList(
+                                topicSpecificLocationTemplateProbe,
+                            ),
                         },
                         global: [],
                     },
                     expiration: {
                         location: formatLocationProbeConfigs(topicSpecificLocationTemplateProbe),
                         topic: {
-                            'cold-archive-req-location-dmf-v1':
-                                formatLocationProbeConfigList(topicSpecificLocationTemplateProbe),
+                            'cold-archive-req-location-dmf-v1': formatLocationProbeConfigList(
+                                topicSpecificLocationTemplateProbe,
+                            ),
                         },
                         global: [],
                     },
                 },
             },
-        }, {
+        },
+        {
             it: 'should build circuit breaker for each location when template is set',
-            probes: [
-                locationTemplatedProbe,
-            ],
+            probes: [locationTemplatedProbe],
             expected: {
                 global: {
                     nominalEvaluateIntervalMs: 60000,
@@ -440,11 +407,10 @@ describe('extractBucketProcessorCircuitBreakerConfigs', () => {
                     },
                 },
             },
-        }, {
+        },
+        {
             it: 'should build circuit breaker for specified location and replace template',
-            probes: [
-                locationSpecificTemplatedProbe,
-            ],
+            probes: [locationSpecificTemplatedProbe],
             expected: {
                 global: {
                     nominalEvaluateIntervalMs: 60000,
@@ -456,37 +422,24 @@ describe('extractBucketProcessorCircuitBreakerConfigs', () => {
                 circuitBreakers: {
                     transition: {
                         location: {
-                            'dmf-v1': [
-                                formatProbeConfig(
-                                    locationSpecificTemplatedProbe,
-                                    '${location}',
-                                    'dmf-v1',
-                                ),
-                            ],
+                            'dmf-v1': [formatProbeConfig(locationSpecificTemplatedProbe, '${location}', 'dmf-v1')],
                         },
                         topic: {},
                         global: [],
                     },
                     expiration: {
                         location: {
-                            'dmf-v1': [
-                                formatProbeConfig(
-                                    locationSpecificTemplatedProbe,
-                                    '${location}',
-                                    'dmf-v1',
-                                ),
-                            ],
+                            'dmf-v1': [formatProbeConfig(locationSpecificTemplatedProbe, '${location}', 'dmf-v1')],
                         },
                         topic: {},
                         global: [],
                     },
                 },
             },
-        }, {
+        },
+        {
             it: 'should build circuit breaker for specified location when no template set',
-            probes: [
-                locationSpecificNoTemplateProbe,
-            ],
+            probes: [locationSpecificNoTemplateProbe],
             expected: {
                 global: {
                     nominalEvaluateIntervalMs: 60000,
@@ -498,37 +451,24 @@ describe('extractBucketProcessorCircuitBreakerConfigs', () => {
                 circuitBreakers: {
                     transition: {
                         location: {
-                            'dmf-v1': [
-                                formatProbeConfig(
-                                    locationSpecificNoTemplateProbe,
-                                    '',
-                                    '',
-                                ),
-                            ],
+                            'dmf-v1': [formatProbeConfig(locationSpecificNoTemplateProbe, '', '')],
                         },
                         topic: {},
                         global: [],
                     },
                     expiration: {
                         location: {
-                            'dmf-v1': [
-                                formatProbeConfig(
-                                    locationSpecificNoTemplateProbe,
-                                    '',
-                                    '',
-                                ),
-                            ],
+                            'dmf-v1': [formatProbeConfig(locationSpecificNoTemplateProbe, '', '')],
                         },
                         topic: {},
                         global: [],
                     },
                 },
             },
-        }, {
+        },
+        {
             it: 'should build circuit breaker for specified location and all topics when topic template set',
-            probes: [
-                locationSpecificTopicTemplateProbe,
-            ],
+            probes: [locationSpecificTopicTemplateProbe],
             expected: {
                 global: {
                     nominalEvaluateIntervalMs: 60000,
@@ -630,11 +570,10 @@ describe('extractBucketProcessorCircuitBreakerConfigs', () => {
                     },
                 },
             },
-        }, {
+        },
+        {
             it: 'should build circuit breaker for specified location and topic when no template set',
-            probes: [
-                locationAndTopicSpecificNoTemplateProbe,
-            ],
+            probes: [locationAndTopicSpecificNoTemplateProbe],
             expected: {
                 global: {
                     nominalEvaluateIntervalMs: 60000,
@@ -646,53 +585,32 @@ describe('extractBucketProcessorCircuitBreakerConfigs', () => {
                 circuitBreakers: {
                     transition: {
                         location: {
-                            'dmf-v1': [
-                                formatProbeConfig(
-                                    locationAndTopicSpecificNoTemplateProbe,
-                                    '',
-                                    '',
-                                ),
-                            ],
+                            'dmf-v1': [formatProbeConfig(locationAndTopicSpecificNoTemplateProbe, '', '')],
                         },
                         topic: {
                             'cold-archive-req-location-dmf-v1': [
-                                formatProbeConfig(
-                                    locationAndTopicSpecificNoTemplateProbe,
-                                    '',
-                                    '',
-                                ),
+                                formatProbeConfig(locationAndTopicSpecificNoTemplateProbe, '', ''),
                             ],
                         },
                         global: [],
                     },
                     expiration: {
                         location: {
-                            'dmf-v1': [
-                                formatProbeConfig(
-                                    locationAndTopicSpecificNoTemplateProbe,
-                                    '',
-                                    '',
-                                ),
-                            ],
+                            'dmf-v1': [formatProbeConfig(locationAndTopicSpecificNoTemplateProbe, '', '')],
                         },
                         topic: {
                             'cold-archive-req-location-dmf-v1': [
-                                formatProbeConfig(
-                                    locationAndTopicSpecificNoTemplateProbe,
-                                    '',
-                                    '',
-                                ),
+                                formatProbeConfig(locationAndTopicSpecificNoTemplateProbe, '', ''),
                             ],
                         },
                         global: [],
                     },
                 },
             },
-        }, {
+        },
+        {
             it: 'should ignore probe that uses both topic and location templates',
-            probes: [
-                invalidDoubleTemplate,
-            ],
+            probes: [invalidDoubleTemplate],
             expected: {
                 global: {
                     nominalEvaluateIntervalMs: 60000,
@@ -714,11 +632,10 @@ describe('extractBucketProcessorCircuitBreakerConfigs', () => {
                     },
                 },
             },
-        }, {
+        },
+        {
             it: 'should ignore probe that has all workflows disabled',
-            probes: [
-                invalidInactiveProbe,
-            ],
+            probes: [invalidInactiveProbe],
             expected: {
                 global: {
                     nominalEvaluateIntervalMs: 60000,
@@ -740,11 +657,10 @@ describe('extractBucketProcessorCircuitBreakerConfigs', () => {
                     },
                 },
             },
-        }, {
+        },
+        {
             it: 'should create a global circuit breaker only used for expiration',
-            probes: [
-                disabledTransition,
-            ],
+            probes: [disabledTransition],
             expected: {
                 global: {
                     nominalEvaluateIntervalMs: 60000,
@@ -762,21 +678,14 @@ describe('extractBucketProcessorCircuitBreakerConfigs', () => {
                     expiration: {
                         location: {},
                         topic: {},
-                        global: [
-                            formatProbeConfig(
-                                disabledTransition,
-                                '',
-                                '',
-                            ),
-                        ],
+                        global: [formatProbeConfig(disabledTransition, '', '')],
                     },
                 },
             },
-        }, {
+        },
+        {
             it: 'should create a global circuit breaker only used for transition',
-            probes: [
-                disabledExpiration,
-            ],
+            probes: [disabledExpiration],
             expected: {
                 global: {
                     nominalEvaluateIntervalMs: 60000,
@@ -789,13 +698,7 @@ describe('extractBucketProcessorCircuitBreakerConfigs', () => {
                     transition: {
                         location: {},
                         topic: {},
-                        global: [
-                            formatProbeConfig(
-                                disabledExpiration,
-                                '',
-                                '',
-                            ),
-                        ],
+                        global: [formatProbeConfig(disabledExpiration, '', '')],
                     },
                     expiration: {
                         location: {},
@@ -804,21 +707,22 @@ describe('extractBucketProcessorCircuitBreakerConfigs', () => {
                     },
                 },
             },
-        }, {
+        },
+        {
             it: 'consider non PrometheusQuery probes global',
-            probes: [
-                notPrometheusQueryProbe,
-            ],
+            probes: [notPrometheusQueryProbe],
             expected: {
                 global: {
                     nominalEvaluateIntervalMs: 60000,
                     stabilizingEvaluateIntervalMs: 60000,
                     trippedEvaluateIntervalMs: 60000,
                     stabilizeAfterNSuccesses: 2,
-                    probes: [{
-                        type: 'noop',
-                        returnConstantValue: true,
-                    }],
+                    probes: [
+                        {
+                            type: 'noop',
+                            returnConstantValue: true,
+                        },
+                    ],
                 },
                 circuitBreakers: {
                     transition: {
@@ -833,7 +737,7 @@ describe('extractBucketProcessorCircuitBreakerConfigs', () => {
                     },
                 },
             },
-        }
+        },
     ].forEach(item => {
         it(item.it, () => {
             const circuitBreakerConfig = {
@@ -888,15 +792,14 @@ describe('extractBucketProcessorCircuitBreakerConfigs', () => {
 });
 
 const nominalBreaker = {
-    state: () => BreakerState.Nominal
+    state: () => BreakerState.Nominal,
 };
 
 const trippedBreaker = {
-    state: () => BreakerState.Tripped
+    state: () => BreakerState.Tripped,
 };
 
 describe('shouldCircuitBreak', () => {
-
     [
         {
             it: 'Should check all global circuit breakers when nothing specified',
@@ -904,171 +807,150 @@ describe('shouldCircuitBreak', () => {
                 expiration: {
                     location: {},
                     topic: {},
-                    global: [
-                        trippedBreaker,
-                    ],
+                    global: [trippedBreaker],
                 },
                 transition: {
                     location: {},
                     topic: {},
-                    global: [
-                        trippedBreaker,
-                    ]
+                    global: [trippedBreaker],
                 },
             },
             workflow: '',
             location: '',
             topic: '',
-            shouldBreak: true
-        }, {
+            shouldBreak: true,
+        },
+        {
             it: 'Should check global expiration circuit breakers',
             breakers: {
                 expiration: {
                     location: {},
                     topic: {},
-                    global: [
-                        trippedBreaker,
-                    ],
+                    global: [trippedBreaker],
                 },
                 transition: {
                     location: {},
                     topic: {},
-                    global: [
-                        nominalBreaker,
-                    ]
+                    global: [nominalBreaker],
                 },
             },
             workflow: 'expiration',
             location: '',
             topic: '',
-            shouldBreak: true
-        }, {
+            shouldBreak: true,
+        },
+        {
             it: 'Should check global transition circuit breakers',
             breakers: {
                 expiration: {
                     location: {},
                     topic: {},
-                    global: [
-                        nominalBreaker,
-                    ],
+                    global: [nominalBreaker],
                 },
                 transition: {
                     location: {},
                     topic: {},
-                    global: [
-                        trippedBreaker,
-                    ]
+                    global: [trippedBreaker],
                 },
             },
             workflow: 'transition',
             location: '',
             topic: '',
-            shouldBreak: true
-        }, {
+            shouldBreak: true,
+        },
+        {
             it: 'Should check location specific breakers',
             breakers: {
                 expiration: {
                     location: {
-                        'dmf-v1': [
-                            trippedBreaker,
-                        ],
+                        'dmf-v1': [trippedBreaker],
                     },
                     topic: {},
                     global: [],
                 },
                 transition: {
                     location: {
-                        'dmf-v1': [
-                            trippedBreaker,
-                        ],
+                        'dmf-v1': [trippedBreaker],
                     },
                     topic: {},
-                    global: []
+                    global: [],
                 },
             },
             workflow: '',
             location: 'dmf-v1',
             topic: '',
-            shouldBreak: true
-        }, {
+            shouldBreak: true,
+        },
+        {
             it: 'Should check location specific breakers enabled for transition',
             breakers: {
                 expiration: {
                     location: {
-                        'dmf-v1': [
-                            nominalBreaker,
-                        ],
+                        'dmf-v1': [nominalBreaker],
                     },
                     topic: {},
                     global: [],
                 },
                 transition: {
                     location: {
-                        'dmf-v1': [
-                            trippedBreaker,
-                        ],
+                        'dmf-v1': [trippedBreaker],
                     },
                     topic: {},
-                    global: []
+                    global: [],
                 },
             },
             workflow: 'transition',
             location: 'dmf-v1',
             topic: '',
-            shouldBreak: true
-        }, {
+            shouldBreak: true,
+        },
+        {
             it: 'Should check location specific breakers enabled for expiration',
             breakers: {
                 expiration: {
                     location: {
-                        'dmf-v1': [
-                            trippedBreaker,
-                        ],
+                        'dmf-v1': [trippedBreaker],
                     },
                     topic: {},
                     global: [],
                 },
                 transition: {
                     location: {
-                        'dmf-v1': [
-                            nominalBreaker,
-                        ],
+                        'dmf-v1': [nominalBreaker],
                     },
                     topic: {},
-                    global: []
+                    global: [],
                 },
             },
             workflow: 'expiration',
             location: 'dmf-v1',
             topic: '',
-            shouldBreak: true
-        }, {
+            shouldBreak: true,
+        },
+        {
             it: 'Should check topic specific breakers',
             breakers: {
                 expiration: {
                     location: {},
                     topic: {
-                        'dmf-v1-topic': [
-                            trippedBreaker,
-                        ],
+                        'dmf-v1-topic': [trippedBreaker],
                     },
                     global: [],
                 },
                 transition: {
                     location: {},
                     topic: {
-                        'dmf-v1-topic': [
-                            trippedBreaker,
-                        ],
+                        'dmf-v1-topic': [trippedBreaker],
                     },
-                    global: []
+                    global: [],
                 },
             },
             workflow: '',
             location: '',
             topic: 'dmf-v1-topic',
-            shouldBreak: true
-        }, {
+            shouldBreak: true,
+        },
+        {
             it: 'Should check topic specific breakers enabled for transition',
             breakers: {
                 expiration: {
@@ -1079,48 +961,41 @@ describe('shouldCircuitBreak', () => {
                 transition: {
                     location: {},
                     topic: {
-                        'dmf-v1-topic': [
-                            trippedBreaker,
-                        ],
+                        'dmf-v1-topic': [trippedBreaker],
                     },
-                    global: []
+                    global: [],
                 },
             },
             workflow: 'transition',
             location: '',
             topic: 'dmf-v1-topic',
-            shouldBreak: true
-        }, {
+            shouldBreak: true,
+        },
+        {
             it: 'Should check topic specific breakers enabled for expiration',
             breakers: {
                 expiration: {
                     location: {},
                     topic: {
-                        'dmf-v1-topic': [
-                            trippedBreaker,
-                        ],
+                        'dmf-v1-topic': [trippedBreaker],
                     },
                     global: [],
                 },
                 transition: {
                     location: {},
                     topic: {},
-                    global: []
+                    global: [],
                 },
             },
             workflow: 'expiration',
             location: '',
             topic: 'dmf-v1-topic',
-            shouldBreak: true
+            shouldBreak: true,
         },
     ].forEach(item => {
         it(item.it, () => {
             const circuitBreakerCluster = new CircuitBreakerGroup({}, item.breakers, logger);
-            const shouldBreak = circuitBreakerCluster.tripped(
-                item.workflow,
-                item.location,
-                item.topic,
-            );
+            const shouldBreak = circuitBreakerCluster.tripped(item.workflow, item.location, item.topic);
             assert.strictEqual(shouldBreak, item.shouldBreak);
         });
     });
@@ -1134,11 +1009,19 @@ describe('CircuitBreakerGroup state change logging', () => {
         sinon.stub(CircuitBreaker.prototype, 'start');
         log = { info: sinon.stub(), warn: sinon.stub() };
         const group = new CircuitBreakerGroup({}, null, log);
-        group.addCircuitBreaker({
-            type: 'prometheusQuery',
-            threshold: 100,
-            prometheus: { endpoint: 'http://prometheus:9090' },
-        }, 'kafka_consumergroup_group_lag{topic="cold-topic"}', true, false, 'cold-topic', 'cold-location', 'topic');
+        group.addCircuitBreaker(
+            {
+                type: 'prometheusQuery',
+                threshold: 100,
+                prometheus: { endpoint: 'http://prometheus:9090' },
+            },
+            'kafka_consumergroup_group_lag{topic="cold-topic"}',
+            true,
+            false,
+            'cold-topic',
+            'cold-location',
+            'topic',
+        );
         breaker = group.circuitBreakers.transition.topic['cold-topic'][0];
     });
 

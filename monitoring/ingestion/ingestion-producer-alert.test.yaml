@@ -3,7 +3,6 @@ rule_files:
   - ingestion-producer-alert.rendered.yaml
 
 tests:
-
   # getRaftId errors stay at 100% on that op even when getRaftLog volume is high.
   # The warning and critical rules share one name, so Alertmanager raises the
   # severity instead of sending two alerts.
@@ -26,15 +25,15 @@ tests:
               op: getRaftId
             exp_annotations:
               zenko_service: backbeat-ingestion-producer
-              description: "Ingestion producer source error rate has increased to 3% in the last 5 minutes"
-              summary: "Ingestion producer source error rate has increased"
+              description: 'Ingestion producer source error rate has increased to 3% in the last 5 minutes'
+              summary: 'Ingestion producer source error rate has increased'
           - exp_labels:
               severity: critical
               op: getRaftId
             exp_annotations:
               zenko_service: backbeat-ingestion-producer
-              description: "Ingestion producer source error rate has increased to 5% in the last 5 minutes"
-              summary: "Ingestion producer source error rate has increased"
+              description: 'Ingestion producer source error rate has increased to 5% in the last 5 minutes'
+              summary: 'Ingestion producer source error rate has increased'
 
   # A source that fails to set up while its location restarts, then recovers,
   # must not alert.
@@ -73,12 +72,12 @@ tests:
               op: getRaftLog
             exp_annotations:
               zenko_service: backbeat-ingestion-producer
-              description: "Ingestion producer source error rate has increased to 3% in the last 5 minutes"
-              summary: "Ingestion producer source error rate has increased"
+              description: 'Ingestion producer source error rate has increased to 3% in the last 5 minutes'
+              summary: 'Ingestion producer source error rate has increased'
           - exp_labels:
               severity: critical
               op: getRaftLog
             exp_annotations:
               zenko_service: backbeat-ingestion-producer
-              description: "Ingestion producer source error rate has increased to 5% in the last 5 minutes"
-              summary: "Ingestion producer source error rate has increased"
+              description: 'Ingestion producer source error rate has increased to 5% in the last 5 minutes'
+              summary: 'Ingestion producer source error rate has increased'

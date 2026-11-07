@@ -37,7 +37,8 @@ class GarbageCollectorProducer {
             producer.on('error', err =>
                 this._log.error('error from backbeat producer', {
                     error: err,
-                }));
+                }),
+            );
             this._producer = producer;
             if (cb) {
                 return cb();

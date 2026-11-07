@@ -1,7 +1,6 @@
 const assert = require('assert');
 
-const getWorkflowUpdates =
-      require('../../../lib/management/getWorkflowUpdates');
+const getWorkflowUpdates = require('../../../lib/management/getWorkflowUpdates');
 
 const workflow1 = {
     workflowId: 'w1',
@@ -58,7 +57,7 @@ describe('getWorkflowUpdates', () => {
                 {
                     bucket1: [workflow1],
                 },
-                undefined
+                undefined,
             ),
             {
                 bucket1: {
@@ -66,7 +65,8 @@ describe('getWorkflowUpdates', () => {
                     modified: [],
                     deleted: [],
                 },
-            });
+            },
+        );
     });
     it('should detect a new workflow on new bucket', () => {
         assert.deepStrictEqual(
@@ -74,8 +74,7 @@ describe('getWorkflowUpdates', () => {
                 {
                     bucket1: [workflow1],
                 },
-                {
-                }
+                {},
             ),
             {
                 bucket1: {
@@ -83,10 +82,10 @@ describe('getWorkflowUpdates', () => {
                     modified: [],
                     deleted: [],
                 },
-            });
+            },
+        );
     });
-    it('should detect a new workflow on existing bucket with workflows',
-    () => {
+    it('should detect a new workflow on existing bucket with workflows', () => {
         assert.deepStrictEqual(
             getWorkflowUpdates(
                 {
@@ -94,7 +93,7 @@ describe('getWorkflowUpdates', () => {
                 },
                 {
                     bucket1: { w1: workflow1 },
-                }
+                },
             ),
             {
                 bucket1: {
@@ -102,7 +101,8 @@ describe('getWorkflowUpdates', () => {
                     modified: [],
                     deleted: [],
                 },
-            });
+            },
+        );
     });
     it('should detect a modified workflow', () => {
         assert.deepStrictEqual(
@@ -112,16 +112,16 @@ describe('getWorkflowUpdates', () => {
                 },
                 {
                     bucket1: { w1: workflow1, w2: workflow2 },
-                }
+                },
             ),
             {
                 bucket1: {
                     new: [],
-                    modified: [{ previous: workflow1,
-                                 current: workflow1Mod }],
+                    modified: [{ previous: workflow1, current: workflow1Mod }],
                     deleted: [],
                 },
-            });
+            },
+        );
     });
     it('should ignore an existing but unmodified workflow', () => {
         assert.deepStrictEqual(
@@ -131,10 +131,10 @@ describe('getWorkflowUpdates', () => {
                 },
                 {
                     bucket1: { w1: workflow1, w2: workflow2 },
-                }
+                },
             ),
-            {
-            });
+            {},
+        );
     });
     it('should detect a deleted workflow on existing bucket', () => {
         assert.deepStrictEqual(
@@ -144,7 +144,7 @@ describe('getWorkflowUpdates', () => {
                 },
                 {
                     bucket1: { w1: workflow1, w2: workflow2 },
-                }
+                },
             ),
             {
                 bucket1: {
@@ -152,16 +152,16 @@ describe('getWorkflowUpdates', () => {
                     modified: [],
                     deleted: [workflow1],
                 },
-            });
+            },
+        );
     });
     it('should detect deleted workflows on deleted bucket', () => {
         assert.deepStrictEqual(
             getWorkflowUpdates(
-                {
-                },
+                {},
                 {
                     bucket1: { w1: workflow1, w2: workflow2 },
-                }
+                },
             ),
             {
                 bucket1: {
@@ -169,23 +169,22 @@ describe('getWorkflowUpdates', () => {
                     modified: [],
                     deleted: [workflow1, workflow2],
                 },
-            });
+            },
+        );
     });
     it('should be fine with no configured workflow at all', () => {
         assert.deepStrictEqual(
-            getWorkflowUpdates(
-                undefined,
-                {
-                    bucket1: { w1: workflow1, w2: workflow2 },
-                }
-            ),
+            getWorkflowUpdates(undefined, {
+                bucket1: { w1: workflow1, w2: workflow2 },
+            }),
             {
                 bucket1: {
                     new: [],
                     modified: [],
                     deleted: [workflow1, workflow2],
                 },
-            });
+            },
+        );
     });
     it('should detect a set of new, modified and deleted workflows', () => {
         assert.deepStrictEqual(
@@ -199,21 +198,20 @@ describe('getWorkflowUpdates', () => {
                     bucket1: { w1: workflow1 },
                     bucket2: { w1: workflow1, w2: workflow2, w3: workflow3 },
                     bucket3: {},
-                }
+                },
             ),
             {
                 bucket1: {
                     new: [],
-                    modified: [{ previous: workflow1,
-                                 current: workflow1Mod }],
+                    modified: [{ previous: workflow1, current: workflow1Mod }],
                     deleted: [],
                 },
                 bucket2: {
                     new: [workflow4],
-                    modified: [{ previous: workflow2,
-                                 current: workflow2Mod }],
+                    modified: [{ previous: workflow2, current: workflow2Mod }],
                     deleted: [workflow1],
                 },
-            });
+            },
+        );
     });
 });

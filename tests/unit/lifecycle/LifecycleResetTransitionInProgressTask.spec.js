@@ -3,14 +3,11 @@ const werelogs = require('werelogs');
 
 const { ObjectMD, ObjectMDArchive } = require('@scality/arsenal').models;
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
-const { LifecycleResetTransitionInProgressTask } = require(
-    '../../../extensions/lifecycle/tasks/LifecycleResetTransitionInProgressTask');
-
 const {
-    BackbeatMetadataProxyMock,
-    GarbageCollectorProducerMock,
-    ProcessorMock,
-} = require('../mocks');
+    LifecycleResetTransitionInProgressTask,
+} = require('../../../extensions/lifecycle/tasks/LifecycleResetTransitionInProgressTask');
+
+const { BackbeatMetadataProxyMock, GarbageCollectorProducerMock, ProcessorMock } = require('../mocks');
 
 describe('LifecycleResetTransitionInProgressTask', () => {
     let backbeatMetadataProxyClient;
@@ -20,25 +17,25 @@ describe('LifecycleResetTransitionInProgressTask', () => {
 
     const byAccount = {
         123: {
-            bucket1: [{
-                objectKey: 'obj1',
-                objectVersion: 'v1',
-                eTag: '"etag1"',
-                try: 12,
-            }]
+            bucket1: [
+                {
+                    objectKey: 'obj1',
+                    objectVersion: 'v1',
+                    eTag: '"etag1"',
+                    try: 12,
+                },
+            ],
         },
     };
-    const actionEntry = ActionQueueEntry.create('requeueTransition')
-        .setAttribute('target', { byAccount, location: 'location-dmf-v1' });
+    const actionEntry = ActionQueueEntry.create('requeueTransition').setAttribute('target', {
+        byAccount,
+        location: 'location-dmf-v1',
+    });
 
-    const objectNotTransitioning = new ObjectMD()
-        .setContentMd5('etag1');
-    const objectTransitioning = new ObjectMD()
-        .setContentMd5('etag1')
-        .setTransitionInProgress(true)
-        .setUserMetadata({
-            'x-amz-meta-scal-s3-transition-attempt': 11,
-        });
+    const objectNotTransitioning = new ObjectMD().setContentMd5('etag1');
+    const objectTransitioning = new ObjectMD().setContentMd5('etag1').setTransitionInProgress(true).setUserMetadata({
+        'x-amz-meta-scal-s3-transition-attempt': 11,
+    });
     // "direct" transition: the cold storage class was requested in the PUT request, and the
     // data still lies in the hot location
     const objectDirectTransitioning = new ObjectMD()
@@ -92,7 +89,8 @@ describe('LifecycleResetTransitionInProgressTask', () => {
             gcProducer,
             null,
             null,
-            new werelogs.Logger('test:LifecycleResetTransitionInProgressTask'));
+            new werelogs.Logger('test:LifecycleResetTransitionInProgressTask'),
+        );
 
         task = new LifecycleResetTransitionInProgressTask(objectProcessor);
     });
@@ -113,7 +111,7 @@ describe('LifecycleResetTransitionInProgressTask', () => {
             assert.ifError(err);
 
             const md = backbeatMetadataProxyClient.mdObj;
-            const umd =  JSON.parse(md.getUserMetadata());
+            const umd = JSON.parse(md.getUserMetadata());
             const attempts = umd['x-amz-meta-scal-s3-transition-attempt'];
             assert.deepStrictEqual(12, attempts);
 
@@ -190,8 +188,10 @@ describe('LifecycleResetTransitionInProgressTask', () => {
 
         it('should skip when the requeue message does not give a cold location', done => {
             backbeatMetadataProxyClient.setMdObj(objectDirectArchived);
-            const entry = ActionQueueEntry.create('requeueTransition')
-                .setAttribute('target', { byAccount, location: 'us-east-1' });
+            const entry = ActionQueueEntry.create('requeueTransition').setAttribute('target', {
+                byAccount,
+                location: 'us-east-1',
+            });
             task.processActionEntry(entry, err => {
                 assert.ifError(err);
                 assert.strictEqual(backbeatMetadataProxyClient.receivedMd, null);

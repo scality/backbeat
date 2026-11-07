@@ -6,10 +6,8 @@ const sinon = require('sinon');
 const { errors } = require('@scality/arsenal');
 const { ValidLifecycleRules } = require('@scality/arsenal').models;
 
-const LifecycleTask = require(
-    '../../../extensions/lifecycle/tasks/LifecycleTask');
-const LifecycleTaskV2 = require(
-    '../../../extensions/lifecycle/tasks/LifecycleTaskV2');
+const LifecycleTask = require('../../../extensions/lifecycle/tasks/LifecycleTask');
+const LifecycleTaskV2 = require('../../../extensions/lifecycle/tasks/LifecycleTaskV2');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const ReplicationAPI = require('../../../extensions/replication/ReplicationAPI');
 const { LifecycleMetrics } = require('../../../extensions/lifecycle/LifecycleMetrics');
@@ -86,14 +84,12 @@ const NON_CURRENT_DELETE_MARKER = {
 
 // LifecycleBucketProcessor mini Mock
 const lp = {
-    getStateVars: () => (
-        {
-            ncvHeap: new Map(),
-            lcOptions: timeOptions,
-            log: fakeLogger,
-            supportedRules: ValidLifecycleRules,
-        }
-    ),
+    getStateVars: () => ({
+        ncvHeap: new Map(),
+        lcOptions: timeOptions,
+        log: fakeLogger,
+        supportedRules: ValidLifecycleRules,
+    }),
 };
 
 describe('lifecycle task helper methods', () => {
@@ -108,37 +104,32 @@ describe('lifecycle task helper methods', () => {
     });
 
     describe('_mergeSortedVersionsAndDeleteMarkers', () => {
-        it('should merge and sort arrays based on Key names and then by ' +
-        'LastModified times', () => {
+        it('should merge and sort arrays based on Key names and then by ' + 'LastModified times', () => {
             // Both arrays should be sorted respective to their own arrays.
             // This method should stable sort and merge both arrays
             const versions = [
                 {
                     Key: 'obj-1',
-                    VersionId:
-                    '39383331323130353631303036363939393939395247303031202038363935392e3131',
+                    VersionId: '39383331323130353631303036363939393939395247303031202038363935392e3131',
                     IsLatest: true,
                     LastModified: '2018-04-04T23:16:46.000Z',
                 },
                 // LastModified matches with a delete marker
                 {
                     Key: 'obj-1',
-                    VersionId:
-                    '39383331323130353632373431383939393939395247303031202038363935392e39',
+                    VersionId: '39383331323130353632373431383939393939395247303031202038363935392e39',
                     IsLatest: false,
                     LastModified: '2018-04-04T23:16:44.000Z',
                 },
                 {
                     Key: 'obj-1',
-                    VersionId:
-                    '39383331323130353632393030393939393939395247303031202038363935392e38',
+                    VersionId: '39383331323130353632393030393939393939395247303031202038363935392e38',
                     IsLatest: false,
                     LastModified: '2018-04-04T23:16:41.000Z',
                 },
                 {
                     Key: 'obj-1',
-                    VersionId:
-                    '39383331323130353634393037323939393939395247303031202038363935392e36',
+                    VersionId: '39383331323130353634393037323939393939395247303031202038363935392e36',
                     IsLatest: false,
                     LastModified: '2018-04-04T23:16:32.000Z',
                 },
@@ -147,15 +138,13 @@ describe('lifecycle task helper methods', () => {
                 {
                     Key: 'obj-1',
                     IsLatest: false,
-                    VersionId:
-                    '39383331323130353631353130353939393939395247303031202038363935392e3130',
+                    VersionId: '39383331323130353631353130353939393939395247303031202038363935392e3130',
                     LastModified: '2018-04-04T23:16:44.000Z',
                 },
                 {
                     Key: 'obj-1',
                     IsLatest: false,
-                    VersionId:
-                    '39383331323130353633303731373939393939395247303031202038363935392e37',
+                    VersionId: '39383331323130353633303731373939393939395247303031202038363935392e37',
                     LastModified: '2018-04-04T23:16:34.000Z',
                 },
             ];
@@ -181,8 +170,7 @@ describe('lifecycle task helper methods', () => {
             const versions = [
                 {
                     Key: 'obj-1',
-                    VersionId:
-                    '39383331323130353632373431383939393939395247303031202038363935392e39',
+                    VersionId: '39383331323130353632373431383939393939395247303031202038363935392e39',
                     IsLatest: false,
                     LastModified: '2018-04-04T23:16:44.000Z',
                 },
@@ -191,8 +179,7 @@ describe('lifecycle task helper methods', () => {
                 {
                     Key: 'obj-1',
                     IsLatest: false,
-                    VersionId:
-                    '39383331323130353631353130353939393939395247303031202038363935392e3130',
+                    VersionId: '39383331323130353631353130353939393939395247303031202038363935392e3130',
                     LastModified: '2018-04-04T23:16:44.000Z',
                 },
             ];
@@ -203,39 +190,39 @@ describe('lifecycle task helper methods', () => {
             assert.deepStrictEqual(sortedList, expected);
         });
 
-        it('should merge and sort the arrays ' +
-        'if the modified dates match and the version has the newest versionId', () => {
-            const versions = [
-                {
-                    Key: 'obj-1',
-                    VersionId:
-                    '39383331323130353631353130353939393939395247303031202038363935392e3130',
-                    IsLatest: false,
-                    LastModified: '2018-04-04T23:16:44.000Z',
-                },
-            ];
-            const dms = [
-                {
-                    Key: 'obj-1',
-                    IsLatest: false,
-                    VersionId:
-                    '39383331323130353632373431383939393939395247303031202038363935392e39',
-                    LastModified: '2018-04-04T23:16:44.000Z',
-                },
-            ];
+        it(
+            'should merge and sort the arrays ' +
+                'if the modified dates match and the version has the newest versionId',
+            () => {
+                const versions = [
+                    {
+                        Key: 'obj-1',
+                        VersionId: '39383331323130353631353130353939393939395247303031202038363935392e3130',
+                        IsLatest: false,
+                        LastModified: '2018-04-04T23:16:44.000Z',
+                    },
+                ];
+                const dms = [
+                    {
+                        Key: 'obj-1',
+                        IsLatest: false,
+                        VersionId: '39383331323130353632373431383939393939395247303031202038363935392e39',
+                        LastModified: '2018-04-04T23:16:44.000Z',
+                    },
+                ];
 
-            const expected = [versions[0], dms[0]];
-            const { error, sortedList } = lct._mergeSortedVersionsAndDeleteMarkers(versions, dms, fakeLogger);
-            assert.ifError(error);
-            assert.deepStrictEqual(sortedList, expected);
-        });
+                const expected = [versions[0], dms[0]];
+                const { error, sortedList } = lct._mergeSortedVersionsAndDeleteMarkers(versions, dms, fakeLogger);
+                assert.ifError(error);
+                assert.deepStrictEqual(sortedList, expected);
+            },
+        );
 
         it('should merge and sort arrays that include a null version id version', () => {
             const versions = [
                 {
                     Key: 'obj-1',
-                    VersionId:
-                    '39383331323130353632373431383939393939395247303031202038363935392e39',
+                    VersionId: '39383331323130353632373431383939393939395247303031202038363935392e39',
                     IsLatest: true,
                     LastModified: '2018-04-04T23:16:47.000Z',
                 },
@@ -249,22 +236,19 @@ describe('lifecycle task helper methods', () => {
             const dms = [
                 {
                     Key: 'obj-1',
-                    VersionId:
-                    '39383331323130353632393030393939393939395247303031202038363935392e38',
+                    VersionId: '39383331323130353632393030393939393939395247303031202038363935392e38',
                     IsLatest: false,
                     LastModified: '2018-04-04T23:16:47.000Z',
                 },
                 {
                     Key: 'obj-1',
-                    VersionId:
-                    '39383331323130353633303731373939393939395247303031202038363935392e37',
+                    VersionId: '39383331323130353633303731373939393939395247303031202038363935392e37',
                     IsLatest: false,
                     LastModified: '2018-04-04T23:16:46.000Z',
                 },
                 {
                     Key: 'obj-1',
-                    VersionId:
-                    '39383331323130353634393037323939393939395247303031202038363935392e36',
+                    VersionId: '39383331323130353634393037323939393939395247303031202038363935392e36',
                     IsLatest: false,
                     LastModified: '2018-04-04T23:16:40.000Z',
                 },
@@ -326,8 +310,7 @@ describe('lifecycle task helper methods', () => {
             const dms = [
                 {
                     Key: 'obj-1',
-                    VersionId:
-                    '39383331323130353632393030393939393939395247303031202038363935392e38',
+                    VersionId: '39383331323130353632393030393939393939395247303031202038363935392e38',
                     IsLatest: false,
                     LastModified: '2018-04-04T23:16:47.000Z',
                 },
@@ -368,29 +351,25 @@ describe('lifecycle task helper methods', () => {
         const list = [
             {
                 Key: 'obj-1',
-                VersionId:
-                '834373731313631393339313839393939393952473030312020353833',
+                VersionId: '834373731313631393339313839393939393952473030312020353833',
                 IsLatest: true,
                 LastModified: '2018-04-04T23:16:46.000Z',
             },
             {
                 Key: 'obj-1',
-                VersionId:
-                '834373731313631393339313839393939393952473030312020353830',
+                VersionId: '834373731313631393339313839393939393952473030312020353830',
                 IsLatest: false,
                 LastModified: '2018-04-04T23:16:44.000Z',
             },
             {
                 Key: 'obj-1',
-                VersionId:
-                '834373731313631393339313839393939393952473030312020353827',
+                VersionId: '834373731313631393339313839393939393952473030312020353827',
                 IsLatest: false,
                 LastModified: '2018-04-04T23:16:41.000Z',
             },
             {
                 Key: 'obj-1',
-                VersionId:
-                '834373731313631393339313839393939393952473030312020353823',
+                VersionId: '834373731313631393339313839393939393952473030312020353823',
                 IsLatest: false,
                 LastModified: '2018-04-04T23:16:32.000Z',
             },
@@ -398,35 +377,30 @@ describe('lifecycle task helper methods', () => {
             {
                 Key: 'obj-2',
                 IsLatest: true,
-                VersionId:
-                '834373731313631393339313839393939393952473030312020353832',
+                VersionId: '834373731313631393339313839393939393952473030312020353832',
                 LastModified: '2018-04-04T23:16:44.000Z',
             },
             {
                 Key: 'obj-2',
-                VersionId:
-                '834373731313631393339313839393939393952473030312020353831',
+                VersionId: '834373731313631393339313839393939393952473030312020353831',
                 IsLatest: false,
                 LastModified: '2018-04-04T23:16:44.000Z',
             },
             {
                 Key: 'obj-2',
                 IsLatest: false,
-                VersionId:
-                '834373731313631393339313839393939393952473030312020353825',
+                VersionId: '834373731313631393339313839393939393952473030312020353825',
                 LastModified: '2018-04-04T23:16:34.000Z',
             },
             {
                 Key: 'obj-2',
-                VersionId:
-                '834373731313631393339313839393939393952473030312020353824',
+                VersionId: '834373731313631393339313839393939393952473030312020353824',
                 IsLatest: false,
                 LastModified: '2018-04-04T23:16:19.000Z',
             },
         ];
 
-        it('should apply a staleDate property on each version on a list ' +
-        'of versions', () => {
+        it('should apply a staleDate property on each version on a list ' + 'of versions', () => {
             const dupelist = list.map(i => Object.assign({}, i));
             const bucketDetails = {};
             const res = lct._addStaleDateToVersions(bucketDetails, dupelist);
@@ -460,7 +434,7 @@ describe('lifecycle task helper methods', () => {
     describe('_checkAndApplyEODMRule', () => {
         let lct2;
 
-        const oldLastModified = new Date(Date.now() - (2 * DAY)).toISOString();
+        const oldLastModified = new Date(Date.now() - 2 * DAY).toISOString();
         const lastModified = new Date(Date.now()).toISOString();
 
         const bucketData = {
@@ -476,8 +450,7 @@ describe('lifecycle task helper methods', () => {
                 ID: '86346e5bda4c2158985574c9942089c36ca650dc509',
             },
             Key: 'test-key',
-            VersionId:
-            '834373731313631393339313839393939393952473030312020353820',
+            VersionId: '834373731313631393339313839393939393952473030312020353820',
             LastModified: lastModified,
         };
         const deleteMarkerOld = {
@@ -486,16 +459,14 @@ describe('lifecycle task helper methods', () => {
                 ID: '86346e5bda4c2158985574c9942089c36ca650dc509',
             },
             Key: 'test-key',
-            VersionId:
-            '834373731313631393339313839393939393952473030312020353820',
+            VersionId: '834373731313631393339313839393939393952473030312020353820',
             LastModified: oldLastModified,
         };
         const listOfVersions = [
             {
                 IsLatest: false,
                 Key: 'another-test-key',
-                VersionId:
-                '834373731313631393339313839393939393952473030312020353815',
+                VersionId: '834373731313631393339313839393939393952473030312020353815',
             },
         ];
 
@@ -527,8 +498,7 @@ describe('lifecycle task helper methods', () => {
                 Expiration: { Days: 5 },
             };
 
-            lct2._checkAndApplyEODMRule(bucketData, deleteMarker,
-            listOfVersions, rules, fakeLogger, err => {
+            lct2._checkAndApplyEODMRule(bucketData, deleteMarker, listOfVersions, rules, fakeLogger, err => {
                 assert.ifError(err);
 
                 const latestEntry = lct2.getLatestEntry();
@@ -542,59 +512,60 @@ describe('lifecycle task helper methods', () => {
             assert.ok(time <= now && time >= now - 1000, 'transitionTime is not the current time');
         };
 
-        it('should send any entry to Kafka when delete marker meets the age criteria and ' +
-        'ExpiredObjectDeleteMarker is not set', () => {
-            const rules = {
-                Expiration: { Days: 1 },
-            };
+        it(
+            'should send any entry to Kafka when delete marker meets the age criteria and ' +
+                'ExpiredObjectDeleteMarker is not set',
+            () => {
+                const rules = {
+                    Expiration: { Days: 1 },
+                };
 
-            lct2._checkAndApplyEODMRule(bucketData, deleteMarkerOld,
-            listOfVersions, rules, fakeLogger, err => {
-                assert.ifError(err);
+                lct2._checkAndApplyEODMRule(bucketData, deleteMarkerOld, listOfVersions, rules, fakeLogger, err => {
+                    assert.ifError(err);
 
-                const latestEntry = lct2.getLatestEntry();
-                const expectedTarget = Object.assign({}, bucketData.target, {
-                    key: deleteMarkerOld.Key,
-                    version: deleteMarkerOld.VersionId,
+                    const latestEntry = lct2.getLatestEntry();
+                    const expectedTarget = Object.assign({}, bucketData.target, {
+                        key: deleteMarkerOld.Key,
+                        version: deleteMarkerOld.VersionId,
+                    });
+                    assert(latestEntry, 'entry has not been sent');
+                    assert.strictEqual(latestEntry.getActionType(), 'deleteObject');
+                    assert.deepStrictEqual(latestEntry.getAttribute('target'), expectedTarget);
+                    assertNow(latestEntry.getAttribute('transitionTime'));
                 });
-                assert(latestEntry, 'entry has not been sent');
-                assert.strictEqual(latestEntry.getActionType(), 'deleteObject');
-                assert.deepStrictEqual(
-                    latestEntry.getAttribute('target'), expectedTarget);
-                assertNow(latestEntry.getAttribute('transitionTime'));
-            });
-        });
+            },
+        );
 
-        it('should send any entry to Kafka when delete marker meets the age criteria and ' +
-        'ExpiredObjectDeleteMarker is set to false', () => {
-            const rules = {
-                Expiration: { Days: 1, ExpiredObjectDeleteMarker: false },
-            };
+        it(
+            'should send any entry to Kafka when delete marker meets the age criteria and ' +
+                'ExpiredObjectDeleteMarker is set to false',
+            () => {
+                const rules = {
+                    Expiration: { Days: 1, ExpiredObjectDeleteMarker: false },
+                };
 
-            lct2._checkAndApplyEODMRule(bucketData, deleteMarkerOld,
-            listOfVersions, rules, fakeLogger, err => {
-                assert.ifError(err);
+                lct2._checkAndApplyEODMRule(bucketData, deleteMarkerOld, listOfVersions, rules, fakeLogger, err => {
+                    assert.ifError(err);
 
-                const latestEntry = lct2.getLatestEntry();
-                const expectedTarget = Object.assign({}, bucketData.target, {
-                    key: deleteMarkerOld.Key,
-                    version: deleteMarkerOld.VersionId,
+                    const latestEntry = lct2.getLatestEntry();
+                    const expectedTarget = Object.assign({}, bucketData.target, {
+                        key: deleteMarkerOld.Key,
+                        version: deleteMarkerOld.VersionId,
+                    });
+                    assert(latestEntry, 'entry has not been sent');
+                    assert.strictEqual(latestEntry.getActionType(), 'deleteObject');
+                    assert.deepStrictEqual(latestEntry.getAttribute('target'), expectedTarget);
+                    assertNow(latestEntry.getAttribute('transitionTime'));
                 });
-                assert(latestEntry, 'entry has not been sent');
-                assert.strictEqual(latestEntry.getActionType(), 'deleteObject');
-                assert.deepStrictEqual(
-                    latestEntry.getAttribute('target'), expectedTarget);
-                assertNow(latestEntry.getAttribute('transitionTime'));
-            });
-        });
+            },
+        );
 
         it('should send an entry to Kafka when ExpiredObjectDeleteMarker is enabled', () => {
             const rules = {
                 Expiration: { ExpiredObjectDeleteMarker: true },
             };
 
-            lct2._checkAndApplyEODMRule(bucketData, deleteMarker,
-            listOfVersions, rules, fakeLogger, err => {
+            lct2._checkAndApplyEODMRule(bucketData, deleteMarker, listOfVersions, rules, fakeLogger, err => {
                 assert.ifError(err);
 
                 const latestEntry = lct2.getLatestEntry();
@@ -604,40 +575,39 @@ describe('lifecycle task helper methods', () => {
                 });
                 assert(latestEntry, 'entry has not been sent');
                 assert.strictEqual(latestEntry.getActionType(), 'deleteObject');
-                assert.deepStrictEqual(
-                    latestEntry.getAttribute('target'), expectedTarget);
+                assert.deepStrictEqual(latestEntry.getAttribute('target'), expectedTarget);
                 assertNow(latestEntry.getAttribute('transitionTime'));
             });
         });
 
-        it('should send an entry to Kafka when ExpiredObjectDeleteMarker is ' +
-        'enabled and delete marker is not eligible based on its age', () => {
-            const rules = {
-                Expiration: { Days: 5, ExpiredObjectDeleteMarker: true },
-            };
+        it(
+            'should send an entry to Kafka when ExpiredObjectDeleteMarker is ' +
+                'enabled and delete marker is not eligible based on its age',
+            () => {
+                const rules = {
+                    Expiration: { Days: 5, ExpiredObjectDeleteMarker: true },
+                };
 
-            lct2._checkAndApplyEODMRule(bucketData, deleteMarker,
-            listOfVersions, rules, fakeLogger, err => {
-                assert.ifError(err);
+                lct2._checkAndApplyEODMRule(bucketData, deleteMarker, listOfVersions, rules, fakeLogger, err => {
+                    assert.ifError(err);
 
-                const latestEntry = lct2.getLatestEntry();
-                const expectedTarget = Object.assign({}, bucketData.target, {
-                    key: deleteMarker.Key,
-                    version: deleteMarker.VersionId,
+                    const latestEntry = lct2.getLatestEntry();
+                    const expectedTarget = Object.assign({}, bucketData.target, {
+                        key: deleteMarker.Key,
+                        version: deleteMarker.VersionId,
+                    });
+                    assert(latestEntry, 'entry has not been sent');
+                    assert.strictEqual(latestEntry.getActionType(), 'deleteObject');
+                    assert.deepStrictEqual(latestEntry.getAttribute('target'), expectedTarget);
+                    assertNow(latestEntry.getAttribute('transitionTime'));
                 });
-                assert(latestEntry, 'entry has not been sent');
-                assert.strictEqual(latestEntry.getActionType(), 'deleteObject');
-                assert.deepStrictEqual(
-                    latestEntry.getAttribute('target'), expectedTarget);
-                assertNow(latestEntry.getAttribute('transitionTime'));
-            });
-        });
+            },
+        );
 
         it('should NOT send an entry to Kafka when no Expiration rule is set', () => {
             const rules = {};
 
-            lct2._checkAndApplyEODMRule(bucketData, deleteMarker,
-            listOfVersions, rules, fakeLogger, err => {
+            lct2._checkAndApplyEODMRule(bucketData, deleteMarker, listOfVersions, rules, fakeLogger, err => {
                 assert.ifError(err);
 
                 const latestEntry = lct2.getLatestEntry();
@@ -650,8 +620,7 @@ describe('lifecycle task helper methods', () => {
                 Expiration: { ExpiredObjectDeleteMarker: false },
             };
 
-            lct2._checkAndApplyEODMRule(bucketData, deleteMarker,
-            listOfVersions, rules, fakeLogger, err => {
+            lct2._checkAndApplyEODMRule(bucketData, deleteMarker, listOfVersions, rules, fakeLogger, err => {
                 assert.ifError(err);
 
                 const latestEntry = lct2.getLatestEntry();
@@ -686,25 +655,29 @@ describe('lifecycle task helper methods', () => {
         it('should propagate scan context to current-version transition actions', done => {
             sinon.stub(lifecycleTaskV2, '_checkAndApplyExpirationRule').returns(false);
             sinon.stub(lifecycleTaskV2, '_isDeleteMarker').returns(false);
-            sinon.stub(lifecycleTaskV2, '_applyTransitionRule')
-                .callsFake((params, log, cb) => {
-                    assert.strictEqual(params.bucketData.contextInfo.conductorScanId, 'scan-A');
-                    assert.strictEqual(
-                        params.bucketData.contextInfo.conductorScanStartTimestamp, 1700000000000);
-                    cb();
-                });
+            sinon.stub(lifecycleTaskV2, '_applyTransitionRule').callsFake((params, log, cb) => {
+                assert.strictEqual(params.bucketData.contextInfo.conductorScanId, 'scan-A');
+                assert.strictEqual(params.bucketData.contextInfo.conductorScanStartTimestamp, 1700000000000);
+                cb();
+            });
 
-            lifecycleTaskV2._compareCurrent(bucketData, {
-                Key: 'test-key',
-                VersionId: 'test-version',
-                ETag: '"test-etag"',
-                LastModified: '2023-01-01T00:00:00.000Z',
-            }, {
-                Transition: {
-                    Days: 1,
-                    StorageClass: 'test-site',
+            lifecycleTaskV2._compareCurrent(
+                bucketData,
+                {
+                    Key: 'test-key',
+                    VersionId: 'test-version',
+                    ETag: '"test-etag"',
+                    LastModified: '2023-01-01T00:00:00.000Z',
                 },
-            }, fakeLogger, done);
+                {
+                    Transition: {
+                        Days: 1,
+                        StorageClass: 'test-site',
+                    },
+                },
+                fakeLogger,
+                done,
+            );
         });
 
         it('should propagate scan context to expired delete-marker actions', () => {
@@ -716,13 +689,18 @@ describe('lifecycle task helper methods', () => {
             }
             lifecycleTaskV2 = new LifecycleTaskV2Mock(lp);
 
-            lifecycleTaskV2._checkAndApplyEODMRule(bucketData, {
-                Key: 'test-key',
-                VersionId: 'test-version',
-                LastModified: new Date(Date.now() - (2 * DAY)).toISOString(),
-            }, {
-                Expiration: { Days: 1 },
-            }, fakeLogger);
+            lifecycleTaskV2._checkAndApplyEODMRule(
+                bucketData,
+                {
+                    Key: 'test-key',
+                    VersionId: 'test-version',
+                    LastModified: new Date(Date.now() - 2 * DAY).toISOString(),
+                },
+                {
+                    Expiration: { Days: 1 },
+                },
+                fakeLogger,
+            );
 
             const context = lifecycleTaskV2.latestEntry.getContext();
             assert.strictEqual(context.conductorScanId, 'scan-A');
@@ -743,8 +721,7 @@ describe('lifecycle task helper methods', () => {
             assert.strictEqual(entry.contextInfo.requestId, 'test-request-id');
             assert.strictEqual(entry.contextInfo.reqId, undefined);
             assert.strictEqual(entry.contextInfo.conductorScanId, 'scan-A');
-            assert.strictEqual(
-                entry.contextInfo.conductorScanStartTimestamp, 1700000000000);
+            assert.strictEqual(entry.contextInfo.conductorScanStartTimestamp, 1700000000000);
         });
     });
 
@@ -757,9 +734,7 @@ describe('lifecycle task helper methods', () => {
                     Filter: {
                         And: {
                             Prefix: 'prefix',
-                            Tags: [
-                                { Key: 'key', Value: 'val' },
-                            ],
+                            Tags: [{ Key: 'key', Value: 'val' }],
                         },
                     },
                     Expiration: { Days: 1 },
@@ -1134,10 +1109,12 @@ describe('lifecycle task helper methods', () => {
                     ID: 'id1',
                     Prefix: '',
                     Status: 'Enabled',
-                    Transitions: [{
-                        Date: new Date(Date.now() - HOUR),
-                        StorageClass: 'us-east-2',
-                    }],
+                    Transitions: [
+                        {
+                            Date: new Date(Date.now() - HOUR),
+                            StorageClass: 'us-east-2',
+                        },
+                    ],
                     NoncurrentVersionTransitions: [],
                 },
             ];
@@ -1153,10 +1130,12 @@ describe('lifecycle task helper methods', () => {
                     ID: 'id1',
                     Prefix: '',
                     Status: 'Enabled',
-                    Transitions: [{
-                        Date: new Date(Date.now() + HOUR),
-                        StorageClass: 'us-east-2',
-                    }],
+                    Transitions: [
+                        {
+                            Date: new Date(Date.now() + HOUR),
+                            StorageClass: 'us-east-2',
+                        },
+                    ],
                     NoncurrentVersionTransitions: [],
                 },
             ];
@@ -1295,10 +1274,12 @@ describe('lifecycle task helper methods', () => {
                     ID: 'id1',
                     Prefix: '',
                     Status: 'Enabled',
-                    Transitions: [{
-                        Date: new Date(Date.now() - HOUR),
-                        StorageClass: 'us-east-2',
-                    }],
+                    Transitions: [
+                        {
+                            Date: new Date(Date.now() - HOUR),
+                            StorageClass: 'us-east-2',
+                        },
+                    ],
                     NoncurrentVersionTransitions: [],
                 },
             ];
@@ -1314,10 +1295,12 @@ describe('lifecycle task helper methods', () => {
                     ID: 'id1',
                     Prefix: '',
                     Status: 'Enabled',
-                    Transitions: [{
-                        Date: new Date(Date.now() + HOUR),
-                        StorageClass: 'us-east-2',
-                    }],
+                    Transitions: [
+                        {
+                            Date: new Date(Date.now() + HOUR),
+                            StorageClass: 'us-east-2',
+                        },
+                    ],
                     NoncurrentVersionTransitions: [],
                 },
             ];
@@ -1364,7 +1347,6 @@ describe('lifecycle task helper methods', () => {
             assert.strictEqual(result, false);
         });
 
-
         it('should return false if expiration rule with date is set for a non-current version', () => {
             const rules = [
                 {
@@ -1405,10 +1387,12 @@ describe('lifecycle task helper methods', () => {
                     ID: 'id1',
                     Prefix: '',
                     Status: 'Enabled',
-                    Transitions: [{
-                        Date: new Date(Date.now()),
-                        StorageClass: 'us-east-2',
-                    }],
+                    Transitions: [
+                        {
+                            Date: new Date(Date.now()),
+                            StorageClass: 'us-east-2',
+                        },
+                    ],
                     NoncurrentVersionTransitions: [],
                 },
             ];
@@ -1595,35 +1579,35 @@ describe('lifecycle task helper methods', () => {
             {
                 Key: 'testkey',
                 VersionId: '4',
-                staleDate: new Date(testDate - (1 * DAY)).toISOString(),
-                LastModified: new Date(testDate - (1 * DAY)).toISOString(),
+                staleDate: new Date(testDate - 1 * DAY).toISOString(),
+                LastModified: new Date(testDate - 1 * DAY).toISOString(),
                 StorageClass: 'eu-west-1',
             },
             {
                 Key: 'testkey',
                 VersionId: '3',
-                staleDate: new Date(testDate - (2 * DAY)).toISOString(),
-                LastModified: new Date(testDate - (2 * DAY)).toISOString(),
+                staleDate: new Date(testDate - 2 * DAY).toISOString(),
+                LastModified: new Date(testDate - 2 * DAY).toISOString(),
                 StorageClass: 'eu-west-2',
             },
             {
                 Key: 'testkey',
                 VersionId: '1',
-                staleDate: new Date(testDate - (4 * DAY)).toISOString(),
-                LastModified: new Date(testDate - (4 * DAY)).toISOString(),
+                staleDate: new Date(testDate - 4 * DAY).toISOString(),
+                LastModified: new Date(testDate - 4 * DAY).toISOString(),
                 // no storage class, to "simulate" a delete marker
             },
             {
                 Key: 'testkey',
                 VersionId: '2',
-                staleDate: new Date(testDate - (3 * DAY)).toISOString(),
-                LastModified: new Date(testDate - (3 * DAY)).toISOString(),
+                staleDate: new Date(testDate - 3 * DAY).toISOString(),
+                LastModified: new Date(testDate - 3 * DAY).toISOString(),
                 StorageClass: 'eu-west-4',
             },
             {
                 Key: 'testkey',
                 VersionId: '0',
-                staleDate: new Date(testDate - (5 * DAY)).toISOString(),
+                staleDate: new Date(testDate - 5 * DAY).toISOString(),
                 LastModified: new Date().toISOString(),
                 StorageClass: 'eu-west-5',
             },
@@ -1679,30 +1663,23 @@ describe('lifecycle task helper methods', () => {
                         return;
                     }
 
-                    const expectedTarget = Object.assign(
-                        {},
-                        bucketData.target,
-                        {
-                            key: expectedEntries[idx].Key,
-                            version: expectedEntries[idx].VersionId,
-                        }
-                    );
+                    const expectedTarget = Object.assign({}, bucketData.target, {
+                        key: expectedEntries[idx].Key,
+                        version: expectedEntries[idx].VersionId,
+                    });
 
                     const expectedStorageClass = expectedEntries[idx].StorageClass || '-delete-marker-';
 
                     assert.strictEqual(latestEntry.getActionType(), 'deleteObject');
-                    assert.deepStrictEqual(
-                        latestEntry.getAttribute('target'), expectedTarget);
-                    assert.deepStrictEqual(
-                        latestEntry.getAttribute('details.dataStoreName'), expectedStorageClass);
+                    assert.deepStrictEqual(latestEntry.getAttribute('target'), expectedTarget);
+                    assert.deepStrictEqual(latestEntry.getAttribute('details.dataStoreName'), expectedStorageClass);
 
                     // `details.lastModified` must not be set for NCV expiration, as it is used to
                     // check that the master version has not changed. This check is not relevant for
                     // NCV (if anything, we may check that the current version is actually newer
                     // than this one), and in particular may fail if current revision is a delete
                     // marker
-                    assert.deepStrictEqual(
-                        latestEntry.getAttribute('details.lastModified'), undefined);
+                    assert.deepStrictEqual(latestEntry.getAttribute('details.lastModified'), undefined);
                 });
             });
         });
@@ -1716,13 +1693,7 @@ describe('lifecycle task helper methods', () => {
                     },
                 };
 
-                const expectedEntries = [
-                    versions[0],
-                    versions[1],
-                    versions[2],
-                    versions[3],
-                    versions[4],
-                ];
+                const expectedEntries = [versions[0], versions[1], versions[2], versions[3], versions[4]];
 
                 versions.forEach((v, idx) => {
                     lct2._checkAndApplyNCVExpirationRule(bucketData, versions[idx], rules, fakeLogger);
@@ -1733,18 +1704,13 @@ describe('lifecycle task helper methods', () => {
                         return;
                     }
 
-                    const expectedTarget = Object.assign(
-                        {},
-                        bucketData.target,
-                        {
-                            key: expectedEntries[idx].Key,
-                            version: expectedEntries[idx].VersionId,
-                        }
-                    );
+                    const expectedTarget = Object.assign({}, bucketData.target, {
+                        key: expectedEntries[idx].Key,
+                        version: expectedEntries[idx].VersionId,
+                    });
 
                     assert.strictEqual(latestEntry.getActionType(), 'deleteObject');
-                    assert.deepStrictEqual(
-                        latestEntry.getAttribute('target'), expectedTarget);
+                    assert.deepStrictEqual(latestEntry.getAttribute('target'), expectedTarget);
                 });
             });
         });
@@ -1765,27 +1731,27 @@ describe('lifecycle task helper methods', () => {
             {
                 Key: 'testkey',
                 VersionId: '4',
-                staleDate: new Date(testDate - (1 * DAY)).toISOString(),
+                staleDate: new Date(testDate - 1 * DAY).toISOString(),
             },
             {
                 Key: 'testkey',
                 VersionId: '3',
-                staleDate: new Date(testDate - (2 * DAY)).toISOString(),
+                staleDate: new Date(testDate - 2 * DAY).toISOString(),
             },
             {
                 Key: 'testkey',
                 VersionId: '1',
-                staleDate: new Date(testDate - (4 * DAY)).toISOString(),
+                staleDate: new Date(testDate - 4 * DAY).toISOString(),
             },
             {
                 Key: 'testkey',
                 VersionId: '2',
-                staleDate: new Date(testDate - (3 * DAY)).toISOString(),
+                staleDate: new Date(testDate - 3 * DAY).toISOString(),
             },
             {
                 Key: 'testkey',
                 VersionId: '0',
-                staleDate: new Date(testDate - (5 * DAY)).toISOString(),
+                staleDate: new Date(testDate - 5 * DAY).toISOString(),
             },
         ];
 
@@ -1870,19 +1836,19 @@ describe('lifecycle task helper methods', () => {
             const version1 = {
                 Key: 'testkey1',
                 VersionId: '1',
-                staleDate: new Date(testDate - (1 * DAY)).toISOString(),
+                staleDate: new Date(testDate - 1 * DAY).toISOString(),
             };
 
             const version2 = {
                 Key: 'testkey2',
                 VersionId: '2',
-                staleDate: new Date(testDate - (1 * DAY)).toISOString(),
+                staleDate: new Date(testDate - 1 * DAY).toISOString(),
             };
 
             const version3 = {
                 Key: 'testkey3',
                 VersionId: '3',
-                staleDate: new Date(testDate - (1 * DAY)).toISOString(),
+                staleDate: new Date(testDate - 1 * DAY).toISOString(),
             };
 
             const uniqueKeySet = new Set(['testkey1', 'testkey2']);
@@ -1954,19 +1920,19 @@ describe('lifecycle task helper methods', () => {
             const version1 = {
                 Key: 'testkey1',
                 VersionId: '1',
-                staleDate: new Date(testDate - (1 * DAY)).toISOString(),
+                staleDate: new Date(testDate - 1 * DAY).toISOString(),
             };
 
             const version2 = {
                 Key: 'testkey2',
                 VersionId: '2',
-                staleDate: new Date(testDate - (1 * DAY)).toISOString(),
+                staleDate: new Date(testDate - 1 * DAY).toISOString(),
             };
 
             const version3 = {
                 Key: 'testkey3',
                 VersionId: '3',
-                staleDate: new Date(testDate - (1 * DAY)).toISOString(),
+                staleDate: new Date(testDate - 1 * DAY).toISOString(),
             };
 
             const b1 = 'testbucket1';
@@ -2045,14 +2011,7 @@ describe('lifecycle task helper methods', () => {
                     this.bucketClearCalledWith = { bucketName };
                 }
 
-                _compareRulesToList(
-                    bucketData,
-                    bucketLCRules,
-                    allVersionsWithStateDate,
-                    log,
-                    versioningStatus,
-                    cb
-                ) {
+                _compareRulesToList(bucketData, bucketLCRules, allVersionsWithStateDate, log, versioningStatus, cb) {
                     return cb();
                 }
 
@@ -2098,13 +2057,12 @@ describe('lifecycle task helper methods', () => {
                 ],
                 DeleteMarkers: [],
             };
-            lct2._getObjectVersions(bucketData, {}, 'Enabled', 0, fakeLogger,
-                err => {
-                    assert.ifError(err);
-                    assert.strictEqual(lct2.objectsClearCalledWith, null);
-                    assert.deepStrictEqual(lct2.bucketClearCalledWith, { bucketName: 'test-bucket' });
-                    done();
-                });
+            lct2._getObjectVersions(bucketData, {}, 'Enabled', 0, fakeLogger, err => {
+                assert.ifError(err);
+                assert.strictEqual(lct2.objectsClearCalledWith, null);
+                assert.deepStrictEqual(lct2.bucketClearCalledWith, { bucketName: 'test-bucket' });
+                done();
+            });
         });
 
         it('should clear heap object-level entries when IsTruncated is true', done => {
@@ -2139,16 +2097,15 @@ describe('lifecycle task helper methods', () => {
                 ],
                 DeleteMarkers: [],
             };
-            lct2._getObjectVersions(bucketData, {}, 'Enabled', 0, fakeLogger,
-                err => {
-                    assert.ifError(err);
-                    assert.strictEqual(lct2.bucketClearCalledWith, null);
-                    assert.strictEqual(lct2.objectsClearCalledWith.bucketName, 'test-bucket');
-                    assert(lct2.objectsClearCalledWith.uniqueObjectKeys.has('obj1'));
-                    assert(lct2.objectsClearCalledWith.uniqueObjectKeys.has('obj2'));
-                    assert(!lct2.objectsClearCalledWith.uniqueObjectKeys.has('obj3'));
-                    done();
-                });
+            lct2._getObjectVersions(bucketData, {}, 'Enabled', 0, fakeLogger, err => {
+                assert.ifError(err);
+                assert.strictEqual(lct2.bucketClearCalledWith, null);
+                assert.strictEqual(lct2.objectsClearCalledWith.bucketName, 'test-bucket');
+                assert(lct2.objectsClearCalledWith.uniqueObjectKeys.has('obj1'));
+                assert(lct2.objectsClearCalledWith.uniqueObjectKeys.has('obj2'));
+                assert(!lct2.objectsClearCalledWith.uniqueObjectKeys.has('obj3'));
+                done();
+            });
         });
 
         it('should return an error if version id is invalid', done => {
@@ -2171,11 +2128,10 @@ describe('lifecycle task helper methods', () => {
                     },
                 ],
             };
-            lct2._getObjectVersions(bucketData, {}, 'Enabled', 0, fakeLogger,
-                err => {
-                    assert.deepStrictEqual(err, errors.InternalError);
-                    done();
-                });
+            lct2._getObjectVersions(bucketData, {}, 'Enabled', 0, fakeLogger, err => {
+                assert.deepStrictEqual(err, errors.InternalError);
+                done();
+            });
         });
     });
 
@@ -2185,15 +2141,18 @@ describe('lifecycle task helper methods', () => {
             const action = sinon.stub();
             action.callsArg(0);
 
-            lct._retryEntry({
-                logFields: {},
-                log: fakeLogger,
-                actionFunc: action,
-            }, err => {
-                assert.ifError(err);
-                assert(action.calledOnce);
-                done();
-            });
+            lct._retryEntry(
+                {
+                    logFields: {},
+                    log: fakeLogger,
+                    actionFunc: action,
+                },
+                err => {
+                    assert.ifError(err);
+                    assert(action.calledOnce);
+                    done();
+                },
+            );
         });
 
         it('should not retry if error is not retryable', done => {
@@ -2201,15 +2160,18 @@ describe('lifecycle task helper methods', () => {
             const action = sinon.stub();
             action.callsArgWith(0, { code: 'NotRetryable', message: 'test' });
 
-            lct._retryEntry({
-                logFields: {},
-                log: fakeLogger,
-                actionFunc: action,
-            }, err => {
-                assert.ifError(err);
-                assert(action.calledOnce);
-                done();
-            });
+            lct._retryEntry(
+                {
+                    logFields: {},
+                    log: fakeLogger,
+                    actionFunc: action,
+                },
+                err => {
+                    assert.ifError(err);
+                    assert(action.calledOnce);
+                    done();
+                },
+            );
         });
 
         it('should retry retryable errors up to 5 times', done => {
@@ -2219,15 +2181,18 @@ describe('lifecycle task helper methods', () => {
             const action = sinon.stub();
             action.callsArgWith(0, { code: 'NotRetryable', message: 'test', retryable: true });
 
-            lct._retryEntry({
-                logFields: {},
-                log: fakeLogger,
-                actionFunc: action,
-            }, err => {
-                assert.ifError(err);
-                assert.equal(action.callCount, 5);
-                done();
-            });
+            lct._retryEntry(
+                {
+                    logFields: {},
+                    log: fakeLogger,
+                    actionFunc: action,
+                },
+                err => {
+                    assert.ifError(err);
+                    assert.equal(action.callCount, 5);
+                    done();
+                },
+            );
         });
 
         it('should stop retrying after reaching 400 total retries', done => {
@@ -2240,17 +2205,21 @@ describe('lifecycle task helper methods', () => {
             let count = 0;
             async.whilst(
                 () => count++ < 102,
-                cb => lct._retryEntry({
-                    logFields: { count, totalRetries: lct._totalRetries },
-                    log: fakeLogger,
-                    actionFunc: action,
-                }, cb),
+                cb =>
+                    lct._retryEntry(
+                        {
+                            logFields: { count, totalRetries: lct._totalRetries },
+                            log: fakeLogger,
+                            actionFunc: action,
+                        },
+                        cb,
+                    ),
                 err => {
                     assert.ifError(err);
                     // 5 attempts x 100, last 2 calls will not be retried (reached max)
                     assert.equal(action.callCount, 502);
                     done();
-                }
+                },
             );
         });
     });
@@ -2298,11 +2267,7 @@ describe('lifecycle task helper methods', () => {
                 Rules: [],
             };
             const snapshot = sinon.stub(lct, '_snapshotDataMoverTopicOffsets').returns();
-            lct.setSupportedRules([
-                'Expiration',
-                'NoncurrentVersionExpiration',
-                'AbortIncompleteMultipartUpload',
-            ]);
+            lct.setSupportedRules(['Expiration', 'NoncurrentVersionExpiration', 'AbortIncompleteMultipartUpload']);
             lct.processBucketEntry(bucketLCRules, bucketData, s3target, backbeatMetadataProxy, 0, err => {
                 assert.deepEqual(err, errors.NoSuchBucket);
                 assert(snapshot.notCalled);
@@ -2382,9 +2347,9 @@ describe('lifecycle task helper methods', () => {
 
             lifecycleTask._getTransitionActionEntry(testParams, mockObjectMD, fakeLogger, (err, entry) => {
                 assert.ifError(err);
-                
+
                 assert.strictEqual(entry.getActionType(), 'copyLocation');
-                
+
                 const target = entry.getAttribute('target');
                 assert.strictEqual(target.bucket, testParams.bucket);
                 assert.strictEqual(target.key, testParams.objectKey);
@@ -2394,19 +2359,19 @@ describe('lifecycle task helper methods', () => {
                 assert.strictEqual(target.owner, testParams.owner);
                 assert.strictEqual(target.accountId, testParams.accountId);
                 assert.strictEqual(target.attempt, undefined);
-                
+
                 assert.strictEqual(entry.getAttribute('toLocation'), testParams.site);
-                
+
                 const source = entry.getAttribute('source');
                 assert.strictEqual(source.bucket, testParams.bucket);
                 assert.strictEqual(source.objectKey, testParams.objectKey);
                 assert.strictEqual(source.storageClass, 'local-site');
                 assert.strictEqual(source.lastModified, undefined);
-                
+
                 const context = entry.getContext();
                 assert.strictEqual(context.origin, 'lifecycle');
                 assert.strictEqual(context.ruleType, 'transition');
-                
+
                 done();
             });
         });
@@ -2417,7 +2382,7 @@ describe('lifecycle task helper methods', () => {
                 getDataStoreVersionId: () => 'version-123',
                 getContentLength: () => 1024,
                 getValue: () => ({
-                    'x-amz-meta-scal-s3-transition-attempt': '3'
+                    'x-amz-meta-scal-s3-transition-attempt': '3',
                 }),
             };
 
@@ -2501,22 +2466,24 @@ describe('lifecycle task helper methods', () => {
         let putObjectMD;
 
         function setupObjectMD(overrides) {
-            objectMD = Object.assign({
-                getReplicationStatus: () => 'COMPLETED',
-                getDataStoreName: () => 'us-east-1',
-                getAmzStorageClass: () => 'us-east-1',
-                getDataStoreVersionId: () => 'version-123',
-                getTransitionInProgress: () => false,
-                getArchive: () => undefined,
-                getContentLength: () => 1024,
-                getUserMetadata: () => null,
-                getValue: () => ({}),
-                setTransitionInProgress: sinon.spy(),
-                setOriginOp: sinon.spy(),
-                getSerialized: () => '{}',
-            }, overrides);
-            sinon.stub(lifecycleTask, '_getObjectMD')
-                .callsFake((params, log, cb) => cb(null, objectMD));
+            objectMD = Object.assign(
+                {
+                    getReplicationStatus: () => 'COMPLETED',
+                    getDataStoreName: () => 'us-east-1',
+                    getAmzStorageClass: () => 'us-east-1',
+                    getDataStoreVersionId: () => 'version-123',
+                    getTransitionInProgress: () => false,
+                    getArchive: () => undefined,
+                    getContentLength: () => 1024,
+                    getUserMetadata: () => null,
+                    getValue: () => ({}),
+                    setTransitionInProgress: sinon.spy(),
+                    setOriginOp: sinon.spy(),
+                    getSerialized: () => '{}',
+                },
+                overrides,
+            );
+            sinon.stub(lifecycleTask, '_getObjectMD').callsFake((params, log, cb) => cb(null, objectMD));
         }
 
         beforeEach(() => {
@@ -2525,11 +2492,10 @@ describe('lifecycle task helper methods', () => {
             lifecycleTask.circuitBreakers = { tripped: () => false };
             lifecycleTask.producer = {};
             lifecycleTask.transitionTasksTopic = 'test-transition-topic';
-            sendDataMoverAction = sinon.stub(
-                ReplicationAPI, 'sendDataMoverAction')
+            sendDataMoverAction = sinon
+                .stub(ReplicationAPI, 'sendDataMoverAction')
                 .callsFake((producer, entry, log, cb) => cb());
-            putObjectMD = sinon.stub(lifecycleTask, '_putObjectMD')
-                .callsFake((params, log, cb) => cb());
+            putObjectMD = sinon.stub(lifecycleTask, '_putObjectMD').callsFake((params, log, cb) => cb());
         });
 
         it('should not transition an object declared as cold', done => {
@@ -2537,8 +2503,7 @@ describe('lifecycle task helper methods', () => {
             const getEntryStub = sinon.stub(lifecycleTask, '_getTransitionActionEntry');
 
             lifecycleTask._applyTransitionRule(testParams, fakeLogger, err => {
-                assert.strictEqual(err.description,
-                    'transitioning an object declared as cold is forbidden');
+                assert.strictEqual(err.description, 'transitioning an object declared as cold is forbidden');
                 sinon.assert.notCalled(getEntryStub);
                 sinon.assert.notCalled(sendDataMoverAction);
                 sinon.assert.notCalled(putObjectMD);
@@ -2546,13 +2511,14 @@ describe('lifecycle task helper methods', () => {
             });
         });
 
-        it('should not transition an object still on the source location',
-        done => {
+        it('should not transition an object still on the source location', done => {
             setupObjectMD({ getDataStoreName: () => CRR_LOCATION });
 
             lifecycleTask._applyTransitionRule(testParams, fakeLogger, err => {
-                assert.strictEqual(err.description,
-                    'transitioning an object still on the source location is forbidden');
+                assert.strictEqual(
+                    err.description,
+                    'transitioning an object still on the source location is forbidden',
+                );
                 sinon.assert.notCalled(sendDataMoverAction);
                 sinon.assert.notCalled(objectMD.setTransitionInProgress);
                 sinon.assert.notCalled(putObjectMD);
@@ -2584,11 +2550,15 @@ describe('lifecycle task helper methods', () => {
             [
                 {
                     desc: 'lifecycle events to the location are paused',
-                    setup: () => { lifecycleTask.pausedLocations = new Set([testParams.site]); },
+                    setup: () => {
+                        lifecycleTask.pausedLocations = new Set([testParams.site]);
+                    },
                 },
                 {
                     desc: 'the circuit breaker is tripped',
-                    setup: () => { lifecycleTask.circuitBreakers = { tripped: () => true }; },
+                    setup: () => {
+                        lifecycleTask.circuitBreakers = { tripped: () => true };
+                    },
                 },
                 {
                     desc: 'replication is in progress',
@@ -2612,9 +2582,10 @@ describe('lifecycle task helper methods', () => {
                 },
                 {
                     desc: 'the object is temporarily restored',
-                    setup: () => setupObjectMD({
-                        getArchive: () => ({ restoreCompletedAt: new Date() }),
-                    }),
+                    setup: () =>
+                        setupObjectMD({
+                            getArchive: () => ({ restoreCompletedAt: new Date() }),
+                        }),
                 },
             ].forEach(({ desc, setup }) => {
                 it(`should not log an error when ${desc}`, done => {
@@ -2717,8 +2688,7 @@ describe('lifecycle task helper methods', () => {
                 headStorageClass: 'location-dmf-v1',
             },
         ].forEach(({ desc, listedStorageClass, headStorageClass }) => {
-            it(`should queue the expiration of a ${desc} with the ` +
-            'archive-info storage class', done => {
+            it(`should queue the expiration of a ${desc} with the ` + 'archive-info storage class', done => {
                 class LifecycleTaskMock extends LifecycleTask {
                     _sendObjectAction(entry, cb) {
                         this.latestEntry = entry;
@@ -2755,18 +2725,16 @@ describe('lifecycle task helper methods', () => {
                     assert.ifError(err);
                     assert.strictEqual(lifecycleTask.s3target.send.calledOnce, true);
                     const command = lifecycleTask.s3target.send.firstCall.args[0];
-                    assert(command.middlewareStack.identify()
-                        .includes('attachArchiveInfoHeader - build'));
+                    assert(command.middlewareStack.identify().includes('attachArchiveInfoHeader - build'));
                     assert.strictEqual(
                         lifecycleTask.latestEntry.getAttribute('details.dataStoreName'),
-                        headStorageClass
+                        headStorageClass,
                     );
                     done();
                 });
             });
         });
     });
-
 });
 
 describe('LifecycleTask trace-context propagation', () => {

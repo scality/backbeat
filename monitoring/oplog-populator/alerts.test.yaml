@@ -3,7 +3,6 @@ rule_files:
   - alerts.rendered.yaml
 
 tests:
-
   - name: Oplog Populator Single Failed Scrape
     interval: 1m
     input_series:
@@ -36,8 +35,8 @@ tests:
               severity: critical
             exp_annotations:
               zenko_service: backbeat-oplog-populator
-              description: "Oplog populator pod is down"
-              summary: "Oplog populator service is in critical state"
+              description: 'Oplog populator pod is down'
+              summary: 'Oplog populator service is in critical state'
 
   - name: Connector Configuration Failure
     interval: 1m
@@ -61,7 +60,7 @@ tests:
               connector: example-connector
             exp_annotations:
               zenko_service: backbeat-oplog-populator
-              description: "Oplog populator failed to configure connector"
+              description: 'Oplog populator failed to configure connector'
               summary: "Oplog populator couldn't update kafka connect connector"
 
   - name: Connector Failures
@@ -84,8 +83,8 @@ tests:
               connector: example-connector
             exp_annotations:
               zenko_service: backbeat-oplog-populator
-              description: "Oplog populator restarted connectors too many times"
-              summary: "Oplog populator connectors keep failing after restarts"
+              description: 'Oplog populator restarted connectors too many times'
+              summary: 'Oplog populator connectors keep failing after restarts'
 
   - name: Number of Kafka Connect Replicas
     interval: 1m
@@ -105,8 +104,8 @@ tests:
               severity: warning
             exp_annotations:
               zenko_service: backbeat-oplog-populator
-              description: "Kafka connector count is above the number of hashed connectors, or above the soft limit with per-bucket ingestion. With per-bucket ingestion, if the number of buckets is too high, consider using a single replica for your cluster"
-              summary: "Kafka connector count is above the soft limit"
+              description: 'Kafka connector count is above the number of hashed connectors, or above the soft limit with per-bucket ingestion. With per-bucket ingestion, if the number of buckets is too high, consider using a single replica for your cluster'
+              summary: 'Kafka connector count is above the soft limit'
       - alertname: KafkaConnectReplicasAbove
         eval_time: 25m
         exp_alerts: []
@@ -145,8 +144,8 @@ tests:
               severity: warning
             exp_annotations:
               zenko_service: backbeat-oplog-populator
-              description: "Kafka connector count is above the number of hashed connectors, or above the soft limit with per-bucket ingestion. With per-bucket ingestion, if the number of buckets is too high, consider using a single replica for your cluster"
-              summary: "Kafka connector count is above the soft limit"
+              description: 'Kafka connector count is above the number of hashed connectors, or above the soft limit with per-bucket ingestion. With per-bucket ingestion, if the number of buckets is too high, consider using a single replica for your cluster'
+              summary: 'Kafka connector count is above the soft limit'
 
   - name: Connector Paused
     interval: 1m
@@ -164,8 +163,8 @@ tests:
               severity: critical
             exp_annotations:
               zenko_service: backbeat-oplog-populator
-              description: "An oplog populator connector is paused or stopped, so changes to the buckets it covers are not processed: replication, lifecycle and notifications are delayed for these buckets"
-              summary: "Oplog populator connector paused"
+              description: 'An oplog populator connector is paused or stopped, so changes to the buckets it covers are not processed: replication, lifecycle and notifications are delayed for these buckets'
+              summary: 'Oplog populator connector paused'
 
   - name: Migration Not Completing
     interval: 1m
@@ -183,5 +182,5 @@ tests:
               severity: warning
             exp_annotations:
               zenko_service: backbeat-oplog-populator
-              description: "The oplog populator has not completed the migration of its connectors for 30 minutes, so changes to some buckets may be delayed"
-              summary: "Oplog populator migration not completing"
+              description: 'The oplog populator has not completed the migration of its connectors for 30 minutes, so changes to some buckets may be delayed'
+              summary: 'Oplog populator migration not completing'

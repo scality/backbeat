@@ -29,10 +29,10 @@ describe('MetricsModel', () => {
             mock.site,
             mock.bucketName,
             mock.objectKey,
-            mock.versionId);
+            mock.versionId,
+        );
         const data = JSON.parse(metrics.serialize());
-        Object.keys(mock)
-            .forEach(key => assert.strictEqual(data[key], mock[key]));
+        Object.keys(mock).forEach(key => assert.strictEqual(data[key], mock[key]));
     });
 
     it('should serialize data when values passed to setters', () => {
@@ -46,7 +46,6 @@ describe('MetricsModel', () => {
             .withObjectKey(mock.objectKey)
             .withVersionId(mock.versionId);
         const data = JSON.parse(metrics.serialize());
-        Object.keys(mock)
-            .forEach(key => assert.strictEqual(data[key], mock[key]));
+        Object.keys(mock).forEach(key => assert.strictEqual(data[key], mock[key]));
     });
 });

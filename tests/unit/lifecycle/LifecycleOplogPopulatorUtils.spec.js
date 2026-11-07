@@ -93,12 +93,8 @@ describe('LifecycleOplogPopulatorUtils', () => {
                 bucketMd: {
                     lifecycleConfiguration: {
                         rules: [
-                            buildLifecycleRule([
-                                currentTransitionRule,
-                            ]),
-                            buildLifecycleRule([
-                                nonCurrentTransitionRule,
-                            ], false),
+                            buildLifecycleRule([currentTransitionRule]),
+                            buildLifecycleRule([nonCurrentTransitionRule], false),
                             buildLifecycleRule([
                                 currentExpirationRule,
                                 nonCurrentExpirationRule,
@@ -115,12 +111,8 @@ describe('LifecycleOplogPopulatorUtils', () => {
                 bucketMd: {
                     lifecycleConfiguration: {
                         rules: [
-                            buildLifecycleRule([
-                                nonCurrentTransitionRule,
-                            ]),
-                            buildLifecycleRule([
-                                currentTransitionRule,
-                            ], false),
+                            buildLifecycleRule([nonCurrentTransitionRule]),
+                            buildLifecycleRule([currentTransitionRule], false),
                             buildLifecycleRule([
                                 currentExpirationRule,
                                 nonCurrentExpirationRule,
@@ -137,10 +129,7 @@ describe('LifecycleOplogPopulatorUtils', () => {
                 bucketMd: {
                     lifecycleConfiguration: {
                         rules: [
-                            buildLifecycleRule([
-                                currentTransitionRule,
-                                nonCurrentTransitionRule,
-                            ]),
+                            buildLifecycleRule([currentTransitionRule, nonCurrentTransitionRule]),
                             buildLifecycleRule([
                                 currentExpirationRule,
                                 nonCurrentExpirationRule,
@@ -157,10 +146,7 @@ describe('LifecycleOplogPopulatorUtils', () => {
                 bucketMd: {
                     lifecycleConfiguration: {
                         rules: [
-                            buildLifecycleRule([
-                                currentTransitionRule,
-                                nonCurrentTransitionRule,
-                            ], false),
+                            buildLifecycleRule([currentTransitionRule, nonCurrentTransitionRule], false),
                             buildLifecycleRule([
                                 currentExpirationRule,
                                 nonCurrentExpirationRule,
@@ -177,13 +163,8 @@ describe('LifecycleOplogPopulatorUtils', () => {
                 bucketMd: {
                     lifecycleConfiguration: {
                         rules: [
-                            buildLifecycleRule([
-                                currentTransitionRuleCold,
-                            ], false),
-                            buildLifecycleRule([
-                                currentTransitionRule,
-                                nonCurrentTransitionRule,
-                            ], false),
+                            buildLifecycleRule([currentTransitionRuleCold], false),
+                            buildLifecycleRule([currentTransitionRule, nonCurrentTransitionRule], false),
                         ],
                     },
                 },
@@ -194,13 +175,8 @@ describe('LifecycleOplogPopulatorUtils', () => {
                 bucketMd: {
                     lifecycleConfiguration: {
                         rules: [
-                            buildLifecycleRule([
-                                nonCurrentTransitionRuleCold,
-                            ], false),
-                            buildLifecycleRule([
-                                currentTransitionRule,
-                                nonCurrentTransitionRule,
-                            ], false),
+                            buildLifecycleRule([nonCurrentTransitionRuleCold], false),
+                            buildLifecycleRule([currentTransitionRule, nonCurrentTransitionRule], false),
                         ],
                     },
                 },

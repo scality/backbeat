@@ -2,14 +2,13 @@ const OplogPopulatorUtils = require('../../lib/util/OplogPopulatorUtils');
 const locations = require('../../conf/locationConfig.json');
 
 class LifecycleOplogPopulatorUtils extends OplogPopulatorUtils {
-
     /**
      * Get extension specific MongoDB filter
      * to get buckets that have the lifecycle
      * extension enabled
      * @returns {Object} MongoDB filter
      */
-     static getExtensionMongoDBFilter() {
+    static getExtensionMongoDBFilter() {
         const coldLocations = Object.keys(locations).filter(loc => locations[loc].isCold);
         // getting buckets with at least one lifecycle transition rule enabled
         // or buckets with disabled lifecycle transition rules to cold locations (needed for restores)
@@ -25,7 +24,8 @@ class LifecycleOplogPopulatorUtils extends OplogPopulatorUtils {
                                     },
                                 },
                             },
-                        }, {
+                        },
+                        {
                             $or: [
                                 {
                                     ruleStatus: 'Enabled',
@@ -50,17 +50,17 @@ class LifecycleOplogPopulatorUtils extends OplogPopulatorUtils {
                                                 $elemMatch: {
                                                     storageClass: {
                                                         $in: coldLocations,
-                                                    }
+                                                    },
                                                 },
                                             },
                                         },
-                                    }
+                                    },
                                 },
                             ],
                         },
                     ],
                 },
-            }
+            },
         };
     }
 
@@ -72,8 +72,7 @@ class LifecycleOplogPopulatorUtils extends OplogPopulatorUtils {
      * current extension enabled
      */
     static isBucketExtensionEnabled(bucketMD) {
-        const rules = bucketMD.lifecycleConfiguration
-            && bucketMD.lifecycleConfiguration.rules;
+        const rules = bucketMD.lifecycleConfiguration && bucketMD.lifecycleConfiguration.rules;
         if (!rules || rules.length === 0) {
             return false;
         } else {
@@ -81,19 +80,16 @@ class LifecycleOplogPopulatorUtils extends OplogPopulatorUtils {
             // or if buckets have transition rules to cold locations (needed for restores)
             return rules.some(rule => {
                 if (rule.ruleStatus === 'Enabled') {
-                    return rule.actions.some(
-                        action => ['Transition', 'NoncurrentVersionTransition']
-                            .includes(action.actionName)
+                    return rule.actions.some(action =>
+                        ['Transition', 'NoncurrentVersionTransition'].includes(action.actionName),
                     );
                 }
                 return rule.actions.some(action => {
                     if (action.actionName === 'Transition') {
-                        return action.transition.some(
-                            transition => locations[transition.storageClass]?.isCold
-                        );
+                        return action.transition.some(transition => locations[transition.storageClass]?.isCold);
                     } else if (action.actionName === 'NoncurrentVersionTransition') {
                         return action.nonCurrentVersionTransition.some(
-                            transition => locations[transition.storageClass]?.isCold
+                            transition => locations[transition.storageClass]?.isCold,
                         );
                     }
                     return false;

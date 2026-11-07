@@ -9,13 +9,9 @@ const LocationStatusStream = require('../../../extensions/utils/LocationStatusSt
 const ChangeStream = require('../../../lib/wrappers/ChangeStream');
 const FakeLogger = require('../../utils/fakeLogger');
 
-const {
-    mongoConfig,
-} = require('../../functional/lifecycle/configObjects');
-
+const { mongoConfig } = require('../../functional/lifecycle/configObjects');
 
 describe('LocationStatusStream', () => {
-
     afterEach(() => {
         sinon.restore();
     });
@@ -39,9 +35,11 @@ describe('LocationStatusStream', () => {
                 assert(mongoConnectStub.calledOnce);
                 assert(dbStub.calledOnceWith('metadata', { ignoreUndefined: true }));
                 assert(collectionStub.calledOnceWith('__locationStatusStore'));
-                assert(mongoCommandStub.calledOnceWith({
-                    buildInfo: 1,
-                }));
+                assert(
+                    mongoCommandStub.calledOnceWith({
+                        buildInfo: 1,
+                    }),
+                );
                 assert.equal(lss._mongoVersion, '4.3.17');
             });
         });
@@ -97,7 +95,6 @@ describe('LocationStatusStream', () => {
                 operationType: 'update',
                 documentKey: {
                     _id: 'us-east-1',
-
                 },
                 fullDocument: {
                     _id: 'us-east-1',
@@ -116,7 +113,6 @@ describe('LocationStatusStream', () => {
                 operationType: 'update',
                 documentKey: {
                     _id: 'us-east-1',
-
                 },
                 fullDocument: {
                     _id: 'us-east-1',
@@ -135,12 +131,11 @@ describe('LocationStatusStream', () => {
                 operationType: 'delete',
                 documentKey: {
                     _id: 'us-east-1',
-
                 },
                 fullDocument: null,
             },
             expectedFunctionCall: 'resume',
-        }
+        },
     ].forEach(params => {
         it(`_handleChangeStreamChangeEvent:: ${params.case}`, () => {
             const pauseStub = sinon.stub();
@@ -165,13 +160,15 @@ describe('LocationStatusStream', () => {
             assert(err);
             assert.strictEqual(err.message, 'MongoDB error');
             assert(errorSpy.calledOnce);
-            assert(errorSpy.calledWith(
-                'Could not fetch location statuses from mongo',
-                sinon.match({
-                    method: 'ServiceStatusManager._initializeLocationStatuses',
-                    error: 'MongoDB error',
-                })
-            ));
+            assert(
+                errorSpy.calledWith(
+                    'Could not fetch location statuses from mongo',
+                    sinon.match({
+                        method: 'ServiceStatusManager._initializeLocationStatuses',
+                        error: 'MongoDB error',
+                    }),
+                ),
+            );
             return done();
         });
     });

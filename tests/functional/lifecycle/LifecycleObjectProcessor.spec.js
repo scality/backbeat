@@ -3,21 +3,12 @@
 const werelogs = require('werelogs');
 const { ObjectMD } = require('@scality/arsenal').models;
 
-const LifecycleObjectExpirationProcessor = require(
-    '../../../extensions/lifecycle/objectProcessor/LifecycleObjectExpirationProcessor');
+const LifecycleObjectExpirationProcessor = require('../../../extensions/lifecycle/objectProcessor/LifecycleObjectExpirationProcessor');
 
 const { S3ClientMock } = require('../../utils/S3ClientMock');
 const { BackbeatClientMock } = require('../../utils/BackbeatClientMock');
 
-
-const {
-    zkConfig,
-    kafkaConfig,
-    lcConfig,
-    s3Config,
-    objectTasksTopic,
-    testTimeout,
-} = require('./configObjects');
+const { zkConfig, kafkaConfig, lcConfig, s3Config, objectTasksTopic, testTimeout } = require('./configObjects');
 
 werelogs.configure({ level: 'warn', dump: 'error' });
 
@@ -28,16 +19,14 @@ describe('Lifecycle Object Processor', function lifecycleObjectProcessor() {
 
     function generateRetryTest(name, failures, message) {
         return function testRetries(done) {
-            const lop = new LifecycleObjectExpirationProcessor(
-                zkConfig, kafkaConfig, lcConfig, s3Config);
+            const lop = new LifecycleObjectExpirationProcessor(zkConfig, kafkaConfig, lcConfig, s3Config);
 
             const s3Client = new S3ClientMock(failures);
             const backbeatClient = new BackbeatClientMock(failures);
             lop.clientManager.getS3Client = () => s3Client;
             lop.clientManager.getBackbeatClient = () => backbeatClient;
             lop.clientManager.getBackbeatMetadataProxy = () => ({
-                getMetadata: (_a, _b, cb) =>
-                    cb(null, { Body: new ObjectMD().getSerialized() }),
+                getMetadata: (_a, _b, cb) => cb(null, { Body: new ObjectMD().getSerialized() }),
             });
 
             lop.start(err => {
@@ -45,8 +34,7 @@ describe('Lifecycle Object Processor', function lifecycleObjectProcessor() {
                     return done(err);
                 }
 
-                const objectTaskConsumer =
-                    lop._consumers.getConsumer(lcConfig.objectTasksTopic);
+                const objectTaskConsumer = lop._consumers.getConsumer(lcConfig.objectTasksTopic);
 
                 objectTaskConsumer.onEntryCommittable = () => {
                     if (backbeatRoutes.includes(name)) {
@@ -118,7 +106,9 @@ describe('Lifecycle Object Processor', function lifecycleObjectProcessor() {
             },
         },
     ].forEach(testCase => {
-        it(`should retry object entries when ${testCase.name} fails`,
-            generateRetryTest(testCase.name, testCase.failures, testCase.message));
+        it(
+            `should retry object entries when ${testCase.name} fails`,
+            generateRetryTest(testCase.name, testCase.failures, testCase.message),
+        );
     });
 });

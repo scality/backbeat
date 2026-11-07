@@ -33,10 +33,7 @@ class HashedPipelineFactory extends PipelineFactory {
                 // $mod keeps the sign of the (signed 64-bit) hash: connector k
                 // gets the remainders k and k - nbConnectors
                 '$expr': {
-                    $in: [
-                        { $mod: [{ $toHashedIndexKey: '$ns.coll' }, nbConnectors] },
-                        [index, index - nbConnectors],
-                    ],
+                    $in: [{ $mod: [{ $toHashedIndexKey: '$ns.coll' }, nbConnectors] }, [index, index - nbConnectors]],
                 },
             },
         };

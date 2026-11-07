@@ -2,8 +2,7 @@
 
 const assert = require('assert');
 
-const IngestionMetadataPolicy =
-    require('../../../extensions/mongoProcessor/metadataPolicy/IngestionMetadataPolicy');
+const IngestionMetadataPolicy = require('../../../extensions/mongoProcessor/metadataPolicy/IngestionMetadataPolicy');
 const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
 const { listEntries } = require('../../utils/nullVersionRows');
 

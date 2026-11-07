@@ -9,9 +9,18 @@ const { errors } = require('@scality/arsenal');
 describe('QueuePopulator', () => {
     let qp;
     beforeEach(() => {
-        qp = new QueuePopulator({}, {}, {
-            logSource: 'bucketd',
-        }, null, null, null, null, {});
+        qp = new QueuePopulator(
+            {},
+            {},
+            {
+                logSource: 'bucketd',
+            },
+            null,
+            null,
+            null,
+            null,
+            {},
+        );
     });
 
     describe('handle liveness', () => {
@@ -52,9 +61,7 @@ describe('QueuePopulator', () => {
             mockLogReader.getLogInfo = sinon.fake(() => logInfo);
             mockLogReader.batchProcessTimedOut = sinon.fake(() => false);
             mockLogReader.isLogConsumerReady = sinon.fake(() => true);
-            qp.logReaders = [
-                mockLogReader,
-            ];
+            qp.logReaders = [mockLogReader];
             qp.zkClient = {
                 getState: () => zookeeper.State.SYNC_CONNECTED,
             };
@@ -77,9 +84,7 @@ describe('QueuePopulator', () => {
             mockLogReader.getLogInfo = sinon.fake(() => logInfo);
             mockLogReader.batchProcessTimedOut = sinon.fake(() => false);
             mockLogReader.isLogConsumerReady = sinon.fake(() => true);
-            qp.logReaders = [
-                mockLogReader,
-            ];
+            qp.logReaders = [mockLogReader];
             qp.zkClient = {
                 getState: () => zookeeper.State.SYNC_CONNECTED,
             };
@@ -93,7 +98,7 @@ describe('QueuePopulator', () => {
                         status: constants.statusNotReady,
                         topic: 'topicB',
                     },
-                ])
+                ]),
             );
         });
 
@@ -105,9 +110,7 @@ describe('QueuePopulator', () => {
             mockLogReader.getLogInfo = sinon.fake(() => {});
             mockLogReader.batchProcessTimedOut = sinon.fake(() => true);
             mockLogReader.isLogConsumerReady = sinon.fake(() => true);
-            qp.logReaders = [
-                mockLogReader,
-            ];
+            qp.logReaders = [mockLogReader];
             qp.zkClient = {
                 getState: () => zookeeper.State.SYNC_CONNECTED,
             };
@@ -120,7 +123,7 @@ describe('QueuePopulator', () => {
                         component: 'log reader',
                         status: constants.statusTimedOut,
                     },
-                ])
+                ]),
             );
         });
 
@@ -132,9 +135,7 @@ describe('QueuePopulator', () => {
             mockLogReader.getLogInfo = sinon.fake(() => {});
             mockLogReader.batchProcessTimedOut = sinon.fake(() => false);
             mockLogReader.isLogConsumerReady = sinon.fake(() => false);
-            qp.logReaders = [
-                mockLogReader,
-            ];
+            qp.logReaders = [mockLogReader];
             qp.zkClient = {
                 getState: () => zookeeper.State.SYNC_CONNECTED,
             };
@@ -147,7 +148,7 @@ describe('QueuePopulator', () => {
                         component: 'log consumer',
                         status: constants.statusNotReady,
                     },
-                ])
+                ]),
             );
         });
     });
@@ -155,9 +156,11 @@ describe('QueuePopulator', () => {
     describe('_processLogEntries', () => {
         it('should process log records once when no more logs are available', done => {
             qp.qpConfig.exhaustLogSource = true;
-            qp.logReaders = [{
-                processLogEntries: sinon.stub().yields(null, false),
-            }];
+            qp.logReaders = [
+                {
+                    processLogEntries: sinon.stub().yields(null, false),
+                },
+            ];
             qp._processLogEntries({}, err => {
                 assert.ifError(err);
                 assert(qp.logReaders[0].processLogEntries.calledOnce);
@@ -167,11 +170,11 @@ describe('QueuePopulator', () => {
 
         it('should process log records until no more logs are available', done => {
             qp.qpConfig.exhaustLogSource = true;
-            qp.logReaders = [{
-                processLogEntries: sinon.stub()
-                    .onCall(0).yields(null, true)
-                    .onCall(1).yields(null, false),
-            }];
+            qp.logReaders = [
+                {
+                    processLogEntries: sinon.stub().onCall(0).yields(null, true).onCall(1).yields(null, false),
+                },
+            ];
             qp._processLogEntries({}, err => {
                 assert.ifError(err);
                 assert(qp.logReaders[0].processLogEntries.calledTwice);
@@ -181,11 +184,11 @@ describe('QueuePopulator', () => {
 
         it('should only process log records once if exhaustLogSource is set to false', done => {
             qp.qpConfig.exhaustLogSource = false;
-            qp.logReaders = [{
-                processLogEntries: sinon.stub()
-                    .onCall(0).yields(null, true)
-                    .onCall(1).yields(null, false),
-            }];
+            qp.logReaders = [
+                {
+                    processLogEntries: sinon.stub().onCall(0).yields(null, true).onCall(1).yields(null, false),
+                },
+            ];
             qp._processLogEntries({}, err => {
                 assert.ifError(err);
                 assert(qp.logReaders[0].processLogEntries.calledOnce);
@@ -195,11 +198,11 @@ describe('QueuePopulator', () => {
 
         it('should only process log records once if the logReaders need to be updated', done => {
             qp.qpConfig.exhaustLogSource = true;
-            qp.logReaders = [{
-                processLogEntries: sinon.stub()
-                    .onCall(0).yields(null, true)
-                    .onCall(1).yields(null, false),
-            }];
+            qp.logReaders = [
+                {
+                    processLogEntries: sinon.stub().onCall(0).yields(null, true).onCall(1).yields(null, false),
+                },
+            ];
             qp.logReadersUpdate = true;
             qp._processLogEntries({}, err => {
                 assert.ifError(err);
@@ -210,9 +213,11 @@ describe('QueuePopulator', () => {
 
         it('should forward logReader errors', done => {
             qp.qpConfig.exhaustLogSource = true;
-            qp.logReaders = [{
-                processLogEntries: sinon.stub().yields(errors.InternalError, false),
-            }];
+            qp.logReaders = [
+                {
+                    processLogEntries: sinon.stub().yields(errors.InternalError, false),
+                },
+            ];
             qp._processLogEntries({}, err => {
                 assert.deepEqual(err, errors.InternalError);
                 assert(qp.logReaders[0].processLogEntries.calledOnce);
@@ -226,15 +231,14 @@ describe('QueuePopulator', () => {
             sinon.restore();
         });
 
-        it('should set up no metrics client when no metrics are configured',
-            done => {
-                qp._setupMetricsClients(err => {
-                    assert.ifError(err);
-                    assert.strictEqual(qp._mConsumer, null);
-                    assert.strictEqual(qp._mProducer.getProducer(), null);
-                    return done();
-                });
+        it('should set up no metrics client when no metrics are configured', done => {
+            qp._setupMetricsClients(err => {
+                assert.ifError(err);
+                assert.strictEqual(qp._mConsumer, null);
+                assert.strictEqual(qp._mProducer.getProducer(), null);
+                return done();
             });
+        });
     });
 
     describe('close', () => {
@@ -309,7 +313,7 @@ describe('QueuePopulator', () => {
         it('should handle logReader close error', done => {
             const closeError = new Error('Close failed');
             mockLogReader1.close = sinon.stub().yields(closeError);
-            
+
             qp.close(err => {
                 assert.strictEqual(err, closeError);
                 sinon.assert.calledOnce(mockLogReader1.close);
@@ -322,7 +326,7 @@ describe('QueuePopulator', () => {
         it('should handle metrics producer close error', done => {
             const closeError = new Error('Metrics producer close failed');
             mockMProducer.close = sinon.stub().yields(closeError);
-            
+
             qp.close(err => {
                 assert.strictEqual(err, closeError);
                 sinon.assert.calledOnce(mockLogReader1.close);
@@ -337,7 +341,7 @@ describe('QueuePopulator', () => {
         it('should handle metrics consumer close error', done => {
             const closeError = new Error('Metrics consumer close failed');
             mockMConsumer.close = sinon.stub().yields(closeError);
-            
+
             qp.close(err => {
                 assert.strictEqual(err, closeError);
                 sinon.assert.calledOnce(mockLogReader1.close);
@@ -351,7 +355,7 @@ describe('QueuePopulator', () => {
 
         it('should work when no metrics producer exists', done => {
             qp._mProducer = null;
-            
+
             qp.close(err => {
                 assert.ifError(err);
                 sinon.assert.calledOnce(mockLogReader1.close);
@@ -365,7 +369,7 @@ describe('QueuePopulator', () => {
 
         it('should work when no metrics consumer exists', done => {
             qp._mConsumer = null;
-            
+
             qp.close(err => {
                 assert.ifError(err);
                 sinon.assert.calledOnce(mockLogReader1.close);
@@ -379,16 +383,17 @@ describe('QueuePopulator', () => {
     });
 
     it('should refuse to run with no log source', () => {
-        assert.throws(() => new QueuePopulator({}, {}, { logSource: 'none' },
-            null, null, null, null, {}), /'none' log source/);
+        assert.throws(
+            () => new QueuePopulator({}, {}, { logSource: 'none' }, null, null, null, null, {}),
+            /'none' log source/,
+        );
     });
 
     describe('configured extensions', () => {
         const extConfigs = { replication: {}, lifecycle: {}, notification: {} };
 
         function buildPopulator() {
-            return new QueuePopulator({}, {}, { logSource: 'bucketd' },
-                null, null, null, null, extConfigs);
+            return new QueuePopulator({}, {}, { logSource: 'bucketd' }, null, null, null, null, extConfigs);
         }
 
         afterEach(() => {
@@ -396,21 +401,22 @@ describe('QueuePopulator', () => {
         });
 
         it('should run every extension by default', () => {
-            assert.deepStrictEqual(Object.keys(buildPopulator().extConfigs),
-                ['replication', 'lifecycle', 'notification']);
+            assert.deepStrictEqual(Object.keys(buildPopulator().extConfigs), [
+                'replication',
+                'lifecycle',
+                'notification',
+            ]);
         });
 
         it('should only run the extensions it is configured with', () => {
             process.env.BACKBEAT_QUEUEPOPULATOR_EXTENSIONS = 'replication';
-            assert.deepStrictEqual(Object.keys(buildPopulator().extConfigs),
-                ['replication']);
+            assert.deepStrictEqual(Object.keys(buildPopulator().extConfigs), ['replication']);
         });
 
         it('should leave the configuration of the other extensions alone', () => {
             process.env.BACKBEAT_QUEUEPOPULATOR_EXTENSIONS = 'replication';
             buildPopulator();
-            assert.deepStrictEqual(Object.keys(extConfigs),
-                ['replication', 'lifecycle', 'notification']);
+            assert.deepStrictEqual(Object.keys(extConfigs), ['replication', 'lifecycle', 'notification']);
         });
     });
 });

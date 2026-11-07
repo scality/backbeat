@@ -4,9 +4,7 @@ const { MongoClient } = require('mongodb');
 const testConfig = require('../../config.json');
 const HashedPipelineFactory = require('../../../extensions/oplogPopulator/pipeline/HashedPipelineFactory');
 
-const mongoUrl =
-    `mongodb://${testConfig.queuePopulator.mongo.replicaSetHosts}` +
-    '/db?replicaSet=rs0';
+const mongoUrl = `mongodb://${testConfig.queuePopulator.mongo.replicaSetHosts}` + '/db?replicaSet=rs0';
 
 const nbConnectors = 3;
 const buckets = [...Array(30).keys()].map(i => `hashed-bucket-${i}`);
@@ -16,21 +14,25 @@ async function collect(streams, expected, timeoutMs) {
     const events = streams.map(() => []);
     const deadline = Date.now() + timeoutMs;
     while (events.flat().length < expected && Date.now() < deadline) {
-        await Promise.all(streams.map(async (stream, index) => {
-            const event = await stream.tryNext();
-            if (event) {
-                events[index].push(event);
-            }
-        }));
+        await Promise.all(
+            streams.map(async (stream, index) => {
+                const event = await stream.tryNext();
+                if (event) {
+                    events[index].push(event);
+                }
+            }),
+        );
     }
     // let any unexpected event come through
-    await Promise.all(streams.map(async (stream, index) => {
-        let event = await stream.tryNext();
-        while (event) {
-            events[index].push(event);
-            event = await stream.tryNext();
-        }
-    }));
+    await Promise.all(
+        streams.map(async (stream, index) => {
+            let event = await stream.tryNext();
+            while (event) {
+                events[index].push(event);
+                event = await stream.tryNext();
+            }
+        }),
+    );
     return events;
 }
 
@@ -46,9 +48,9 @@ describe('HashedPipelineFactory', function () {
         await db.dropDatabase();
         const { operationTime } = await db.command({ ping: 1 });
         const factory = new HashedPipelineFactory(0);
-        streams = [...Array(nbConnectors).keys()].map(index => db.watch(
-            JSON.parse(factory.getPipeline({ nbConnectors, index })),
-            { startAtOperationTime: operationTime }));
+        streams = [...Array(nbConnectors).keys()].map(index =>
+            db.watch(JSON.parse(factory.getPipeline({ nbConnectors, index })), { startAtOperationTime: operationTime }),
+        );
     });
 
     after(async () => {
@@ -72,17 +74,22 @@ describe('HashedPipelineFactory', function () {
         const events = await collect(streams, buckets.length + 1, 30000);
 
         const connectorOf = new Map();
-        events.forEach((connectorEvents, index) => connectorEvents.forEach(event => {
-            const coll = event.ns.coll;
-            assert(!excluded.includes(coll), `${coll} should be excluded`);
-            assert(['insert', 'update'].includes(event.operationType),
-                `${event.operationType} event should be filtered`);
-            assert.strictEqual(connectorOf.get(coll) ?? index, index, `${coll} spread over connectors`);
-            connectorOf.set(coll, index);
-        }));
+        events.forEach((connectorEvents, index) =>
+            connectorEvents.forEach(event => {
+                const coll = event.ns.coll;
+                assert(!excluded.includes(coll), `${coll} should be excluded`);
+                assert(
+                    ['insert', 'update'].includes(event.operationType),
+                    `${event.operationType} event should be filtered`,
+                );
+                assert.strictEqual(connectorOf.get(coll) ?? index, index, `${coll} spread over connectors`);
+                connectorOf.set(coll, index);
+            }),
+        );
         assert.deepStrictEqual([...connectorOf.keys()].sort(), [...buckets].sort());
         assert.strictEqual(events.flat().length, buckets.length + 1);
         events.forEach((connectorEvents, index) =>
-            assert(connectorEvents.length > 0, `connector ${index} got no bucket`));
+            assert(connectorEvents.length > 0, `connector ${index} got no bucket`),
+        );
     });
 });

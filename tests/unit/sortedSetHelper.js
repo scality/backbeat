@@ -1,27 +1,21 @@
 const assert = require('assert');
 const { redisKeys } = require('../../extensions/replication/constants');
 
-const {
-    getSortedSetMember,
-    getSortedSetKey,
-} = require('../../lib/util/sortedSetHelper');
+const { getSortedSetMember, getSortedSetKey } = require('../../lib/util/sortedSetHelper');
 
 describe('sorted set helper methods', () => {
     describe('getSortedSetMember', () => {
-        it('should return the correct Redis sorted set member schema when ' +
-        'using a version', () => {
+        it('should return the correct Redis sorted set member schema when ' + 'using a version', () => {
             const member = getSortedSetMember('a', 'b', 'c');
             assert.strictEqual(member, 'a:b:c');
         });
 
-        it('should return the correct Redis sorted set member schema with no ' +
-        'version', () => {
+        it('should return the correct Redis sorted set member schema with no ' + 'version', () => {
             const member = getSortedSetMember('a', 'b');
             assert.strictEqual(member, 'a:b:');
         });
 
-        it('should return the correct Redis sorted set member schema when ' +
-        'using a role', () => {
+        it('should return the correct Redis sorted set member schema when ' + 'using a role', () => {
             const member = getSortedSetMember('a', 'b', 'c', 'd');
             assert.strictEqual(member, 'a:b:c:d');
         });

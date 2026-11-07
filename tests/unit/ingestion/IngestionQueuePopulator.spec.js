@@ -1,7 +1,6 @@
 const assert = require('assert');
 
-const IngestionQueuePopulator =
-    require('../../../extensions/ingestion/IngestionQueuePopulator');
+const IngestionQueuePopulator = require('../../../extensions/ingestion/IngestionQueuePopulator');
 
 const fakeLogger = require('../../utils/fakeLogger');
 const { listEntries } = require('../../utils/nullVersionRows');

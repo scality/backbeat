@@ -127,8 +127,9 @@ describe('VaultClientWrapper', () => {
                 { type: 'assumeRole' },
                 FakeLogger,
             );
-            const getAccountIdsWithTempCredentials =
-                sinon.stub(vaultClientWrapper, 'getAccountIdsWithTempCredentials').yields();
+            const getAccountIdsWithTempCredentials = sinon
+                .stub(vaultClientWrapper, 'getAccountIdsWithTempCredentials')
+                .yields();
             vaultClientWrapper.getAccountIds(['account'], err => {
                 assert.ifError(err);
                 assert(getAccountIdsWithTempCredentials.calledOnce);
@@ -146,8 +147,7 @@ describe('VaultClientWrapper', () => {
             );
             vaultClientWrapper.init();
             sinon.stub(vaultClientWrapper._vaultClientCache, 'getClient').returns({
-                getAccountIds: (canonicalIds, opts, cb) =>
-                    cb(null, { message: { body: { account: 'accountID' } } }),
+                getAccountIds: (canonicalIds, opts, cb) => cb(null, { message: { body: { account: 'accountID' } } }),
             });
             vaultClientWrapper.getAccountIds(['account'], (err, accountIds) => {
                 assert.ifError(err);
@@ -192,8 +192,7 @@ describe('VaultClientWrapper', () => {
             vaultClientWrapper._vaultClientCache = {
                 getClientWithAWSCreds: sinon.stub().resolves({
                     enableIAMOnAdminRoutes: sinon.stub().resolves({
-                        getAccountIds: (canonicalIds, opts, cb) =>
-                            cb(errors.InternalError, null),
+                        getAccountIds: (canonicalIds, opts, cb) => cb(errors.InternalError, null),
                     }),
                 }),
             };

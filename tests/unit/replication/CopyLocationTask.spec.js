@@ -25,7 +25,7 @@ describe('CopyLocationTask', () => {
                     site: 'test-site',
                     mProducer: {
                         getProducer: () => {},
-                    }
+                    },
                 }),
             });
         });
@@ -83,7 +83,7 @@ describe('CopyLocationTask', () => {
                     site: 'test-site',
                     mProducer: {
                         getProducer: () => {},
-                    }
+                    },
                 }),
             });
         });
@@ -182,37 +182,35 @@ describe('CopyLocationTask', () => {
             });
             const objectMD = new ObjectMD();
             objectMD.setContentLength(200);
-            
+
             sinon.stub(task, '_getRanges').returns([
                 { start: 0, end: 100 },
-                { start: 101, end: 199 }
+                { start: 101, end: 199 },
             ]);
-            
+
             const putRangeFunc = sinon.stub(task, '_getRangeAndPutMPUPart');
             putRangeFunc.onCall(0).yields(null, {
                 partNumber: 0,
                 ETag: 'etag1',
             });
             putRangeFunc.onCall(1).yields(new Error('Upload failed'));
-            
+
             const abortMpuFunc = sinon.stub(task, '_multipleBackendAbortMPU').yields();
             const completeMpuFunc = sinon.stub(task, '_completeMPU').yields();
-            
+
             task.destType = 'aws_s3';
-            
+
             const uploadId = 'test-upload-id';
             task._completeRangedMPU(entry, objectMD, uploadId, fakeLogger, err => {
                 assert(err);
                 assert.strictEqual(err.message, 'Upload failed');
                 assert(abortMpuFunc.calledOnce);
-                assert(abortMpuFunc.calledWith(
-                    entry, objectMD, uploadId, fakeLogger, sinon.match.func
-                ));
+                assert(abortMpuFunc.calledWith(entry, objectMD, uploadId, fakeLogger, sinon.match.func));
                 assert(completeMpuFunc.notCalled);
                 done();
             });
         });
-            
+
         it('should handle Azure special case for MPU parts', done => {
             const entry = new ActionQueueEntry({
                 target: {
@@ -223,28 +221,28 @@ describe('CopyLocationTask', () => {
             });
             const objectMD = new ObjectMD();
             objectMD.setContentLength(200);
-            
+
             sinon.stub(task, '_getRanges').returns([
                 { start: 0, end: 100 },
-                { start: 101, end: 199 }
+                { start: 101, end: 199 },
             ]);
-            
+
             const putRangeFunc = sinon.stub(task, '_getRangeAndPutMPUPart');
             putRangeFunc.onCall(0).yields(null, {
                 partNumber: 0,
                 ETag: 'etag1',
-                numberSubParts: 2
+                numberSubParts: 2,
             });
             putRangeFunc.onCall(1).yields(null, {
                 partNumber: 1,
                 ETag: 'etag2',
-                numberSubParts: 1
+                numberSubParts: 1,
             });
-            
+
             const completeMpuFunc = sinon.stub(task, '_completeMPU').yields();
-            
+
             task.destType = 'azure';
-            
+
             task._completeRangedMPU(entry, objectMD, 'test-upload-id', fakeLogger, err => {
                 assert.ifError(err);
                 assert(completeMpuFunc.calledOnce);
@@ -279,7 +277,7 @@ describe('CopyLocationTask', () => {
                         replicationEndpoint: {
                             site: 'test-site',
                             type: 'scality',
-                        }
+                        },
                     },
                 }),
             });
@@ -359,8 +357,7 @@ describe('CopyLocationTask', () => {
         }
 
         beforeEach(() => {
-            locationConfig['source-site'] =
-                { type: 'aws_s3', isCRR: true, details: remoteSiteDetails };
+            locationConfig['source-site'] = { type: 'aws_s3', isCRR: true, details: remoteSiteDetails };
             sinon.stub(fakeLogger, 'getSerializedUids').returns('req-uid-1');
             task = new CopyLocationTask({
                 getStateVars: () => ({
@@ -384,17 +381,16 @@ describe('CopyLocationTask', () => {
             const objMd = new ObjectMD();
             objMd.setDataStoreName('some-location');
 
-            return task._sendGetObject(entry, objMd, undefined, fakeLogger, new AbortController())
-                .then(response => {
-                    assert.deepStrictEqual(response, { Body: 'stream' });
-                    assert(task.backbeatClient.send.calledOnce);
-                    const command = task.backbeatClient.send.firstCall.args[0];
-                    assert.strictEqual(command.input.Bucket, 'bucket');
-                    assert.strictEqual(command.input.Key, 'key');
-                    assert.strictEqual(command.input.VersionId, 'v1');
-                    assert.strictEqual(command.input.LocationConstraint, 'some-location');
-                    assert.strictEqual(command.input.RequestUids, 'req-uid-1');
-                });
+            return task._sendGetObject(entry, objMd, undefined, fakeLogger, new AbortController()).then(response => {
+                assert.deepStrictEqual(response, { Body: 'stream' });
+                assert(task.backbeatClient.send.calledOnce);
+                const command = task.backbeatClient.send.firstCall.args[0];
+                assert.strictEqual(command.input.Bucket, 'bucket');
+                assert.strictEqual(command.input.Key, 'key');
+                assert.strictEqual(command.input.VersionId, 'v1');
+                assert.strictEqual(command.input.LocationConstraint, 'some-location');
+                assert.strictEqual(command.input.RequestUids, 'req-uid-1');
+            });
         });
 
         it('should read directly from the source location when it is a CRR location', () => {
@@ -405,8 +401,8 @@ describe('CopyLocationTask', () => {
                 target: { bucket: 'local-bucket', key: 'key', version: 'v1' },
             });
 
-            return task._sendGetObject(entry, sourceObjectMD(), undefined, fakeLogger,
-                new AbortController())
+            return task
+                ._sendGetObject(entry, sourceObjectMD(), undefined, fakeLogger, new AbortController())
                 .then(response => {
                     assert.deepStrictEqual(response, { Body: 'remote-stream' });
                     assert(task._getAssumedRoleS3Client.calledOnce);
@@ -440,11 +436,10 @@ describe('CopyLocationTask', () => {
             const entry = new ActionQueueEntry({ target: {} });
             const objMd = sourceObjectMD([{ ...sourcePart, dataStoreVersionId: undefined }]);
 
-            return task._sendGetObject(entry, objMd, undefined, fakeLogger, new AbortController())
-                .then(() => {
-                    const command = remoteClient.send.firstCall.args[0];
-                    assert.strictEqual(command.input.VersionId, 'null');
-                });
+            return task._sendGetObject(entry, objMd, undefined, fakeLogger, new AbortController()).then(() => {
+                const command = remoteClient.send.firstCall.args[0];
+                assert.strictEqual(command.input.VersionId, 'null');
+            });
         });
 
         it('should pass the range on to the source location', () => {
@@ -453,8 +448,8 @@ describe('CopyLocationTask', () => {
 
             const entry = new ActionQueueEntry({ target: {} });
 
-            return task._sendGetObject(entry, sourceObjectMD(), { start: 0, end: 99 },
-                fakeLogger, new AbortController())
+            return task
+                ._sendGetObject(entry, sourceObjectMD(), { start: 0, end: 99 }, fakeLogger, new AbortController())
                 .then(() => {
                     const command = remoteClient.send.firstCall.args[0];
                     assert.strictEqual(command.input.Range, 'bytes=0-99');
@@ -469,8 +464,8 @@ describe('CopyLocationTask', () => {
 
             const entry = new ActionQueueEntry({ target: {} });
 
-            return task._sendGetObject(entry, sourceObjectMD(), undefined, fakeLogger,
-                new AbortController())
+            return task
+                ._sendGetObject(entry, sourceObjectMD(), undefined, fakeLogger, new AbortController())
                 .then(() => assert.fail('expected rejection'))
                 .catch(err => {
                     assert(err.InternalError);
@@ -490,8 +485,8 @@ describe('CopyLocationTask', () => {
 
             const entry = new ActionQueueEntry({ target: {} });
 
-            return task._sendGetObject(entry, sourceObjectMD(), undefined, fakeLogger,
-                new AbortController())
+            return task
+                ._sendGetObject(entry, sourceObjectMD(), undefined, fakeLogger, new AbortController())
                 .then(() => assert.fail('expected rejection'))
                 .catch(err => {
                     assert(err.InternalError);
@@ -507,7 +502,8 @@ describe('CopyLocationTask', () => {
             const entry = new ActionQueueEntry({ target: {} });
             const objMd = sourceObjectMD([sourcePart, { ...sourcePart, start: 1048576 }]);
 
-            return task._sendGetObject(entry, objMd, undefined, fakeLogger, new AbortController())
+            return task
+                ._sendGetObject(entry, objMd, undefined, fakeLogger, new AbortController())
                 .then(() => assert.fail('expected rejection'))
                 .catch(err => {
                     assert(err.InternalError);
@@ -526,7 +522,8 @@ describe('CopyLocationTask', () => {
             // no role: owner absent from the ownerId->role map
             const objMd = sourceObjectMD([{ key: 'k', bucket: 'b', dataStoreName: 'source-site' }]);
 
-            return task._sendGetObject(entry, objMd, undefined, fakeLogger, new AbortController())
+            return task
+                ._sendGetObject(entry, objMd, undefined, fakeLogger, new AbortController())
                 .then(() => assert.fail('expected rejection'))
                 .catch(err => {
                     assert(err.AccessDenied);
@@ -586,13 +583,12 @@ describe('CopyLocationTask', () => {
             const entry = new ActionQueueEntry({ target: {} });
             const objMd = new ObjectMD();
 
-            task._getRangeAndPutMPUPartOnce(entry, objMd, { start: 0, end: 99 }, 1,
-                'upload-id', fakeLogger, err => {
-                    assert(err);
-                    assert(!err.InvalidObjectState);
-                    assert(putPart.notCalled);
-                    done();
-                });
+            task._getRangeAndPutMPUPartOnce(entry, objMd, { start: 0, end: 99 }, 1, 'upload-id', fakeLogger, err => {
+                assert(err);
+                assert(!err.InvalidObjectState);
+                assert(putPart.notCalled);
+                done();
+            });
         });
 
         it('should report the failure so the transition can be reset', () => {
@@ -601,15 +597,16 @@ describe('CopyLocationTask', () => {
             task.replicationStatusProducer = { sendToTopic: sinon.stub() };
             task.dataMoverConsumer = { onEntryCommittable: sinon.stub() };
 
-            const res = task._publishCopyLocationStatus(
-                noSuchVersion(), entry, null, fakeLogger);
+            const res = task._publishCopyLocationStatus(noSuchVersion(), entry, null, fakeLogger);
 
             // committing here would drop the entry before the lifecycle side
             // resets transitionInProgress and counts the attempt
             assert.strictEqual(res.committable, false);
             assert(task.replicationStatusProducer.sendToTopic.calledOnce);
-            assert.strictEqual(task.replicationStatusProducer.sendToTopic.firstCall.args[0],
-                'backbeat-lifecycle-transition-tasks');
+            assert.strictEqual(
+                task.replicationStatusProducer.sendToTopic.firstCall.args[0],
+                'backbeat-lifecycle-transition-tasks',
+            );
         });
     });
 
@@ -632,8 +629,7 @@ describe('CopyLocationTask', () => {
         beforeEach(() => {
             sinon.stub(ClientManager.prototype, 'initSTSConfig');
             sinon.stub(ClientManager.prototype, 'initCredentialsManager');
-            getBackbeatClient = sinon.stub(ClientManager.prototype, 'getBackbeatClient')
-                .returns({ send: () => {} });
+            getBackbeatClient = sinon.stub(ClientManager.prototype, 'getBackbeatClient').returns({ send: () => {} });
             task = new CopyLocationTask({
                 getStateVars: () => ({
                     mProducer: { getProducer: () => {} },
@@ -656,8 +652,7 @@ describe('CopyLocationTask', () => {
             assert.strictEqual(task.sourceClientManagers.size, 1);
             const clientManager = firstManager(task.sourceClientManagers);
             assert.strictEqual(clientManager._transport, 'https');
-            assert.deepStrictEqual(clientManager._s3Config,
-                { host: 'production.example.com', port: '443' });
+            assert.deepStrictEqual(clientManager._s3Config, { host: 'production.example.com', port: '443' });
             assert.deepStrictEqual(clientManager._authConfig.sts, siteConfig.sts);
             assert(getBackbeatClient.alwaysCalledWith('123456789012'));
         });
@@ -681,12 +676,10 @@ describe('CopyLocationTask', () => {
         });
 
         it('should default the port when the location carries none', () => {
-            task._getAssumedRoleS3Client(
-                { ...siteConfig, endpoint: 'production.example.com' }, roleArn, fakeLogger);
+            task._getAssumedRoleS3Client({ ...siteConfig, endpoint: 'production.example.com' }, roleArn, fakeLogger);
 
             const clientManager = firstManager(task.sourceClientManagers);
-            assert.deepStrictEqual(clientManager._s3Config,
-                { host: 'production.example.com', port: 443 });
+            assert.deepStrictEqual(clientManager._s3Config, { host: 'production.example.com', port: 443 });
         });
 
         it('should log and throw a retryable AccessDenied when credentials cannot be obtained', () => {
@@ -695,7 +688,8 @@ describe('CopyLocationTask', () => {
 
             assert.throws(
                 () => task._getAssumedRoleS3Client(siteConfig, roleArn, fakeLogger),
-                err => err.AccessDenied && err.retryable === true);
+                err => err.AccessDenied && err.retryable === true,
+            );
             assert(logSpy.calledOnce);
         });
 

@@ -8,7 +8,7 @@ const {
     coldStorageRestoreAdjustTopicPrefix,
     coldStorageRestoreTopicPrefix,
     coldStorageGCTopicPrefix,
-    coldStorageArchiveTopicPrefix
+    coldStorageArchiveTopicPrefix,
 } = config.extensions.lifecycle;
 
 const LifecycleQueuePopulator = require('../../../extensions/lifecycle/LifecycleQueuePopulator');
@@ -57,21 +57,21 @@ const templateEntry = {
     'x-amz-server-side-encryption-customer-algorithm': '',
     'x-amz-website-redirect-location': '',
     'acl': {
-      Canned: 'private',
-      FULL_CONTROL: [],
-      WRITE_ACP: [],
-      READ: [],
-      READ_ACP: []
+        Canned: 'private',
+        FULL_CONTROL: [],
+        WRITE_ACP: [],
+        READ: [],
+        READ_ACP: [],
     },
     'key': 'hosts',
     'location': [
-      {
-        key: '29258f299ddfd65f6108e6cd7bd2aea9fbe7e9e0',
-        size: 542,
-        start: 0,
-        dataStoreName: 'file',
-        dataStoreETag: '1:01064f35c238bd2b785e34508c3d27f4'
-      }
+        {
+            key: '29258f299ddfd65f6108e6cd7bd2aea9fbe7e9e0',
+            size: 542,
+            start: 0,
+            dataStoreName: 'file',
+            dataStoreETag: '1:01064f35c238bd2b785e34508c3d27f4',
+        },
     ],
     'isDeleteMarker': false,
     'tags': {},
@@ -156,8 +156,9 @@ describe('LifecycleQueuePopulator', () => {
     describe(':_handleRestoreOp', () => {
         let lcqp;
         const handleRestoreOp = entry => lcqp._handleRestoreOp(entry, JSON.parse(entry.value));
-        const getAccountIdStub = sinon.stub().yields(null,
-            '79a59df900b949e55d96a1e698fbacedfd6e09d98eacf8f8d5218e7cd47ef2be');
+        const getAccountIdStub = sinon
+            .stub()
+            .yields(null, '79a59df900b949e55d96a1e698fbacedfd6e09d98eacf8f8d5218e7cd47ef2be');
         beforeEach(() => {
             lcqp = new LifecycleQueuePopulator(params);
             lcqp.locationConfigs = Object.assign({}, coldLocationConfigs, locationConfigs);
@@ -223,7 +224,7 @@ describe('LifecycleQueuePopulator', () => {
                         'archive': {
                             archiveInfo: {
                                 archiveId: '04425717-a65c-4e8a-95e1-fa1d902d9d9f',
-                                archiveVersion: 7504504064263669
+                                archiveVersion: 7504504064263669,
                             },
                             restoreRequestedAt: '2017-07-11T02:44:25.515Z',
                             restoreRequestedDays: params.requestDays,
@@ -251,7 +252,7 @@ describe('LifecycleQueuePopulator', () => {
                         eTag: '01064f35c238bd2b785e34508c3d27f4',
                         archiveInfo: {
                             archiveId: '04425717-a65c-4e8a-95e1-fa1d902d9d9f',
-                            archiveVersion: 7504504064263669
+                            archiveVersion: 7504504064263669,
                         },
                         requestedDurationSecs: params.sentDurationSecs,
                         requestId: message.requestId,
@@ -278,7 +279,7 @@ describe('LifecycleQueuePopulator', () => {
                     'archive': {
                         archiveInfo: {
                             archiveId: '04425717-a65c-4e8a-95e1-fa1d902d9d9f',
-                            archiveVersion: 7504504064263669
+                            archiveVersion: 7504504064263669,
                         },
                         restoreCompletedAt: '2017-07-13T02:44:25.519Z',
                         restoreWillExpireAt: '2017-07-15T02:44:25.519Z',
@@ -305,7 +306,7 @@ describe('LifecycleQueuePopulator', () => {
                     },
                     archiveInfo: {
                         archiveId: '04425717-a65c-4e8a-95e1-fa1d902d9d9f',
-                        archiveVersion: 7504504064263669
+                        archiveVersion: 7504504064263669,
                     },
                     requestId: message.requestId,
                     updatedAt: '2017-07-13T02:44:25.515Z',
@@ -330,7 +331,7 @@ describe('LifecycleQueuePopulator', () => {
                     'archive': {
                         archiveInfo: {
                             archiveId: '04425717-a65c-4e8a-95e1-fa1d902d9d9f',
-                            archiveVersion: 7504504064263669
+                            archiveVersion: 7504504064263669,
                         },
                         restoreCompletedAt: '2017-07-13T02:44:25.519Z',
                         restoreWillExpireAt: '2017-07-12T02:44:25.519Z',
@@ -370,7 +371,7 @@ describe('LifecycleQueuePopulator', () => {
                     'archive': {
                         archiveInfo: {
                             archiveId: '04425717-a65c-4e8a-95e1-fa1d902d9d9f',
-                            archiveVersion: 7504504064263669
+                            archiveVersion: 7504504064263669,
                         },
                         restoreCompletedAt: '2017-07-13T02:44:25.519Z',
                         restoreWillExpireAt: '2017-07-15T02:44:25.519Z',
@@ -420,7 +421,7 @@ describe('LifecycleQueuePopulator', () => {
                         'archive': {
                             archiveInfo: {
                                 archiveId: '04425717-a65c-4e8a-95e1-fa1d902d9d9f',
-                                archiveVersion: 7504504064263669
+                                archiveVersion: 7504504064263669,
                             },
                             restoreRequestedAt: '2017-07-11T02:44:25.515Z',
                             restoreRequestedDays: 3,
@@ -466,7 +467,7 @@ describe('LifecycleQueuePopulator', () => {
                     const archive = {
                         archiveInfo: {
                             archiveId: '04425717-a65c-4e8a-95e1-fa1d902d9d9f',
-                            archiveVersion: 7504504064263669
+                            archiveVersion: 7504504064263669,
                         },
                         restoreCompletedAt: '2017-07-13T02:44:25.519Z',
                         restoreWillExpireAt: '2017-07-15T02:44:25.519Z',
@@ -495,27 +496,33 @@ describe('LifecycleQueuePopulator', () => {
 
             // restore requested during the archive window: no archiveInfo, data still hot
             function getDeferredRestoreEntry(archiveOverrides, overrides) {
-                const value = Object.assign({
-                    'md-model-version': 2,
-                    'owner-display-name': 'Bart',
-                    'owner-id': accountId,
-                    'content-length': 542,
-                    'content-type': 'text/plain',
-                    'last-modified': '2017-07-13T02:44:25.519Z',
-                    'content-md5': '01064f35c238bd2b785e34508c3d27f4',
-                    'x-amz-storage-class': 'dmf-v1',
-                    'key': 'hosts',
-                    'location': [],
-                    'isDeleteMarker': false,
-                    'isNull': false,
-                    versionId,
-                    'archive': archiveOverrides === undefined ? {
-                        restoreRequestedAt: '2017-07-11T02:44:25.515Z',
-                        restoreRequestedDays: 3,
-                    } : archiveOverrides,
-                    'dataStoreName': 'us-east-1',
-                    'originOp': 's3:ObjectRestore:Post',
-                }, overrides);
+                const value = Object.assign(
+                    {
+                        'md-model-version': 2,
+                        'owner-display-name': 'Bart',
+                        'owner-id': accountId,
+                        'content-length': 542,
+                        'content-type': 'text/plain',
+                        'last-modified': '2017-07-13T02:44:25.519Z',
+                        'content-md5': '01064f35c238bd2b785e34508c3d27f4',
+                        'x-amz-storage-class': 'dmf-v1',
+                        'key': 'hosts',
+                        'location': [],
+                        'isDeleteMarker': false,
+                        'isNull': false,
+                        versionId,
+                        'archive':
+                            archiveOverrides === undefined
+                                ? {
+                                      restoreRequestedAt: '2017-07-11T02:44:25.515Z',
+                                      restoreRequestedDays: 3,
+                                  }
+                                : archiveOverrides,
+                        'dataStoreName': 'us-east-1',
+                        'originOp': 's3:ObjectRestore:Post',
+                    },
+                    overrides,
+                );
                 Object.keys(value).forEach(k => {
                     if (value[k] === undefined) {
                         delete value[k];
@@ -531,14 +538,20 @@ describe('LifecycleQueuePopulator', () => {
 
             // same object, once archived: archiveInfo set and data moved to the cold location
             function getCompletedArchiveEntry(archiveOverrides) {
-                return getDeferredRestoreEntry(Object.assign({
-                    archiveInfo,
-                    restoreRequestedAt: '2017-07-11T02:44:25.515Z',
-                    restoreRequestedDays: 3,
-                }, archiveOverrides), {
-                    dataStoreName: 'dmf-v1',
-                    originOp: 's3:LifecycleTransition:Direct',
-                });
+                return getDeferredRestoreEntry(
+                    Object.assign(
+                        {
+                            archiveInfo,
+                            restoreRequestedAt: '2017-07-11T02:44:25.515Z',
+                            restoreRequestedDays: 3,
+                        },
+                        archiveOverrides,
+                    ),
+                    {
+                        dataStoreName: 'dmf-v1',
+                        originOp: 's3:LifecycleTransition:Direct',
+                    },
+                );
             }
 
             beforeEach(() => {
@@ -591,8 +604,10 @@ describe('LifecycleQueuePopulator', () => {
                 assert(kafkaSendStub.calledOnce);
 
                 const kafkaEntry = kafkaSendStub.args[0][0][0];
-                assert.strictEqual(kafkaEntry.key,
-                    encodeURIComponent(`lc-queue-populator-test-bucket/hosts\x00${versionId}`));
+                assert.strictEqual(
+                    kafkaEntry.key,
+                    encodeURIComponent(`lc-queue-populator-test-bucket/hosts\x00${versionId}`),
+                );
 
                 const message = JSON.parse(kafkaEntry.message);
                 assert.deepStrictEqual(message, {
@@ -610,10 +625,12 @@ describe('LifecycleQueuePopulator', () => {
             });
 
             it('should not publish on archive completion without a pending restore', () => {
-                handleRestoreOp(getCompletedArchiveEntry({
-                    restoreRequestedAt: undefined,
-                    restoreRequestedDays: undefined,
-                }));
+                handleRestoreOp(
+                    getCompletedArchiveEntry({
+                        restoreRequestedAt: undefined,
+                        restoreRequestedDays: undefined,
+                    }),
+                );
 
                 assert(!kafkaSendStub.called);
                 assert(!kafkaAdjustSendStub.called);
@@ -621,10 +638,12 @@ describe('LifecycleQueuePopulator', () => {
             });
 
             it('should adjust the expiry when the object is already restored', () => {
-                handleRestoreOp(getCompletedArchiveEntry({
-                    restoreCompletedAt: '2017-07-13T02:44:25.519Z',
-                    restoreWillExpireAt: '2017-07-15T02:44:25.519Z',
-                }));
+                handleRestoreOp(
+                    getCompletedArchiveEntry({
+                        restoreCompletedAt: '2017-07-13T02:44:25.519Z',
+                        restoreWillExpireAt: '2017-07-15T02:44:25.519Z',
+                    }),
+                );
 
                 assert(kafkaAdjustSendStub.calledOnce);
                 assert(!kafkaSendStub.called);
@@ -644,25 +663,28 @@ describe('LifecycleQueuePopulator', () => {
         const handleTransitionOp = entry => lcqp._handleTransitionOp(entry, JSON.parse(entry.value));
 
         function getTransitionEntry(overrides) {
-            const value = Object.assign({
-                'md-model-version': 2,
-                'owner-display-name': 'Bart',
-                'owner-id': accountId,
-                'content-length': 542,
-                'content-type': 'text/plain',
-                'last-modified': '2017-07-13T02:44:25.519Z',
-                'content-md5': '01064f35c238bd2b785e34508c3d27f4',
-                'x-amz-storage-class': 'dmf-v1',
-                'x-amz-scal-transition-in-progress': true,
-                'x-amz-scal-transition-time': '2017-07-13T02:44:20.000Z',
-                'key': 'hosts',
-                'location': [],
-                'isDeleteMarker': false,
-                'isNull': false,
-                versionId,
-                'dataStoreName': 'us-east-1',
-                'originOp': 's3:ObjectCreated:Put',
-            }, overrides);
+            const value = Object.assign(
+                {
+                    'md-model-version': 2,
+                    'owner-display-name': 'Bart',
+                    'owner-id': accountId,
+                    'content-length': 542,
+                    'content-type': 'text/plain',
+                    'last-modified': '2017-07-13T02:44:25.519Z',
+                    'content-md5': '01064f35c238bd2b785e34508c3d27f4',
+                    'x-amz-storage-class': 'dmf-v1',
+                    'x-amz-scal-transition-in-progress': true,
+                    'x-amz-scal-transition-time': '2017-07-13T02:44:20.000Z',
+                    'key': 'hosts',
+                    'location': [],
+                    'isDeleteMarker': false,
+                    'isNull': false,
+                    versionId,
+                    'dataStoreName': 'us-east-1',
+                    'originOp': 's3:ObjectCreated:Put',
+                },
+                overrides,
+            );
             // allow overrides to remove a field by passing `undefined`
             Object.keys(value).forEach(k => {
                 if (value[k] === undefined) {
@@ -716,9 +738,11 @@ describe('LifecycleQueuePopulator', () => {
         });
 
         it('should fall back on last-modified when no transition time is set', () => {
-            handleTransitionOp(getTransitionEntry({
-                'x-amz-scal-transition-time': undefined,
-            }));
+            handleTransitionOp(
+                getTransitionEntry({
+                    'x-amz-scal-transition-time': undefined,
+                }),
+            );
 
             assert(kafkaSendStub.calledOnce);
             const message = JSON.parse(kafkaSendStub.args[0][0][0].message);
@@ -726,10 +750,12 @@ describe('LifecycleQueuePopulator', () => {
         });
 
         it('should publish the transition attempt count', () => {
-            handleTransitionOp(getTransitionEntry({
-                'originOp': 's3:LifecycleTransition:Retry',
-                'x-amz-meta-scal-s3-transition-attempt': '3',
-            }));
+            handleTransitionOp(
+                getTransitionEntry({
+                    'originOp': 's3:LifecycleTransition:Retry',
+                    'x-amz-meta-scal-s3-transition-attempt': '3',
+                }),
+            );
 
             assert(kafkaSendStub.calledOnce);
             const message = JSON.parse(kafkaSendStub.args[0][0][0].message);
@@ -783,17 +809,19 @@ describe('LifecycleQueuePopulator', () => {
         });
 
         it('should not re-trigger a transition on the direct-to-cold completion write', () => {
-            handleTransitionOp(getTransitionEntry({
-                'originOp': 's3:LifecycleTransition:Direct',
-                'x-amz-scal-transition-in-progress': undefined,
-                'dataStoreName': 'dmf-v1',
-                'archive': {
-                    archiveInfo: {
-                        archiveId: '04425717-a65c-4e8a-95e1-fa1d902d9d9f',
-                        archiveVersion: 7504504064263669,
+            handleTransitionOp(
+                getTransitionEntry({
+                    'originOp': 's3:LifecycleTransition:Direct',
+                    'x-amz-scal-transition-in-progress': undefined,
+                    'dataStoreName': 'dmf-v1',
+                    'archive': {
+                        archiveInfo: {
+                            archiveId: '04425717-a65c-4e8a-95e1-fa1d902d9d9f',
+                            archiveVersion: 7504504064263669,
+                        },
                     },
-                },
-            }));
+                }),
+            );
 
             assert(!getAccountIdStub.called);
             assert(!kafkaSendStub.called);
@@ -856,7 +884,7 @@ describe('LifecycleQueuePopulator', () => {
             owner: '79a59df900b949e55d96a1e698fbacedfd6e09d98eacf8f8d5218e7cd47ef2be',
             ownerDisplayName: 'Bart',
             creationDate: '2017-07-13T02:44:25.519Z',
-            mdBucketModelVersion: 10
+            mdBucketModelVersion: 10,
         };
 
         let lcqp;
@@ -947,17 +975,19 @@ describe('LifecycleQueuePopulator', () => {
             });
 
             it('should republish the archive request on a retry write', () => {
-                lcqp.filter(getEntry({
-                    'originOp': 's3:LifecycleTransition:Retry',
-                    'x-amz-scal-transition-in-progress': true,
-                    'x-amz-meta-scal-s3-transition-attempt': '2',
-                    'dataStoreName': 'us-east-1',
-                    // restore requested while the transition was stuck
-                    'archive': {
-                        restoreRequestedAt: '2017-07-14T02:44:25.519Z',
-                        restoreRequestedDays: 2,
-                    },
-                }));
+                lcqp.filter(
+                    getEntry({
+                        'originOp': 's3:LifecycleTransition:Retry',
+                        'x-amz-scal-transition-in-progress': true,
+                        'x-amz-meta-scal-s3-transition-attempt': '2',
+                        'dataStoreName': 'us-east-1',
+                        // restore requested while the transition was stuck
+                        'archive': {
+                            restoreRequestedAt: '2017-07-14T02:44:25.519Z',
+                            restoreRequestedDays: 2,
+                        },
+                    }),
+                );
 
                 assert(archiveSendStub.calledOnce);
                 assert(!restoreSendStub.called);
@@ -967,27 +997,31 @@ describe('LifecycleQueuePopulator', () => {
             });
 
             it('should not republish the archive request once archived', () => {
-                lcqp.filter(getEntry({
-                    'originOp': 's3:LifecycleTransition:Retry',
-                    'x-amz-scal-transition-in-progress': true,
-                    'dataStoreName': 'us-east-1',
-                    'archive': { archiveInfo },
-                }));
+                lcqp.filter(
+                    getEntry({
+                        'originOp': 's3:LifecycleTransition:Retry',
+                        'x-amz-scal-transition-in-progress': true,
+                        'dataStoreName': 'us-east-1',
+                        'archive': { archiveInfo },
+                    }),
+                );
 
                 assert(!archiveSendStub.called);
                 assert(!restoreSendStub.called);
             });
 
             it('should initiate the deferred restore on completion of the repaired transition', () => {
-                lcqp.filter(getEntry({
-                    originOp: 's3:LifecycleTransition:Direct',
-                    dataStoreName: 'dmf-v1',
-                    archive: {
-                        archiveInfo,
-                        restoreRequestedAt: '2017-07-14T02:44:25.519Z',
-                        restoreRequestedDays: 2,
-                    },
-                }));
+                lcqp.filter(
+                    getEntry({
+                        originOp: 's3:LifecycleTransition:Direct',
+                        dataStoreName: 'dmf-v1',
+                        archive: {
+                            archiveInfo,
+                            restoreRequestedAt: '2017-07-14T02:44:25.519Z',
+                            restoreRequestedDays: 2,
+                        },
+                    }),
+                );
 
                 assert(!archiveSendStub.called);
                 assert(restoreSendStub.calledOnce);
@@ -1162,7 +1196,7 @@ describe('LifecycleQueuePopulator', () => {
             'archive': {
                 archiveInfo: {
                     archiveId: '04425717-a65c-4e8a-95e1-fa1d902d9d9f',
-                    archiveVersion: 7504504064263669
+                    archiveVersion: 7504504064263669,
                 },
             },
             'dataStoreName': 'dmf-v1',

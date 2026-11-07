@@ -21,13 +21,15 @@ describe('PipelineFactory', () => {
 
     it('should extract buckets from connector config', () => {
         const config = {
-            pipeline: JSON.stringify([{
-                $match: {
-                    'ns.coll': {
-                        $in: ['example-bucket-1, example-bucket-2'],
-                    }
-                }
-            }])
+            pipeline: JSON.stringify([
+                {
+                    $match: {
+                        'ns.coll': {
+                            $in: ['example-bucket-1, example-bucket-2'],
+                        },
+                    },
+                },
+            ]),
         };
         const buckets = pipelineFactory.extractBucketsFromConfig(config);
         assert.deepEqual(buckets, ['example-bucket-1, example-bucket-2']);
@@ -35,13 +37,15 @@ describe('PipelineFactory', () => {
 
     it('getOldConnectorBucketList throws NotImplemented for a bucket list pipeline', async () => {
         const config = {
-            pipeline: JSON.stringify([{
-                $match: {
-                    'ns.coll': {
-                        $in: ['bucket1', 'bucket2'],
+            pipeline: JSON.stringify([
+                {
+                    $match: {
+                        'ns.coll': {
+                            $in: ['bucket1', 'bucket2'],
+                        },
                     },
                 },
-            }]),
+            ]),
         };
         assert.throws(() => pipelineFactory.getOldConnectorBucketList(config), {
             name: 'Error',

@@ -2,14 +2,10 @@ const assert = require('assert');
 const werelogs = require('werelogs');
 const sinon = require('sinon');
 
-const NotificationConfigManager
-    = require('../../../extensions/notification/NotificationConfigManager');
-const NotificationQueuePopulator
-    = require('../../../extensions/notification/NotificationQueuePopulator');
-const mongoConfig
-    = require('../../config.json').queuePopulator.mongo;
-const notificationConfig
-    = require('../../config.notification.json').extensions.notification;
+const NotificationConfigManager = require('../../../extensions/notification/NotificationConfigManager');
+const NotificationQueuePopulator = require('../../../extensions/notification/NotificationQueuePopulator');
+const mongoConfig = require('../../config.json').queuePopulator.mongo;
+const notificationConfig = require('../../config.notification.json').extensions.notification;
 const { listEntries } = require('../../utils/nullVersionRows');
 
 const logger = new werelogs.Logger('NotificationConfigManager:test');
@@ -55,14 +51,12 @@ describe('NotificationQueuePopulator ::', () => {
 
     describe('_isBucketEntry ::', () => {
         it('should return true if entry is a bucket entry', done => {
-            const isBucket =
-                notificationQueuePopulator._isBucketEntry('__metastore', 'example-bucket');
+            const isBucket = notificationQueuePopulator._isBucketEntry('__metastore', 'example-bucket');
             assert.strictEqual(isBucket, true);
             return done();
         });
         it('should return false if entry is an object entry', done => {
-            const isBucket =
-                notificationQueuePopulator._isBucketEntry('example-bucket', 'example-key');
+            const isBucket = notificationQueuePopulator._isBucketEntry('example-bucket', 'example-key');
             assert.strictEqual(isBucket, false);
             return done();
         });
@@ -72,201 +66,190 @@ describe('NotificationQueuePopulator ::', () => {
         it('should publish object entry in notification topic of destination1', async () => {
             sinon.stub(bnConfigManager, 'getConfig').returns(config);
             const publishStub = sinon.stub(notificationQueuePopulator, 'publish');
-            await notificationQueuePopulator._processObjectEntry(
-                'example-bucket',
-                'example-key',
-                {
-                    'originOp': 's3:ObjectCreated:Put',
-                    'dataStoreName': 'metastore',
-                    'content-length': '100',
-                    'last-modified': '0000',
-                    'md-model-version': '1',
-                });
+            await notificationQueuePopulator._processObjectEntry('example-bucket', 'example-key', {
+                'originOp': 's3:ObjectCreated:Put',
+                'dataStoreName': 'metastore',
+                'content-length': '100',
+                'last-modified': '0000',
+                'md-model-version': '1',
+            });
             assert.strictEqual(publishStub.getCall(0).args.at(0), 'internal-notification-topic-destination1');
         });
 
         it('should publish object entry in notification topic of destination2', async () => {
             sinon.stub(bnConfigManager, 'getConfig').returns(config);
             const publishStub = sinon.stub(notificationQueuePopulator, 'publish');
-            await notificationQueuePopulator._processObjectEntry(
-                'example-bucket',
-                'example-key',
-                {
-                    'originOp': 's3:ObjectRemoved:Delete',
-                    'dataStoreName': 'metastore',
-                    'content-length': '100',
-                    'last-modified': '0000',
-                    'md-model-version': '1',
-                });
-                assert.strictEqual(publishStub.getCall(0).args.at(0), 'internal-notification-topic-destination2');
+            await notificationQueuePopulator._processObjectEntry('example-bucket', 'example-key', {
+                'originOp': 's3:ObjectRemoved:Delete',
+                'dataStoreName': 'metastore',
+                'content-length': '100',
+                'last-modified': '0000',
+                'md-model-version': '1',
+            });
+            assert.strictEqual(publishStub.getCall(0).args.at(0), 'internal-notification-topic-destination2');
         });
 
-        it('should not publish object entry in notification topic if ' +
-            'config validation failed', async () => {
+        it('should not publish object entry in notification topic if ' + 'config validation failed', async () => {
             sinon.stub(bnConfigManager, 'getConfig').returns(config);
             const publishStub = sinon.stub(notificationQueuePopulator, 'publish');
-            await notificationQueuePopulator._processObjectEntry(
-                'example-bucket',
-                'example-key',
-                {
-                    'originOp': 's3:ObjectRemoved:DeleteMarkerCreated',
-                    'dataStoreName': 'metastore',
-                    'content-length': '100',
-                    'versionId': '1234',
-                    'last-modified': '0000',
-                    'md-model-version': '1',
-                });
+            await notificationQueuePopulator._processObjectEntry('example-bucket', 'example-key', {
+                'originOp': 's3:ObjectRemoved:DeleteMarkerCreated',
+                'dataStoreName': 'metastore',
+                'content-length': '100',
+                'versionId': '1234',
+                'last-modified': '0000',
+                'md-model-version': '1',
+            });
             assert(publishStub.notCalled);
         });
 
-        it('should publish object entry to internal shared topic only once ' +
-            'when multiple destinations are valid for that event', async () => {
-            // override the destinations' config to use the default shared topic
-            notificationQueuePopulator.notificationConfig = {
-                ...notificationConfig,
-                destinations: notificationConfig.destinations.map(destination => ({
-                    ...destination,
-                    internalTopic: '',
-                })),
-            };
-            sinon.stub(bnConfigManager, 'getConfig').returns({
-                bucket: 'example-bucket',
-                notificationConfiguration: {
-                    queueConfig: [
-                        {
-                            events: ['s3:ObjectCreated:Put'],
-                            queueArn: 'arn:scality:bucketnotif:::destination1',
-                            filterRules: [],
-                        },
-                        {
-                            events: ['s3:ObjectCreated:Put'],
-                            queueArn: 'arn:scality:bucketnotif:::destination2',
-                            filterRules: [],
-                        }
-                    ],
-                },
-            });
-            const publishStub = sinon.stub(notificationQueuePopulator, 'publish');
-            await notificationQueuePopulator._processObjectEntry(
-                'example-bucket',
-                'example-key',
-                {
-                    'originOp': 's3:ObjectCreated:Put',
-                    'dataStoreName': 'metastore',
-                    'content-length': '100',
-                    'last-modified': '0000',
-                    'md-model-version': '1',
-                });
-            assert(publishStub.calledOnce);
-            assert.strictEqual(publishStub.getCall(0).args.at(0), 'backbeat-bucket-notification');
-        });
-
-        it('should publish object entry to same custom internal topic only once ' +
-            'when multiple destinations are valid for that event', async () => {
-            // override the destinations' config to use a single custom internal topic
-            notificationQueuePopulator.notificationConfig = {
-                ...notificationConfig,
-                destinations: notificationConfig.destinations.map(destination => ({
-                    ...destination,
-                    internalTopic: 'custom-topic',
-                })),
-            };
-            sinon.stub(bnConfigManager, 'getConfig').returns({
-                bucket: 'example-bucket',
-                notificationConfiguration: {
-                    queueConfig: [
-                        {
-                            events: ['s3:ObjectCreated:Put'],
-                            queueArn: 'arn:scality:bucketnotif:::destination1',
-                            filterRules: [],
-                        },
-                        {
-                            events: ['s3:ObjectCreated:Put'],
-                            queueArn: 'arn:scality:bucketnotif:::destination2',
-                            filterRules: [],
-                        }
-                    ],
-                },
-            });
-            const publishStub = sinon.stub(notificationQueuePopulator, 'publish');
-            await notificationQueuePopulator._processObjectEntry(
-                'example-bucket',
-                'example-key',
-                {
-                    'originOp': 's3:ObjectCreated:Put',
-                    'dataStoreName': 'metastore',
-                    'content-length': '100',
-                    'last-modified': '0000',
-                    'md-model-version': '1',
-                });
-            assert(publishStub.calledOnce);
-            assert.strictEqual(publishStub.getCall(0).args.at(0), 'custom-topic');
-        });
-
-        it('should publish object entry to each entry\'s destination topic when multiple ' +
-            'destinations are valid for an event', async () => {
-            sinon.stub(bnConfigManager, 'getConfig').returns({
-                bucket: 'example-bucket',
-                notificationConfiguration: {
-                    queueConfig: [
-                        {
-                            events: ['s3:ObjectCreated:Put'],
-                            queueArn: 'arn:scality:bucketnotif:::destination1',
-                            filterRules: [],
-                        },
-                        {
-                            events: ['s3:ObjectCreated:Put'],
-                            queueArn: 'arn:scality:bucketnotif:::destination2',
-                            filterRules: [],
-                        },
-                        {
-                            events: ['s3:ObjectCreated:Put'],
-                            queueArn: 'arn:scality:bucketnotif:::destination3',
-                            filterRules: [],
-                        },
-                        {
-                            events: ['s3:ObjectCreated:Put'],
-                            queueArn: 'arn:scality:bucketnotif:::destination4',
-                            filterRules: [],
-                        },
-                    ],
-                },
-            });
-            // override the destinations' config to add two new destinations that use
-            // the default shared internal topic
-            notificationQueuePopulator.notificationConfig = {
-                ...notificationConfig,
-                destinations: [
-                    ...notificationConfig.destinations,
-                    {
-                        resource: 'destination3',
-                        topic: 'destination-topic-3',
+        it(
+            'should publish object entry to internal shared topic only once ' +
+                'when multiple destinations are valid for that event',
+            async () => {
+                // override the destinations' config to use the default shared topic
+                notificationQueuePopulator.notificationConfig = {
+                    ...notificationConfig,
+                    destinations: notificationConfig.destinations.map(destination => ({
+                        ...destination,
+                        internalTopic: '',
+                    })),
+                };
+                sinon.stub(bnConfigManager, 'getConfig').returns({
+                    bucket: 'example-bucket',
+                    notificationConfiguration: {
+                        queueConfig: [
+                            {
+                                events: ['s3:ObjectCreated:Put'],
+                                queueArn: 'arn:scality:bucketnotif:::destination1',
+                                filterRules: [],
+                            },
+                            {
+                                events: ['s3:ObjectCreated:Put'],
+                                queueArn: 'arn:scality:bucketnotif:::destination2',
+                                filterRules: [],
+                            },
+                        ],
                     },
-                    {
-                        resource: 'destination4',
-                        topic: 'destination-topic-4',
-                    },
-                ],
-            };
-            const publishStub = sinon.stub(notificationQueuePopulator, 'publish');
-            await notificationQueuePopulator._processObjectEntry(
-                'example-bucket',
-                'example-key',
-                {
+                });
+                const publishStub = sinon.stub(notificationQueuePopulator, 'publish');
+                await notificationQueuePopulator._processObjectEntry('example-bucket', 'example-key', {
                     'originOp': 's3:ObjectCreated:Put',
                     'dataStoreName': 'metastore',
                     'content-length': '100',
                     'last-modified': '0000',
                     'md-model-version': '1',
                 });
-            assert(publishStub.calledThrice);
-            assert.strictEqual(publishStub.getCall(0).args.at(0), 'internal-notification-topic-destination1');
-            assert.strictEqual(publishStub.getCall(1).args.at(0), 'internal-notification-topic-destination2');
-            assert.strictEqual(publishStub.getCall(2).args.at(0), 'backbeat-bucket-notification');
-        });
+                assert(publishStub.calledOnce);
+                assert.strictEqual(publishStub.getCall(0).args.at(0), 'backbeat-bucket-notification');
+            },
+        );
 
-        it('should not publish object entry in notification topic if ' +
-            'notification is non standard', async () => {
+        it(
+            'should publish object entry to same custom internal topic only once ' +
+                'when multiple destinations are valid for that event',
+            async () => {
+                // override the destinations' config to use a single custom internal topic
+                notificationQueuePopulator.notificationConfig = {
+                    ...notificationConfig,
+                    destinations: notificationConfig.destinations.map(destination => ({
+                        ...destination,
+                        internalTopic: 'custom-topic',
+                    })),
+                };
+                sinon.stub(bnConfigManager, 'getConfig').returns({
+                    bucket: 'example-bucket',
+                    notificationConfiguration: {
+                        queueConfig: [
+                            {
+                                events: ['s3:ObjectCreated:Put'],
+                                queueArn: 'arn:scality:bucketnotif:::destination1',
+                                filterRules: [],
+                            },
+                            {
+                                events: ['s3:ObjectCreated:Put'],
+                                queueArn: 'arn:scality:bucketnotif:::destination2',
+                                filterRules: [],
+                            },
+                        ],
+                    },
+                });
+                const publishStub = sinon.stub(notificationQueuePopulator, 'publish');
+                await notificationQueuePopulator._processObjectEntry('example-bucket', 'example-key', {
+                    'originOp': 's3:ObjectCreated:Put',
+                    'dataStoreName': 'metastore',
+                    'content-length': '100',
+                    'last-modified': '0000',
+                    'md-model-version': '1',
+                });
+                assert(publishStub.calledOnce);
+                assert.strictEqual(publishStub.getCall(0).args.at(0), 'custom-topic');
+            },
+        );
+
+        it(
+            "should publish object entry to each entry's destination topic when multiple " +
+                'destinations are valid for an event',
+            async () => {
+                sinon.stub(bnConfigManager, 'getConfig').returns({
+                    bucket: 'example-bucket',
+                    notificationConfiguration: {
+                        queueConfig: [
+                            {
+                                events: ['s3:ObjectCreated:Put'],
+                                queueArn: 'arn:scality:bucketnotif:::destination1',
+                                filterRules: [],
+                            },
+                            {
+                                events: ['s3:ObjectCreated:Put'],
+                                queueArn: 'arn:scality:bucketnotif:::destination2',
+                                filterRules: [],
+                            },
+                            {
+                                events: ['s3:ObjectCreated:Put'],
+                                queueArn: 'arn:scality:bucketnotif:::destination3',
+                                filterRules: [],
+                            },
+                            {
+                                events: ['s3:ObjectCreated:Put'],
+                                queueArn: 'arn:scality:bucketnotif:::destination4',
+                                filterRules: [],
+                            },
+                        ],
+                    },
+                });
+                // override the destinations' config to add two new destinations that use
+                // the default shared internal topic
+                notificationQueuePopulator.notificationConfig = {
+                    ...notificationConfig,
+                    destinations: [
+                        ...notificationConfig.destinations,
+                        {
+                            resource: 'destination3',
+                            topic: 'destination-topic-3',
+                        },
+                        {
+                            resource: 'destination4',
+                            topic: 'destination-topic-4',
+                        },
+                    ],
+                };
+                const publishStub = sinon.stub(notificationQueuePopulator, 'publish');
+                await notificationQueuePopulator._processObjectEntry('example-bucket', 'example-key', {
+                    'originOp': 's3:ObjectCreated:Put',
+                    'dataStoreName': 'metastore',
+                    'content-length': '100',
+                    'last-modified': '0000',
+                    'md-model-version': '1',
+                });
+                assert(publishStub.calledThrice);
+                assert.strictEqual(publishStub.getCall(0).args.at(0), 'internal-notification-topic-destination1');
+                assert.strictEqual(publishStub.getCall(1).args.at(0), 'internal-notification-topic-destination2');
+                assert.strictEqual(publishStub.getCall(2).args.at(0), 'backbeat-bucket-notification');
+            },
+        );
+
+        it('should not publish object entry in notification topic if ' + 'notification is non standard', async () => {
             sinon.stub(bnConfigManager, 'getConfig').returns({
                 bucket: 'example-bucket',
                 notificationConfiguration: {
@@ -280,16 +263,13 @@ describe('NotificationQueuePopulator ::', () => {
                 },
             });
             const publishStub = sinon.stub(notificationQueuePopulator, 'publish');
-            await notificationQueuePopulator._processObjectEntry(
-                'example-bucket',
-                'example-key',
-                {
-                    'originOp': 's3:ObjectCreated:non-standard',
-                    'dataStoreName': 'metastore',
-                    'content-length': '100',
-                    'last-modified': '0000',
-                    'md-model-version': '1',
-                });
+            await notificationQueuePopulator._processObjectEntry('example-bucket', 'example-key', {
+                'originOp': 's3:ObjectCreated:non-standard',
+                'dataStoreName': 'metastore',
+                'content-length': '100',
+                'last-modified': '0000',
+                'md-model-version': '1',
+            });
             assert(publishStub.notCalled);
         });
 
@@ -305,7 +285,7 @@ describe('NotificationQueuePopulator ::', () => {
                 {
                     versionId: '123456',
                     commitTimestamp: timestamp,
-                }
+                },
             );
             const expectedMessage = {
                 bucket: 'example-bucket',
@@ -338,17 +318,11 @@ describe('NotificationQueuePopulator ::', () => {
             });
             const publishStub = sinon.stub(notificationQueuePopulator, 'publish').returns();
             const timestamp = new Date().toISOString();
-            await notificationQueuePopulator._processObjectEntry(
-                'example-bucket',
-                'example-key',
-                {},
-                'del',
-                {
-                    versionId: '123456',
-                    commitTimestamp: timestamp,
-                    originOp: 's3:LifecycleExpiration:Delete',
-                }
-            );
+            await notificationQueuePopulator._processObjectEntry('example-bucket', 'example-key', {}, 'del', {
+                versionId: '123456',
+                commitTimestamp: timestamp,
+                originOp: 's3:LifecycleExpiration:Delete',
+            });
             const expectedMessage = {
                 bucket: 'example-bucket',
                 key: 'example-key',
@@ -452,7 +426,8 @@ describe('NotificationQueuePopulator ::', () => {
                 bucket: '__metastore',
                 key: 'example-bucket',
                 type: 'put',
-                value: '{"attributes":"{\\"name\\":\\"example-bucket\\",\\"notificationConfiguration\\":' +
+                value:
+                    '{"attributes":"{\\"name\\":\\"example-bucket\\",\\"notificationConfiguration\\":' +
                     '{\\"queueConfig\\":[{\\"events\\":[\\"s3:ObjectCreated:*\\"],\\"queueArn\\":' +
                     '\\"arn:scality:bucketnotif:::notification-target\\"}]}}"}',
                 overheadFields: {
@@ -462,9 +437,8 @@ describe('NotificationQueuePopulator ::', () => {
             notificationQueuePopulator.filterAsync(entry, err => {
                 assert.ifError(err);
                 assert(processEntryStub.notCalled);
-                assert(setConfigStub.calledWithMatch(
-                    'example-bucket',
-                    {
+                assert(
+                    setConfigStub.calledWithMatch('example-bucket', {
                         bucket: 'example-bucket',
                         notificationConfiguration: {
                             queueConfig: [
@@ -474,15 +448,16 @@ describe('NotificationQueuePopulator ::', () => {
                                 },
                             ],
                         },
-                    },
-                ));
+                    }),
+                );
                 return done();
             });
         });
 
         it('remove config when bucket no longer has notification configured', done => {
             const processEntryStub = sinon.stub(notificationQueuePopulator, '_processObjectEntry').yields();
-            const removeConfigStub = sinon.stub(notificationQueuePopulator.bnConfigManager, 'removeConfig')
+            const removeConfigStub = sinon
+                .stub(notificationQueuePopulator.bnConfigManager, 'removeConfig')
                 .returns(true);
             const entry = {
                 bucket: '__metastore',
@@ -503,7 +478,8 @@ describe('NotificationQueuePopulator ::', () => {
 
         it('should remove config whe bucket is deleted', done => {
             const processEntryStub = sinon.stub(notificationQueuePopulator, '_processObjectEntry').yields();
-            const removeConfigStub = sinon.stub(notificationQueuePopulator.bnConfigManager, 'removeConfig')
+            const removeConfigStub = sinon
+                .stub(notificationQueuePopulator.bnConfigManager, 'removeConfig')
                 .returns(true);
             const entry = {
                 bucket: '__metastore',
@@ -523,8 +499,7 @@ describe('NotificationQueuePopulator ::', () => {
         });
 
         it('should process an object entry', done => {
-            const processEntryCbStub = sinon.stub(notificationQueuePopulator, '_processObjectEntryCb')
-                .yields();
+            const processEntryCbStub = sinon.stub(notificationQueuePopulator, '_processObjectEntryCb').yields();
             const entry = {
                 bucket: 'example-bucket',
                 key: 'example-key',
@@ -548,25 +523,25 @@ describe('NotificationQueuePopulator ::', () => {
                 desc: 'non versioned',
                 input: {},
                 overhead: null,
-                out: null
+                out: null,
             },
             {
                 desc: 'versioned',
                 input: { versionId: '1234' },
                 overhead: null,
-                out: '1234'
+                out: '1234',
             },
             {
                 desc: 'versioned (S3C delete case)',
                 input: {},
                 overhead: { versionId: '1234' },
-                out: '1234'
+                out: '1234',
             },
             {
                 desc: 'a null version',
                 input: { isNull: true, versionId: '1234' },
                 overhead: null,
-                out: null
+                out: null,
             },
         ].forEach(tests => {
             const { desc, input, overhead, out } = tests;
@@ -610,8 +585,7 @@ describe('NotificationQueuePopulator ::', () => {
                 },
                 out: false,
             },
-            ...listEntries().map(({ desc, key, value, shadowed }) =>
-                ({ desc, key, value, out: !shadowed })),
+            ...listEntries().map(({ desc, key, value, shadowed }) => ({ desc, key, value, out: !shadowed })),
         ].forEach(params => {
             const { desc, key, value, out } = params;
             it(`Should return ${out} if ${desc}`, () => {
@@ -641,40 +615,31 @@ describe('NotificationQueuePopulator ::', () => {
         it('should attach traceparent header when oplog value has traceContext', async () => {
             sinon.stub(bnConfigManager, 'getConfig').returns(config);
             const publishStub = sinon.stub(notificationQueuePopulator, 'publish');
-            await notificationQueuePopulator._processObjectEntry(
-                'example-bucket',
-                'example-key',
-                {
-                    'originOp': 's3:ObjectCreated:Put',
-                    'dataStoreName': 'metastore',
-                    'content-length': '100',
-                    'last-modified': '0000',
-                    'md-model-version': '1',
-                    'traceContext': { traceparent: tp, tracestate: ts },
-                });
+            await notificationQueuePopulator._processObjectEntry('example-bucket', 'example-key', {
+                'originOp': 's3:ObjectCreated:Put',
+                'dataStoreName': 'metastore',
+                'content-length': '100',
+                'last-modified': '0000',
+                'md-model-version': '1',
+                'traceContext': { traceparent: tp, tracestate: ts },
+            });
             assert(publishStub.calledOnce);
             // publish(topic, key, message, optEntriesToPublish, headers)
             const headers = publishStub.getCall(0).args.at(4);
-            assert.deepStrictEqual(headers, [
-                { traceparent: tp },
-                { tracestate: ts },
-            ]);
+            assert.deepStrictEqual(headers, [{ traceparent: tp }, { tracestate: ts }]);
         });
 
         it('should attach traceparent-only header when tracestate is missing', async () => {
             sinon.stub(bnConfigManager, 'getConfig').returns(config);
             const publishStub = sinon.stub(notificationQueuePopulator, 'publish');
-            await notificationQueuePopulator._processObjectEntry(
-                'example-bucket',
-                'example-key',
-                {
-                    'originOp': 's3:ObjectCreated:Put',
-                    'dataStoreName': 'metastore',
-                    'content-length': '100',
-                    'last-modified': '0000',
-                    'md-model-version': '1',
-                    'traceContext': { traceparent: tp },
-                });
+            await notificationQueuePopulator._processObjectEntry('example-bucket', 'example-key', {
+                'originOp': 's3:ObjectCreated:Put',
+                'dataStoreName': 'metastore',
+                'content-length': '100',
+                'last-modified': '0000',
+                'md-model-version': '1',
+                'traceContext': { traceparent: tp },
+            });
             const headers = publishStub.getCall(0).args.at(4);
             assert.deepStrictEqual(headers, [{ traceparent: tp }]);
         });
@@ -682,22 +647,18 @@ describe('NotificationQueuePopulator ::', () => {
         it('should pass undefined headers when oplog value has no traceContext', async () => {
             sinon.stub(bnConfigManager, 'getConfig').returns(config);
             const publishStub = sinon.stub(notificationQueuePopulator, 'publish');
-            await notificationQueuePopulator._processObjectEntry(
-                'example-bucket',
-                'example-key',
-                {
-                    'originOp': 's3:ObjectCreated:Put',
-                    'dataStoreName': 'metastore',
-                    'content-length': '100',
-                    'last-modified': '0000',
-                    'md-model-version': '1',
-                });
+            await notificationQueuePopulator._processObjectEntry('example-bucket', 'example-key', {
+                'originOp': 's3:ObjectCreated:Put',
+                'dataStoreName': 'metastore',
+                'content-length': '100',
+                'last-modified': '0000',
+                'md-model-version': '1',
+            });
             const headers = publishStub.getCall(0).args.at(4);
             assert.strictEqual(headers, undefined);
         });
     });
 });
-
 
 describe('NotificationQueuePopulator with multiple rules ::', () => {
     let bnConfigManager;
@@ -724,7 +685,8 @@ describe('NotificationQueuePopulator with multiple rules ::', () => {
                                 value: 'toto/',
                             },
                         ],
-                    }, {
+                    },
+                    {
                         events: ['s3:ObjectCreated:*'],
                         queueArn: 'arn:scality:bucketnotif:::destination1',
                         id: '1',
@@ -751,49 +713,40 @@ describe('NotificationQueuePopulator with multiple rules ::', () => {
     describe('_processObjectEntry with multiple rules::', () => {
         it('should publish object entry if it matches the first rule', async () => {
             const publishStub = sinon.stub(notificationQueuePopulator, 'publish');
-            await notificationQueuePopulator._processObjectEntry(
-                'example-bucket',
-                'toto/example-key',
-                {
-                    'key': 'toto/example-key',
-                    'originOp': 's3:ObjectCreated:Put',
-                    'dataStoreName': 'metastore',
-                    'content-length': '100',
-                    'last-modified': '0000',
-                    'md-model-version': '1',
-                });
+            await notificationQueuePopulator._processObjectEntry('example-bucket', 'toto/example-key', {
+                'key': 'toto/example-key',
+                'originOp': 's3:ObjectCreated:Put',
+                'dataStoreName': 'metastore',
+                'content-length': '100',
+                'last-modified': '0000',
+                'md-model-version': '1',
+            });
             assert.strictEqual(publishStub.getCall(0).args.at(0), 'internal-notification-topic-destination1');
         });
 
         it('should publish object entry if it matches the second rule', async () => {
             const publishStub = sinon.stub(notificationQueuePopulator, 'publish');
-            await notificationQueuePopulator._processObjectEntry(
-                'example-bucket',
-                'tata/example-key',
-                {
-                    'key': 'tata/example-key',
-                    'originOp': 's3:ObjectCreated:Put',
-                    'dataStoreName': 'metastore',
-                    'content-length': '100',
-                    'last-modified': '0000',
-                    'md-model-version': '1',
-                });
+            await notificationQueuePopulator._processObjectEntry('example-bucket', 'tata/example-key', {
+                'key': 'tata/example-key',
+                'originOp': 's3:ObjectCreated:Put',
+                'dataStoreName': 'metastore',
+                'content-length': '100',
+                'last-modified': '0000',
+                'md-model-version': '1',
+            });
             assert.strictEqual(publishStub.getCall(0).args.at(0), 'internal-notification-topic-destination1');
         });
 
         it('should not publish object entry if it does not match any rule', async () => {
             const publishStub = sinon.stub(notificationQueuePopulator, 'publish');
-            await notificationQueuePopulator._processObjectEntry(
-                'example-bucket',
-                'example-key',
-                {
-                    'key': 'example-key',
-                    'originOp': 's3:ObjectCreated:Put',
-                    'dataStoreName': 'metastore',
-                    'content-length': '100',
-                    'last-modified': '0000',
-                    'md-model-version': '1',
-                });
+            await notificationQueuePopulator._processObjectEntry('example-bucket', 'example-key', {
+                'key': 'example-key',
+                'originOp': 's3:ObjectCreated:Put',
+                'dataStoreName': 'metastore',
+                'content-length': '100',
+                'last-modified': '0000',
+                'md-model-version': '1',
+            });
             sinon.assert.notCalled(publishStub);
         });
     });

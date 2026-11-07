@@ -19,16 +19,22 @@ function onNotificationSent(target, status, messages, delay) {
     if (status === 'success') {
         // Update total size of notifications sent
         const messageSize = new TextEncoder().encode(JSON.stringify(messages)).length;
-        notificationSize.inc({
-            target,
-        }, messageSize);
+        notificationSize.inc(
+            {
+                target,
+            },
+            messageSize,
+        );
     }
     if (delay) {
         // update notification delivery delay
-        deliveryLag.observe({
-            target,
-            status,
-        }, delay);
+        deliveryLag.observe(
+            {
+                target,
+                status,
+            },
+            delay,
+        );
     }
 }
 
@@ -82,8 +88,7 @@ class KafkaNotificationDestination extends NotificationDestination {
     init(done) {
         this._setupProducer(err => {
             if (err) {
-                this._log.info('error setting up kafka notif destination',
-                    { error: err.message });
+                this._log.info('error setting up kafka notif destination', { error: err.message });
                 done(err);
             } else {
                 done();
@@ -119,21 +124,11 @@ class KafkaNotificationDestination extends NotificationDestination {
                     topic,
                     error: error.message,
                 });
-                onNotificationSent(
-                    this._destinationConfig.resource,
-                    'failure',
-                    messages,
-                    null,
-                );
+                onNotificationSent(this._destinationConfig.resource, 'failure', messages, null);
                 return done();
             }
             const delay = (Date.now() - starTime) / 1000;
-            onNotificationSent(
-                this._destinationConfig.resource,
-                'success',
-                messages,
-                delay,
-            );
+            onNotificationSent(this._destinationConfig.resource, 'success', messages, delay);
             return done();
         });
     }

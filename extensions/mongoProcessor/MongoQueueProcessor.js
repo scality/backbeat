@@ -5,8 +5,7 @@ const async = require('async');
 const Logger = require('werelogs').Logger;
 const errors = require('@scality/arsenal').errors;
 const { replicationBackends } = require('@scality/arsenal').constants;
-const MongoClient = require('@scality/arsenal').storage
-    .metadata.mongoclient.MongoClientInterface;
+const MongoClient = require('@scality/arsenal').storage.metadata.mongoclient.MongoClientInterface;
 const { ObjectMD, ReplicationConfiguration } = require('@scality/arsenal').models;
 
 const Config = require('../../lib/Config');
@@ -15,8 +14,7 @@ const QueueEntry = require('../../lib/models/QueueEntry');
 const DeleteOpQueueEntry = require('../../lib/models/DeleteOpQueueEntry');
 const ObjectQueueEntry = require('../../lib/models/ObjectQueueEntry');
 const MetricsProducer = require('../../lib/MetricsProducer');
-const { metricsExtension, metricsTypeCompleted, metricsTypePendingOnly } =
-    require('../ingestion/constants');
+const { metricsExtension, metricsTypeCompleted, metricsTypePendingOnly } = require('../ingestion/constants');
 const { metadataPolicies, defaultMode } = require('./metadataPolicy');
 const BucketMemState = require('./utils/BucketMemState');
 const MongoProcessorMetrics = require('./MongoProcessorMetrics');
@@ -34,7 +32,6 @@ const METRIC_REPORT_INTERVAL_MS = process.env.CI === 'true' ? 1000 : 5000;
  * ingestion for kafka queue and pushes entries to mongo
  */
 class MongoQueueProcessor {
-
     /**
      * @constructor
      * @param {Object} kafkaConfig - kafka configuration object
@@ -74,8 +71,7 @@ class MongoQueueProcessor {
         this._bootstrapList = null;
         this.logger = new Logger('Backbeat:Ingestion:MongoProcessor');
         this.mongoClientConfig.logger = this.logger;
-        this._policy =
-            new metadataPolicies[mongoProcessorConfig.mode ?? defaultMode]();
+        this._policy = new metadataPolicies[mongoProcessorConfig.mode ?? defaultMode]();
         this._mongoClient = new MongoClient(this.mongoClientConfig);
         this._bucketMemState = new BucketMemState();
 
@@ -115,66 +111,71 @@ class MongoQueueProcessor {
      */
     start() {
         this.logger.info('starting mongo queue processor');
-        async.series([
-            next => this._setupMetricsClients(err => {
-                if (err) {
-                    this.logger.error('error setting up metrics client', {
-                        method: 'MongoQueueProcessor.start',
-                        error: err,
-                    });
-                }
-                return next(err);
-            }),
-            next => this._mongoClient.setup(err => {
-                if (err) {
-                    this.logger.error('could not connect to MongoDB', {
-                        method: 'MongoQueueProcessor.start',
-                        error: err.message,
-                    });
-                }
-                return next(err);
-            }),
-        ], error => {
-            if (error) {
-                this.logger.fatal('error starting mongo queue processor');
-                process.exit(1);
-            }
-
-            this._bootstrapList = Config.getBootstrapList();
-
-            let consumerReady = false;
-            this._consumer = new BackbeatConsumer({
-                topic: this.mongoProcessorConfig.topic,
-                groupId: `${this.mongoProcessorConfig.groupId}`,
-                kafka: {
-                    hosts: this.kafkaConfig.hosts,
-                    site: this.kafkaConfig.site,
-                    compressionType: this.kafkaConfig.compressionType,
-                    requiredAcks: this.kafkaConfig.requiredAcks,
-                    consumerParams: this.kafkaConfig.consumerParams,
-                },
-                queueProcessor: this.processKafkaEntry.bind(this),
-                circuitBreaker: this.mongoProcessorConfig.circuitBreaker,
-                circuitBreakerMetrics: {
-                    type: 'mongo_queue_processor',
-                },
-                concurrency: this.mongoProcessorConfig.concurrency,
-                maxQueued: this.mongoProcessorConfig.maxQueued,
-                fromOffset: 'earliest',
-            });
-            this._consumer.on('error', () => {
-                MongoProcessorMetrics.onIngestionKafkaConsume('error');
-                if (!consumerReady) {
+        async.series(
+            [
+                next =>
+                    this._setupMetricsClients(err => {
+                        if (err) {
+                            this.logger.error('error setting up metrics client', {
+                                method: 'MongoQueueProcessor.start',
+                                error: err,
+                            });
+                        }
+                        return next(err);
+                    }),
+                next =>
+                    this._mongoClient.setup(err => {
+                        if (err) {
+                            this.logger.error('could not connect to MongoDB', {
+                                method: 'MongoQueueProcessor.start',
+                                error: err.message,
+                            });
+                        }
+                        return next(err);
+                    }),
+            ],
+            error => {
+                if (error) {
                     this.logger.fatal('error starting mongo queue processor');
                     process.exit(1);
                 }
-            });
-            this._consumer.on('ready', () => {
-                consumerReady = true;
-                this._consumer.subscribe();
-                this.logger.info('mongo queue processor is ready');
-            });
-        });
+
+                this._bootstrapList = Config.getBootstrapList();
+
+                let consumerReady = false;
+                this._consumer = new BackbeatConsumer({
+                    topic: this.mongoProcessorConfig.topic,
+                    groupId: `${this.mongoProcessorConfig.groupId}`,
+                    kafka: {
+                        hosts: this.kafkaConfig.hosts,
+                        site: this.kafkaConfig.site,
+                        compressionType: this.kafkaConfig.compressionType,
+                        requiredAcks: this.kafkaConfig.requiredAcks,
+                        consumerParams: this.kafkaConfig.consumerParams,
+                    },
+                    queueProcessor: this.processKafkaEntry.bind(this),
+                    circuitBreaker: this.mongoProcessorConfig.circuitBreaker,
+                    circuitBreakerMetrics: {
+                        type: 'mongo_queue_processor',
+                    },
+                    concurrency: this.mongoProcessorConfig.concurrency,
+                    maxQueued: this.mongoProcessorConfig.maxQueued,
+                    fromOffset: 'earliest',
+                });
+                this._consumer.on('error', () => {
+                    MongoProcessorMetrics.onIngestionKafkaConsume('error');
+                    if (!consumerReady) {
+                        this.logger.fatal('error starting mongo queue processor');
+                        process.exit(1);
+                    }
+                });
+                this._consumer.on('ready', () => {
+                    consumerReady = true;
+                    this._consumer.subscribe();
+                    this.logger.info('mongo queue processor is ready');
+                });
+            },
+        );
     }
 
     /**
@@ -184,32 +185,35 @@ class MongoQueueProcessor {
      * @return {undefined}
      */
     stop(done) {
-        async.parallel([
-            next => {
-                if (this._consumer) {
-                    this.logger.debug('closing kafka consumer', {
+        async.parallel(
+            [
+                next => {
+                    if (this._consumer) {
+                        this.logger.debug('closing kafka consumer', {
+                            method: 'MongoQueueProcessor.stop',
+                        });
+                        return this._consumer.close(next);
+                    }
+                    this.logger.debug('no kafka consumer to close', {
                         method: 'MongoQueueProcessor.stop',
                     });
-                    return this._consumer.close(next);
-                }
-                this.logger.debug('no kafka consumer to close', {
-                    method: 'MongoQueueProcessor.stop',
-                });
-                return next();
-            },
-            next => {
-                if (this._mProducer) {
-                    this.logger.debug('closing metrics producer', {
+                    return next();
+                },
+                next => {
+                    if (this._mProducer) {
+                        this.logger.debug('closing metrics producer', {
+                            method: 'MongoQueueProcessor.stop',
+                        });
+                        return this._mProducer.close(next);
+                    }
+                    this.logger.debug('no metrics producer to close', {
                         method: 'MongoQueueProcessor.stop',
                     });
-                    return this._mProducer.close(next);
-                }
-                this.logger.debug('no metrics producer to close', {
-                    method: 'MongoQueueProcessor.stop',
-                });
-                return next();
-            },
-        ], done);
+                    return next();
+                },
+            ],
+            done,
+        );
     }
 
     /**
@@ -310,68 +314,70 @@ class MongoQueueProcessor {
 
         this.logger.debug('processing object delete', { bucket, key, versionId });
 
-        async.waterfall([
-            cb => this._getZenkoObjectMetadata(log, sourceEntry, versionId, cb),
-            (zenkoObjMd, cb) => {
-                if (this._policy.skipsDelete(sourceEntry, zenkoObjMd, location)) {
-                    log.end().info('ignore delete entry, transitioned to another location', {
+        async.waterfall(
+            [
+                cb => this._getZenkoObjectMetadata(log, sourceEntry, versionId, cb),
+                (zenkoObjMd, cb) => {
+                    if (this._policy.skipsDelete(sourceEntry, zenkoObjMd, location)) {
+                        log.end().info('ignore delete entry, transitioned to another location', {
+                            entry: sourceEntry.getLogInfo(),
+                            location,
+                        });
+                        return done();
+                    }
+
+                    return cb(null, zenkoObjMd);
+                },
+                (zenkoObjMd, cb) => {
+                    const options = {};
+
+                    // Calling deleteObject with empty options to use deleteObjectNoVer which is used
+                    // for deleting non versioned objects that only have master keys.
+                    // When deleting a versioned object however we supply the version id in the options,
+                    // which causes the function to call the deleteObjectVer function that is used to
+                    // handle objects that have both a master and version keys. This handles the
+                    // deletion of both the version and the master keys in the case where no other
+                    // version is available, or deleting the version and updating the master key
+                    // otherwise.
+                    if (versionId) {
+                        options.versionId = versionId;
+                    }
+
+                    // If the bucket has notification configuration and the object is not archived, we
+                    // don't need the oplog update, and can skip it to lower the load on mongo
+                    if (!zenkoObjMd.archive && !bucketInfo.notificationConfiguration) {
+                        options.doesNotNeedOpogUpdate = true;
+                    }
+
+                    return this._mongoClient.deleteObject(bucket, key, options, log, cb);
+                },
+            ],
+            err => {
+                if (err?.is.NoSuchKey) {
+                    log.end().info('skipping delete entry', {
                         entry: sourceEntry.getLogInfo(),
                         location,
                     });
                     return done();
                 }
-
-                return cb(null, zenkoObjMd);
-            },
-            (zenkoObjMd, cb) => {
-                const options = {};
-
-                // Calling deleteObject with empty options to use deleteObjectNoVer which is used
-                // for deleting non versioned objects that only have master keys.
-                // When deleting a versioned object however we supply the version id in the options,
-                // which causes the function to call the deleteObjectVer function that is used to
-                // handle objects that have both a master and version keys. This handles the
-                // deletion of both the version and the master keys in the case where no other
-                // version is available, or deleting the version and updating the master key
-                // otherwise.
-                if (versionId) {
-                    options.versionId = versionId;
+                if (err) {
+                    this._normalizePendingMetric(location);
+                    log.end().error('error deleting object metadata ' + 'from mongo', {
+                        bucket,
+                        key,
+                        error: err.message,
+                        location,
+                    });
+                    return done(err);
                 }
-
-                // If the bucket has notification configuration and the object is not archived, we
-                // don't need the oplog update, and can skip it to lower the load on mongo
-                if (!zenkoObjMd.archive && !bucketInfo.notificationConfiguration) {
-                    options.doesNotNeedOpogUpdate = true;
-                }
-
-                return this._mongoClient.deleteObject(bucket, key, options, log, cb);
-            },
-        ], err => {
-            if (err?.is.NoSuchKey) {
-                log.end().info('skipping delete entry', {
+                this._produceMetricCompletionEntry(location);
+                log.end().info('object metadata deleted from mongo', {
                     entry: sourceEntry.getLogInfo(),
                     location,
                 });
                 return done();
-            }
-            if (err) {
-                this._normalizePendingMetric(location);
-                log.end().error('error deleting object metadata ' +
-                    'from mongo', {
-                    bucket,
-                    key,
-                    error: err.message,
-                    location,
-                });
-                return done(err);
-            }
-            this._produceMetricCompletionEntry(location);
-            log.end().info('object metadata deleted from mongo', {
-                entry: sourceEntry.getLogInfo(),
-                location,
-            });
-            return done();
-        });
+            },
+        );
     }
 
     /**
@@ -408,8 +414,7 @@ class MongoQueueProcessor {
                 return done(err);
             }
 
-            const applied = this._policy.apply(sourceEntry, zenkoObjMd,
-                location, bucketInfo);
+            const applied = this._policy.apply(sourceEntry, zenkoObjMd, location, bucketInfo);
             if (!applied) {
                 this._normalizePendingMetric(location);
                 log.end().debug('skipping duplicate entry', {
@@ -422,8 +427,7 @@ class MongoQueueProcessor {
             }
 
             // Try to update replication info, if applicable
-            this._updateReplicationInfo(sourceEntry, bucketInfo,
-                applied.content, zenkoObjMd);
+            this._updateReplicationInfo(sourceEntry, bucketInfo, applied.content, zenkoObjMd);
 
             // Some object stores we are ingesting from (e.g. S3C) do
             // not populate the value.key property.
@@ -446,27 +450,25 @@ class MongoQueueProcessor {
              * in params to putObject to use putObjectVerCase4. We rely on
              * internal logic in mongoClient for handling master version ops.
              */
-            return this._mongoClient.putObject(bucket, key, objVal, params,
-                this.logger, err => {
-                    if (err) {
-                        this._normalizePendingMetric(location);
-                        log.end().error('error putting object metadata ' +
-                        'to mongo', {
-                            bucket,
-                            key,
-                            versionId: sourceEntry.getEncodedVersionId(),
-                            error: err.message,
-                            location,
-                        });
-                        return done(err);
-                    }
-                    this._produceMetricCompletionEntry(location);
-                    log.end().info('object metadata put to mongo', {
-                        entry: sourceEntry.getLogInfo(),
+            return this._mongoClient.putObject(bucket, key, objVal, params, this.logger, err => {
+                if (err) {
+                    this._normalizePendingMetric(location);
+                    log.end().error('error putting object metadata ' + 'to mongo', {
+                        bucket,
+                        key,
+                        versionId: sourceEntry.getEncodedVersionId(),
+                        error: err.message,
                         location,
                     });
-                    return done();
+                    return done(err);
+                }
+                this._produceMetricCompletionEntry(location);
+                log.end().info('object metadata put to mongo', {
+                    entry: sourceEntry.getLogInfo(),
+                    location,
                 });
+                return done();
+            });
         });
     }
 
@@ -482,8 +484,7 @@ class MongoQueueProcessor {
             if (count > 0) {
                 this._accruedMetrics[loc] = 0;
                 const metric = { [loc]: { ops: count } };
-                this._mProducer.publishMetrics(metric, metricsTypeCompleted,
-                    metricsExtension, () => {});
+                this._mProducer.publishMetrics(metric, metricsTypeCompleted, metricsExtension, () => {});
             }
         });
     }
@@ -510,8 +511,7 @@ class MongoQueueProcessor {
      */
     _normalizePendingMetric(location) {
         const metric = { [location]: { ops: 1 } };
-        this._mProducer.publishMetrics(metric, metricsTypePendingOnly,
-            metricsExtension, () => {});
+        this._mProducer.publishMetrics(metric, metricsTypePendingOnly, metricsExtension, () => {});
     }
 
     /**
@@ -527,11 +527,9 @@ class MongoQueueProcessor {
         if (bucketInfo) {
             return cb(null, bucketInfo);
         }
-        return this._mongoClient.getBucketAttributes(bucketName, log,
-        (err, bucketInfo) => {
+        return this._mongoClient.getBucketAttributes(bucketName, log, (err, bucketInfo) => {
             if (err) {
-                log.error('error getting bucket owner ' +
-                'details', {
+                log.error('error getting bucket owner ' + 'details', {
                     method: 'MongoQueueProcessor.processKafkaEntry',
                     entry: sourceEntry.getLogInfo(),
                     error: err.message,
@@ -561,8 +559,7 @@ class MongoQueueProcessor {
         this.logger.trace('processing kafka entry', { sourceEntry });
 
         if (sourceEntry.error) {
-            log.end().error('error processing source entry',
-                              { error: sourceEntry.error });
+            log.end().error('error processing source entry', { error: sourceEntry.error });
             this._handleMetrics(null, true);
             return process.nextTick(() => done(errors.InternalError));
         }
@@ -575,19 +572,17 @@ class MongoQueueProcessor {
             const location = bucketInfo.getLocationConstraint();
 
             if (sourceEntry instanceof DeleteOpQueueEntry) {
-                return this._processDeleteOpQueueEntry(log, sourceEntry,
-                    location, bucketInfo, err => {
-                        this._handleMetrics(sourceEntry, !!err);
-                        return done(err);
-                    });
+                return this._processDeleteOpQueueEntry(log, sourceEntry, location, bucketInfo, err => {
+                    this._handleMetrics(sourceEntry, !!err);
+                    return done(err);
+                });
             }
 
             if (sourceEntry instanceof ObjectQueueEntry) {
-                return this._processObjectQueueEntry(log, sourceEntry, location,
-                    bucketInfo, err => {
-                        this._handleMetrics(sourceEntry, !!err);
-                        return done(err);
-                    });
+                return this._processObjectQueueEntry(log, sourceEntry, location, bucketInfo, err => {
+                    this._handleMetrics(sourceEntry, !!err);
+                    return done(err);
+                });
             }
 
             log.end().warn('skipping unknown source entry', {

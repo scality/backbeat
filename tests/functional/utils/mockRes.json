@@ -393,7 +393,7 @@
             "uid": null
         }
     },
-    "bucketList": [ "bucket1", "bucket2" ],
+    "bucketList": ["bucket1", "bucket2"],
     "raftLogs": {
         "1": {
             "info": {
@@ -445,7 +445,7 @@
                                     "locationConstraint": "us-east-1",
                                     "cors": "",
                                     "replicationConfiguration": ""
-                                    },
+                                },
                                 "raftSession": 1
                             }
                         }
@@ -486,7 +486,7 @@
                                     "owner": "94224c921648ada653f584f3caf42654ccf3f1cbd2e569a24e88eb460f2f84d8",
                                     "ownerDisplayName": "test_1518720219",
                                     "creationDate": "2018-02-16T20:41:34.253Z",
-                                    "mdBucketModelVersion":5,
+                                    "mdBucketModelVersion": 5,
                                     "transient": false,
                                     "deleted": false,
                                     "serverSideEncryption": "",
@@ -495,7 +495,7 @@
                                     "cors": "",
                                     "replicationConfiguration": ""
                                 },
-                            "raftSession": 1
+                                "raftSession": 1
                             }
                         }
                     ]
@@ -544,7 +544,7 @@
                                     "cors": "",
                                     "replicationConfiguration": ""
                                 },
-                            "raftSession":1
+                                "raftSession": 1
                             }
                         }
                     ]

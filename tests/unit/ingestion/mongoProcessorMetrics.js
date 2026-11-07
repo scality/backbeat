@@ -1,15 +1,12 @@
 const assert = require('assert');
 
 const { ZenkoMetrics } = require('@scality/arsenal').metrics;
-const MongoProcessorMetrics =
-      require('../../../extensions/mongoProcessor/MongoProcessorMetrics');
-const { promMetricNames } =
-      require('../../../extensions/mongoProcessor/constants');
+const MongoProcessorMetrics = require('../../../extensions/mongoProcessor/MongoProcessorMetrics');
+const { promMetricNames } = require('../../../extensions/mongoProcessor/constants');
 
 describe('MongoProcessorMetrics', () => {
     it('onProcessKafkaEntry should increase value', async () => {
-        const countMetric = ZenkoMetrics.getMetric(
-            promMetricNames.ingestionKafkaPulledTotal);
+        const countMetric = ZenkoMetrics.getMetric(promMetricNames.ingestionKafkaPulledTotal);
 
         // before increase.
         const initialValues = (await countMetric.get()).values;
@@ -29,8 +26,7 @@ describe('MongoProcessorMetrics', () => {
         const elapsedTimeinMS = 5000;
         const status = 'success';
 
-        const elapsedMetric = ZenkoMetrics.getMetric(
-            promMetricNames.ingestionProcessedElapsedSeconds);
+        const elapsedMetric = ZenkoMetrics.getMetric(promMetricNames.ingestionProcessedElapsedSeconds);
 
         // before observe.
         const initialValues = (await elapsedMetric.get()).values;
@@ -45,8 +41,9 @@ describe('MongoProcessorMetrics', () => {
         });
         assert.strictEqual(totalValues.length, 14);
 
-        const bucketMetrics = totalValues.filter(v =>
-            v.metricName === `${promMetricNames.ingestionProcessedElapsedSeconds}_bucket`);
+        const bucketMetrics = totalValues.filter(
+            v => v.metricName === `${promMetricNames.ingestionProcessedElapsedSeconds}_bucket`,
+        );
 
         // It should return one metric value for each bucket defined (11) plus one for '+Inf'
         assert.strictEqual(bucketMetrics.length, 12);
@@ -54,7 +51,7 @@ describe('MongoProcessorMetrics', () => {
         // So 0 processed ingestion took less than 5ms, 10ms, 25ms, 50ms, 100ms 250ms, 500ms, 750ms, 1s
         // So 1 processed ingestion took less than or equal to 5s, 10s and +Inf (biggest value)
         bucketMetrics.forEach(v => {
-            if (v.labels.le >= (elapsedTimeinMS / 1000) || v.labels.le === '+Inf') {
+            if (v.labels.le >= elapsedTimeinMS / 1000 || v.labels.le === '+Inf') {
                 assert.strictEqual(v.value, 1, `value for ${v.labels.le} is invalid`);
             } else {
                 assert.strictEqual(v.value, 0, `value for ${v.labels.le} is invalid`);
@@ -62,14 +59,16 @@ describe('MongoProcessorMetrics', () => {
         });
 
         // The sum of observations
-        const sumMetrics = totalValues.filter(v =>
-            v.metricName === `${promMetricNames.ingestionProcessedElapsedSeconds}_sum`);
+        const sumMetrics = totalValues.filter(
+            v => v.metricName === `${promMetricNames.ingestionProcessedElapsedSeconds}_sum`,
+        );
         assert.strictEqual(sumMetrics.length, 1);
         assert.strictEqual(sumMetrics[0].value, 5);
 
         // The number of observations
-        const countMetrics = totalValues.filter(v =>
-            v.metricName === `${promMetricNames.ingestionProcessedElapsedSeconds}_count`);
+        const countMetrics = totalValues.filter(
+            v => v.metricName === `${promMetricNames.ingestionProcessedElapsedSeconds}_count`,
+        );
         assert.strictEqual(countMetrics.length, 1);
         assert.strictEqual(countMetrics[0].value, 1);
 

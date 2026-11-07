@@ -8,13 +8,7 @@ const { TRANSITION_ATTEMPT_MD } = require('../../../lib/util/transitionAttempt')
 
 class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
     getTargetAttribute(entry) {
-        const {
-            bucketName: bucket,
-            objectKey: key,
-            objectVersion: version,
-            accountId,
-            owner,
-        } = entry.target;
+        const { bucketName: bucket, objectKey: key, objectVersion: version, accountId, owner } = entry.target;
         return { bucket, key, version, accountId, owner };
     }
 
@@ -118,8 +112,7 @@ class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
             // A restore means the transition already completed: keep the metadata as it is.
             // A direct-to-cold object may carry a restore request before that, which has not
             // started yet.
-            if (!objectMD.getTransitionInProgress()
-                && (archive.restoreRequestedAt || archive.restoreCompletedAt)) {
+            if (!objectMD.getTransitionInProgress() && (archive.restoreRequestedAt || archive.restoreCompletedAt)) {
                 log.info('object is being restored, skipping archive update', {
                     entry: entry.getLogInfo(),
                     method: 'LifecycleColdStatusArchiveTask.processEntry',
@@ -138,11 +131,9 @@ class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
 
         // set new ObjectMDArchive to ObjectMD, but make sure to keep any (deferred)
         // restore request
-        objectMD.setArchive(new ObjectMDArchive(
-            entry.archiveInfo,
-            archive?.restoreRequestedAt,
-            archive?.restoreRequestedDays,
-        ));
+        objectMD.setArchive(
+            new ObjectMDArchive(entry.archiveInfo, archive?.restoreRequestedAt, archive?.restoreRequestedDays),
+        );
         objectMD.setOriginOp('s3:LifecycleTransition:SetArchive');
 
         const locations = objectMD.getLocation();
@@ -151,7 +142,8 @@ class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
             // Only a direct transition can declare the cold class at this point.
             const isDirectToCold = objectMD.getAmzStorageClass() === coldLocation;
 
-            objectMD.setDataStoreName(coldLocation)
+            objectMD
+                .setDataStoreName(coldLocation)
                 .setAmzStorageClass(coldLocation)
                 .setTransitionInProgress(false)
                 .setOriginOp(isDirectToCold ? 's3:LifecycleTransition:Direct' : 's3:LifecycleTransition')
@@ -165,8 +157,12 @@ class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
             LifecycleMetrics.onS3Request(log, 'putMetadata', 'archive', err);
             throw err;
         } finally {
-            LifecycleMetrics.onLifecycleCompleted(log, 'archive',
-                coldLocation, Date.now() - Date.parse(transitionTime));
+            LifecycleMetrics.onLifecycleCompleted(
+                log,
+                'archive',
+                coldLocation,
+                Date.now() - Date.parse(transitionTime),
+            );
         }
 
         if (!skipLocationDeletion) {

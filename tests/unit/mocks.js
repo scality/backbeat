@@ -51,7 +51,7 @@ class BackbeatClientMock {
         const commandName = command.constructor.name;
         if (commandName === 'DeleteObjectFromExpirationCommand') {
             this.times.deleteObjectFromExpiration += 1;
-            
+
             if (this.response?.error) {
                 const err = this.response.error;
                 if (err.statusCode && !err.$metadata) {
@@ -61,17 +61,17 @@ class BackbeatClientMock {
             }
             return Promise.resolve(this.response?.data || {});
         }
-        
+
         if (commandName === 'BatchDeleteCommand') {
             this.times.batchDeleteResponse += 1;
-            
+
             const resp = this.batchDeleteResponse;
             if (resp.error) {
                 return Promise.reject(resp.error);
             }
             return Promise.resolve(resp.res || {});
         }
-        
+
         return Promise.resolve({});
     }
 
@@ -147,7 +147,6 @@ class BackbeatMetadataProxyMock {
     }
 }
 
-
 class ProcessorMock {
     constructor(lcConfig, s3Client, backbeatClient, backbeatMetadataProxy, gcProducer, coldProducer, gcConfig, logger) {
         this.lcConfig = lcConfig;
@@ -216,7 +215,7 @@ class S3ClientMock {
 
     send(command) {
         this.assertRespIsSet();
-        
+
         const commandName = command.constructor.name;
         if (commandName === 'HeadObjectCommand') {
             this.calls.headObject += 1;
@@ -227,7 +226,7 @@ class S3ClientMock {
         } else if (commandName === 'DeleteMultipartObjectCommand') {
             this.calls.deleteMultipartObject += 1;
         }
-        
+
         const { error, data } = this.response;
         if (error) {
             if (error.statusCode && !error.$metadata) {

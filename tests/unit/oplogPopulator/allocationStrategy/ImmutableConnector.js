@@ -1,12 +1,9 @@
 const assert = require('assert');
 const werelogs = require('werelogs');
 
-const Connector =
-    require('../../../../extensions/oplogPopulator/modules/Connector');
-const ImmutableConnector =
-    require('../../../../extensions/oplogPopulator/allocationStrategy/ImmutableConnector');
-const MultipleBucketsPipelineFactory =
-    require('../../../../extensions/oplogPopulator/pipeline/MultipleBucketsPipelineFactory');
+const Connector = require('../../../../extensions/oplogPopulator/modules/Connector');
+const ImmutableConnector = require('../../../../extensions/oplogPopulator/allocationStrategy/ImmutableConnector');
+const MultipleBucketsPipelineFactory = require('../../../../extensions/oplogPopulator/pipeline/MultipleBucketsPipelineFactory');
 
 const logger = new werelogs.Logger('LeastFullConnector');
 
@@ -40,8 +37,7 @@ const connector3 = new Connector({
 describe('ImmutableConnector', () => {
     it('should return null for getConnector', async () => {
         const immutableConnector = new ImmutableConnector({ logger });
-        const result = await immutableConnector.getConnector(
-            [connector1, connector2, connector3], 'bucket1');
+        const result = await immutableConnector.getConnector([connector1, connector2, connector3], 'bucket1');
         assert.strictEqual(result, null);
     });
 

@@ -3,17 +3,16 @@ const jsutil = require('@scality/arsenal').jsutil;
 const sinon = require('sinon');
 
 const config = require('../../config.json');
-const MultipleBackendTask =
-    require('../../../extensions/replication/tasks/MultipleBackendTask');
+const MultipleBackendTask = require('../../../extensions/replication/tasks/MultipleBackendTask');
 const QueueEntry = require('../../../lib/models/QueueEntry');
 const { sourceEntry } = require('../../utils/mockEntries');
 const fakeLogger = require('../../utils/fakeLogger');
 const { replicationEntry } = require('../../utils/kafkaEntries');
 
 const MPU_GCP_MAX_PARTS = 1024;
-const MIN_AWS_PART_SIZE = (1024 * 1024) * 5; // 5MB
-const MAX_AWS_PART_SIZE = (1024 * 1024 * 1024) * 5; // 5GB
-const MAX_AWS_OBJECT_SIZE = (1024 * 1024 * 1024 * 1024) * 5; // 5TB
+const MIN_AWS_PART_SIZE = 1024 * 1024 * 5; // 5MB
+const MAX_AWS_PART_SIZE = 1024 * 1024 * 1024 * 5; // 5GB
+const MAX_AWS_OBJECT_SIZE = 1024 * 1024 * 1024 * 1024 * 5; // 5TB
 const retryConfig = { scality: { timeoutS: 300 } };
 
 describe('MultipleBackendTask', function test() {
@@ -53,17 +52,18 @@ describe('MultipleBackendTask', function test() {
                 sourceConfig: config.extensions.replication.source,
                 destConfig: {
                     ...config.extensions.replication.destination,
-                    replicationEndpoint: config.extensions.replication.destination.bootstrapList
-                        .find(e => e.site === 'test-site-2'),
+                    replicationEndpoint: config.extensions.replication.destination.bootstrapList.find(
+                        e => e.site === 'test-site-2',
+                    ),
                 },
                 site: 'test-site-2',
                 notificationConfigManager: {
-                    getConfig: () => null
+                    getConfig: () => null,
                 },
                 logger: fakeLogger,
                 metricsHandler: {
                     rpo: () => {},
-                }
+                },
             }),
         });
     });
@@ -92,11 +92,13 @@ describe('MultipleBackendTask', function test() {
                     content: ['DATA', 'METADATA'],
                     destination: '',
                     role: 'arn:aws:iam::111:role/src',
-                    backends: [{
-                        site: 'test-site-2',
-                        status: 'PENDING',
-                        dataStoreVersionId: '',
-                    }],
+                    backends: [
+                        {
+                            site: 'test-site-2',
+                            status: 'PENDING',
+                            dataStoreVersionId: '',
+                        },
+                    ],
                 },
             }).setSite('test-site-2');
         }
@@ -104,19 +106,22 @@ describe('MultipleBackendTask', function test() {
         it('matches V2 rules by Filter.Prefix', () => {
             sinon.stub(task, '_setupSourceClients').returns();
             task.S3source = {
-                send: () => Promise.resolve({
-                    ReplicationConfiguration: {
-                        Role: 'arn:aws:iam::111:role/src',
-                        Rules: [{
-                            Status: 'Enabled',
-                            Filter: { Prefix: '' },
-                            Destination: {
-                                Bucket: 'arn:aws:s3:::bucket-a',
-                                StorageClass: 'test-site-2',
-                            },
-                        }],
-                    },
-                }),
+                send: () =>
+                    Promise.resolve({
+                        ReplicationConfiguration: {
+                            Role: 'arn:aws:iam::111:role/src',
+                            Rules: [
+                                {
+                                    Status: 'Enabled',
+                                    Filter: { Prefix: '' },
+                                    Destination: {
+                                        Bucket: 'arn:aws:s3:::bucket-a',
+                                        StorageClass: 'test-site-2',
+                                    },
+                                },
+                            ],
+                        },
+                    }),
             };
 
             return task._setupRolesOnce(makeEntry(), fakeLogger);
@@ -125,42 +130,49 @@ describe('MultipleBackendTask', function test() {
         it('rejects with PreconditionFailed when no rule matches the object key', () => {
             sinon.stub(task, '_setupSourceClients').returns();
             task.S3source = {
-                send: () => Promise.resolve({
-                    ReplicationConfiguration: {
-                        Role: 'arn:aws:iam::111:role/src',
-                        Rules: [{
-                            Status: 'Enabled',
-                            Filter: { Prefix: 'logs/' },
-                            Destination: {
-                                Bucket: 'arn:aws:s3:::bucket-a',
-                                StorageClass: 'test-site-2',
-                            },
-                        }],
-                    },
-                }),
+                send: () =>
+                    Promise.resolve({
+                        ReplicationConfiguration: {
+                            Role: 'arn:aws:iam::111:role/src',
+                            Rules: [
+                                {
+                                    Status: 'Enabled',
+                                    Filter: { Prefix: 'logs/' },
+                                    Destination: {
+                                        Bucket: 'arn:aws:s3:::bucket-a',
+                                        StorageClass: 'test-site-2',
+                                    },
+                                },
+                            ],
+                        },
+                    }),
             };
 
             return assert.rejects(
                 task._setupRolesOnce(makeEntry(), fakeLogger),
-                err => err.is.PreconditionFailed === true);
+                err => err.is.PreconditionFailed === true,
+            );
         });
 
         it('accepts V1 rules with top-level Prefix', () => {
             sinon.stub(task, '_setupSourceClients').returns();
             task.S3source = {
-                send: () => Promise.resolve({
-                    ReplicationConfiguration: {
-                        Role: 'arn:aws:iam::111:role/src',
-                        Rules: [{
-                            Status: 'Enabled',
-                            Prefix: '',
-                            Destination: {
-                                Bucket: 'arn:aws:s3:::bucket-a',
-                                StorageClass: 'test-site-2',
-                            },
-                        }],
-                    },
-                }),
+                send: () =>
+                    Promise.resolve({
+                        ReplicationConfiguration: {
+                            Role: 'arn:aws:iam::111:role/src',
+                            Rules: [
+                                {
+                                    Status: 'Enabled',
+                                    Prefix: '',
+                                    Destination: {
+                                        Bucket: 'arn:aws:s3:::bucket-a',
+                                        StorageClass: 'test-site-2',
+                                    },
+                                },
+                            ],
+                        },
+                    }),
             };
 
             return task._setupRolesOnce(makeEntry(), fakeLogger);
@@ -192,17 +204,15 @@ describe('MultipleBackendTask', function test() {
         it('should get correct part sizes', () => {
             checkPartLength(0, 0);
             checkPartLength(1, 1);
-            checkPartLength((1024 * 1024) * 16, (1024 * 1024) * 16);
-            checkPartLength(((1024 * 1024) * 16) + 1, (1024 * 1024) * 16);
-            for (let size = (1024 * 1024) * 16;
-                size <= (1024 * 1024) * 512;
-                size *= 2) {
-                checkPartLength((size * 1000), size);
+            checkPartLength(1024 * 1024 * 16, 1024 * 1024 * 16);
+            checkPartLength(1024 * 1024 * 16 + 1, 1024 * 1024 * 16);
+            for (let size = 1024 * 1024 * 16; size <= 1024 * 1024 * 512; size *= 2) {
+                checkPartLength(size * 1000, size);
                 // 512MB part sizes should allow for up to 10K parts.
-                if (size === (1024 * 1024) * 512) {
-                    checkPartLength((size * 1000) + 1, size);
+                if (size === 1024 * 1024 * 512) {
+                    checkPartLength(size * 1000 + 1, size);
                 } else {
-                    checkPartLength((size * 1000) + 1, size * 2);
+                    checkPartLength(size * 1000 + 1, size * 2);
                 }
             }
             checkPartLength(MAX_AWS_OBJECT_SIZE, 1024 * 1024 * 1024);
@@ -231,31 +241,31 @@ describe('MultipleBackendTask', function test() {
         });
 
         it('should get a list of ranges with content length 16MB', () => {
-            const contentLength = (1024 * 1024) * 16; // 16MB
+            const contentLength = 1024 * 1024 * 16; // 16MB
             const ranges = task._getRanges(contentLength, false);
             assert.strictEqual(ranges.length, 1);
-            const expected = { start: 0, end: (1024 * 1024) * 16 - 1 };
+            const expected = { start: 0, end: 1024 * 1024 * 16 - 1 };
             assert.deepStrictEqual(ranges[0], expected);
         });
 
         it('should get a list of ranges with content length 16MB + 1B', () => {
-            const contentLength = ((1024 * 1024) * 16) + 1;
+            const contentLength = 1024 * 1024 * 16 + 1;
             const ranges = task._getRanges(contentLength, false);
             assert.strictEqual(ranges.length, 2);
-            let expected = { start: 0, end: ((1024 * 1024) * 16) - 1 };
+            let expected = { start: 0, end: 1024 * 1024 * 16 - 1 };
             assert.deepStrictEqual(ranges[0], expected);
             expected = { start: contentLength - 1, end: contentLength - 1 };
             assert.deepStrictEqual(ranges[ranges.length - 1], expected);
         });
 
         it('should get a list of ranges with content length of 16000MB', () => {
-            const sixteenMB = (1024 * 1024) * 16;
-            const contentLength = ((1024 * 1024) * 16) * 1000;
+            const sixteenMB = 1024 * 1024 * 16;
+            const contentLength = 1024 * 1024 * 16 * 1000;
             const ranges = task._getRanges(contentLength, false);
             assert.strictEqual(ranges.length, 1000);
             let expected = { start: 0, end: sixteenMB - 1 };
             assert.deepStrictEqual(ranges[0], expected);
-            expected = { start: sixteenMB, end: (sixteenMB * 2) - 1 };
+            expected = { start: sixteenMB, end: sixteenMB * 2 - 1 };
             assert.deepStrictEqual(ranges[1], expected);
             expected = {
                 start: sixteenMB * (ranges.length - 1),
@@ -264,22 +274,21 @@ describe('MultipleBackendTask', function test() {
             assert.deepStrictEqual(ranges[ranges.length - 1], expected);
         });
 
-        it('should get a list of ranges with content length 16000MB + 1B',
-        () => {
-            const contentLength = (((1024 * 1024) * 16) * 1000) + 1;
+        it('should get a list of ranges with content length 16000MB + 1B', () => {
+            const contentLength = 1024 * 1024 * 16 * 1000 + 1;
             const ranges = task._getRanges(contentLength, false);
             assert.strictEqual(ranges.length, 501);
-            const thirtyTwoMB = (1024 * 1024) * 32;
+            const thirtyTwoMB = 1024 * 1024 * 32;
             let expected = { start: 0, end: thirtyTwoMB - 1 };
             assert.deepStrictEqual(ranges[0], expected);
-            expected = { start: thirtyTwoMB, end: (thirtyTwoMB * 2) - 1 };
+            expected = { start: thirtyTwoMB, end: thirtyTwoMB * 2 - 1 };
             assert.deepStrictEqual(ranges[1], expected);
             expected = { start: contentLength - 1, end: contentLength - 1 };
             assert.deepStrictEqual(ranges[ranges.length - 1], expected);
         });
 
         it('should get a list of 10K ranges', () => {
-            const fiveHundredTwelveMB = (1024 * 1024) * 512;
+            const fiveHundredTwelveMB = 1024 * 1024 * 512;
             const contentLength = fiveHundredTwelveMB * 10000;
             const ranges = task._getRanges(contentLength, false);
             assert.strictEqual(ranges.length, 10000);
@@ -294,7 +303,7 @@ describe('MultipleBackendTask', function test() {
 
         it('should not exceed a list of 10K ranges', () => {
             const oneGB = 1024 * 1024 * 1024;
-            const contentLength = (((1024 * 1024) * 512) * 10000) + 1;
+            const contentLength = 1024 * 1024 * 512 * 10000 + 1;
             const ranges = task._getRanges(contentLength, false);
             assert.strictEqual(ranges.length, 5001);
             let expected = { start: 0, end: oneGB - 1 };
@@ -314,15 +323,12 @@ describe('MultipleBackendTask', function test() {
             assert.deepStrictEqual(ranges[ranges.length - 1], expected);
         });
 
-        it('should ensure all parts of the original object are intact',
-        function test() {
+        it('should ensure all parts of the original object are intact', function test() {
             this.timeout(10000);
             const minMPUObjectSize = MIN_AWS_PART_SIZE + 1;
             const contentLengths = [MAX_AWS_OBJECT_SIZE];
             Array.from(Array(1024).keys()).forEach(n => {
-                for (let i = minMPUObjectSize + n;
-                    i <= MAX_AWS_OBJECT_SIZE;
-                    i *= 2) {
+                for (let i = minMPUObjectSize + n; i <= MAX_AWS_OBJECT_SIZE; i *= 2) {
                     contentLengths.push(i);
                 }
             });
@@ -346,14 +352,13 @@ describe('MultipleBackendTask', function test() {
         });
 
         it('should get single part count for GCP', () => {
-            const contentLength = (1024 * 1024) * 5;
+            const contentLength = 1024 * 1024 * 5;
             const ranges = task._getRanges(contentLength, true);
             assert(ranges.length === 1);
         });
 
-        it('should use GCP calculation for ranges exceeding 512MB * 1024',
-        () => {
-            const contentLength = ((1024 * 1024) * 512) * 1024;
+        it('should use GCP calculation for ranges exceeding 512MB * 1024', () => {
+            const contentLength = 1024 * 1024 * 512 * 1024;
             let ranges = task._getRanges(contentLength, true);
             assert(ranges.length === 1024);
             ranges = task._getRanges(contentLength + 1, true);
@@ -366,23 +371,34 @@ describe('MultipleBackendTask', function test() {
                 const count = n + 1025;
                 const ranges = task._getRanges(count * partSize, true);
                 const contentLen = count * partSize;
-                const pow = Math.pow(2,
-                    Math.ceil(Math.log(contentLen) / Math.log(2)));
+                const pow = Math.pow(2, Math.ceil(Math.log(contentLen) / Math.log(2)));
                 const range = pow / MPU_GCP_MAX_PARTS;
                 const msg = `incorrect value for part count: ${count}`;
                 assert.strictEqual(ranges.length <= 1024, true, msg);
-                assert.deepStrictEqual(ranges[0], {
-                    start: 0,
-                    end: range - 1,
-                }, msg);
-                assert.deepStrictEqual(ranges[1], {
-                    start: range,
-                    end: range * 2 - 1,
-                }, msg);
-                assert.deepStrictEqual(ranges[ranges.length - 1], {
-                    start: range * (ranges.length - 1),
-                    end: contentLen - 1,
-                }, msg);
+                assert.deepStrictEqual(
+                    ranges[0],
+                    {
+                        start: 0,
+                        end: range - 1,
+                    },
+                    msg,
+                );
+                assert.deepStrictEqual(
+                    ranges[1],
+                    {
+                        start: range,
+                        end: range * 2 - 1,
+                    },
+                    msg,
+                );
+                assert.deepStrictEqual(
+                    ranges[ranges.length - 1],
+                    {
+                        start: range * (ranges.length - 1),
+                        end: contentLen - 1,
+                    },
+                    msg,
+                );
             });
         });
     });
@@ -394,8 +410,9 @@ describe('MultipleBackendTask', function test() {
             queueEntry = QueueEntry.createFromKafkaEntry(replicationEntry);
             sinon.stub(task, '_setupClients').yields(null);
             sinon.stub(task, '_refreshSourceEntry').resolves(queueEntry);
-            sinon.stub(task, '_handleReplicationOutcome').callsFake(
-                err => (err ? Promise.reject(err) : Promise.resolve(null)));
+            sinon
+                .stub(task, '_handleReplicationOutcome')
+                .callsFake(err => (err ? Promise.reject(err) : Promise.resolve(null)));
         });
 
         afterEach(() => {
@@ -435,7 +452,7 @@ describe('MultipleBackendTask', function test() {
             });
         });
 
-        it('should replicate whole object if putting tags and object wasn\'t previously replicated', done => {
+        it("should replicate whole object if putting tags and object wasn't previously replicated", done => {
             sinon.stub(queueEntry, 'getIsDeleteMarker').returns(false);
             sinon.stub(queueEntry, 'getReplicationContent').returns(['METADATA', 'DATA', 'PUT_TAGGING']);
             sinon.stub(queueEntry, 'getReplicationSiteStatus').returns('PENDING');
@@ -465,7 +482,7 @@ describe('MultipleBackendTask', function test() {
             });
         });
 
-        it('should replicate whole object if deleting tags and object wasn\'t previously replicated', done => {
+        it("should replicate whole object if deleting tags and object wasn't previously replicated", done => {
             sinon.stub(queueEntry, 'getIsDeleteMarker').returns(false);
             sinon.stub(queueEntry, 'getReplicationContent').returns(['METADATA', 'DATA', 'DELETE_TAGGING']);
             sinon.stub(queueEntry, 'getReplicationSiteStatus').returns('PENDING');
@@ -632,29 +649,29 @@ describe('MultipleBackendTask', function test() {
     });
 
     describe('_completeRangedMPU', () => {
-        it('should abort MPU on part upload error', done => {            
+        it('should abort MPU on part upload error', done => {
             sinon.stub(task, '_getRanges').returns([
                 { start: 0, end: 100 },
-                { start: 101, end: 199 }
+                { start: 101, end: 199 },
             ]);
-            
+
             const putRangeFunc = sinon.stub(task, '_getRangeAndPutMPUPart');
             putRangeFunc.onCall(0).yields(null, {
                 partNumber: 0,
                 ETag: 'etag1',
             });
             putRangeFunc.onCall(1).yields(new Error('Upload failed'));
-            
+
             const abortMpuFunc = sinon.stub(task, '_multipleBackendAbortMPU').yields();
             const completeMpuFunc = sinon.stub(task, '_completeMPU').yields();
-            
+
             task.destConfig = {
                 replicationEndpoint: {
                     site: 'test-site',
                     type: 'aws_s3',
                 },
             };
-            
+
             const uploadId = 'test-upload-id';
             task._completeRangedMPU(sourceEntry, uploadId, fakeLogger, err => {
                 assert(err);
@@ -664,34 +681,34 @@ describe('MultipleBackendTask', function test() {
                 done();
             });
         });
-            
+
         it('should handle Azure special case for MPU parts', done => {
             sinon.stub(task, '_getRanges').returns([
                 { start: 0, end: 100 },
-                { start: 101, end: 199 }
+                { start: 101, end: 199 },
             ]);
-            
+
             const putRangeFunc = sinon.stub(task, '_getRangeAndPutMPUPart');
             putRangeFunc.onCall(0).yields(null, {
                 partNumber: 0,
                 ETag: 'etag1',
-                numberSubParts: 2
+                numberSubParts: 2,
             });
             putRangeFunc.onCall(1).yields(null, {
                 partNumber: 1,
                 ETag: 'etag2',
-                numberSubParts: 1
+                numberSubParts: 1,
             });
-            
+
             const completeMpuFunc = sinon.stub(task, '_completeMPU').yields();
-            
+
             task.destConfig = {
                 replicationEndpoint: {
                     site: 'test-site',
                     type: 'azure',
                 },
             };
-            
+
             task._completeRangedMPU(sourceEntry, 'test-upload-id', fakeLogger, err => {
                 assert.ifError(err);
                 assert(completeMpuFunc.calledOnce);

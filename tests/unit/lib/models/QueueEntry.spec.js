@@ -10,17 +10,12 @@ describe('QueueEntry helper class', () => {
         it('should parse a well-formed kafka entry', () => {
             const entry = QueueEntry.createFromKafkaEntry(replicationEntry);
             assert.strictEqual(entry.error, undefined);
-            assert.strictEqual(entry.getBucket(),
-                               'queue-populator-test-bucket');
+            assert.strictEqual(entry.getBucket(), 'queue-populator-test-bucket');
             assert.strictEqual(entry.getObjectKey(), 'hosts');
-            assert.strictEqual(entry.getVersionId(),
-                               '98500086134471999999RG001  0');
-            assert.strictEqual(
-                entry.getEncodedVersionId(),
-                '39383530303038363133343437313939393939395247303031202030');
+            assert.strictEqual(entry.getVersionId(), '98500086134471999999RG001  0');
+            assert.strictEqual(entry.getEncodedVersionId(), '39383530303038363133343437313939393939395247303031202030');
             assert.strictEqual(entry.getContentLength(), 542);
-            assert.strictEqual(entry.getContentMd5(),
-                               '01064f35c238bd2b785e34508c3d27f4');
+            assert.strictEqual(entry.getContentMd5(), '01064f35c238bd2b785e34508c3d27f4');
             assert.strictEqual(entry.getReplicationStatus(), 'PENDING');
             const repContent = entry.getReplicationContent();
             assert.deepStrictEqual(repContent, ['DATA', 'METADATA']);
@@ -28,46 +23,33 @@ describe('QueueEntry helper class', () => {
             assert.deepStrictEqual(destBucket, 'dummy-dest-bucket');
         });
 
-        it('should convert a kafka entry\'s replication status', () => {
+        it("should convert a kafka entry's replication status", () => {
             const entry = QueueEntry.createFromKafkaEntry(replicationEntry);
             assert.strictEqual(entry.error, undefined);
 
             // If one site is a REPLICA, the global status should be REPLICA
             const replica = entry.toReplicaEntry({ site: 'sf' });
-            assert.strictEqual(replica.getReplicationSiteStatus({ site: 'sf' }),
-                'REPLICA');
-            assert.strictEqual(
-                replica.getReplicationSiteStatus({ site: 'replicationaws' }),
-                undefined);
+            assert.strictEqual(replica.getReplicationSiteStatus({ site: 'sf' }), 'REPLICA');
+            assert.strictEqual(replica.getReplicationSiteStatus({ site: 'replicationaws' }), undefined);
             assert.strictEqual(replica.getReplicationStatus(), 'REPLICA');
 
             // If one site is FAILED, the global status should be FAILED
             const failed = entry.toFailedEntry({ site: 'sf' });
-            assert.strictEqual(failed.getReplicationSiteStatus({ site: 'sf' }),
-                'FAILED');
-            assert.strictEqual(
-                failed.getReplicationSiteStatus({ site: 'replicationaws' }),
-                'PENDING');
+            assert.strictEqual(failed.getReplicationSiteStatus({ site: 'sf' }), 'FAILED');
+            assert.strictEqual(failed.getReplicationSiteStatus({ site: 'replicationaws' }), 'PENDING');
             assert.strictEqual(failed.getReplicationStatus(), 'FAILED');
 
             // If one site is still PENDING, the global status should be
             // PROCESSING even though one has completed
             const completed = entry.toCompletedEntry({ site: 'sf' });
-            assert.strictEqual(completed.getReplicationSiteStatus({ site: 'sf' }),
-                'COMPLETED');
-            assert.strictEqual(
-                completed.getReplicationSiteStatus({ site: 'replicationaws' }),
-                'PENDING');
+            assert.strictEqual(completed.getReplicationSiteStatus({ site: 'sf' }), 'COMPLETED');
+            assert.strictEqual(completed.getReplicationSiteStatus({ site: 'replicationaws' }), 'PENDING');
             assert.strictEqual(completed.getReplicationStatus(), 'PROCESSING');
 
             // If all sites are COMPLETED, the global status should be COMPLETED
-            const allCompleted = entry.toCompletedEntry({ site: 'sf' })
-                .toCompletedEntry({ site: 'replicationaws' });
-            assert.strictEqual(allCompleted.getReplicationSiteStatus({ site: 'sf' }),
-                'COMPLETED');
-            assert.strictEqual(allCompleted
-                .getReplicationSiteStatus({ site: 'replicationaws' }),
-                'COMPLETED');
+            const allCompleted = entry.toCompletedEntry({ site: 'sf' }).toCompletedEntry({ site: 'replicationaws' });
+            assert.strictEqual(allCompleted.getReplicationSiteStatus({ site: 'sf' }), 'COMPLETED');
+            assert.strictEqual(allCompleted.getReplicationSiteStatus({ site: 'replicationaws' }), 'COMPLETED');
             assert.strictEqual(allCompleted.getReplicationStatus(), 'COMPLETED');
             assert.strictEqual(entry.getReplicationSiteStatus({ site: 'sf' }), 'PENDING');
         });
@@ -82,14 +64,12 @@ describe('QueueEntry helper class', () => {
 
         it('should accept an object as the entry value', () => {
             const fromString = QueueEntry.createFromKafkaEntry(replicationEntry);
-            const fromObject = QueueEntry.createFromKafkaEntry(
-                withDecodedValue(replicationEntry));
+            const fromObject = QueueEntry.createFromKafkaEntry(withDecodedValue(replicationEntry));
 
             assert.strictEqual(fromObject.error, undefined);
             assert.deepStrictEqual(fromObject.getValue(), fromString.getValue());
             assert.strictEqual(fromObject.getBucket(), fromString.getBucket());
-            assert.strictEqual(fromObject.getObjectKey(),
-                               fromString.getObjectKey());
+            assert.strictEqual(fromObject.getObjectKey(), fromString.getObjectKey());
         });
 
         it('should report a malformed value string', () => {
@@ -102,12 +82,10 @@ describe('QueueEntry helper class', () => {
                 }),
             });
 
-            assert.strictEqual(entry.error.message,
-                               'malformed JSON in kafka entry');
+            assert.strictEqual(entry.error.message, 'malformed JSON in kafka entry');
         });
 
-        it('should reject a value that is neither a string nor an object',
-        () => {
+        it('should reject a value that is neither a string nor an object', () => {
             const entry = QueueEntry.createFromKafkaEntry({
                 value: JSON.stringify({
                     type: 'put',
@@ -117,8 +95,7 @@ describe('QueueEntry helper class', () => {
                 }),
             });
 
-            assert.strictEqual(entry.error.message,
-                               'malformed JSON in kafka entry');
+            assert.strictEqual(entry.error.message, 'malformed JSON in kafka entry');
             assert.match(entry.error.description, /got number/);
         });
     });

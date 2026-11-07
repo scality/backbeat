@@ -123,22 +123,25 @@ describe('BackbeatTask', () => {
             });
 
             let attempts = 0;
-            task.retry({
-                actionDesc: 'test short timeout',
-                actionFunc: cb => {
-                    attempts += 1;
-                    cb(new Error('test error'));
+            task.retry(
+                {
+                    actionDesc: 'test short timeout',
+                    actionFunc: cb => {
+                        attempts += 1;
+                        cb(new Error('test error'));
+                    },
+                    shouldRetryFunc: () => true,
+                    onRetryFunc: () => {
+                        logger.info(`retry attempt #${attempts}`);
+                    },
+                    log: logger,
                 },
-                shouldRetryFunc: () => true,
-                onRetryFunc: () => {
-                    logger.info(`retry attempt #${attempts}`);
+                err => {
+                    assert(err, 'expected an error after retries timed out');
+                    assert(attempts > 1, `expected multiple attempts, got ${attempts}`);
+                    done();
                 },
-                log: logger,
-            }, err => {
-                assert(err, 'expected an error after retries timed out');
-                assert(attempts > 1, `expected multiple attempts, got ${attempts}`);
-                done();
-            });
+            );
 
             clock.tick(5000);
         });
@@ -149,27 +152,30 @@ describe('BackbeatTask', () => {
             let cbCalledCount = 0;
             let inRetry = false;
 
-            task.retry({
-                actionDesc: 'do test action',
-                actionFunc: cb => {
-                    logger.info('actionFunc called');
-                    if (inRetry) {
-                        cb();
-                    } else {
-                        cb(new Error('OOPS'));
-                        inRetry = true;
-                    }
-                    setTimeout(cb, 2000);
+            task.retry(
+                {
+                    actionDesc: 'do test action',
+                    actionFunc: cb => {
+                        logger.info('actionFunc called');
+                        if (inRetry) {
+                            cb();
+                        } else {
+                            cb(new Error('OOPS'));
+                            inRetry = true;
+                        }
+                        setTimeout(cb, 2000);
+                    },
+                    shouldRetryFunc: () => true,
+                    logFields: {
+                        testLog: 'a log field',
+                    },
+                    log: logger,
                 },
-                shouldRetryFunc: () => true,
-                logFields: {
-                    testLog: 'a log field',
+                err => {
+                    assert.ifError(err, 'did not expect an error after final success');
+                    cbCalledCount += 1;
                 },
-                log: logger,
-            }, err => {
-                assert.ifError(err, 'did not expect an error after final success');
-                cbCalledCount += 1;
-            });
+            );
 
             clock.tick(3000);
 

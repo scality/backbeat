@@ -37,8 +37,7 @@ describe('backbeat config schema', () => {
         });
 
         it('should accept the log source its section configures', () => {
-            assert.strictEqual(validate({ logSource: 'dmd', dmd: { host: 'dmd', port: 9990 } }).error,
-                               undefined);
+            assert.strictEqual(validate({ logSource: 'dmd', dmd: { host: 'dmd', port: 9990 } }).error, undefined);
         });
 
         // the ingestion reader is configured by the extension
@@ -47,14 +46,17 @@ describe('backbeat config schema', () => {
         });
 
         it('should reject a log source it cannot read', () => {
-            assert.match(validate({ logSource: 'mongo' }).error.message,
-                         /"queuePopulator.logSource" must be one of \[bucketd, ingestion, dmd, kafka, none\]/);
+            assert.match(
+                validate({ logSource: 'mongo' }).error.message,
+                /"queuePopulator.logSource" must be one of \[bucketd, ingestion, dmd, kafka, none\]/,
+            );
         });
 
         it('should require the populator settings of any log source but none', () => {
             const { error } = schema.validate(
                 { queuePopulator: { logSource: 'kafka', kafka: {} }, extensions: { gc: {} } },
-                { abortEarly: false });
+                { abortEarly: false },
+            );
             const missing = error.details.map(detail => detail.path.join('.'));
             assert.deepStrictEqual(missing.sort(), [
                 'queuePopulator.cronRule',
@@ -78,8 +80,9 @@ describe('backbeat config schema', () => {
         // a configuration that does not mention redis reaches it locally, as
         // the standalone section of the shipped configuration file does
         it('should default to a local standalone server', () => {
-            assert.deepStrictEqual(joi.attempt({}, joi.object({ redis: redisJoi })),
-                                   { redis: { host: '127.0.0.1', port: 6379 } });
+            assert.deepStrictEqual(joi.attempt({}, joi.object({ redis: redisJoi })), {
+                redis: { host: '127.0.0.1', port: 6379 },
+            });
         });
 
         describe('sentinels', () => {
@@ -98,9 +101,10 @@ describe('backbeat config schema', () => {
 
             // the redis client expects a list: a comma separated one is parsed
             it('should parse the comma separated form', () => {
-                assert.deepStrictEqual(
-                    validate({ sentinels: 'host1:26379,host2:26380' }).sentinels,
-                    [{ host: 'host1', port: 26379 }, { host: 'host2', port: 26380 }]);
+                assert.deepStrictEqual(validate({ sentinels: 'host1:26379,host2:26380' }).sentinels, [
+                    { host: 'host1', port: 26379 },
+                    { host: 'host2', port: 26380 },
+                ]);
             });
 
             it('should keep the passwords of a comma separated form', () => {
@@ -115,24 +119,24 @@ describe('backbeat config schema', () => {
             });
 
             it('should accept a list of host and port', () => {
-                const sentinels = [{ host: 'host1', port: 26379 }, { host: 'host2', port: 26379 }];
+                const sentinels = [
+                    { host: 'host1', port: 26379 },
+                    { host: 'host2', port: 26379 },
+                ];
 
                 assert.deepStrictEqual(validate({ sentinels }).sentinels, sentinels);
             });
 
             // the two modes are exclusive: a deployment configures one of them
             it('should reject the standalone host and port', () => {
-                assert.throws(() => validate({ sentinels: 'host1:26379', host: 'redis' }),
-                              /"host" is not allowed/);
-                assert.throws(() => validate({ sentinels: 'host1:26379', port: 6380 }),
-                              /"port" is not allowed/);
+                assert.throws(() => validate({ sentinels: 'host1:26379', host: 'redis' }), /"host" is not allowed/);
+                assert.throws(() => validate({ sentinels: 'host1:26379', port: 6380 }), /"port" is not allowed/);
             });
         });
 
         describe('standalone', () => {
             it('should default the port', () => {
-                assert.deepStrictEqual(validate({ host: 'redis' }),
-                                       { host: 'redis', port: 6379, password: '' });
+                assert.deepStrictEqual(validate({ host: 'redis' }), { host: 'redis', port: 6379, password: '' });
             });
 
             it('should keep the configured port', () => {
@@ -147,10 +151,11 @@ describe('backbeat config schema', () => {
             // the group name and the sentinel password only mean something to
             // the sentinels, and are not part of this mode
             it('should reject the settings of the sentinels', () => {
-                assert.throws(() => validate({ host: 'redis', name: 'group' }),
-                              /"name" is not allowed/);
-                assert.throws(() => validate({ host: 'redis', sentinelPassword: 'p' }),
-                              /"sentinelPassword" is not allowed/);
+                assert.throws(() => validate({ host: 'redis', name: 'group' }), /"name" is not allowed/);
+                assert.throws(
+                    () => validate({ host: 'redis', sentinelPassword: 'p' }),
+                    /"sentinelPassword" is not allowed/,
+                );
             });
         });
     });

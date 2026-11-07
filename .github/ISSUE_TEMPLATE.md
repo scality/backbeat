@@ -9,7 +9,7 @@ the **[Zenko Forum](http://forum.zenko.io/)**.
 > Questions opened as GitHub issues will systematically be closed, and moved to
 > the [Zenko Forum](http://forum.zenko.io/).
 
---------------------------------------------------------------------------------
+---
 
 ## Avoiding duplicates
 
@@ -21,7 +21,7 @@ any duplicates already open:
 - if there is a duplicate, please do not open your issue, and add a comment
   to the existing issue instead.
 
---------------------------------------------------------------------------------
+---
 
 ## Bug report information
 
@@ -52,7 +52,7 @@ Describe the results you expected
 - distribution/OS,
 - optional: anything else you deem helpful to us.
 
---------------------------------------------------------------------------------
+---
 
 ## Feature Request
 
@@ -86,4 +86,4 @@ Please provide usecases for changing the current behavior
 - Position/Title:
 - How did you hear about us?
 
---------------------------------------------------------------------------------
+---

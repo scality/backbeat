@@ -2,8 +2,7 @@ const joi = require('joi');
 const semver = require('semver');
 
 const { ZenkoMetrics } = require('@scality/arsenal').metrics;
-const LRUCache = require('@scality/arsenal').algorithms
-    .cache.LRUCache;
+const LRUCache = require('@scality/arsenal').algorithms.cache.LRUCache;
 const { errors } = require('@scality/arsenal');
 
 const MongoClient = require('mongodb').MongoClient;
@@ -12,12 +11,14 @@ const ChangeStream = require('../../../lib/wrappers/ChangeStream');
 const { constructConnectionString, getMongoVersion } = require('../../utils/MongoUtils');
 const BaseConfigManager = require('./BaseConfigManager');
 
-const paramsJoi = joi.object({
-    mongoConfig: joi.object().required(),
-    bucketMetastore: joi.string().required(),
-    maxCachedConfigs: joi.number().required(),
-    logger: joi.object().required(),
-}).required();
+const paramsJoi = joi
+    .object({
+        mongoConfig: joi.object().required(),
+        bucketMetastore: joi.string().required(),
+        maxCachedConfigs: joi.number().required(),
+        logger: joi.object().required(),
+    })
+    .required();
 
 // cached for buckets without notification configuration; truthy, so that the
 // change stream handler replaces it when a configuration is added
@@ -31,17 +32,13 @@ const CONFIG_MANAGER_OPERATION_TYPE = 'op';
 const cacheUpdates = ZenkoMetrics.createCounter({
     name: 's3_notification_config_manager_cache_updates_total',
     help: 'Total number of cache updates',
-    labelNames: [
-        CONFIG_MANAGER_OPERATION_TYPE,
-    ],
+    labelNames: [CONFIG_MANAGER_OPERATION_TYPE],
 });
 
 const configGetLag = ZenkoMetrics.createHistogram({
     name: 's3_notification_config_manager_config_get_seconds',
     help: 'Time it takes in seconds to get a bucket notification config from MongoDB',
-    labelNames: [
-        CONFIG_MANAGER_CACHE_HIT,
-    ],
+    labelNames: [CONFIG_MANAGER_CACHE_HIT],
     buckets: [0.001, 0.01, 1, 10, 100, 1000],
 });
 
@@ -58,9 +55,12 @@ function onConfigManagerCacheUpdate(op, nbCachedBuckets) {
 }
 
 function onConfigManagerConfigGet(cacheHit, delay) {
-    configGetLag.observe({
-        [CONFIG_MANAGER_CACHE_HIT]: cacheHit,
-    }, delay);
+    configGetLag.observe(
+        {
+            [CONFIG_MANAGER_CACHE_HIT]: cacheHit,
+        },
+        delay,
+    );
 }
 
 /**
@@ -114,7 +114,7 @@ class MongoConfigManager extends BaseConfigManager {
                 ignoreUndefined: true,
             });
             this._metastore = this._mongoClient.collection(this._bucketMetastore);
-                // get mongodb version
+            // get mongodb version
             return getMongoVersion(this._mongoClient, (err, version) => {
                 if (err) {
                     this._logger.error('Could not get MongoDB version', {
@@ -144,8 +144,9 @@ class MongoConfigManager extends BaseConfigManager {
     _handleChangeStreamChangeEvent(change) {
         // invalidating cached notification configs
         const cachedConfig = this._cachedConfigs.get(change.documentKey._id);
-        const bucketNotificationConfiguration = change.fullDocument ? change.fullDocument.value.
-            notificationConfiguration : null;
+        const bucketNotificationConfiguration = change.fullDocument
+            ? change.fullDocument.value.notificationConfiguration
+            : null;
         switch (change.operationType) {
             case 'delete':
                 if (cachedConfig) {
@@ -158,9 +159,7 @@ class MongoConfigManager extends BaseConfigManager {
                 if (cachedConfig) {
                     // disabling bucket notification works by setting
                     // the configuration to an empty object
-                    if (!bucketNotificationConfiguration ||
-                        !Object.keys(bucketNotificationConfiguration).length
-                    ) {
+                    if (!bucketNotificationConfiguration || !Object.keys(bucketNotificationConfiguration).length) {
                         this._cachedConfigs.remove(change.documentKey._id);
                         onConfigManagerCacheUpdate('delete', this._cachedConfigs.count());
                     } else {
@@ -199,12 +198,8 @@ class MongoConfigManager extends BaseConfigManager {
         const changeStreamPipeline = [
             {
                 $match: {
-                    $or: [
-                        { operationType: 'delete' },
-                        { operationType: 'replace' },
-                        { operationType: 'update' },
-                    ]
-                }
+                    $or: [{ operationType: 'delete' }, { operationType: 'replace' }, { operationType: 'update' }],
+                },
             },
             {
                 $project: {
@@ -212,7 +207,7 @@ class MongoConfigManager extends BaseConfigManager {
                     'operationType': 1,
                     'documentKey._id': 1,
                     'fullDocument._id': 1,
-                    'fullDocument.value.notificationConfiguration': 1
+                    'fullDocument.value.notificationConfiguration': 1,
                 },
             },
         ];
@@ -295,11 +290,10 @@ class MongoConfigManager extends BaseConfigManager {
             onConfigManagerCacheUpdate('add', this._cachedConfigs.count());
             return {
                 bucket,
-                notificationConfiguration
+                notificationConfiguration,
             };
         } catch (err) {
-            this._logger.error('An error occured when getting notification ' +
-                'configuration of bucket', {
+            this._logger.error('An error occured when getting notification ' + 'configuration of bucket', {
                 method: 'MongoConfigManager.getConfig',
                 bucket,
                 error: err.message,

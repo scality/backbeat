@@ -2,16 +2,12 @@ const assert = require('assert');
 const sinon = require('sinon');
 const werelogs = require('werelogs');
 
-const Allocator =
-    require('../../../extensions/oplogPopulator/modules/Allocator');
-const Connector =
-    require('../../../extensions/oplogPopulator/modules/Connector');
-const OplogPopulatorMetrics =
-    require('../../../extensions/oplogPopulator/OplogPopulatorMetrics');
+const Allocator = require('../../../extensions/oplogPopulator/modules/Allocator');
+const Connector = require('../../../extensions/oplogPopulator/modules/Connector');
+const OplogPopulatorMetrics = require('../../../extensions/oplogPopulator/OplogPopulatorMetrics');
 const LeastFullConnector = require('../../../extensions/oplogPopulator/allocationStrategy/LeastFullConnector');
 const RetainBucketsDecorator = require('../../../extensions/oplogPopulator/allocationStrategy/RetainBucketsDecorator');
-const MultipleBucketsPipelineFactory =
-    require('../../../extensions/oplogPopulator/pipeline/MultipleBucketsPipelineFactory');
+const MultipleBucketsPipelineFactory = require('../../../extensions/oplogPopulator/pipeline/MultipleBucketsPipelineFactory');
 
 const logger = new werelogs.Logger('Allocator');
 
@@ -44,7 +40,7 @@ describe('Allocator', () => {
                 new LeastFullConnector({
                     logger,
                 }),
-                { logger, }
+                { logger },
             ),
             logger,
         });
@@ -71,7 +67,7 @@ describe('Allocator', () => {
             assert.strictEqual(exists, true);
         });
 
-        it('should return false if bucket doesn\'t exist', () => {
+        it("should return false if bucket doesn't exist", () => {
             const exists = allocator.has('example-bucket-2');
             assert.strictEqual(exists, false);
         });
@@ -83,10 +79,9 @@ describe('Allocator', () => {
             assert.rejects(allocator.listenToBucket('example-bucket-2'));
         });
 
-        it('should listen to bucket if it wasn\'t assigned before', async () => {
+        it("should listen to bucket if it wasn't assigned before", async () => {
             allocator._connectorsManager.connectors = [connector1];
-            const getConnectorStub = sinon.stub(allocator._allocationStrategy, 'getConnector')
-                .returns(connector1);
+            const getConnectorStub = sinon.stub(allocator._allocationStrategy, 'getConnector').returns(connector1);
             const addBucketStub = sinon.stub(connector1, 'addBucket').resolves();
             await allocator.listenToBucket('example-bucket-1');
             assert(getConnectorStub.calledOnceWith([connector1], 'example-bucket-1'));
@@ -97,8 +92,7 @@ describe('Allocator', () => {
 
         it('should not listen to bucket it was assigned before', async () => {
             allocator._bucketsToConnectors.set('example-bucket-1', connector1);
-            const getConnectorStub = sinon.stub(allocator._allocationStrategy, 'getConnector')
-                .returns(connector1);
+            const getConnectorStub = sinon.stub(allocator._allocationStrategy, 'getConnector').returns(connector1);
             const addBucketStub = sinon.stub(connector1, 'addBucket').resolves();
             await allocator.listenToBucket('example-bucket-1');
             assert(getConnectorStub.notCalled);
@@ -115,8 +109,7 @@ describe('Allocator', () => {
 
         it('should handle errors when adding a bucket', async () => {
             allocator._connectorsManager.connectors = [connector1];
-            const getConnectorStub = sinon.stub(allocator._allocationStrategy, 'getConnector')
-                .returns(connector1);
+            const getConnectorStub = sinon.stub(allocator._allocationStrategy, 'getConnector').returns(connector1);
             const addBucketStub = sinon.stub(connector1, 'addBucket').throws();
             await assert.rejects(allocator.listenToBucket('example-bucket-1'));
             assert(getConnectorStub.calledOnceWith([connector1], 'example-bucket-1'));

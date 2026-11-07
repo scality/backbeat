@@ -10,7 +10,7 @@ const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
 const BackbeatMetadataProxy = require('../../../lib/BackbeatMetadataProxy');
 
 const ReplicateObject = require('./ReplicateObject');
-const { 
+const {
     GetObjectCommand,
     MultipleBackendPutObjectCommand,
     MultipleBackendDeleteObjectCommand,
@@ -32,14 +32,12 @@ const MPU_GCP_MAX_PARTS = 1024;
 
 // BACKBEAT_INJECT_REPLICATION_ERROR_RATE variable can be set to randomly introduce errors.
 // When set, the value is the target percentage of errors.
-const BACKBEAT_INJECT_REPLICATION_ERROR_RATE =
-    process.env.BACKBEAT_INJECT_REPLICATION_ERROR_RATE / 100;
+const BACKBEAT_INJECT_REPLICATION_ERROR_RATE = process.env.BACKBEAT_INJECT_REPLICATION_ERROR_RATE / 100;
 
 // When BACKBEAT_INJECT_REPLICATION_ERROR_RATE is set, BACKBEAT_INJECT_REPLICATION_ERRORS
 // variable can be set to choose which "operations" get random errors. This is comma-separated
 // list of: copyObject, copyPart, deleteObject, putTag and deletetag.
-const BACKBEAT_INJECT_REPLICATION_ERRORS =
-    (process.env.BACKBEAT_INJECT_REPLICATION_ERRORS || 'copyObject').split(',');
+const BACKBEAT_INJECT_REPLICATION_ERRORS = (process.env.BACKBEAT_INJECT_REPLICATION_ERRORS || 'copyObject').split(',');
 
 const BACKBEAT_INJECT_REPLICATION_ERROR_COPYPART =
     BACKBEAT_INJECT_REPLICATION_ERROR_RATE && BACKBEAT_INJECT_REPLICATION_ERRORS.includes('copyPart');
@@ -53,7 +51,6 @@ const BACKBEAT_INJECT_REPLICATION_ERROR_DELTAG =
     BACKBEAT_INJECT_REPLICATION_ERROR_RATE && BACKBEAT_INJECT_REPLICATION_ERRORS.includes('deleteTag');
 
 class MultipleBackendTask extends ReplicateObject {
-
     _getReplicationEndpointType() {
         return this.destConfig.replicationEndpoint.type;
     }
@@ -67,7 +64,8 @@ class MultipleBackendTask extends ReplicateObject {
             entryRoles = entryRolesString.split(',');
         }
         if (entryRoles === undefined || entryRoles.length > 2) {
-            errMessage = 'expecting no more than two roles in bucket ' +
+            errMessage =
+                'expecting no more than two roles in bucket ' +
                 'replication configuration when replicating to an external ' +
                 'location';
             log.error(errMessage, {
@@ -102,10 +100,10 @@ class MultipleBackendTask extends ReplicateObject {
             throw err;
         }
 
-        const replicationEnabled = data.ReplicationConfiguration.Rules
-            .some(rule => rule.Status === 'Enabled' &&
-                entry.getObjectKey().startsWith(
-                    rule.Filter?.Prefix ?? rule.Prefix ?? ''));
+        const replicationEnabled = data.ReplicationConfiguration.Rules.some(
+            rule =>
+                rule.Status === 'Enabled' && entry.getObjectKey().startsWith(rule.Filter?.Prefix ?? rule.Prefix ?? ''),
+        );
         if (!replicationEnabled) {
             errMessage = 'replication disabled for object';
             log.debug(errMessage, {
@@ -116,7 +114,8 @@ class MultipleBackendTask extends ReplicateObject {
         }
         const roles = data.ReplicationConfiguration.Role.split(',');
         if (roles.length > 2) {
-            errMessage = 'expecting no more than two roles in bucket ' +
+            errMessage =
+                'expecting no more than two roles in bucket ' +
                 'replication configuration when replicating to an ' +
                 'external location';
             log.error(errMessage, {
@@ -127,13 +126,15 @@ class MultipleBackendTask extends ReplicateObject {
             throw errors.BadRole.customizeDescription(errMessage);
         }
         if (roles[0] !== entryRoles[0]) {
-            log.error('role in replication entry for source does not ' +
-            'match role in bucket replication configuration', {
-                method: 'MultipleBackendTask._setupRolesOnce',
-                entry: entry.getLogInfo(),
-                entryRole: entryRoles[0],
-                bucketRole: roles[0],
-            });
+            log.error(
+                'role in replication entry for source does not ' + 'match role in bucket replication configuration',
+                {
+                    method: 'MultipleBackendTask._setupRolesOnce',
+                    entry: entry.getLogInfo(),
+                    entryRole: entryRoles[0],
+                    bucketRole: roles[0],
+                },
+            );
             throw errors.BadRole;
         }
     }
@@ -162,9 +163,11 @@ class MultipleBackendTask extends ReplicateObject {
             });
             throw errors.InternalError.customizeDescription('error parsing metadata blob');
         }
-        return new ObjectQueueEntry(sourceEntry.getBucket(),
-            sourceEntry.getObjectVersionedKey(), parsedEntry.result)
-            .setReplicationBackend(sourceEntry.getReplicationBackend());
+        return new ObjectQueueEntry(
+            sourceEntry.getBucket(),
+            sourceEntry.getObjectVersionedKey(),
+            parsedEntry.result,
+        ).setReplicationBackend(sourceEntry.getReplicationBackend());
     }
 
     /**
@@ -177,24 +180,23 @@ class MultipleBackendTask extends ReplicateObject {
      * @return {undefined}
      */
     _handleMPUFailure(sourceEntry, uploadId, log, cb) {
-        this._multipleBackendAbortMPU(sourceEntry, uploadId, log,
-            err => {
-                if (err) {
-                    log.error('an error occurred when aborting a MPU', {
-                        method: 'MultipleBackendTask._handleMPUFailure',
-                        entry: sourceEntry.getLogInfo(),
-                        origin: 'target',
-                        peer: this.destBackbeatHost,
-                        error: err.message,
-                    });
-                    return cb(err);
-                }
-                log.info('aborted a MPU', {
+        this._multipleBackendAbortMPU(sourceEntry, uploadId, log, err => {
+            if (err) {
+                log.error('an error occurred when aborting a MPU', {
                     method: 'MultipleBackendTask._handleMPUFailure',
                     entry: sourceEntry.getLogInfo(),
+                    origin: 'target',
+                    peer: this.destBackbeatHost,
+                    error: err.message,
                 });
-                return cb();
+                return cb(err);
+            }
+            log.info('aborted a MPU', {
+                method: 'MultipleBackendTask._handleMPUFailure',
+                entry: sourceEntry.getLogInfo(),
             });
+            return cb();
+        });
     }
 
     /**
@@ -207,22 +209,24 @@ class MultipleBackendTask extends ReplicateObject {
      * @param {Function} cb - The callback to call
      * @return {undefined}
      */
-    _getRangeAndPutMPUPart(sourceEntry, range, partNumber, uploadId,
-        log, cb) {
+    _getRangeAndPutMPUPart(sourceEntry, range, partNumber, uploadId, log, cb) {
         if (BACKBEAT_INJECT_REPLICATION_ERROR_COPYPART) {
             if (Math.random() < BACKBEAT_INJECT_REPLICATION_ERROR_RATE) {
                 return process.nextTick(() => cb(new Error('Replication error')));
             }
         }
 
-        return this.retry({
-            actionDesc: 'stream part data',
-            logFields: { entry: sourceEntry.getLogInfo(), range },
-            actionFunc: done => this._getRangeAndPutMPUPartOnce(sourceEntry,
-                range, partNumber, uploadId, log, done),
-            shouldRetryFunc: err => err.retryable,
-            log,
-        }, cb);
+        return this.retry(
+            {
+                actionDesc: 'stream part data',
+                logFields: { entry: sourceEntry.getLogInfo(), range },
+                actionFunc: done =>
+                    this._getRangeAndPutMPUPartOnce(sourceEntry, range, partNumber, uploadId, log, done),
+                shouldRetryFunc: err => err.retryable,
+                log,
+            },
+            cb,
+        );
     }
 
     /**
@@ -237,8 +241,7 @@ class MultipleBackendTask extends ReplicateObject {
      * @param {Function} done - The callback to call
      * @return {undefined}
      */
-    _getRangeAndPutMPUPartOnce(sourceEntry, range, partNumber,
-        uploadId, log, done) {
+    _getRangeAndPutMPUPartOnce(sourceEntry, range, partNumber, uploadId, log, done) {
         log.debug('getting object range', {
             entry: sourceEntry.getLogInfo(),
             range,
@@ -247,8 +250,17 @@ class MultipleBackendTask extends ReplicateObject {
         // A 0-byte object has no range, otherwise range is inclusive.
         const size = range ? range.end - range.start + 1 : 0;
         if (size === 0) {
-            return this._putMPUPart(sourceEntry, undefined, 0,
-                uploadId, partNumber, log, undefined, undefined, doneOnce);
+            return this._putMPUPart(
+                sourceEntry,
+                undefined,
+                0,
+                uploadId,
+                partNumber,
+                log,
+                undefined,
+                undefined,
+                doneOnce,
+            );
         }
 
         const abortController = new AbortController();
@@ -261,11 +273,23 @@ class MultipleBackendTask extends ReplicateObject {
             LocationConstraint: sourceEntry.getDataStoreName(),
             RequestUids: log.getSerializedUids(),
         });
-        
+
         const startReadTime = Date.now();
-        return this.backbeatSource.send(command, { abortSignal: abortController.signal })
-            .then(data => this._putMPUPart(sourceEntry, data.Body, size,
-                    uploadId, partNumber, log, abortController, startReadTime, doneOnce))
+        return this.backbeatSource
+            .send(command, { abortSignal: abortController.signal })
+            .then(data =>
+                this._putMPUPart(
+                    sourceEntry,
+                    data.Body,
+                    size,
+                    uploadId,
+                    partNumber,
+                    log,
+                    abortController,
+                    startReadTime,
+                    doneOnce,
+                ),
+            )
             .catch(err => {
                 // eslint-disable-next-line no-param-reassign
                 err.origin = 'source';
@@ -293,14 +317,16 @@ class MultipleBackendTask extends ReplicateObject {
      * @return {undefined}
      */
     _multipleBackendAbortMPU(sourceEntry, uploadId, log, cb) {
-        this.retry({
-            actionDesc: 'abort multipart upload',
-            logFields: { entry: sourceEntry.getLogInfo() },
-            actionFunc: done => this._multipleBackendAbortMPUOnce(sourceEntry,
-                uploadId, log, done),
-            shouldRetryFunc: err => err.retryable,
-            log,
-        }, cb);
+        this.retry(
+            {
+                actionDesc: 'abort multipart upload',
+                logFields: { entry: sourceEntry.getLogInfo() },
+                actionFunc: done => this._multipleBackendAbortMPUOnce(sourceEntry, uploadId, log, done),
+                shouldRetryFunc: err => err.retryable,
+                log,
+            },
+            cb,
+        );
     }
 
     /**
@@ -325,8 +351,9 @@ class MultipleBackendTask extends ReplicateObject {
             UploadId: uploadId,
             RequestUids: log.getSerializedUids(),
         });
-        
-        return this.backbeatSource.send(command)
+
+        return this.backbeatSource
+            .send(command)
             .then(() => doneOnce())
             .catch(err => {
                 // eslint-disable-next-line no-param-reassign
@@ -343,15 +370,15 @@ class MultipleBackendTask extends ReplicateObject {
             });
     }
 
-   /**
-    * Perform a multipart upload.
-    * @param {ObjectQueueEntry} sourceEntry - The source object entry
-    * @param {String} uploadId - The upload ID of the initiated MPU
-    * @param {Stream} data - The incoming message of the get request
-    * @param {Werelogs} log - The logger instance
-    * @param {Function} doneOnce - The callback to call
-    * @return {undefined}
-    */
+    /**
+     * Perform a multipart upload.
+     * @param {ObjectQueueEntry} sourceEntry - The source object entry
+     * @param {String} uploadId - The upload ID of the initiated MPU
+     * @param {Stream} data - The incoming message of the get request
+     * @param {Werelogs} log - The logger instance
+     * @param {Function} doneOnce - The callback to call
+     * @return {undefined}
+     */
     _completeMPU(sourceEntry, uploadId, data, log, doneOnce) {
         const command = new MultipleBackendCompleteMPUCommand({
             Bucket: sourceEntry.getBucket(),
@@ -362,20 +389,18 @@ class MultipleBackendTask extends ReplicateObject {
             UserMetaData: sourceEntry.getUserMetadata(),
             ContentType: sourceEntry.getContentType(),
             CacheControl: sourceEntry.getCacheControl() || undefined,
-            ContentDisposition: sourceEntry.getContentDisposition() ||
-                undefined,
-            ContentEncoding: sourceEntry.getContentEncoding() ||
-                undefined,
+            ContentDisposition: sourceEntry.getContentDisposition() || undefined,
+            ContentEncoding: sourceEntry.getContentEncoding() || undefined,
             UploadId: uploadId,
             Tags: JSON.stringify(sourceEntry.getTags()),
             Body: JSON.stringify(data),
             RequestUids: log.getSerializedUids(),
         });
-        
-        return this.backbeatSource.send(command)
+
+        return this.backbeatSource
+            .send(command)
             .then(data => {
-                sourceEntry.setReplicationSiteDataStoreVersionId(sourceEntry.getReplicationBackend(),
-                    data.versionId);
+                sourceEntry.setReplicationSiteDataStoreVersionId(sourceEntry.getReplicationBackend(), data.versionId);
                 return doneOnce();
             })
             .catch(err => {
@@ -392,8 +417,7 @@ class MultipleBackendTask extends ReplicateObject {
                 // Attempt to abort the MPU, but pass the error from
                 // multipleBackendCompleteMPU because that operation's result
                 // should determine the replication's success or failure.
-                return this._handleMPUFailure(sourceEntry, uploadId,
-                    log, () => doneOnce(err));
+                return this._handleMPUFailure(sourceEntry, uploadId, log, () => doneOnce(err));
             });
     }
 
@@ -410,8 +434,7 @@ class MultipleBackendTask extends ReplicateObject {
      * @param {Function} doneOnce - The callback to call
      * @return {undefined}
      */
-    _putMPUPart(sourceEntry, body, size, uploadId, partNumber,
-        log, abortController, readStartTime, doneOnce) {
+    _putMPUPart(sourceEntry, body, size, uploadId, partNumber, log, abortController, readStartTime, doneOnce) {
         let sourceStreamAborted = false;
         let destRequestAborted = false;
 
@@ -456,9 +479,10 @@ class MultipleBackendTask extends ReplicateObject {
             RequestUids: log.getSerializedUids(),
         });
         addContentLengthMiddleware(command, size);
-        
+
         const writeStartTime = Date.now();
-        return this.backbeatSource.send(command)
+        return this.backbeatSource
+            .send(command)
             .then(data => {
                 this._publishDataWriteMetrics(size, sourceEntry, writeStartTime);
                 return doneOnce(null, data);
@@ -489,15 +513,17 @@ class MultipleBackendTask extends ReplicateObject {
     }
 
     _getAndPutMultipartUpload(sourceEntry, log, cb) {
-        this.retry({
-            actionDesc: 'stream multipart data',
-            logFields: { entry: sourceEntry.getLogInfo() },
-            actionFunc: done => this._getAndPutMultipartUploadOnce(sourceEntry,
-                log, done),
-            shouldRetryFunc: err => err.retryable,
-            log,
-            noTimeout: true,
-        }, cb);
+        this.retry(
+            {
+                actionDesc: 'stream multipart data',
+                logFields: { entry: sourceEntry.getLogInfo() },
+                actionFunc: done => this._getAndPutMultipartUploadOnce(sourceEntry, log, done),
+                shouldRetryFunc: err => err.retryable,
+                log,
+                noTimeout: true,
+            },
+            cb,
+        );
     }
 
     _initiateMPU(sourceEntry, log, cb) {
@@ -515,14 +541,14 @@ class MultipleBackendTask extends ReplicateObject {
             UserMetaData: sourceEntry.getUserMetadata(),
             ContentType: sourceEntry.getContentType(),
             CacheControl: sourceEntry.getCacheControl() || undefined,
-            ContentDisposition:
-                sourceEntry.getContentDisposition() || undefined,
+            ContentDisposition: sourceEntry.getContentDisposition() || undefined,
             ContentEncoding: sourceEntry.getContentEncoding() || undefined,
             Tags: JSON.stringify(sourceEntry.getTags()),
             RequestUids: log.getSerializedUids(),
         });
-        
-        return this.backbeatSource.send(command)
+
+        return this.backbeatSource
+            .send(command)
             .then(data => cb(null, data.uploadId))
             .catch(err => {
                 // eslint-disable-next-line no-param-reassign
@@ -549,8 +575,7 @@ class MultipleBackendTask extends ReplicateObject {
     _getGCPRangeSize(contentLen) {
         let rangeSize = this._getRangeSize(contentLen);
         if (contentLen / rangeSize > MPU_GCP_MAX_PARTS) {
-            const pow =
-                Math.pow(2, Math.ceil(Math.log(contentLen) / Math.log(2)));
+            const pow = Math.pow(2, Math.ceil(Math.log(contentLen) / Math.log(2)));
             rangeSize = Math.ceil(pow / MPU_GCP_MAX_PARTS);
         }
         return rangeSize;
@@ -566,7 +591,7 @@ class MultipleBackendTask extends ReplicateObject {
      * @return {Number} The range size to use
      */
     _getRangeSize(contentLen) {
-        let rangeSize = (1024 * 1024) * 16; // Default 16MB part size.
+        let rangeSize = 1024 * 1024 * 16; // Default 16MB part size.
         if (contentLen <= rangeSize) {
             return contentLen;
         }
@@ -574,7 +599,7 @@ class MultipleBackendTask extends ReplicateObject {
         while (contentLen / rangeSize > 1000) {
             // When given a very large object we want to allow use of up to 10K
             // parts, so we limit the part size to 512MB here.
-            if (rangeSize >= (1024 * 1024) * 512) {
+            if (rangeSize >= 1024 * 1024 * 512) {
                 break;
             }
             rangeSize *= 2;
@@ -602,8 +627,7 @@ class MultipleBackendTask extends ReplicateObject {
             // part so the range in the subsequent GET request is undefined.
             return [null];
         }
-        const size = isGCP ?
-            this._getGCPRangeSize(contentLen) : this._getRangeSize(contentLen);
+        const size = isGCP ? this._getGCPRangeSize(contentLen) : this._getRangeSize(contentLen);
         const ranges = [];
         let start = 0;
         let end = 0;
@@ -631,14 +655,15 @@ class MultipleBackendTask extends ReplicateObject {
         const isAzure = this._getReplicationEndpointType() === 'azure';
         const ranges = this._getRanges(sourceEntry.getContentLength(), isGCP);
         const mpuConcLimit = this.repConfig.queueProcessor.mpuPartsConcurrency;
-        return async.timesLimit(ranges.length, mpuConcLimit, (n, next) =>
-            this._getRangeAndPutMPUPart(sourceEntry, ranges[n],
-                n + 1, uploadId, log, (err, data) => {
+        return async.timesLimit(
+            ranges.length,
+            mpuConcLimit,
+            (n, next) =>
+                this._getRangeAndPutMPUPart(sourceEntry, ranges[n], n + 1, uploadId, log, (err, data) => {
                     if (err) {
                         if (sourceEntry.getReplicationIsNFS()) {
                             const putPartErr = err;
-                            return this._checkMPUState(sourceEntry,
-                            uploadId, log, err => {
+                            return this._checkMPUState(sourceEntry, uploadId, log, err => {
                                 if (err) {
                                     return next(err);
                                 }
@@ -657,8 +682,7 @@ class MultipleBackendTask extends ReplicateObject {
                     if (sourceEntry.getReplicationIsNFS()) {
                         // Check that the object state did not change upon
                         // succesffuly putting part data to the destination.
-                        return this._checkMPUState(sourceEntry,
-                            uploadId, log, err => next(err, res));
+                        return this._checkMPUState(sourceEntry, uploadId, log, err => next(err, res));
                     }
                     return next(null, res);
                 }),
@@ -667,8 +691,7 @@ class MultipleBackendTask extends ReplicateObject {
                     // eslint-disable-next-line no-param-reassign
                     err.origin = 'source';
                     log.error('an error occurred on putting MPU part to S3', {
-                        method:
-                            'MultipleBackendTask._completeRangedMPU',
+                        method: 'MultipleBackendTask._completeRangedMPU',
                         entry: sourceEntry.getLogInfo(),
                         origin: 'target',
                         peer: this.destBackbeatHost,
@@ -678,12 +701,11 @@ class MultipleBackendTask extends ReplicateObject {
                     // Attempt to abort the MPU, but pass an error from
                     // multipleBackendPutMPUPart because that operation's result
                     // should determine the replication's success or failure.
-                    return this._handleMPUFailure(sourceEntry,
-                        uploadId, log, () => doneOnce(err));
+                    return this._handleMPUFailure(sourceEntry, uploadId, log, () => doneOnce(err));
                 }
-                return this._completeMPU(sourceEntry, uploadId, data,
-                    log, doneOnce);
-            });
+                return this._completeMPU(sourceEntry, uploadId, data, log, doneOnce);
+            },
+        );
     }
 
     /**
@@ -703,8 +725,7 @@ class MultipleBackendTask extends ReplicateObject {
                 // The latest object has different content so an attempt at CRR
                 // will fail in CloudServer. We can safely skip this entry
                 // because it is not the latest object.
-                return this._multipleBackendAbortMPU(sourceEntry,
-                    uploadId, log, () => cb(errors.InvalidObjectState));
+                return this._multipleBackendAbortMPU(sourceEntry, uploadId, log, () => cb(errors.InvalidObjectState));
             }
             return cb();
         });
@@ -736,21 +757,16 @@ class MultipleBackendTask extends ReplicateObject {
             if (err) {
                 return doneOnce(err);
             }
-            const extMetrics = getExtMetrics(this.site,
-                sourceEntry.getContentLength(), sourceEntry);
-            this.mProducer.publishMetrics(extMetrics, metricsTypeQueued,
-                metricsExtension, () => {});
-            return this._completeRangedMPU(sourceEntry,
-                uploadId, log, doneOnce);
+            const extMetrics = getExtMetrics(this.site, sourceEntry.getContentLength(), sourceEntry);
+            this.mProducer.publishMetrics(extMetrics, metricsTypeQueued, metricsExtension, () => {});
+            return this._completeRangedMPU(sourceEntry, uploadId, log, doneOnce);
         });
     }
 
     _getAndPutObject(sourceEntry, log, cb) {
         const partLogger = this.logger.newRequestLogger(log.getUids());
-        const extMetrics = getExtMetrics(this.site,
-            sourceEntry.getContentLength(), sourceEntry);
-        this.mProducer.publishMetrics(extMetrics, metricsTypeQueued,
-            metricsExtension, () => {});
+        const extMetrics = getExtMetrics(this.site, sourceEntry.getContentLength(), sourceEntry);
+        this.mProducer.publishMetrics(extMetrics, metricsTypeQueued, metricsExtension, () => {});
 
         if (BACKBEAT_INJECT_REPLICATION_ERROR_COPYOBJ) {
             if (Math.random() < BACKBEAT_INJECT_REPLICATION_ERROR_RATE) {
@@ -758,14 +774,16 @@ class MultipleBackendTask extends ReplicateObject {
             }
         }
 
-        return this.retry({
-            actionDesc: 'stream object data',
-            logFields: { entry: sourceEntry.getLogInfo() },
-            actionFunc: done => this._getAndPutObjectOnce(
-                sourceEntry, partLogger, done),
-            shouldRetryFunc: err => err.retryable,
-            log: partLogger,
-        }, cb);
+        return this.retry(
+            {
+                actionDesc: 'stream object data',
+                logFields: { entry: sourceEntry.getLogInfo() },
+                actionFunc: done => this._getAndPutObjectOnce(sourceEntry, partLogger, done),
+                shouldRetryFunc: err => err.retryable,
+                log: partLogger,
+            },
+            cb,
+        );
     }
 
     _getAndPutObjectOnce(sourceEntry, log, done) {
@@ -779,12 +797,10 @@ class MultipleBackendTask extends ReplicateObject {
                     if (err) {
                         return doneOnce(err);
                     }
-                    return this._sendMultipleBackendPutObject(sourceEntry,
-                        size, null, log, doneOnce);
+                    return this._sendMultipleBackendPutObject(sourceEntry, size, null, log, doneOnce);
                 });
             }
-            return this._sendMultipleBackendPutObject(sourceEntry,
-                size, null, log, doneOnce);
+            return this._sendMultipleBackendPutObject(sourceEntry, size, null, log, doneOnce);
         }
 
         const abortController = new AbortController();
@@ -797,9 +813,10 @@ class MultipleBackendTask extends ReplicateObject {
             LocationConstraint: sourceEntry.getDataStoreName(),
             RequestUids: log.getSerializedUids(),
         });
-        
+
         const readStartTime = Date.now();
-        return this.backbeatSource.send(command, { abortSignal: abortController.signal })
+        return this.backbeatSource
+            .send(command, { abortSignal: abortController.signal })
             .catch(err => {
                 // eslint-disable-next-line no-param-reassign
                 err.origin = 'source';
@@ -857,7 +874,7 @@ class MultipleBackendTask extends ReplicateObject {
                     }
                     return undefined;
                 });
-                
+
                 log.debug('putting object', { entry: sourceEntry.getLogInfo() });
                 const putDone = err => {
                     if (err && !sourceStreamAborted) {
@@ -869,18 +886,16 @@ class MultipleBackendTask extends ReplicateObject {
                     }
                     return doneOnce(err);
                 };
-                
+
                 if (sourceEntry.getReplicationIsNFS()) {
                     return this._checkObjectState(sourceEntry, log, err => {
                         if (err) {
                             return putDone(err);
                         }
-                        return this._sendMultipleBackendPutObject(sourceEntry,
-                            size, incomingMsg, log, putDone);
+                        return this._sendMultipleBackendPutObject(sourceEntry, size, incomingMsg, log, putDone);
                     });
                 }
-                return this._sendMultipleBackendPutObject(sourceEntry,
-                    size, incomingMsg, log, putDone);
+                return this._sendMultipleBackendPutObject(sourceEntry, size, incomingMsg, log, putDone);
             });
     }
 
@@ -930,11 +945,15 @@ class MultipleBackendTask extends ReplicateObject {
      * @return {undefined}
      */
     _getSourceMD(sourceEntry, log, cb) {
-        this.backbeatSourceProxy.getMetadata({
-            bucket: sourceEntry.getBucket(),
-            objectKey: sourceEntry.getObjectKey(),
-            versionId: sourceEntry.getEncodedVersionId() || 'null',
-        }, log, cb);
+        this.backbeatSourceProxy.getMetadata(
+            {
+                bucket: sourceEntry.getBucket(),
+                objectKey: sourceEntry.getObjectKey(),
+                versionId: sourceEntry.getEncodedVersionId() || 'null',
+            },
+            log,
+            cb,
+        );
     }
 
     /**
@@ -946,9 +965,7 @@ class MultipleBackendTask extends ReplicateObject {
      * @param {Function} doneOnce - The callback to call
      * @return {undefined}
      */
-    _sendMultipleBackendPutObject(sourceEntry, size,
-        incomingMsg, log, doneOnce) {
-        
+    _sendMultipleBackendPutObject(sourceEntry, size, incomingMsg, log, doneOnce) {
         const command = new MultipleBackendPutObjectCommand({
             Bucket: sourceEntry.getBucket(),
             Key: sourceEntry.getObjectKey(),
@@ -960,8 +977,7 @@ class MultipleBackendTask extends ReplicateObject {
             UserMetaData: sourceEntry.getUserMetadata(),
             ContentType: sourceEntry.getContentType() || undefined,
             CacheControl: sourceEntry.getCacheControl() || undefined,
-            ContentDisposition:
-                sourceEntry.getContentDisposition() || undefined,
+            ContentDisposition: sourceEntry.getContentDisposition() || undefined,
             ContentEncoding: sourceEntry.getContentEncoding() || undefined,
             Tags: JSON.stringify(sourceEntry.getTags()),
             Body: incomingMsg,
@@ -970,10 +986,10 @@ class MultipleBackendTask extends ReplicateObject {
         addContentLengthMiddleware(command, size);
 
         const writeStartTime = Date.now();
-        return this.backbeatSource.send(command)
+        return this.backbeatSource
+            .send(command)
             .then(data => {
-                sourceEntry.setReplicationSiteDataStoreVersionId(sourceEntry.getReplicationBackend(),
-                    data.versionId);
+                sourceEntry.setReplicationSiteDataStoreVersionId(sourceEntry.getReplicationBackend(), data.versionId);
 
                 this._publishDataWriteMetrics(size, sourceEntry, writeStartTime);
                 return doneOnce(null, data);
@@ -992,15 +1008,17 @@ class MultipleBackendTask extends ReplicateObject {
             }
         }
 
-        return this.retry({
-            actionDesc: 'send object tagging XML data',
-            entry: sourceEntry,
-            logFields: { entry: sourceEntry.getLogInfo() },
-            actionFunc: done => this._putObjectTaggingOnce(
-                sourceEntry, log, done),
-            shouldRetryFunc: err => err.retryable,
-            log,
-        }, cb);
+        return this.retry(
+            {
+                actionDesc: 'send object tagging XML data',
+                entry: sourceEntry,
+                logFields: { entry: sourceEntry.getLogInfo() },
+                actionFunc: done => this._putObjectTaggingOnce(sourceEntry, log, done),
+                shouldRetryFunc: err => err.retryable,
+                log,
+            },
+            cb,
+        );
     }
 
     _putObjectTaggingOnce(sourceEntry, log, cb) {
@@ -1013,8 +1031,7 @@ class MultipleBackendTask extends ReplicateObject {
             Key: sourceEntry.getObjectKey(),
             StorageType: this._getReplicationEndpointType(),
             StorageClass: this.site,
-            DataStoreVersionId:
-                sourceEntry.getReplicationSiteDataStoreVersionId(sourceEntry.getReplicationBackend()),
+            DataStoreVersionId: sourceEntry.getReplicationSiteDataStoreVersionId(sourceEntry.getReplicationBackend()),
             Tags: JSON.stringify(sourceEntry.getTags()),
             SourceBucket: sourceEntry.getBucket(),
             SourceVersionId: sourceEntry.getVersionId(),
@@ -1023,10 +1040,10 @@ class MultipleBackendTask extends ReplicateObject {
         });
 
         const writeStartTime = Date.now();
-        return this.backbeatSource.send(command)
+        return this.backbeatSource
+            .send(command)
             .then(data => {
-                sourceEntry.setReplicationSiteDataStoreVersionId(sourceEntry.getReplicationBackend(),
-                    data.versionId);
+                sourceEntry.setReplicationSiteDataStoreVersionId(sourceEntry.getReplicationBackend(), data.versionId);
                 // TODO : follow-up BB-730 to provide better metrics
                 this._publishMetadataWriteMetrics(JSON.stringify(sourceEntry.getTags()), writeStartTime);
                 return doneOnce();
@@ -1050,14 +1067,16 @@ class MultipleBackendTask extends ReplicateObject {
             }
         }
 
-        return this.retry({
-            actionDesc: 'delete object tagging',
-            logFields: { entry: sourceEntry.getLogInfo() },
-            actionFunc: done => this._deleteObjectTaggingOnce(sourceEntry,
-                log, done),
-            shouldRetryFunc: err => err.retryable,
-            log,
-        }, cb);
+        return this.retry(
+            {
+                actionDesc: 'delete object tagging',
+                logFields: { entry: sourceEntry.getLogInfo() },
+                actionFunc: done => this._deleteObjectTaggingOnce(sourceEntry, log, done),
+                shouldRetryFunc: err => err.retryable,
+                log,
+            },
+            cb,
+        );
     }
 
     _deleteObjectTaggingOnce(sourceEntry, log, cb) {
@@ -1070,8 +1089,7 @@ class MultipleBackendTask extends ReplicateObject {
             Key: sourceEntry.getObjectKey(),
             StorageType: this._getReplicationEndpointType(),
             StorageClass: this.site,
-            DataStoreVersionId:
-                sourceEntry.getReplicationSiteDataStoreVersionId(sourceEntry.getReplicationBackend()),
+            DataStoreVersionId: sourceEntry.getReplicationSiteDataStoreVersionId(sourceEntry.getReplicationBackend()),
             SourceBucket: sourceEntry.getBucket(),
             SourceVersionId: sourceEntry.getVersionId(),
             ReplicationEndpointSite: this.site,
@@ -1079,10 +1097,10 @@ class MultipleBackendTask extends ReplicateObject {
         });
 
         const writeStartTime = Date.now();
-        return this.backbeatSource.send(command)
+        return this.backbeatSource
+            .send(command)
             .then(data => {
-                sourceEntry.setReplicationSiteDataStoreVersionId(sourceEntry.getReplicationBackend(),
-                    data.versionId);
+                sourceEntry.setReplicationSiteDataStoreVersionId(sourceEntry.getReplicationBackend(), data.versionId);
                 // TODO : follow-up BB-730 to provide better metrics
                 this._publishMetadataWriteMetrics('', writeStartTime);
                 return doneOnce();
@@ -1107,14 +1125,16 @@ class MultipleBackendTask extends ReplicateObject {
             }
         }
 
-        return this.retry({
-            actionDesc: 'put delete marker',
-            logFields: { entry: sourceEntry.getLogInfo() },
-            actionFunc: done => this._putDeleteMarkerOnce(
-                sourceEntry, log, done),
-            shouldRetryFunc: err => err.retryable,
-            log,
-        }, cb);
+        return this.retry(
+            {
+                actionDesc: 'put delete marker',
+                logFields: { entry: sourceEntry.getLogInfo() },
+                actionFunc: done => this._putDeleteMarkerOnce(sourceEntry, log, done),
+                shouldRetryFunc: err => err.retryable,
+                log,
+            },
+            cb,
+        );
     }
 
     _putDeleteMarkerOnce(sourceEntry, log, cb) {
@@ -1130,12 +1150,10 @@ class MultipleBackendTask extends ReplicateObject {
                     // marker.
                     return doneOnce(err);
                 }
-                return this._sendMultipleBackendDeleteObject(sourceEntry, log,
-                    doneOnce);
+                return this._sendMultipleBackendDeleteObject(sourceEntry, log, doneOnce);
             });
         }
-        return this._sendMultipleBackendDeleteObject(sourceEntry, log,
-            doneOnce);
+        return this._sendMultipleBackendDeleteObject(sourceEntry, log, doneOnce);
     }
 
     /**
@@ -1155,7 +1173,8 @@ class MultipleBackendTask extends ReplicateObject {
         });
 
         const writeStartTime = Date.now();
-        return this.backbeatSource.send(command)
+        return this.backbeatSource
+            .send(command)
             .then(() => {
                 // TODO : follow-up BB-730 to provide better metrics
                 this._publishMetadataWriteMetrics('', writeStartTime);
@@ -1195,125 +1214,144 @@ class MultipleBackendTask extends ReplicateObject {
         const content = sourceEntry.getReplicationContent();
         log.debug('processing entry', { entry: sourceEntry.getLogInfo() });
 
-        return async.waterfall([
-            next => this._setupClients(sourceEntry, log, next),
-            next => this._refreshSourceEntry(sourceEntry, log)
-                .then(res => next(null, res), err => {
-                    if (err.name === 'ObjNotFound' &&
-                        sourceEntry.getReplicationIsNFS() && !sourceEntry.getIsDeleteMarker()) {
-                        // The object was deleted before entry is processed, we
-                        // can safely skip this entry.
-                        return next(errors.InvalidObjectState);
-                    }
-                    return next(err);
-                }),
-            (refreshedEntry, next) => {
-                const lastModified = new Date(refreshedEntry.getLastModified());
-                this.metricsHandler.rpo({
-                    serviceName: this.serviceName,
-                    location: this.site,
-                }, (Date.now() - lastModified) / 1000);
+        return async.waterfall(
+            [
+                next => this._setupClients(sourceEntry, log, next),
+                next =>
+                    this._refreshSourceEntry(sourceEntry, log).then(
+                        res => next(null, res),
+                        err => {
+                            if (
+                                err.name === 'ObjNotFound' &&
+                                sourceEntry.getReplicationIsNFS() &&
+                                !sourceEntry.getIsDeleteMarker()
+                            ) {
+                                // The object was deleted before entry is processed, we
+                                // can safely skip this entry.
+                                return next(errors.InvalidObjectState);
+                            }
+                            return next(err);
+                        },
+                    ),
+                (refreshedEntry, next) => {
+                    const lastModified = new Date(refreshedEntry.getLastModified());
+                    this.metricsHandler.rpo(
+                        {
+                            serviceName: this.serviceName,
+                            location: this.site,
+                        },
+                        (Date.now() - lastModified) / 1000,
+                    );
 
-                if (sourceEntry.getIsDeleteMarker()) {
-                    return this._putDeleteMarker(sourceEntry, log, next);
-                }
-                const status = refreshedEntry.getReplicationSiteStatus(
-                    sourceEntry.getReplicationBackend());
-                log.debug('refreshed entry site replication info', {
-                    entry: refreshedEntry.getLogInfo(),
-                    site: this.site, siteStatus: status,
-                    content,
-                });
-                if (status === 'COMPLETED' && content.includes('DATA')) {
-                    const errMessage = 'skipping replication: ' +
-                          'replication status is already COMPLETED ' +
-                          `on the location ${this.site}`;
-                    log.warn(errMessage, {
+                    if (sourceEntry.getIsDeleteMarker()) {
+                        return this._putDeleteMarker(sourceEntry, log, next);
+                    }
+                    const status = refreshedEntry.getReplicationSiteStatus(sourceEntry.getReplicationBackend());
+                    log.debug('refreshed entry site replication info', {
                         entry: refreshedEntry.getLogInfo(),
+                        site: this.site,
+                        siteStatus: status,
+                        content,
                     });
-                    return next(errors.InvalidObjectState.customizeDescription(
-                        errMessage));
-                }
-                // Only put/delete tags if object was previously
-                // replicated. Otherwise we replicate the whole object
-                // which should also replicate the updated tags.
-                const dataStoreVersionId =
-                    sourceEntry.getReplicationSiteDataStoreVersionId(sourceEntry.getReplicationBackend());
-                if (content.includes('PUT_TAGGING') && dataStoreVersionId) {
-                    return this._putObjectTagging(sourceEntry, log, next);
-                }
-                if (content.includes('DELETE_TAGGING') && dataStoreVersionId) {
-                    return this._deleteObjectTagging(sourceEntry, log, next);
-                }
-                // Do a multipart upload when either the size is above
-                // a threshold or the source object is itself a MPU.
-                //
-                // FIXME: object ETag for MPUs is an aggregate from
-                // each part's ETag, which does not allow the current
-                // implementation to check the data integrity when
-                // doing ranged PUTs. Also in the current
-                // implementation we are forced to send an ETag for a
-                // multiple backend putObject(), which only matches if
-                // the object is not a MPU, so we cannot use this
-                // route for MPUs as-is without recomputing a new
-                // checksum, which is not the case today (hence the
-                // MPU check below).
-                if (sourceEntry.getContentLength() / 1000000 >=
-                    this.repConfig.queueProcessor.minMPUSizeMB ||
-                    sourceEntry.isMultipartUpload()) {
-                    return this._getAndPutMultipartUpload(sourceEntry,
-                        log, next);
-                }
-                return this._getAndPutObject(sourceEntry, log, next);
-            },
-        ], err => this._handleReplicationOutcome(err, sourceEntry, null, kafkaEntry, log)
-            .then(result => (result === null ? done() : done(null, result)), done));
+                    if (status === 'COMPLETED' && content.includes('DATA')) {
+                        const errMessage =
+                            'skipping replication: ' +
+                            'replication status is already COMPLETED ' +
+                            `on the location ${this.site}`;
+                        log.warn(errMessage, {
+                            entry: refreshedEntry.getLogInfo(),
+                        });
+                        return next(errors.InvalidObjectState.customizeDescription(errMessage));
+                    }
+                    // Only put/delete tags if object was previously
+                    // replicated. Otherwise we replicate the whole object
+                    // which should also replicate the updated tags.
+                    const dataStoreVersionId = sourceEntry.getReplicationSiteDataStoreVersionId(
+                        sourceEntry.getReplicationBackend(),
+                    );
+                    if (content.includes('PUT_TAGGING') && dataStoreVersionId) {
+                        return this._putObjectTagging(sourceEntry, log, next);
+                    }
+                    if (content.includes('DELETE_TAGGING') && dataStoreVersionId) {
+                        return this._deleteObjectTagging(sourceEntry, log, next);
+                    }
+                    // Do a multipart upload when either the size is above
+                    // a threshold or the source object is itself a MPU.
+                    //
+                    // FIXME: object ETag for MPUs is an aggregate from
+                    // each part's ETag, which does not allow the current
+                    // implementation to check the data integrity when
+                    // doing ranged PUTs. Also in the current
+                    // implementation we are forced to send an ETag for a
+                    // multiple backend putObject(), which only matches if
+                    // the object is not a MPU, so we cannot use this
+                    // route for MPUs as-is without recomputing a new
+                    // checksum, which is not the case today (hence the
+                    // MPU check below).
+                    if (
+                        sourceEntry.getContentLength() / 1000000 >= this.repConfig.queueProcessor.minMPUSizeMB ||
+                        sourceEntry.isMultipartUpload()
+                    ) {
+                        return this._getAndPutMultipartUpload(sourceEntry, log, next);
+                    }
+                    return this._getAndPutObject(sourceEntry, log, next);
+                },
+            ],
+            err =>
+                this._handleReplicationOutcome(err, sourceEntry, null, kafkaEntry, log).then(
+                    result => (result === null ? done() : done(null, result)),
+                    done,
+                ),
+        );
     }
 
     async _handleReplicationOutcome(err, sourceEntry, destEntry, kafkaEntry, log) {
         if (!err) {
-            log.debug('replication succeeded for object, publishing ' +
-                      'replication status as COMPLETED',
-                      { entry: sourceEntry.getLogInfo() });
-            this._publishReplicationStatus(
-                sourceEntry, 'COMPLETED', { kafkaEntry, log });
+            log.debug('replication succeeded for object, publishing ' + 'replication status as COMPLETED', {
+                entry: sourceEntry.getLogInfo(),
+            });
+            this._publishReplicationStatus(sourceEntry, 'COMPLETED', { kafkaEntry, log });
             return { committable: false };
         }
-        if (err.BadRole || err.name === 'BadRole' ||
+        if (
+            err.BadRole ||
+            err.name === 'BadRole' ||
             (err.origin === 'source' &&
-             (err.NoSuchEntity || err.name === 'NoSuchEntity' ||
-              err.AccessDenied || err.name === 'AccessDenied' ||
-              err.InvalidAccessKeyId || err.name === 'InvalidAccessKeyId'))) {
-            log.error('replication failed permanently for object, ' +
-                      'processing skipped',
-                { failMethod: err.method,
-                    entry: sourceEntry.getLogInfo(),
-                    origin: err.origin,
-                    error: err.description });
+                (err.NoSuchEntity ||
+                    err.name === 'NoSuchEntity' ||
+                    err.AccessDenied ||
+                    err.name === 'AccessDenied' ||
+                    err.InvalidAccessKeyId ||
+                    err.name === 'InvalidAccessKeyId'))
+        ) {
+            log.error('replication failed permanently for object, ' + 'processing skipped', {
+                failMethod: err.method,
+                entry: sourceEntry.getLogInfo(),
+                origin: err.origin,
+                error: err.description,
+            });
             return null;
         }
         if (err.ObjNotFound || err.name === 'ObjNotFound') {
-            log.info('replication skipped: ' +
-                     'source object version does not exist',
-                     { entry: sourceEntry.getLogInfo() });
+            log.info('replication skipped: ' + 'source object version does not exist', {
+                entry: sourceEntry.getLogInfo(),
+            });
             return null;
         }
         if (err.InvalidObjectState || err.name === 'InvalidObjectState') {
-            log.info('replication skipped: invalid object state',
-                     { entry: sourceEntry.getLogInfo() });
+            log.info('replication skipped: invalid object state', { entry: sourceEntry.getLogInfo() });
             return null;
         }
-        log.debug('replication failed permanently for object, ' +
-                  'publishing replication status as FAILED',
-            { failMethod: err.method,
-                entry: sourceEntry.getLogInfo(),
-                error: err.description });
-        this._publishReplicationStatus(
-            sourceEntry, 'FAILED', {
-                log,
-                reason: err.description,
-                kafkaEntry,
-            });
+        log.debug('replication failed permanently for object, ' + 'publishing replication status as FAILED', {
+            failMethod: err.method,
+            entry: sourceEntry.getLogInfo(),
+            error: err.description,
+        });
+        this._publishReplicationStatus(sourceEntry, 'FAILED', {
+            log,
+            reason: err.description,
+            kafkaEntry,
+        });
         return { committable: false };
     }
 }

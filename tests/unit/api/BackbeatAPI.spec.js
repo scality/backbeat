@@ -17,8 +17,7 @@ describe('BackbeatAPI', () => {
     const destconfig = config.extensions.replication.destination;
     const { site } = destconfig.bootstrapList[0];
     const ingestSite = `${destconfig.bootstrapList[1].site}-ingestion`;
-    const coldSite = Object.keys(locationConfig)
-        .filter(site => locationConfig[site].isCold)[0];
+    const coldSite = Object.keys(locationConfig).filter(site => locationConfig[site].isCold)[0];
 
     before(() => {
         setupIngestionSiteMock();
@@ -58,15 +57,13 @@ describe('BackbeatAPI', () => {
         { url: '/_/metrics/crr/all/failures', method: 'GET' },
         { url: '/_/metrics/crr/all/throughput', method: 'GET' },
         { url: '/_/metrics/ingestion/all/completions', method: 'GET' },
-        { url: `/_/metrics/ingestion/${ingestSite}/completions`,
-            method: 'GET' },
+        { url: `/_/metrics/ingestion/${ingestSite}/completions`, method: 'GET' },
         { url: '/_/metrics/ingestion/all/throughput', method: 'GET' },
         { url: `/_/metrics/ingestion/${ingestSite}/throughput`, method: 'GET' },
         { url: '/_/metrics/ingestion/all/pending', method: 'GET' },
         { url: `/_/metrics/ingestion/${ingestSite}/pending`, method: 'GET' },
         { url: '/_/monitoring/metrics', method: 'GET' },
-        { url: '/_/crr/failed/mybucket/mykey?versionId=test-myvId',
-            method: 'GET' },
+        { url: '/_/crr/failed/mybucket/mykey?versionId=test-myvId', method: 'GET' },
         { url: '/_/crr/failed/mybucket/mykey?role=testrole', method: 'GET' },
         { url: '/_/crr/failed?mymarker', method: 'GET' },
         // invalid params but will default to getting all buckets
@@ -87,10 +84,8 @@ describe('BackbeatAPI', () => {
         { url: '/_/lifecycle/resume/all/schedule', method: 'POST' },
         { url: '/_/lifecycle/resume', method: 'GET' },
         { url: '/_/lifecycle/status', method: 'GET' },
-        { url: `/_/metrics/crr/${site}/throughput/mybucket/mykey` +
-            '?versionId=test-myvId', method: 'GET' },
-        { url: `/_/metrics/crr/${site}/progress/mybucket/mykey` +
-            '?versionId=test-myvId', method: 'GET' },
+        { url: `/_/metrics/crr/${site}/throughput/mybucket/mykey` + '?versionId=test-myvId', method: 'GET' },
+        { url: `/_/metrics/crr/${site}/progress/mybucket/mykey` + '?versionId=test-myvId', method: 'GET' },
         // valid site for given service
         { url: `/_/crr/pause/${site}`, method: 'POST' },
         { url: `/_/crr/resume/${site}`, method: 'POST' },
@@ -132,10 +127,8 @@ describe('BackbeatAPI', () => {
         { url: '/_/crr/status', method: 'POST' },
         { url: '/_/ingestion/pause', method: 'GET' },
         { url: '/_/ingestion/status', method: 'POST' },
-        { url: '/_/metrics/crr/unknown-site/throughput/mybucket/mykey' +
-            '?versionId=test-myvId', method: 'GET' },
-        { url: '/_/metrics/crr/unknown-site/progress/mybucket/mykey' +
-            '?versionId=test-myvId', method: 'GET' },
+        { url: '/_/metrics/crr/unknown-site/throughput/mybucket/mykey' + '?versionId=test-myvId', method: 'GET' },
+        { url: '/_/metrics/crr/unknown-site/progress/mybucket/mykey' + '?versionId=test-myvId', method: 'GET' },
         { url: '/_/metrics/ingestion/all/throughput', method: 'POST' },
         { url: `/_/metrics/ingestion/${site}/completions`, method: 'POST' },
         { url: `/_/metrics/ingestion/${site}/pending`, method: 'POST' },
@@ -162,8 +155,7 @@ describe('BackbeatAPI', () => {
         });
     });
 
-    it('should calculate the average throughput through redis intervals',
-    () => {
+    it('should calculate the average throughput through redis intervals', () => {
         bbapi._getData = function overwriteGetData(details, data, cb) {
             return cb(null, [
                 // ops
@@ -203,34 +195,20 @@ describe('BackbeatAPI', () => {
                 service: 'lifecycle',
                 site: 'all',
                 extensions: {
-                    lifecycle: [
-                        'us-east-1',
-                        'us-east-2',
-                        'location-dmf-v1',
-                        'all',
-                    ],
+                    lifecycle: ['us-east-1', 'us-east-2', 'location-dmf-v1', 'all'],
                 },
             },
-            expected: [
-                'us-east-1',
-                'us-east-2',
-                'location-dmf-v1',
-            ]
+            expected: ['us-east-1', 'us-east-2', 'location-dmf-v1'],
         },
         {
             details: {
                 service: 'lifecycle',
                 site: 'us-east-1',
                 extensions: {
-                    lifecycle: [
-                        'us-east-1',
-                        'us-east-2',
-                        'location-dmf-v1',
-                        'all',
-                    ],
+                    lifecycle: ['us-east-1', 'us-east-2', 'location-dmf-v1', 'all'],
                 },
             },
-            expected: ['us-east-1']
+            expected: ['us-east-1'],
         },
     ].forEach(params => {
         it('getRequestedSites:: should return correct list of requested sites', () => {
@@ -266,9 +244,11 @@ describe('BackbeatAPI', () => {
             bbapi._setupMongoClient(err => {
                 assert.ifError(err);
                 assert(mongoClientStub.calledOnce);
-                assert(infoSpy.calledWith('Connected to MongoDB', {
-                    method: 'BackbeatAPI._setupMongoClient',
-                }));
+                assert(
+                    infoSpy.calledWith('Connected to MongoDB', {
+                        method: 'BackbeatAPI._setupMongoClient',
+                    }),
+                );
                 done();
             });
         });
@@ -280,10 +260,12 @@ describe('BackbeatAPI', () => {
             bbapi._setupMongoClient(err => {
                 assert.strictEqual(err, mockError);
                 assert(mongoClientStub.calledOnce);
-                assert(errorSpy.calledWith('Could not connect to MongoDB', {
-                    method: 'BackbeatAPI._setupMongoClient',
-                    error: mockError.message,
-                }));
+                assert(
+                    errorSpy.calledWith('Could not connect to MongoDB', {
+                        method: 'BackbeatAPI._setupMongoClient',
+                        error: mockError.message,
+                    }),
+                );
                 done();
             });
         });
@@ -294,9 +276,11 @@ describe('BackbeatAPI', () => {
             bbapi._setupMongoClient(err => {
                 assert.ifError(err);
                 assert(mongoClientStub.notCalled);
-                assert(debugSpy.calledWith('MongoDB configuration not found, skipping MongoDB client setup', {
-                    method: 'BackbeatAPI._setupMongoClient',
-                }));
+                assert(
+                    debugSpy.calledWith('MongoDB configuration not found, skipping MongoDB client setup', {
+                        method: 'BackbeatAPI._setupMongoClient',
+                    }),
+                );
                 done();
             });
         });
@@ -515,11 +499,13 @@ describe('BackbeatAPI', () => {
                 'replicationInfo': {
                     role: 'replication',
                     status: 'SUCCESS',
-                    backends: [{
+                    backends: [
+                        {
                             site: 'azure',
                             status: 'SUCCESS',
                             dataStoreVersionId: '123456',
-                    }],
+                        },
+                    ],
                 },
             };
             const entry = new ObjectQueueEntry('mybucket', 'mykey', objectMD);
@@ -533,15 +519,17 @@ describe('BackbeatAPI', () => {
             });
             const expectedResponse = {
                 IsTruncated: false,
-                Versions: [{
-                    Bucket: 'mybucket',
-                    Key: 'mykey',
-                    VersionId: '746573742d6d79764964',
-                    StorageClass: null,
-                    Size: 542,
-                    LastModified: '2017-07-13T02:44:25.515Z',
-                    Role: 'replication'
-                }],
+                Versions: [
+                    {
+                        Bucket: 'mybucket',
+                        Key: 'mykey',
+                        VersionId: '746573742d6d79764964',
+                        StorageClass: null,
+                        Size: 542,
+                        LastModified: '2017-07-13T02:44:25.515Z',
+                        Role: 'replication',
+                    },
+                ],
             };
             bbapi._getFailedCRRResponse(undefined, [entry], (err, resp) => {
                 assert.ifError(err);
@@ -553,11 +541,13 @@ describe('BackbeatAPI', () => {
 
     describe('_parseRetryFailedCRR', () => {
         it('should fail if the "Role" property is not included when auth type is "role"', () => {
-            const body = JSON.stringify([{
-                Bucket: 'mybucket',
-                Key: 'mykey',
-                StorageClass: 'replication',
-            }]);
+            const body = JSON.stringify([
+                {
+                    Bucket: 'mybucket',
+                    Key: 'mykey',
+                    StorageClass: 'replication',
+                },
+            ]);
             sinon.stub(bbapi, '_repConfig').value({
                 source: {
                     auth: {
@@ -570,12 +560,14 @@ describe('BackbeatAPI', () => {
         });
 
         it('should succeed if the "Role" property is included when auth type is "role"', () => {
-            const body = JSON.stringify([{
-                Bucket: 'mybucket',
-                Key: 'mykey',
-                StorageClass: 'replication',
-                Role: 'replication',
-            }]);
+            const body = JSON.stringify([
+                {
+                    Bucket: 'mybucket',
+                    Key: 'mykey',
+                    StorageClass: 'replication',
+                    Role: 'replication',
+                },
+            ]);
             sinon.stub(bbapi, '_repConfig').value({
                 source: {
                     auth: {
@@ -588,11 +580,13 @@ describe('BackbeatAPI', () => {
         });
 
         it('should succeed if the "Role" property is not included when auth type is not "role"', () => {
-            const body = JSON.stringify([{
-                Bucket: 'mybucket',
-                Key: 'mykey',
-                StorageClass: 'replication',
-            }]);
+            const body = JSON.stringify([
+                {
+                    Bucket: 'mybucket',
+                    Key: 'mykey',
+                    StorageClass: 'replication',
+                },
+            ]);
             sinon.stub(bbapi, '_repConfig').value({
                 source: {
                     auth: {
@@ -607,12 +601,14 @@ describe('BackbeatAPI', () => {
 
     describe('retryFailedCRR', () => {
         it('should include the role in the key when searching redis', done => {
-            const body = JSON.stringify([{
-                Bucket: 'mybucket',
-                Key: 'mykey',
-                StorageClass: 'replication',
-                Role: 'replication',
-            }]);
+            const body = JSON.stringify([
+                {
+                    Bucket: 'mybucket',
+                    Key: 'mykey',
+                    StorageClass: 'replication',
+                    Role: 'replication',
+                },
+            ]);
             sinon.stub(bbapi, '_repConfig').value({
                 source: {
                     auth: {
@@ -648,19 +644,22 @@ describe('BackbeatAPI', () => {
                 'tags': {},
                 'replicationInfo': {
                     status: 'PENDING',
-                    backends: [{
-                        site: 'sf',
-                        status: 'PENDING',
-                        destination: 'arn:aws:s3:::bucket-a',
-                        role: 'arn:aws:iam::111:role/r',
-                        dataStoreVersionId: '',
-                    }, {
-                        site: 'sf',
-                        status: 'PENDING',
-                        destination: 'arn:aws:s3:::bucket-b',
-                        role: 'arn:aws:iam::222:role/r',
-                        dataStoreVersionId: '',
-                    }],
+                    backends: [
+                        {
+                            site: 'sf',
+                            status: 'PENDING',
+                            destination: 'arn:aws:s3:::bucket-a',
+                            role: 'arn:aws:iam::111:role/r',
+                            dataStoreVersionId: '',
+                        },
+                        {
+                            site: 'sf',
+                            status: 'PENDING',
+                            destination: 'arn:aws:s3:::bucket-b',
+                            role: 'arn:aws:iam::222:role/r',
+                            dataStoreVersionId: '',
+                        },
+                    ],
                     content: ['DATA'],
                     destination: 'arn:aws:s3:::bucket-a',
                     storageClass: 'sf',

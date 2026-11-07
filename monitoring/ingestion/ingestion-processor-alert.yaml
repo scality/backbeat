@@ -7,83 +7,82 @@ x-inputs:
     type: constant
 
 groups:
-- name: IngestionProcessor
-  rules:
+  - name: IngestionProcessor
+    rules:
+      - alert: IngestionProcessorDown
+        Expr: sum(up{namespace="${namespace}", job="${job_ingestion_processor}"}) == 0
+        For: '30s'
+        Labels:
+          severity: critical
+        Annotations:
+          zenko_service: backbeat-ingestion-processor
+          description: 'All Ingestion Processor pod(s) has been down for 30 seconds'
+          summary: 'Ingestion Processor service is down'
 
-  - alert: IngestionProcessorDown
-    Expr: sum(up{namespace="${namespace}", job="${job_ingestion_processor}"}) == 0
-    For:   "30s"
-    Labels:
-      severity: critical
-    Annotations:
-      zenko_service: backbeat-ingestion-processor
-      description: "All Ingestion Processor pod(s) has been down for 30 seconds"
-      summary: "Ingestion Processor service is down"
+      - alert: IngestionProcessorDegraded
+        Expr: sum(up{namespace="${namespace}", job="${job_ingestion_processor}"}) < ${replicas}
+        For: '30s'
+        Labels:
+          severity: warning
+        Annotations:
+          zenko_service: backbeat-ingestion-processor
+          description: 'At least one Ingestion Processor pod has been down for 30 seconds'
+          summary: 'Ingestion Processor service is degraded'
 
-  - alert: IngestionProcessorDegraded
-    Expr: sum(up{namespace="${namespace}", job="${job_ingestion_processor}"}) < ${replicas}
-    For:   "30s"
-    Labels:
-      severity: warning
-    Annotations:
-      zenko_service: backbeat-ingestion-processor
-      description: "At least one Ingestion Processor pod has been down for 30 seconds"
-      summary: "Ingestion Processor service is degraded"
+      - alert: IngestionProcessorErrorRate3Percent
+        Expr: |
+          (sum(s3_ingestion_mongo_processed_elapsed_seconds_count{status="error", namespace="${namespace}", job="${job_ingestion_processor}" })
+            /
+          sum(s3_ingestion_mongo_processed_elapsed_seconds_count{namespace="${namespace}", job="${job_ingestion_processor}"}))
+          > 0.03
+        For: '5m'
+        Labels:
+          severity: warning
+        Annotations:
+          zenko_service: backbeat-ingestion-processor
+          description: 'Ingestion processor error rate has increased to 3% in the last 5 minutes'
+          summary: 'Ingestion Processor error rate has increased'
 
-  - alert: IngestionProcessorErrorRate3Percent
-    Expr: |
-      (sum(s3_ingestion_mongo_processed_elapsed_seconds_count{status="error", namespace="${namespace}", job="${job_ingestion_processor}" })
-        /
-      sum(s3_ingestion_mongo_processed_elapsed_seconds_count{namespace="${namespace}", job="${job_ingestion_processor}"}))
-      > 0.03
-    For:   "5m"
-    Labels:
-      severity: warning
-    Annotations:
-      zenko_service: backbeat-ingestion-processor
-      description: "Ingestion processor error rate has increased to 3% in the last 5 minutes"
-      summary: "Ingestion Processor error rate has increased"
+      - alert: IngestionProcessorErrorRate5Percent
+        Expr: |
+          (sum(s3_ingestion_mongo_processed_elapsed_seconds_count{status="error", namespace="${namespace}", job="${job_ingestion_processor}" })
+            /
+          sum(s3_ingestion_mongo_processed_elapsed_seconds_count{namespace="${namespace}", job="${job_ingestion_processor}"}))
+          > 0.05
+        For: '5m'
+        Labels:
+          severity: critical
+        Annotations:
+          zenko_service: backbeat-ingestion-processor
+          description: 'Ingestion processor error rate has increased to 5% in the last 5 minutes'
+          summary: 'Ingestion Processor error rate has increased'
 
-  - alert: IngestionProcessorErrorRate5Percent
-    Expr: |
-      (sum(s3_ingestion_mongo_processed_elapsed_seconds_count{status="error", namespace="${namespace}", job="${job_ingestion_processor}" })
-        /
-      sum(s3_ingestion_mongo_processed_elapsed_seconds_count{namespace="${namespace}", job="${job_ingestion_processor}"}))
-      > 0.05
-    For:   "5m"
-    Labels:
-      severity: critical
-    Annotations:
-      zenko_service: backbeat-ingestion-processor
-      description: "Ingestion processor error rate has increased to 5% in the last 5 minutes"
-      summary: "Ingestion Processor error rate has increased"
+      - alert: IngestionProcessorTopicConsumeErrorIncreasedBy3Percent
+        Expr: |
+          sum(rate(s3_ingestion_kafka_consume_status_total{status="error", namespace="${namespace}", job="${job_ingestion_processor}"}[5m]))
+            /
+          sum(rate(s3_ingestion_kafka_messages_pulled_total{namespace="${namespace}", job="${job_ingestion_processor}"}[5m]) +
+            rate(s3_ingestion_kafka_consume_status_total{status="error", namespace="${namespace}", job="${job_ingestion_processor}"}[5m]))
+          > 0.03
+        For: '5m'
+        Labels:
+          severity: warning
+        Annotations:
+          zenko_service: backbeat-ingestion-producer
+          description: 'Errors in consuming messages from ingestion topic has increased to 3% in the last 5 minutes'
+          summary: 'Ingestion processor error consuming messages'
 
-  - alert: IngestionProcessorTopicConsumeErrorIncreasedBy3Percent
-    Expr: |
-      sum(rate(s3_ingestion_kafka_consume_status_total{status="error", namespace="${namespace}", job="${job_ingestion_processor}"}[5m]))
-        /
-      sum(rate(s3_ingestion_kafka_messages_pulled_total{namespace="${namespace}", job="${job_ingestion_processor}"}[5m]) +
-        rate(s3_ingestion_kafka_consume_status_total{status="error", namespace="${namespace}", job="${job_ingestion_processor}"}[5m]))
-      > 0.03
-    For:   "5m"
-    Labels:
-      severity: warning
-    Annotations:
-      zenko_service: backbeat-ingestion-producer
-      description: "Errors in consuming messages from ingestion topic has increased to 3% in the last 5 minutes"
-      summary: "Ingestion processor error consuming messages"
-
-  - alert: IngestionProcessorTopicConsumeErrorIncreasedBy5Percent
-    Expr: |
-      sum(rate(s3_ingestion_kafka_consume_status_total{status="error", namespace="${namespace}", job="${job_ingestion_processor}"}[5m]))
-        /
-      sum(rate(s3_ingestion_kafka_messages_pulled_total{namespace="${namespace}", job="${job_ingestion_processor}"}[5m]) +
-        rate(s3_ingestion_kafka_consume_status_total{status="error", namespace="${namespace}", job="${job_ingestion_processor}"}[5m]))
-      > 0.05
-    For:   "5m"
-    Labels:
-      severity: critical
-    Annotations:
-      zenko_service: backbeat-ingestion-producer
-      description: "Errors in consuming messages from ingestion topic has increased to 5% in the last 5 minutes"
-      summary: "Ingestion processor error consuming messages"
+      - alert: IngestionProcessorTopicConsumeErrorIncreasedBy5Percent
+        Expr: |
+          sum(rate(s3_ingestion_kafka_consume_status_total{status="error", namespace="${namespace}", job="${job_ingestion_processor}"}[5m]))
+            /
+          sum(rate(s3_ingestion_kafka_messages_pulled_total{namespace="${namespace}", job="${job_ingestion_processor}"}[5m]) +
+            rate(s3_ingestion_kafka_consume_status_total{status="error", namespace="${namespace}", job="${job_ingestion_processor}"}[5m]))
+          > 0.05
+        For: '5m'
+        Labels:
+          severity: critical
+        Annotations:
+          zenko_service: backbeat-ingestion-producer
+          description: 'Errors in consuming messages from ingestion topic has increased to 5% in the last 5 minutes'
+          summary: 'Ingestion processor error consuming messages'

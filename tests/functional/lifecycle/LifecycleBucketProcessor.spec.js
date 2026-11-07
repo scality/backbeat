@@ -4,8 +4,7 @@ const assert = require('assert');
 const werelogs = require('werelogs');
 const { errors } = require('@scality/arsenal');
 
-const LifecycleBucketProcessor = require(
-    '../../../extensions/lifecycle/bucketProcessor/LifecycleBucketProcessor');
+const LifecycleBucketProcessor = require('../../../extensions/lifecycle/bucketProcessor/LifecycleBucketProcessor');
 
 const { S3ClientMock } = require('../../utils/S3ClientMock');
 
@@ -47,7 +46,15 @@ describe('Lifecycle Bucket Processor', function lifecycleBucketProcessor() {
 
     function generateRetryTest(s3Client, shouldRetry = true) {
         const lbp = new LifecycleBucketProcessor(
-            zkConfig, kafkaConfig, lcConfig, repConfig, s3Config, mongoConfig, lcConfig.transport, timeOptions);
+            zkConfig,
+            kafkaConfig,
+            lcConfig,
+            repConfig,
+            s3Config,
+            mongoConfig,
+            lcConfig.transport,
+            timeOptions,
+        );
 
         lbp.clientManager.getS3Client = () => s3Client;
         lbp.clientManager.getBackbeatClient = () => ({});
@@ -71,25 +78,26 @@ describe('Lifecycle Bucket Processor', function lifecycleBucketProcessor() {
 
         return new Promise((resolve, reject) => {
             const messages = [];
-            start.then(() => {
-                lbp._producer.sendToTopic = (topic, [{ message }], cb) => {
-                    const entry = JSON.parse(message);
-                    messages.push({ topic, entry });
-                    if (cb) {
-                        process.nextTick(cb);
-                    }
-                    return;
-                };
-                lbp._consumer.onEntryCommittable = () => {
-                    if (shouldRetry) {
-                        s3Client.verifyRetries();
-                    } else {
-                        s3Client.verifyNoRetries();
-                    }
-                    resolve(messages);
-                };
-            })
-            .catch(reject);
+            start
+                .then(() => {
+                    lbp._producer.sendToTopic = (topic, [{ message }], cb) => {
+                        const entry = JSON.parse(message);
+                        messages.push({ topic, entry });
+                        if (cb) {
+                            process.nextTick(cb);
+                        }
+                        return;
+                    };
+                    lbp._consumer.onEntryCommittable = () => {
+                        if (shouldRetry) {
+                            s3Client.verifyRetries();
+                        } else {
+                            s3Client.verifyNoRetries();
+                        }
+                        resolve(messages);
+                    };
+                })
+                .catch(reject);
         });
     }
 
@@ -195,9 +203,9 @@ describe('Lifecycle Bucket Processor', function lifecycleBucketProcessor() {
 
             // check that "MPU batch" action entry is only sent once before
             // the process succeeds.
-            const reprocessMPUActions = messages
-                .filter(m =>
-                m.entry.action === 'processObjects' && m.entry.details.keyMarker === 'mpu2');
+            const reprocessMPUActions = messages.filter(
+                m => m.entry.action === 'processObjects' && m.entry.details.keyMarker === 'mpu2',
+            );
 
             assert.strictEqual(reprocessMPUActions.length, 1);
         });

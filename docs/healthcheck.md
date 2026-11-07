@@ -28,23 +28,23 @@ HTTP code.
 
 ### Healthcheck
 
- `/_/backbeat/api/healthcheck`
+`/_/backbeat/api/healthcheck`
 
 Basic healthchecks return details on the health of Kafka and its topics.
 
 A successful response is structured as an object with two main keys:
-*topics* and *internalConnections*.
+_topics_ and _internalConnections_.
 
-* The `topics` key returns details on the Kafka CRR topic only.
-  * The `name` field returns the Kafka topic name, and
-  * The `partitions` field returns details of each partition for the CRR topic,
-    where:
-    * `id` is the partition id.
-    * `leader` is the current node responsible for all reads and writes for
-      the given partition.
-    * `replicas` is an array containing a list of nodes that replicates the
-      log for the given partition.
-    * `isrs` is an array listing in-sync replicas.
+- The `topics` key returns details on the Kafka CRR topic only.
+    - The `name` field returns the Kafka topic name, and
+    - The `partitions` field returns details of each partition for the CRR topic,
+      where:
+        - `id` is the partition id.
+        - `leader` is the current node responsible for all reads and writes for
+          the given partition.
+        - `replicas` is an array containing a list of nodes that replicates the
+          log for the given partition.
+        - `isrs` is an array listing in-sync replicas.
 
 ```
 topics: {
@@ -61,15 +61,15 @@ topics: {
 }
 ```
 
-* `internalConnections` returns general details on the whole system's health.
-  * `isrHealth` indicates if the minimum in-sync replicas for every partition
-    are met.
-  * `zookeeper` indicates if ZooKeeper is running properly.
-  * `kafkaProducer` reports the health of all Kafka Producers for
-    every topic.
-  * `zookeeper` contains a status code and status name provided directly from the
-    [node-zookeeper](https://github.com/alexguan/node-zookeeper-client#state)),
-    library.
+- `internalConnections` returns general details on the whole system's health.
+    - `isrHealth` indicates if the minimum in-sync replicas for every partition
+      are met.
+    - `zookeeper` indicates if ZooKeeper is running properly.
+    - `kafkaProducer` reports the health of all Kafka Producers for
+      every topic.
+    - `zookeeper` contains a status code and status name provided directly from the
+      [node-zookeeper](https://github.com/alexguan/node-zookeeper-client#state)),
+      library.
 
 ```
 internalConnections: {

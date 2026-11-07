@@ -1,12 +1,10 @@
 const assert = require('assert');
 const http = require('http');
 const { MetadataMock } = require('../utils/MetadataMock');
-const VID_SEP = require('@scality/arsenal').versioning.VersioningConstants
-          .VersionId.Separator;
+const VID_SEP = require('@scality/arsenal').versioning.VersioningConstants.VersionId.Separator;
 
 const QueuePopulator = require('../../../lib/queuePopulator/QueuePopulator');
-const IngestionProducer =
-    require('../../../lib/queuePopulator/IngestionProducer');
+const IngestionProducer = require('../../../lib/queuePopulator/IngestionProducer');
 const { setupS3Mock, emptyAndDeleteVersionedBucket } = require('./S3Mock');
 const testConfig = require('../../config.json');
 
@@ -23,14 +21,12 @@ describe('ingestion producer tests with mock', () => {
 
     before(done => {
         metadataMock = new MetadataMock();
-        httpServer = http.createServer(
-            (req, res) => metadataMock.onRequest(req, res)).listen(7998);
+        httpServer = http.createServer((req, res) => metadataMock.onRequest(req, res)).listen(7998);
 
         const adjustedConfig = Object.assign({}, sourceConfig, {
             auth: { accessKey: 'accessKey1', secretKey: 'verySecretKey1' },
         });
-        this.iProducer = new IngestionProducer(adjustedConfig,
-            testConfig.queuePopulator, testConfig.s3);
+        this.iProducer = new IngestionProducer(adjustedConfig, testConfig.queuePopulator, testConfig.s3);
 
         this.queuePopulator = new QueuePopulator(
             testConfig.zookeeper,
@@ -38,7 +34,8 @@ describe('ingestion producer tests with mock', () => {
             testConfig.queuePopulator,
             null,
             null,
-            testConfig.extensions);
+            testConfig.extensions,
+        );
         setupS3Mock(sourceConfig, done);
     });
 
@@ -49,8 +46,7 @@ describe('ingestion producer tests with mock', () => {
     });
 
     // skipping because functionality currently not needed
-    it.skip('should be able to grab list of buckets for each raft session',
-        done => {
+    it.skip('should be able to grab list of buckets for each raft session', done => {
         this.iProducer._getBuckets('1', (err, res) => {
             assert.ifError(err);
             assert(res);
@@ -59,8 +55,7 @@ describe('ingestion producer tests with mock', () => {
         });
     });
 
-    it('should be able to grab list of object versions for given bucket',
-    done => {
+    it('should be able to grab list of object versions for given bucket', done => {
         this.iProducer._getObjectVersionsList(bucket, {}, (err, res) => {
             assert.ifError(err);
             assert(res);
@@ -81,8 +76,7 @@ describe('ingestion producer tests with mock', () => {
             assert.ifError(err);
 
             const { versionList } = res;
-            this.iProducer._getBucketObjectsMetadata(bucket, versionList,
-            (err, list) => {
+            this.iProducer._getBucketObjectsMetadata(bucket, versionList, (err, list) => {
                 assert.ifError(err);
 
                 assert(Array.isArray(list));
@@ -93,9 +87,7 @@ describe('ingestion producer tests with mock', () => {
                 assert.strictEqual(entry1.bucket, entry2.bucket);
                 assert.deepStrictEqual(entry1.value, entry2.value);
                 assert(entry1.key !== entry2.key);
-                assert.strictEqual(
-                    _extractVersionedBaseKey(entry1.key),
-                    _extractVersionedBaseKey(entry2.key));
+                assert.strictEqual(_extractVersionedBaseKey(entry1.key), _extractVersionedBaseKey(entry2.key));
 
                 return done();
             });
@@ -159,8 +151,7 @@ describe('ingestion producer tests with mock', () => {
         });
     });
 
-    it('should return the full raft ID for multi-digit raft sessions',
-    done => {
+    it('should return the full raft ID for multi-digit raft sessions', done => {
         this.iProducer.getRaftId('bucket-raft13', (err, res) => {
             assert.ifError(err);
             assert.strictEqual(typeof res, 'string');

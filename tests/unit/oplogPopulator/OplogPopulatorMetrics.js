@@ -10,16 +10,18 @@ describe('OplogPopulatorMetrics', () => {
     metrics.registerMetrics();
 
     // the registry is shared: each test uses its own connector names
-    const valueOf = async (metric, connector, filter = () => true) => (await metric.get()).values
-        .find(({ labels, metricName }) => labels.connector === connector && filter({ labels, metricName }))?.value;
+    const valueOf = async (metric, connector, filter = () => true) =>
+        (await metric.get()).values.find(
+            ({ labels, metricName }) => labels.connector === connector && filter({ labels, metricName }),
+        )?.value;
 
     afterEach(() => {
         sinon.restore();
     });
 
     it('should count per-bucket connectors as running', async () => {
-        const running = async () => (await metrics.connectors.get()).values
-            .find(({ labels }) => labels.state === 'running')?.value || 0;
+        const running = async () =>
+            (await metrics.connectors.get()).values.find(({ labels }) => labels.state === 'running')?.value || 0;
         const before = await running();
         metrics.onConnectorsInstantiated(true, 3);
         metrics.onConnectorDestroyed();
@@ -28,11 +30,19 @@ describe('OplogPopulatorMetrics', () => {
     });
 
     it('should count connectors by state', async () => {
-        [['running', 2], ['paused', 1], ['failed', 0], ['outdated', 3]]
-            .forEach(([state, count]) => metrics.onConnectorsCounted(state, count));
+        [
+            ['running', 2],
+            ['paused', 1],
+            ['failed', 0],
+            ['outdated', 3],
+        ].forEach(([state, count]) => metrics.onConnectorsCounted(state, count));
         const { values } = await metrics.connectors.get();
-        assert.deepStrictEqual(values.map(({ labels, value }) => [labels.state, value]).sort(),
-            [['failed', 0], ['outdated', 3], ['paused', 1], ['running', 2]]);
+        assert.deepStrictEqual(values.map(({ labels, value }) => [labels.state, value]).sort(), [
+            ['failed', 0],
+            ['outdated', 3],
+            ['paused', 1],
+            ['running', 2],
+        ]);
     });
 
     it('should refuse an unknown connector state', async () => {
@@ -60,12 +70,28 @@ describe('OplogPopulatorMetrics', () => {
         metrics.onConnectorReconfiguration({ name: 'reconfigured-1' }, false, 0.5, 10);
         assert.strictEqual(await valueOf(metrics.requestSize, 'reconfigured-0'), 42);
         assert.strictEqual(await valueOf(metrics.requestSize, 'reconfigured-1'), 10);
-        assert.strictEqual(await valueOf(metrics.connectorConfigurationApplied, 'reconfigured-0',
-            ({ labels }) => labels.success === true), 1);
-        assert.strictEqual(await valueOf(metrics.connectorConfigurationApplied, 'reconfigured-1',
-            ({ labels }) => labels.success === false), 1);
-        assert.strictEqual(await valueOf(metrics.reconfigurationLag, 'reconfigured-0',
-            ({ metricName }) => metricName.endsWith('_count')), 1);
+        assert.strictEqual(
+            await valueOf(
+                metrics.connectorConfigurationApplied,
+                'reconfigured-0',
+                ({ labels }) => labels.success === true,
+            ),
+            1,
+        );
+        assert.strictEqual(
+            await valueOf(
+                metrics.connectorConfigurationApplied,
+                'reconfigured-1',
+                ({ labels }) => labels.success === false,
+            ),
+            1,
+        );
+        assert.strictEqual(
+            await valueOf(metrics.reconfigurationLag, 'reconfigured-0', ({ metricName }) =>
+                metricName.endsWith('_count'),
+            ),
+            1,
+        );
         assert.strictEqual(await valueOf(metrics.buckets, 'reconfigured-0'), undefined);
     });
 

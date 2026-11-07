@@ -4,24 +4,23 @@ const async = require('async');
 
 const TaskScheduler = require('../../../../lib/tasks/TaskScheduler');
 
-describe('TaskScheduler', () => {    
+describe('TaskScheduler', () => {
     afterEach(() => {
         sinon.restore();
     });
 
-    it('should ensure serialization of updates with the same queue key',
-    done => {
+    it('should ensure serialization of updates with the same queue key', done => {
         const taskScheduler = new TaskScheduler(
             (entry, done) => {
                 setTimeout(() => {
-                    assert.strictEqual(
-                        entry.object.value, entry.setValueTo - 1);
+                    assert.strictEqual(entry.object.value, entry.setValueTo - 1);
                     // eslint-disable-next-line no-param-reassign
                     entry.object.value = entry.setValueTo;
                     done();
                 }, Math.random() * 100);
             },
-            entry => entry.object.queueKey);
+            entry => entry.object.queueKey,
+        );
         const objects = [];
         let doneCount = 0;
         function doneFunc() {
@@ -35,26 +34,24 @@ describe('TaskScheduler', () => {
         }
         for (let value = 0; value < 10; ++value) {
             for (let i = 0; i < 10; ++i) {
-                taskScheduler.push({ object: objects[i], setValueTo: value },
-                                   doneFunc);
+                taskScheduler.push({ object: objects[i], setValueTo: value }, doneFunc);
             }
         }
     });
 
-    it('with queue key, should skip extra updates that have an existing ' +
-    'dedupe key', done => {
+    it('with queue key, should skip extra updates that have an existing ' + 'dedupe key', done => {
         const taskScheduler = new TaskScheduler(
             (entry, done) => {
                 setTimeout(() => {
-                    assert.strictEqual(
-                        entry.object.value, entry.setValueTo - 1);
+                    assert.strictEqual(entry.object.value, entry.setValueTo - 1);
                     // eslint-disable-next-line no-param-reassign
                     entry.object.value = entry.setValueTo;
                     done();
                 }, Math.random() * 100);
             },
             entry => entry.object.queueKey,
-            entry => entry.dedupeKey);
+            entry => entry.dedupeKey,
+        );
         const objects = [];
         let doneCount = 0;
         function doneFunc() {
@@ -68,32 +65,38 @@ describe('TaskScheduler', () => {
         }
         for (let value = 0; value < 100; ++value) {
             for (let i = 0; i < 10; ++i) {
-                taskScheduler.push({
-                    object: objects[i],
-                    setValueTo: value,
-                    // all tasks with value >= 10 will have the same
-                    // dedupe key than one of the tasks with
-                    // value < 10, so should be skipped
-                    dedupeKey: `key_${i}_${value % 10}`,
-                }, doneFunc);
+                taskScheduler.push(
+                    {
+                        object: objects[i],
+                        setValueTo: value,
+                        // all tasks with value >= 10 will have the same
+                        // dedupe key than one of the tasks with
+                        // value < 10, so should be skipped
+                        dedupeKey: `key_${i}_${value % 10}`,
+                    },
+                    doneFunc,
+                );
             }
         }
     });
 
-    it('without queue key, should skip extra updates that have an existing ' +
-    'dedupe key', done => {
+    it('without queue key, should skip extra updates that have an existing ' + 'dedupe key', done => {
         const taskScheduler = new TaskScheduler(
             (entry, done) => {
-                setTimeout(() => {
-                    // there should be only one update per value
-                    assert.strictEqual(entry.object.value, -1);
-                    // eslint-disable-next-line no-param-reassign
-                    entry.object.value = entry.setValueTo;
-                    done();
-                }, 100 + Math.random() * 100);
+                setTimeout(
+                    () => {
+                        // there should be only one update per value
+                        assert.strictEqual(entry.object.value, -1);
+                        // eslint-disable-next-line no-param-reassign
+                        entry.object.value = entry.setValueTo;
+                        done();
+                    },
+                    100 + Math.random() * 100,
+                );
             },
             null,
-            entry => entry.dedupeKey);
+            entry => entry.dedupeKey,
+        );
         const objects = [];
         let doneCount = 0;
         function doneFunc() {
@@ -110,14 +113,17 @@ describe('TaskScheduler', () => {
         }
         for (let value = 0; value < 10; ++value) {
             for (let i = 0; i < 10; ++i) {
-                taskScheduler.push({
-                    object: objects[i],
-                    setValueTo: value,
-                    // all tasks with value >= 10 will have the same
-                    // dedupe key than one of the tasks with
-                    // value < 10, so should be skipped
-                    dedupeKey: `key_${i}`,
-                }, doneFunc);
+                taskScheduler.push(
+                    {
+                        object: objects[i],
+                        setValueTo: value,
+                        // all tasks with value >= 10 will have the same
+                        // dedupe key than one of the tasks with
+                        // value < 10, so should be skipped
+                        dedupeKey: `key_${i}`,
+                    },
+                    doneFunc,
+                );
             }
         }
     });
@@ -132,35 +138,39 @@ describe('TaskScheduler', () => {
             nokey1: { complete: false },
             nokey2: { complete: false },
         };
-        
+
         const startSignals = {};
         const completeSignals = {};
-        
+
         // Create promise-based signals for each task
         Object.keys(taskStates).forEach(key => {
             const signals = {};
-            startSignals[key] = new Promise(resolve => { signals.startResolve = resolve; });
-            completeSignals[key] = new Promise(resolve => { signals.completeResolve = resolve; });
+            startSignals[key] = new Promise(resolve => {
+                signals.startResolve = resolve;
+            });
+            completeSignals[key] = new Promise(resolve => {
+                signals.completeResolve = resolve;
+            });
             taskStates[key].signals = signals;
         });
-        
+
         // Create a task processor that signals when it starts and waits for completion signal
         const processTask = async (ctx, callback) => {
             const key = ctx.key;
             taskStates[key].signals.startResolve();
-            
+
             // Wait until we're told to complete
             await completeSignals[key];
             taskStates[key].complete = true;
             callback();
         };
-        
+
         const taskScheduler = new TaskScheduler(
             (ctx, done) => processTask(ctx, done),
             ctx => ctx.queueKey,
             null,
         );
-        
+
         const drainStub = sinon.stub();
         taskScheduler.setDrain(drainStub);
 
@@ -168,41 +178,41 @@ describe('TaskScheduler', () => {
         taskScheduler.push({ key: 'key1', queueKey: 'key1' }, () => {});
         taskScheduler.push({ key: 'key2', queueKey: 'key2' }, () => {});
         taskScheduler.push({ key: 'key3', queueKey: 'key3' }, () => {});
-        
+
         // Add another task with key1 - this should be queued
         taskScheduler.push({ key: 'key1q', queueKey: 'key1' }, () => {});
-        
+
         // Add tasks without keys - these should run in parallel
         taskScheduler.push({ key: 'nokey1' }, () => {});
         taskScheduler.push({ key: 'nokey2' }, () => {});
-        
+
         await Promise.all([
             startSignals['key1'],
-            startSignals['key2'], 
+            startSignals['key2'],
             startSignals['key3'],
             startSignals['nokey1'],
-            startSignals['nokey2']
+            startSignals['nokey2'],
         ]);
-        
+
         assert.strictEqual(taskScheduler.running(), 5);
         assert.strictEqual(taskScheduler.length(), 1);
-        
+
         taskStates['key1'].signals.completeResolve();
         await new Promise(resolve => setTimeout(resolve, 10)); // Small delay for processing
-        
+
         // After key1 completes, its queued task should start
         assert.strictEqual(taskScheduler.running(), 5);
         assert.strictEqual(taskScheduler.length(), 0);
 
         assert(drainStub.notCalled);
-        
+
         // Complete all remaining tasks
         Object.keys(taskStates).forEach(key => {
             if (!taskStates[key].complete) {
                 taskStates[key].signals.completeResolve();
             }
         });
-        
+
         // Wait a moment for all tasks to complete processing
         await new Promise(resolve => setTimeout(resolve, 10));
 
@@ -234,11 +244,9 @@ describe('TaskScheduler', () => {
             assert.doesNotThrow(() => taskScheduler._tryDrain());
         });
 
-        it('should run the per-task callback before drain when the last ' +
-           'task completes', done => {
+        it('should run the per-task callback before drain when the last ' + 'task completes', done => {
             const order = [];
-            const taskScheduler = new TaskScheduler(
-                (ctx, cb) => process.nextTick(cb));
+            const taskScheduler = new TaskScheduler((ctx, cb) => process.nextTick(cb));
             taskScheduler.setDrain(() => {
                 order.push('drain');
                 try {
@@ -329,7 +337,9 @@ describe('TaskScheduler', () => {
         });
         it('should skip task with existing dedup key', done => {
             let blockedTaskResolve;
-            const blockedTaskPromise = new Promise(resolve => { blockedTaskResolve = resolve; });
+            const blockedTaskPromise = new Promise(resolve => {
+                blockedTaskResolve = resolve;
+            });
             const processingFunc = sinon.stub().callsFake((ctx, cb) => {
                 if (ctx.id === 'block') {
                     return blockedTaskPromise.then(() => cb());
@@ -362,7 +372,9 @@ describe('TaskScheduler', () => {
         });
         it('should log the tasks skipped by deduplication', done => {
             let blockedTaskResolve;
-            const blockedTaskPromise = new Promise(resolve => { blockedTaskResolve = resolve; });
+            const blockedTaskPromise = new Promise(resolve => {
+                blockedTaskResolve = resolve;
+            });
             const processingFunc = sinon.stub().callsFake((ctx, cb) => {
                 if (ctx.id === 'block') {
                     return blockedTaskPromise.then(() => cb());
@@ -370,16 +382,14 @@ describe('TaskScheduler', () => {
                 return cb();
             });
             const logger = { debug: sinon.spy() };
-            const taskScheduler = new TaskScheduler(
-                processingFunc, null, ctx => ctx.dedupeKey, logger);
+            const taskScheduler = new TaskScheduler(processingFunc, null, ctx => ctx.dedupeKey, logger);
 
             taskScheduler.push({ id: 'block', dedupeKey: 'key' }, () => {});
             taskScheduler.push({ dedupeKey: 'key' }, () => {});
 
             process.nextTick(() => {
                 assert(logger.debug.calledOnce);
-                assert.deepStrictEqual(logger.debug.firstCall.args[1],
-                                       { dedupeKey: 'key' });
+                assert.deepStrictEqual(logger.debug.firstCall.args[1], { dedupeKey: 'key' });
                 blockedTaskResolve();
                 done();
             });
@@ -387,17 +397,22 @@ describe('TaskScheduler', () => {
         it('should remove dedup key after task completion', done => {
             const processingFunc = sinon.stub().yields();
             const taskScheduler = new TaskScheduler(processingFunc, ctx => ctx.queueKey, null);
-            async.series([
-                next => taskScheduler.push({ queueKey: 'key' }, next),
-                next => taskScheduler.push({ queueKey: 'key' }, next),
-            ], () => {
-                assert(processingFunc.calledTwice);
-                done();
-            });
+            async.series(
+                [
+                    next => taskScheduler.push({ queueKey: 'key' }, next),
+                    next => taskScheduler.push({ queueKey: 'key' }, next),
+                ],
+                () => {
+                    assert(processingFunc.calledTwice);
+                    done();
+                },
+            );
         });
         it('should ignore non string dedup key', done => {
             let blockedTaskResolve;
-            const blockedTaskPromise = new Promise(resolve => { blockedTaskResolve = resolve; });
+            const blockedTaskPromise = new Promise(resolve => {
+                blockedTaskResolve = resolve;
+            });
             const processingFunc = sinon.stub().callsFake((ctx, cb) => {
                 if (ctx.id === 'block') {
                     return blockedTaskPromise.then(() => cb());
@@ -430,7 +445,9 @@ describe('TaskScheduler', () => {
         });
         it('should queue task with the same queue key', done => {
             let blockedTaskResolve;
-            const blockedTaskPromise = new Promise(resolve => { blockedTaskResolve = resolve; });
+            const blockedTaskPromise = new Promise(resolve => {
+                blockedTaskResolve = resolve;
+            });
             const processingFunc = sinon.stub().callsFake((ctx, cb) => {
                 if (ctx.id === 'block') {
                     return blockedTaskPromise.then(() => cb());
@@ -469,7 +486,9 @@ describe('TaskScheduler', () => {
         });
         it('should ignore non string queue key', done => {
             let blockedTaskResolve;
-            const blockTaskPromise = new Promise(resolve => { blockedTaskResolve = resolve; });
+            const blockTaskPromise = new Promise(resolve => {
+                blockedTaskResolve = resolve;
+            });
             const processingFunc = sinon.stub().callsFake((ctx, cb) => {
                 if (ctx.id === 'block') {
                     return blockTaskPromise.then(() => cb());
@@ -503,7 +522,9 @@ describe('TaskScheduler', () => {
         });
         it('should call the drain function if there are no tasks in the queue', done => {
             let blockedTaskResolve;
-            const blockTaskPromise = new Promise(resolve => { blockedTaskResolve = resolve; });
+            const blockTaskPromise = new Promise(resolve => {
+                blockedTaskResolve = resolve;
+            });
             const processingFunc = sinon.stub().callsFake((ctx, cb) => {
                 if (ctx.id === 'block') {
                     return blockTaskPromise.then(() => cb());
@@ -522,7 +543,7 @@ describe('TaskScheduler', () => {
             taskScheduler.push({ id: 'block' }, secondTaskCb);
 
             const thirdTaskCb = sinon.spy();
-            taskScheduler.push({ }, thirdTaskCb);
+            taskScheduler.push({}, thirdTaskCb);
 
             setTimeout(() => {
                 assert.strictEqual(taskScheduler._running, 2);

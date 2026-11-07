@@ -1,5 +1,4 @@
-const QueuePopulatorExtension =
-          require('../../lib/queuePopulator/QueuePopulatorExtension');
+const QueuePopulatorExtension = require('../../lib/queuePopulator/QueuePopulatorExtension');
 const ObjectQueueEntry = require('../../lib/models/ObjectQueueEntry');
 const safeJsonParse = require('../../lib/util/safeJsonParse');
 const { isShadowedMaster } = require('../../lib/util/versioning');
@@ -26,12 +25,8 @@ class IngestionQueuePopulator extends QueuePopulatorExtension {
             return;
         }
 
-        this.log.debug('publishing entry',
-                       { entryBucket: entry.bucket, entryKey: entry.key });
-        this.publish(this.config.topic,
-                     `${entry.bucket}/${entry.key}`,
-                     JSON.stringify(entry),
-                    entriesToPublish);
+        this.log.debug('publishing entry', { entryBucket: entry.bucket, entryKey: entry.key });
+        this.publish(this.config.topic, `${entry.bucket}/${entry.key}`, JSON.stringify(entry), entriesToPublish);
 
         this._incrementMetrics(entry.bucket);
     }
@@ -56,9 +51,7 @@ class IngestionQueuePopulator extends QueuePopulatorExtension {
             return true;
         }
         if (entry.type === 'put') {
-            const queueEntry = new ObjectQueueEntry(entry.bucket,
-                                                    entry.key,
-                                                    metadataVal);
+            const queueEntry = new ObjectQueueEntry(entry.bucket, entry.key, metadataVal);
             const sanityCheckRes = queueEntry.checkSanity();
             if (sanityCheckRes) {
                 this.log.trace('entry malformed', {
@@ -86,8 +79,7 @@ class IngestionQueuePopulator extends QueuePopulatorExtension {
     _isBucketEntry(metadataVal) {
         // If `attributes` key exists in metadata, this is a nested bucket
         // metadata entry for s3c buckets
-        if (metadataVal.mdBucketModelVersion ||
-            metadataVal.attributes) {
+        if (metadataVal.mdBucketModelVersion || metadataVal.attributes) {
             return true;
         }
         return false;

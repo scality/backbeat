@@ -54,24 +54,24 @@ Kafka is Backbeat's queue manager.
 
 #### Pros
 
-* Distributed, Pub/Sub, simple to use, durable replicated log.
-* Fast reads and writes using sequential reads/writes to disk.
-* Topics contain partitions that are strictly ordered.
-* Replication is done at a partition level and can be controlled
+- Distributed, Pub/Sub, simple to use, durable replicated log.
+- Fast reads and writes using sequential reads/writes to disk.
+- Topics contain partitions that are strictly ordered.
+- Replication is done at a partition level and can be controlled
   per-partition.
-* More than one consumer can process a partition, achieving parallel
+- More than one consumer can process a partition, achieving parallel
   processing.
-* Supports one consumer processing in real time and another processing
+- Supports one consumer processing in real time and another processing
   in batch.
-* A large number of consumers can easily be added without affecting
+- A large number of consumers can easily be added without affecting
   performance.
-* Stream processing can be leveraged for encryption, compression, etc.
+- Stream processing can be leveraged for encryption, compression, etc.
 
 #### Cons
 
-* Uses ZooKeeper but it’s not in the critical path
-* Requires optimization for fault tolerance
-* Not designed for high-latency environments
+- Uses ZooKeeper but it’s not in the critical path
+- Requires optimization for fault tolerance
+- Not designed for high-latency environments
 
 ## Applying Backbeat
 
@@ -93,58 +93,58 @@ customer can write to Site B, these writes are not replicated to Site
 A (among other reasons, Site A may have data that is not fully
 replicated to Site B when the failure occurred).
 
-* All replication actions go through S3. S3 exposes routes for
+- All replication actions go through S3. S3 exposes routes for
   metadata and data backends to Backbeat.
-* The Metadata journal is the source of truth.
-* Object metadata must have a new property, `replicationStatus`. When a CRR
+- The Metadata journal is the source of truth.
+- Object metadata must have a new property, `replicationStatus`. When a CRR
   configuration is enabled on a bucket, any S3's PUT metadata operations on
   objects matching the configuration will have `replicationStatus` as
   `PENDING`.
-* If a producer (background job) wakes up every `n` seconds and requests
+- If a producer (background job) wakes up every `n` seconds and requests
   a journal from Metadata starting from a sequenceId, the producer queues
   entries from the journal that have `replicationStatus` PENDING to Kafka.
-* The entries contain the sequence number as key and a stringified JSON
+- The entries contain the sequence number as key and a stringified JSON
   with fields like action (PUT), object key, object metadata.
-* Backbeat will leverage Kafka's KeyedMessage mechanism, guaranteeing that
+- Backbeat will leverage Kafka's KeyedMessage mechanism, guaranteeing that
   all records with the same key, for example `<bucket name>:<object key>`,
   are written to the same partition, and that record ordering is guaranteed
   within a partition. This offers the advantage balancing records across all
   Kafka nodes and assigning multiple consumers to process the queue.
-* A consumer picks up from the last committed offset and processes one entry
+- A consumer picks up from the last committed offset and processes one entry
   at a time. The consumer first copies data to the target site, updates the
   object's metadata with the new location, sets replicationStatus to
   `REPLICA` and writes the metadata entry at the target. Once the metadata
   and data operations are completed on the target bucket, the object's
   source bucket metadata is updated to reflect replicationStatus as
   `COMPLETED`.
-* On any failure in this sequence of operations for an entry, the object
+- On any failure in this sequence of operations for an entry, the object
   metadata on the source is updated with replicationStatus `FAILED`.
   The consumer commits the offset of the last successful entry
   processed to Kafka. This entry is retried on the next run.
 
 ## Security
 
-* **End-to-End SSL:** Use PKI certificates with TLS for trusted communication
+- **End-to-End SSL:** Use PKI certificates with TLS for trusted communication
   between servers. All sites (SF, NY, and Paris, for example),
   communicating through a private route establish a TCP connection
   using PKI certificates.
-* **Temporary credentials:** Backbeat shall have no credentials (access key,
+- **Temporary credentials:** Backbeat shall have no credentials (access key,
   secret key pair) by default and must acquire temporary credentials from IAM
   to perform actions on users' resources.
-* **Trust Policy:** A trust policy (IAM actions) will be created, letting
+- **Trust Policy:** A trust policy (IAM actions) will be created, letting
   the user assume a role to gain temporary credentials to the
   source/destination account's resources.
-* **ACL Account Management Permissions:** Cross-account permissions can be
+- **ACL Account Management Permissions:** Cross-account permissions can be
   managed using ACLs. Access policies (S3 actions) will be created
   allowing the role to perform specific actions to achieve replications.
   On establishing a trusted connection using the certificates, Backbeat
   requests temporary credentials from IAM. Temporary credentials expire
   every hour (or some set time). These credentials are used to communicate
   with S3 for replications.
-* **Credential Renewal:** Credentials are renewed when they expire.
+- **Credential Renewal:** Credentials are renewed when they expire.
   Temporary credentials don’t span across sites, so Backbeat must renew
   credentials on all sites individually.
-* **AWS conformity:** The setup and behavior must conform to AWS's
+- **AWS conformity:** The setup and behavior must conform to AWS's
   specifications for asynchronous replication. Conformity assures that
   credentials in Backbeat and roles aren't hardcoded and that policies
   are transparent to customers, who can see what actions we use for
@@ -153,27 +153,27 @@ replicated to Site B when the failure occurred).
 
 ## OSS Licenses
 
-* Kafka and ZooKeeper are the only Backbeat dependencies licensed
+- Kafka and ZooKeeper are the only Backbeat dependencies licensed
   under Apache License 2.0.
-* `node-rdkafka` npm module, used for producer/consumer actions
+- `node-rdkafka` npm module, used for producer/consumer actions
   and maintained by Blizzard Entertainment is MIT-licensed.
 
 ## Statistics for SLA, Metrics and So Forth
 
 There are two ways to approach this:
 
-* Use Pub/Sub events in addition to the MetaData log in a separate topic.
+- Use Pub/Sub events in addition to the MetaData log in a separate topic.
   Leverage the records in this topic by comparing to the active queue to
   generate statistics like:
 
-   - RPO (Recovery Point Objective)
-   - RTO (Recovery Time Objective)
-   - Storage backlog in bytes
-   - Storage replicated so far in bytes
-   - Number of objects in backlog
-   - Number of objects replicated so far etc.
+    - RPO (Recovery Point Objective)
+    - RTO (Recovery Time Objective)
+    - Storage backlog in bytes
+    - Storage replicated so far in bytes
+    - Number of objects in backlog
+    - Number of objects replicated so far etc.
 
-* Use a decoupled topic in addition to the queue topic. The
+- Use a decoupled topic in addition to the queue topic. The
   producers/consumers will manage this by adding records for
   non-replicated and replicated entries. Because each entry has
   a sequence number, calculating the difference between sequence
@@ -204,10 +204,11 @@ directory, exporting the attributes defining the extension metadata
 and entry points. For example, to create a "mycoolext" extension, put
 the following in extensions/mycoolext/index.js:
 
-```
+````
 module.exports = {
     name: 'my cool extension',
         version: '1.0.0',
       queuePopulatorExtension: require('./MyCoolExtensionPopulator.js'),
       };```
 ...
+````

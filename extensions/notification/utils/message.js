@@ -29,8 +29,7 @@ function addLogAttributes(logEntry, message) {
  * @return {Object} updated event object
  */
 function transformToSpec(event) {
-    const encodedVersionId
-        = event.versionId ? versionIdUtils.encode(event.versionId) : null;
+    const encodedVersionId = event.versionId ? versionIdUtils.encode(event.versionId) : null;
     const message = {
         Records: [
             {

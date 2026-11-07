@@ -66,9 +66,7 @@ describe('LocationStatusManager', () => {
 
         it('should get service status for a location from MongoDB', done => {
             const find = sinon.stub().returns({
-                toArray: sinon.stub().resolves([
-                    { _id: 'us-east-1', value: { lifecycle: { paused: true } } },
-                ]),
+                toArray: sinon.stub().resolves([{ _id: 'us-east-1', value: { lifecycle: { paused: true } } }]),
             });
             lsm._locationStatusColl = { find };
             lsm.getServiceStatus('lifecycle', ['us-east-1'], (err, statuses) => {
@@ -98,7 +96,7 @@ describe('LocationStatusManager', () => {
                 toArray: sinon.stub().resolves([
                     {
                         _id: 'us-east-1',
-                        value: { lifecycle: { paused: true, scheduledResume: '2023-01-01T00:00:00.000Z' } }
+                        value: { lifecycle: { paused: true, scheduledResume: '2023-01-01T00:00:00.000Z' } },
                     },
                 ]),
             });
@@ -189,8 +187,12 @@ describe('LocationStatusManager', () => {
             lsm._redis = { publish };
             lsm.deleteScheduledResumeService('crr', ['us-east-1'], err => {
                 assert.ifError(err);
-                assert(publish.calledOnceWith('crr-topic-us-east-1',
-                    JSON.stringify({ action: 'deleteScheduledResumeService' })));
+                assert(
+                    publish.calledOnceWith(
+                        'crr-topic-us-east-1',
+                        JSON.stringify({ action: 'deleteScheduledResumeService' }),
+                    ),
+                );
                 done();
             });
         });
@@ -417,14 +419,16 @@ describe('LocationStatusManager', () => {
 
             lsm._addNewLocations(locations, err => {
                 assert.ifError(err);
-                assert(insertOne.calledWith({
-                    _id: newLocation,
-                    value: {
-                        crr: null,
-                        ingestion: null,
-                        lifecycle: { paused: false, scheduledResume: null },
-                    },
-                }));
+                assert(
+                    insertOne.calledWith({
+                        _id: newLocation,
+                        value: {
+                            crr: null,
+                            ingestion: null,
+                            lifecycle: { paused: false, scheduledResume: null },
+                        },
+                    }),
+                );
                 done();
             });
         });
@@ -459,9 +463,7 @@ describe('LocationStatusManager', () => {
     describe('_getMongoStateDetails', () => {
         it('should get state details from mongo', done => {
             const find = sinon.stub().returns({
-                toArray: sinon.stub().resolves([
-                    { _id: 'us-east-1', value: { lifecycle: { paused: true } } },
-                ]),
+                toArray: sinon.stub().resolves([{ _id: 'us-east-1', value: { lifecycle: { paused: true } } }]),
             });
             lsm._locationStatusColl = { find };
             lsm._getMongoStateDetails('lifecycle', ['us-east-1'], (err, states) => {

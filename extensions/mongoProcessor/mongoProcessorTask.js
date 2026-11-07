@@ -2,11 +2,8 @@
 
 const werelogs = require('werelogs');
 const { errors } = require('@scality/arsenal');
-const {
-    DEFAULT_LIVE_ROUTE,
-    DEFAULT_METRICS_ROUTE,
-    DEFAULT_READY_ROUTE,
-} = require('@scality/arsenal').network.probe.ProbeServer;
+const { DEFAULT_LIVE_ROUTE, DEFAULT_METRICS_ROUTE, DEFAULT_READY_ROUTE } =
+    require('@scality/arsenal').network.probe.ProbeServer;
 const { sendSuccess, sendError } = require('@scality/arsenal').network.probe.Utils;
 const { ZenkoMetrics } = require('@scality/arsenal').metrics;
 
@@ -24,11 +21,9 @@ const mongoClientConfig = config.queuePopulator.mongo;
 
 const log = new werelogs.Logger('Backbeat:MongoProcessor:task');
 const mongoProcessorLogConfig = mongoProcessorConfig.log ?? config.log;
-werelogs.configure({ level: mongoProcessorLogConfig.logLevel,
-    dump: mongoProcessorLogConfig.dumpLevel });
+werelogs.configure({ level: mongoProcessorLogConfig.logLevel, dump: mongoProcessorLogConfig.dumpLevel });
 
-const mqp = new MongoQueueProcessor(kafkaConfig, mongoProcessorConfig,
-    mongoClientConfig, mConfig);
+const mqp = new MongoQueueProcessor(kafkaConfig, mongoProcessorConfig, mongoClientConfig, mConfig);
 
 /**
  * Handle ProbeServer liveness check
@@ -37,7 +32,7 @@ const mqp = new MongoQueueProcessor(kafkaConfig, mongoProcessorConfig,
  * @param {Logger} log - Logger
  * @returns {undefined}
  */
- function handleLiveness(res, log) {
+function handleLiveness(res, log) {
     if (mqp.isReady()) {
         sendSuccess(res, log);
     } else {
@@ -64,18 +59,21 @@ async function handleMetrics(res, log) {
 
 function loadManagementDatabase() {
     const ingestionServiceAuth = config.extensions.ingestion.auth;
-    initManagement({
-        serviceName: 'md-ingestion',
-        serviceAccount: ingestionServiceAuth.account,
-    }, error => {
-        if (error) {
-            log.error('could not load management db', { error });
-            setTimeout(loadManagementDatabase, 5000);
-            return;
-        }
-        log.info('management init done');
-        mqp.start();
-    });
+    initManagement(
+        {
+            serviceName: 'md-ingestion',
+            serviceAccount: ingestionServiceAuth.account,
+        },
+        error => {
+            if (error) {
+                log.error('could not load management db', { error });
+                setTimeout(loadManagementDatabase, 5000);
+                return;
+            }
+            log.info('management init done');
+            mqp.start();
+        },
+    );
 }
 
 startProbeServer(mongoProcessorConfig.probeServer, (err, probeServer) => {

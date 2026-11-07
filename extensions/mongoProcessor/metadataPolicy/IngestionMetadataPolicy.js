@@ -18,8 +18,7 @@ class IngestionMetadataPolicy extends MetadataPolicy {
         // object, so with neither in play the fetch is skipped
         const bucketRepInfo = bucketInfo.getReplicationConfiguration();
 
-        return !this._scalVersionId(entry) &&
-            !bucketRepInfo?.rules?.some(r => r.enabled);
+        return !this._scalVersionId(entry) && !bucketRepInfo?.rules?.some(r => r.enabled);
     }
 
     targetVersionId(entry) {
@@ -29,9 +28,7 @@ class IngestionMetadataPolicy extends MetadataPolicy {
         const scalVersionId = this._scalVersionId(entry);
 
         if (entry instanceof DeleteOpQueueEntry) {
-            return scalVersionId ?
-                VersionID.decode(scalVersionId) :
-                extractVersionId(entry.getObjectVersionedKey());
+            return scalVersionId ? VersionID.decode(scalVersionId) : extractVersionId(entry.getObjectVersionedKey());
         }
 
         // master keys with a 'null' version id comming from
@@ -40,8 +37,7 @@ class IngestionMetadataPolicy extends MetadataPolicy {
         if (entry.getIsNull()) {
             return undefined;
         }
-        return scalVersionId ?
-            VersionID.decode(scalVersionId) : entry.getVersionId();
+        return scalVersionId ? VersionID.decode(scalVersionId) : entry.getVersionId();
     }
 
     /**
@@ -130,29 +126,32 @@ class IngestionMetadataPolicy extends MetadataPolicy {
         // if version id is undefined, we have a single null object.
         // To hold reference to this null object, we need to encode "null"
         // as its dataStoreVersionId
-        const dataStoreVersionId = entry.getVersionId() ?
-            entry.getEncodedVersionId() : 'null';
+        const dataStoreVersionId = entry.getVersionId() ? entry.getEncodedVersionId() : 'null';
         let zenkoDataLocations;
         if (!locations || locations.length === 0) {
-            zenkoDataLocations = [{
-                key: entry.getObjectKey(),
-                size: 0,
-                start: 0,
-                dataStoreName: zenkoLocation,
-                dataStoreType: 'aws_s3',
-                dataStoreETag: `1:${emptyFileMd5}`,
-                dataStoreVersionId,
-            }];
+            zenkoDataLocations = [
+                {
+                    key: entry.getObjectKey(),
+                    size: 0,
+                    start: 0,
+                    dataStoreName: zenkoLocation,
+                    dataStoreType: 'aws_s3',
+                    dataStoreETag: `1:${emptyFileMd5}`,
+                    dataStoreVersionId,
+                },
+            ];
         } else {
-            zenkoDataLocations = [{
-                key: entry.getObjectKey(),
-                size: entry.getContentLength(),
-                start: 0,
-                dataStoreName: zenkoLocation,
-                dataStoreType: 'aws_s3',
-                dataStoreETag: `1:${entry.getContentMd5()}`,
-                dataStoreVersionId,
-            }];
+            zenkoDataLocations = [
+                {
+                    key: entry.getObjectKey(),
+                    size: entry.getContentLength(),
+                    start: 0,
+                    dataStoreName: zenkoLocation,
+                    dataStoreType: 'aws_s3',
+                    dataStoreETag: `1:${entry.getContentMd5()}`,
+                    dataStoreVersionId,
+                },
+            ];
         }
         entry.setLocation(zenkoDataLocations);
     }
@@ -172,8 +171,12 @@ class IngestionMetadataPolicy extends MetadataPolicy {
         // an object stored elsewhere is left alone: the delete was caused by
         // restored-object expiration or transition, both of which update
         // dataStoreName before sending the object to GC
-        return !this._holdsEntryData(objMD, location, entry.getObjectKey(),
-            extractVersionId(entry.getObjectVersionedKey()));
+        return !this._holdsEntryData(
+            objMD,
+            location,
+            entry.getObjectKey(),
+            extractVersionId(entry.getObjectVersionedKey()),
+        );
     }
 
     /**
@@ -189,12 +192,13 @@ class IngestionMetadataPolicy extends MetadataPolicy {
     _holdsEntryData(objMD, location, key, versionId) {
         const encode = vid => (vid ? VersionID.encode(vid) : 'null');
 
-        return objMD.dataStoreName === location &&
+        return (
+            objMD.dataStoreName === location &&
             objMD.location?.length === 1 &&
             objMD.location[0].dataStoreName === location &&
             objMD.location[0].key === key &&
-            (objMD.location[0].dataStoreVersionId || 'null') ===
-                encode(versionId);
+            (objMD.location[0].dataStoreVersionId || 'null') === encode(versionId)
+        );
     }
 }
 
