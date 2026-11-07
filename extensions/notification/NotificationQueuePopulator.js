@@ -7,8 +7,7 @@ const safeJsonParse = require('../../lib/util/safeJsonParse');
 const { extractBaseKey, isShadowedMaster } = require('../../lib/util/versioning');
 const messageUtil = require('./utils/message');
 const notifConstants = require('./constants');
-const QueuePopulatorExtension =
-    require('../../lib/queuePopulator/QueuePopulatorExtension');
+const QueuePopulatorExtension = require('../../lib/queuePopulator/QueuePopulatorExtension');
 const { traceHeadersFromEntry } = require('@scality/arsenal/build/lib/tracing').kafka;
 
 class NotificationQueuePopulator extends QueuePopulatorExtension {
@@ -24,8 +23,7 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
         super(params);
         this.notificationConfig = params.config;
         this.bnConfigManager = params.bnConfigManager;
-        assert(this.bnConfigManager, 'bucket notification configuration manager'
-            + ' is not set');
+        assert(this.bnConfigManager, 'bucket notification configuration manager' + ' is not set');
         // callbackify functions
         this._processObjectEntryCb = util.callbackify(this._processObjectEntry).bind(this);
         this._metricsStore = params.metricsHandler;
@@ -39,8 +37,7 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
      * @return {boolean} - true if bucket entry
      */
     _isBucketEntry(bucket, key) {
-        return ((bucket.toLowerCase() === this.notificationConfig.bucketMetastore && !!key)
-            || key === undefined);
+        return (bucket.toLowerCase() === this.notificationConfig.bucketMetastore && !!key) || key === undefined;
     }
 
     /**
@@ -96,10 +93,8 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
     _processBucketEntry(bucket, value) {
         const attributes = this._getBucketAttributes(value);
         const bucketName = this._getBucketNameFromAttributes(attributes);
-        const notificationConfiguration
-            = this._getBucketNotificationConfiguration(attributes);
-        if (notificationConfiguration &&
-            Object.keys(notificationConfiguration).length > 0) {
+        const notificationConfiguration = this._getBucketNotificationConfiguration(attributes);
+        if (notificationConfiguration && Object.keys(notificationConfiguration).length > 0) {
             const bnConfig = {
                 bucket: bucketName,
                 notificationConfiguration,
@@ -227,8 +222,7 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
                 const pushedToTopic = new Map();
                 // validate and push kafka message foreach destination topic
                 this.notificationConfig.destinations.forEach(destination => {
-                    const topic = destination.internalTopic ||
-                        this.notificationConfig.topic;
+                    const topic = destination.internalTopic || this.notificationConfig.topic;
                     // avoid pushing a message multiple times to the
                     // same internal topic
                     if (pushedToTopic[topic]) {
@@ -236,7 +230,7 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
                     }
                     // get destination specific notification config
                     const queueConfig = config.notificationConfiguration.queueConfig.filter(
-                        c => c.queueArn.split(':').pop() === destination.resource
+                        c => c.queueArn.split(':').pop() === destination.resource,
                     );
                     if (!queueConfig.length) {
                         // skip, if there is no config for the current
@@ -253,8 +247,7 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
                     };
                     const { isValid, matchingConfig } = configUtil.validateEntry(destConfig, ent);
                     if (isValid) {
-                        const message
-                            = messageUtil.addLogAttributes(value, ent);
+                        const message = messageUtil.addLogAttributes(value, ent);
                         this.log.info('publishing message', {
                             method: 'NotificationQueuePopulator._processObjectEntry',
                             bucket,
@@ -265,7 +258,8 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
                             matchingConfig,
                         });
                         const traceHeaders = traceHeadersFromEntry(value);
-                        this.publish(topic,
+                        this.publish(
+                            topic,
                             // keeping all messages for same object
                             // in the same partition to keep the order.
                             // here we use the object name and not the
@@ -273,7 +267,8 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
                             `${bucket}/${message.key}`,
                             JSON.stringify(message),
                             undefined,
-                            traceHeaders);
+                            traceHeaders,
+                        );
                         // keep track of internal topics we have pushed to
                         pushedToTopic[topic] = true;
                     }

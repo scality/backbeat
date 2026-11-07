@@ -13,24 +13,19 @@ const util = require('util');
  * @returns {string} mongo Connection config
  */
 function constructConnectionString(mongoConfig) {
-    const { authCredentials, replicaSetHosts, writeConcern,
-        readPreference, replicaSet } = mongoConfig;
+    const { authCredentials, replicaSetHosts, writeConcern, readPreference, replicaSet } = mongoConfig;
     let cred = '';
-    if (authCredentials &&
-        authCredentials.username &&
-        authCredentials.password) {
+    if (authCredentials && authCredentials.username && authCredentials.password) {
         const username = encodeURIComponent(authCredentials.username);
         const password = encodeURIComponent(authCredentials.password);
         cred = `${username}:${password}@`;
     }
-    let url = `mongodb://${cred}${replicaSetHosts}/` +
-        `?w=${writeConcern}&readPreference=${readPreference}`;
+    let url = `mongodb://${cred}${replicaSetHosts}/` + `?w=${writeConcern}&readPreference=${readPreference}`;
     if (replicaSet) {
         url += `&replicaSet=${replicaSet}`;
     }
     return url;
 }
-
 
 /**
  * returns mongo version

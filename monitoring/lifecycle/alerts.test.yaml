@@ -3,7 +3,6 @@ rule_files:
   - alerts.rendered.yaml
 
 tests:
-
   - name: LifecycleProducer Replicas
     interval: 1m
     input_series:
@@ -20,14 +19,14 @@ tests:
               severity: critical
             exp_annotations:
               zenko_service: backbeat-lifecycle-producer
-              description: "Lifecycle producer pod has been down for 30 seconds"
-              summary: "Lifecycle producer service is down"
+              description: 'Lifecycle producer pod has been down for 30 seconds'
+              summary: 'Lifecycle producer service is down'
 
   - name: LifecycleBucketProcessor Replicas
     interval: 1m
     input_series:
       - series: up{namespace="zenko",job="artesca-data-backbeat-lifecycle-bucket-processor-headless",pod="bucket-1"}
-        values: 1 1 1 
+        values: 1 1 1
       - series: up{namespace="zenko",job="artesca-data-backbeat-lifecycle-bucket-processor-headless",pod="bucket-2"}
         values: 1 1 0
       - series: up{namespace="zenko",job="artesca-data-backbeat-lifecycle-bucket-processor-headless",pod="bucket-3"}
@@ -43,8 +42,8 @@ tests:
               severity: warning
             exp_annotations:
               zenko_service: backbeat-lifecycle-bucket-processor
-              description: "Less than 100% of lifecycle bucket processors are up and healthy"
-              summary: "Degraded lifecycle bucket processor"
+              description: 'Less than 100% of lifecycle bucket processors are up and healthy'
+              summary: 'Degraded lifecycle bucket processor'
       - alertname: LifecycleBucketProcessorDown
         eval_time: 3m
         exp_alerts:
@@ -52,20 +51,20 @@ tests:
               severity: warning
             exp_annotations:
               zenko_service: backbeat-lifecycle-bucket-processor
-              description: "Less than 100% of lifecycle bucket processors are up and healthy"
-              summary: "Degraded lifecycle bucket processor"
+              description: 'Less than 100% of lifecycle bucket processors are up and healthy'
+              summary: 'Degraded lifecycle bucket processor'
           - exp_labels:
               severity: critical
             exp_annotations:
               zenko_service: backbeat-lifecycle-bucket-processor
-              description: "Less than 50% of lifecycle bucket processors are up and healthy"
-              summary: "Degraded lifecycle bucket processor"
+              description: 'Less than 50% of lifecycle bucket processors are up and healthy'
+              summary: 'Degraded lifecycle bucket processor'
 
   - name: LifecycleObjectProcessor Replicas
     interval: 1m
     input_series:
       - series: up{namespace="zenko",job="artesca-data-backbeat-lifecycle-object-processor-headless",pod="object-1"}
-        values: 1 1 1 
+        values: 1 1 1
       - series: up{namespace="zenko",job="artesca-data-backbeat-lifecycle-object-processor-headless",pod="object-2"}
         values: 1 1 0
       - series: up{namespace="zenko",job="artesca-data-backbeat-lifecycle-object-processor-headless",pod="object-3"}
@@ -81,8 +80,8 @@ tests:
               severity: warning
             exp_annotations:
               zenko_service: backbeat-lifecycle-object-processor
-              description: "Less than 100% of lifecycle object processors for expiration are up and healthy"
-              summary: "Degraded lifecycle object processor"
+              description: 'Less than 100% of lifecycle object processors for expiration are up and healthy'
+              summary: 'Degraded lifecycle object processor'
       - alertname: LifecycleObjectProcessorDown
         eval_time: 3m
         exp_alerts:
@@ -90,14 +89,14 @@ tests:
               severity: warning
             exp_annotations:
               zenko_service: backbeat-lifecycle-object-processor
-              description: "Less than 100% of lifecycle object processors for expiration are up and healthy"
-              summary: "Degraded lifecycle object processor"
+              description: 'Less than 100% of lifecycle object processors for expiration are up and healthy'
+              summary: 'Degraded lifecycle object processor'
           - exp_labels:
               severity: critical
             exp_annotations:
               zenko_service: backbeat-lifecycle-object-processor
-              description: "Less than 50% of lifecycle object processors for expiration are up and healthy"
-              summary: "Degraded lifecycle object processor"
+              description: 'Less than 50% of lifecycle object processors for expiration are up and healthy'
+              summary: 'Degraded lifecycle object processor'
 
   - name: LifecycleBucketProcessorRequest
     interval: 1m
@@ -125,8 +124,8 @@ tests:
               severity: warning
             exp_annotations:
               zenko_service: backbeat-lifecycle-bucket-processor
-              description: "More than 3% of S3 requests by bucket processors resulting in errors"
-              summary: "High rate of S3 request errors"
+              description: 'More than 3% of S3 requests by bucket processors resulting in errors'
+              summary: 'High rate of S3 request errors'
       - alertname: LifecycleBucketProcessorRequest
         eval_time: 14m
         exp_alerts:
@@ -134,8 +133,8 @@ tests:
               severity: warning
             exp_annotations:
               zenko_service: backbeat-lifecycle-bucket-processor
-              description: "More than 3% of S3 requests by bucket processors resulting in errors"
-              summary: "High rate of S3 request errors"
+              description: 'More than 3% of S3 requests by bucket processors resulting in errors'
+              summary: 'High rate of S3 request errors'
       - alertname: LifecycleBucketProcessorRequest
         eval_time: 15m
         exp_alerts:
@@ -143,14 +142,14 @@ tests:
               severity: warning
             exp_annotations:
               zenko_service: backbeat-lifecycle-bucket-processor
-              description: "More than 3% of S3 requests by bucket processors resulting in errors"
-              summary: "High rate of S3 request errors"
+              description: 'More than 3% of S3 requests by bucket processors resulting in errors'
+              summary: 'High rate of S3 request errors'
           - exp_labels:
               severity: critical
             exp_annotations:
               zenko_service: backbeat-lifecycle-bucket-processor
-              description: "More than 5% of S3 requests by bucket processors resulting in errors"
-              summary: "Very high rate of S3 request errors"
+              description: 'More than 5% of S3 requests by bucket processors resulting in errors'
+              summary: 'Very high rate of S3 request errors'
       - alertname: LifecycleBucketProcessorRequest
         eval_time: 19m
         exp_alerts: []
@@ -181,8 +180,8 @@ tests:
               severity: warning
             exp_annotations:
               zenko_service: backbeat-lifecycle-object-processor
-              description: "More than 3% of S3 requests by object processors resulting in errors"
-              summary: "High rate of S3 request errors"
+              description: 'More than 3% of S3 requests by object processors resulting in errors'
+              summary: 'High rate of S3 request errors'
       - alertname: LifecycleObjectProcessorRequest
         eval_time: 14m
         exp_alerts:
@@ -190,8 +189,8 @@ tests:
               severity: warning
             exp_annotations:
               zenko_service: backbeat-lifecycle-object-processor
-              description: "More than 3% of S3 requests by object processors resulting in errors"
-              summary: "High rate of S3 request errors"
+              description: 'More than 3% of S3 requests by object processors resulting in errors'
+              summary: 'High rate of S3 request errors'
       - alertname: LifecycleObjectProcessorRequest
         eval_time: 15m
         exp_alerts:
@@ -199,14 +198,14 @@ tests:
               severity: warning
             exp_annotations:
               zenko_service: backbeat-lifecycle-object-processor
-              description: "More than 3% of S3 requests by object processors resulting in errors"
-              summary: "High rate of S3 request errors"
+              description: 'More than 3% of S3 requests by object processors resulting in errors'
+              summary: 'High rate of S3 request errors'
           - exp_labels:
               severity: critical
             exp_annotations:
               zenko_service: backbeat-lifecycle-object-processor
-              description: "More than 5% of S3 requests by object processors resulting in errors"
-              summary: "Very high rate of S3 request errors"
+              description: 'More than 5% of S3 requests by object processors resulting in errors'
+              summary: 'Very high rate of S3 request errors'
       - alertname: LifecycleObjectProcessorRequest
         eval_time: 19m
         exp_alerts: []
@@ -237,8 +236,8 @@ tests:
               severity: warning
             exp_annotations:
               zenko_service: backbeat-lifecycle-transition-processor
-              description: "More than 3% of S3 requests by transition processors resulting in errors"
-              summary: "High rate of S3 request errors"
+              description: 'More than 3% of S3 requests by transition processors resulting in errors'
+              summary: 'High rate of S3 request errors'
       - alertname: LifecycleTransitionProcessorRequest
         eval_time: 14m
         exp_alerts:
@@ -246,8 +245,8 @@ tests:
               severity: warning
             exp_annotations:
               zenko_service: backbeat-lifecycle-transition-processor
-              description: "More than 3% of S3 requests by transition processors resulting in errors"
-              summary: "High rate of S3 request errors"
+              description: 'More than 3% of S3 requests by transition processors resulting in errors'
+              summary: 'High rate of S3 request errors'
       - alertname: LifecycleTransitionProcessorRequest
         eval_time: 15m
         exp_alerts:
@@ -255,14 +254,14 @@ tests:
               severity: warning
             exp_annotations:
               zenko_service: backbeat-lifecycle-transition-processor
-              description: "More than 3% of S3 requests by transition processors resulting in errors"
-              summary: "High rate of S3 request errors"
+              description: 'More than 3% of S3 requests by transition processors resulting in errors'
+              summary: 'High rate of S3 request errors'
           - exp_labels:
               severity: critical
             exp_annotations:
               zenko_service: backbeat-lifecycle-transition-processor
-              description: "More than 5% of S3 requests by transition processors resulting in errors"
-              summary: "Very high rate of S3 request errors"
+              description: 'More than 5% of S3 requests by transition processors resulting in errors'
+              summary: 'Very high rate of S3 request errors'
       - alertname: LifecycleObjectProcessorRequest
         eval_time: 19m
         exp_alerts: []
@@ -287,8 +286,8 @@ tests:
               severity: warning
             exp_annotations:
               zenko_service: backbeat-lifecycle-transition-processor
-              description: "Less than 100% of lifecycle transition processors are up and healthy"
-              summary: "Degraded lifecycle transition processor"
+              description: 'Less than 100% of lifecycle transition processors are up and healthy'
+              summary: 'Degraded lifecycle transition processor'
       - alertname: LifecycleTransitionProcessorDown
         eval_time: 3m
         exp_alerts:
@@ -296,14 +295,14 @@ tests:
               severity: warning
             exp_annotations:
               zenko_service: backbeat-lifecycle-transition-processor
-              description: "Less than 100% of lifecycle transition processors are up and healthy"
-              summary: "Degraded lifecycle transition processor"
+              description: 'Less than 100% of lifecycle transition processors are up and healthy'
+              summary: 'Degraded lifecycle transition processor'
           - exp_labels:
               severity: critical
             exp_annotations:
               zenko_service: backbeat-lifecycle-transition-processor
-              description: "Less than 50% of lifecycle transition processors are up and healthy"
-              summary: "Degraded lifecycle transition processor"
+              description: 'Less than 50% of lifecycle transition processors are up and healthy'
+              summary: 'Degraded lifecycle transition processor'
 
   - name: LifecycleLateScan
     interval: 1m
@@ -328,8 +327,8 @@ tests:
               severity: warning
             exp_annotations:
               zenko_service: backbeat-lifecycle-producer
-              description: "Last lifecycle scan was scheduled more than 2m 0s ago."
-              summary: "Lifecycle scan not scheduled in time"
+              description: 'Last lifecycle scan was scheduled more than 2m 0s ago.'
+              summary: 'Lifecycle scan not scheduled in time'
       - alertname: LifecycleLateScan
         eval_time: 4m
         exp_alerts:
@@ -337,14 +336,14 @@ tests:
               severity: warning
             exp_annotations:
               zenko_service: backbeat-lifecycle-producer
-              description: "Last lifecycle scan was scheduled more than 2m 0s ago."
-              summary: "Lifecycle scan not scheduled in time"
+              description: 'Last lifecycle scan was scheduled more than 2m 0s ago.'
+              summary: 'Lifecycle scan not scheduled in time'
           - exp_labels:
               severity: critical
             exp_annotations:
               zenko_service: backbeat-lifecycle-producer
-              description: "Last lifecycle scan was scheduled more than 3m 0s ago."
-              summary: "Lifecycle scan not scheduled in time"
+              description: 'Last lifecycle scan was scheduled more than 3m 0s ago.'
+              summary: 'Lifecycle scan not scheduled in time'
       - alertname: LifecycleLateScan
         eval_time: 5m
         exp_alerts:
@@ -352,14 +351,14 @@ tests:
               severity: warning
             exp_annotations:
               zenko_service: backbeat-lifecycle-producer
-              description: "Last lifecycle scan was scheduled more than 2m 0s ago."
-              summary: "Lifecycle scan not scheduled in time"
+              description: 'Last lifecycle scan was scheduled more than 2m 0s ago.'
+              summary: 'Lifecycle scan not scheduled in time'
           - exp_labels:
               severity: critical
             exp_annotations:
               zenko_service: backbeat-lifecycle-producer
-              description: "Last lifecycle scan was scheduled more than 3m 0s ago."
-              summary: "Lifecycle scan not scheduled in time"
+              description: 'Last lifecycle scan was scheduled more than 3m 0s ago.'
+              summary: 'Lifecycle scan not scheduled in time'
       - alertname: LifecycleLateScan
         eval_time: 6m
         exp_alerts:
@@ -367,8 +366,8 @@ tests:
               severity: warning
             exp_annotations:
               zenko_service: backbeat-lifecycle-producer
-              description: "Last lifecycle scan was scheduled more than 2m 0s ago."
-              summary: "Lifecycle scan not scheduled in time"
+              description: 'Last lifecycle scan was scheduled more than 2m 0s ago.'
+              summary: 'Lifecycle scan not scheduled in time'
       - alertname: LifecycleLateScan
         eval_time: 7m
         exp_alerts:
@@ -376,8 +375,8 @@ tests:
               severity: warning
             exp_annotations:
               zenko_service: backbeat-lifecycle-producer
-              description: "Last lifecycle scan was scheduled more than 2m 0s ago."
-              summary: "Lifecycle scan not scheduled in time"
+              description: 'Last lifecycle scan was scheduled more than 2m 0s ago.'
+              summary: 'Lifecycle scan not scheduled in time'
       - alertname: LifecycleLateScan
         eval_time: 8m
         exp_alerts:
@@ -385,14 +384,14 @@ tests:
               severity: warning
             exp_annotations:
               zenko_service: backbeat-lifecycle-producer
-              description: "Last lifecycle scan was scheduled more than 2m 0s ago."
-              summary: "Lifecycle scan not scheduled in time"
+              description: 'Last lifecycle scan was scheduled more than 2m 0s ago.'
+              summary: 'Lifecycle scan not scheduled in time'
           - exp_labels:
               severity: critical
             exp_annotations:
               zenko_service: backbeat-lifecycle-producer
-              description: "Last lifecycle scan was scheduled more than 3m 0s ago."
-              summary: "Lifecycle scan not scheduled in time"
+              description: 'Last lifecycle scan was scheduled more than 3m 0s ago.'
+              summary: 'Lifecycle scan not scheduled in time'
       - alertname: LifecycleLateScan
         eval_time: 9m
         exp_alerts:
@@ -400,14 +399,14 @@ tests:
               severity: warning
             exp_annotations:
               zenko_service: backbeat-lifecycle-producer
-              description: "Last lifecycle scan was scheduled more than 2m 0s ago."
-              summary: "Lifecycle scan not scheduled in time"
+              description: 'Last lifecycle scan was scheduled more than 2m 0s ago.'
+              summary: 'Lifecycle scan not scheduled in time'
           - exp_labels:
               severity: critical
             exp_annotations:
               zenko_service: backbeat-lifecycle-producer
-              description: "Last lifecycle scan was scheduled more than 3m 0s ago."
-              summary: "Lifecycle scan not scheduled in time"
+              description: 'Last lifecycle scan was scheduled more than 3m 0s ago.'
+              summary: 'Lifecycle scan not scheduled in time'
       - alertname: LifecycleLateScan
         eval_time: 10m
         exp_alerts:
@@ -415,14 +414,14 @@ tests:
               severity: warning
             exp_annotations:
               zenko_service: backbeat-lifecycle-producer
-              description: "Last lifecycle scan was scheduled more than 2m 0s ago."
-              summary: "Lifecycle scan not scheduled in time"
+              description: 'Last lifecycle scan was scheduled more than 2m 0s ago.'
+              summary: 'Lifecycle scan not scheduled in time'
           - exp_labels:
               severity: critical
             exp_annotations:
               zenko_service: backbeat-lifecycle-producer
-              description: "Last lifecycle scan was scheduled more than 3m 0s ago."
-              summary: "Lifecycle scan not scheduled in time"
+              description: 'Last lifecycle scan was scheduled more than 3m 0s ago.'
+              summary: 'Lifecycle scan not scheduled in time'
       - alertname: LifecycleLateScan
         eval_time: 11m
         exp_alerts:
@@ -430,14 +429,14 @@ tests:
               severity: warning
             exp_annotations:
               zenko_service: backbeat-lifecycle-producer
-              description: "Last lifecycle scan was scheduled more than 2m 0s ago."
-              summary: "Lifecycle scan not scheduled in time"
+              description: 'Last lifecycle scan was scheduled more than 2m 0s ago.'
+              summary: 'Lifecycle scan not scheduled in time'
           - exp_labels:
               severity: critical
             exp_annotations:
               zenko_service: backbeat-lifecycle-producer
-              description: "Last lifecycle scan was scheduled more than 3m 0s ago."
-              summary: "Lifecycle scan not scheduled in time"
+              description: 'Last lifecycle scan was scheduled more than 3m 0s ago.'
+              summary: 'Lifecycle scan not scheduled in time'
       - alertname: LifecycleLateScan
         eval_time: 12m
         exp_alerts:
@@ -445,14 +444,14 @@ tests:
               severity: warning
             exp_annotations:
               zenko_service: backbeat-lifecycle-producer
-              description: "Last lifecycle scan was scheduled more than 2m 0s ago."
-              summary: "Lifecycle scan not scheduled in time"
+              description: 'Last lifecycle scan was scheduled more than 2m 0s ago.'
+              summary: 'Lifecycle scan not scheduled in time'
           - exp_labels:
               severity: critical
             exp_annotations:
               zenko_service: backbeat-lifecycle-producer
-              description: "Last lifecycle scan was scheduled more than 3m 0s ago."
-              summary: "Lifecycle scan not scheduled in time"
+              description: 'Last lifecycle scan was scheduled more than 3m 0s ago.'
+              summary: 'Lifecycle scan not scheduled in time'
       - alertname: LifecycleLateScan
         eval_time: 13m
         exp_alerts:
@@ -460,8 +459,8 @@ tests:
               severity: warning
             exp_annotations:
               zenko_service: backbeat-lifecycle-producer
-              description: "Last lifecycle scan was scheduled more than 2m 0s ago."
-              summary: "Lifecycle scan not scheduled in time"
+              description: 'Last lifecycle scan was scheduled more than 2m 0s ago.'
+              summary: 'Lifecycle scan not scheduled in time'
       - alertname: LifecycleLateScan
         eval_time: 14m
         exp_alerts: []
@@ -490,7 +489,7 @@ tests:
               zenko_service: backbeat-lifecycle-producer
               description: |-
                 The lifecycle producer failed to create the v2 lifecycle indexes on at least one bucket in the last 12 hours. The producer will fall back to v1 (full-scan) processing for that bucket. Check producer logs for the bucket name and the underlying MongoDB error.
-              summary: "Lifecycle index creation failure"
+              summary: 'Lifecycle index creation failure'
       - alertname: LifecycleIndexCreationFailed
         eval_time: 15h
         exp_alerts:
@@ -504,7 +503,7 @@ tests:
               zenko_service: backbeat-lifecycle-producer
               description: |-
                 The lifecycle producer failed to create the v2 lifecycle indexes on at least one bucket in the last 12 hours. The producer will fall back to v1 (full-scan) processing for that bucket. Check producer logs for the bucket name and the underlying MongoDB error.
-              summary: "Lifecycle index creation failure"
+              summary: 'Lifecycle index creation failure'
       - alertname: LifecycleIndexCreationFailed
         eval_time: 18h
         exp_alerts: []
@@ -527,8 +526,8 @@ tests:
               severity: warning
             exp_annotations:
               zenko_service: backbeat-lifecycle-producer
-              description: "Last lifecycle scan did not complete within 2m 0s of being scheduled (it may be stalled or have failed)."
-              summary: "Lifecycle scan did not complete in time"
+              description: 'Last lifecycle scan did not complete within 2m 0s of being scheduled (it may be stalled or have failed).'
+              summary: 'Lifecycle scan did not complete in time'
       - alertname: LifecycleStalledScan
         eval_time: 5m
         exp_alerts:
@@ -536,14 +535,14 @@ tests:
               severity: critical
             exp_annotations:
               zenko_service: backbeat-lifecycle-producer
-              description: "Last lifecycle scan did not complete within 3m 0s of being scheduled (it may be stalled or have failed)."
-              summary: "Lifecycle scan did not complete in time"
+              description: 'Last lifecycle scan did not complete within 3m 0s of being scheduled (it may be stalled or have failed).'
+              summary: 'Lifecycle scan did not complete in time'
           - exp_labels:
               severity: warning
             exp_annotations:
               zenko_service: backbeat-lifecycle-producer
-              description: "Last lifecycle scan did not complete within 2m 0s of being scheduled (it may be stalled or have failed)."
-              summary: "Lifecycle scan did not complete in time"
+              description: 'Last lifecycle scan did not complete within 2m 0s of being scheduled (it may be stalled or have failed).'
+              summary: 'Lifecycle scan did not complete in time'
       - alertname: LifecycleStalledScan
         eval_time: 6m
         exp_alerts: []
@@ -569,8 +568,8 @@ tests:
               severity: warning
             exp_annotations:
               zenko_service: backbeat-lifecycle-bucket-processor
-              description: "Bucket processors have processed bucket-task messages from multiple lifecycle conductor scans in parallel for more than 10 minutes."
-              summary: "Lifecycle bucket processors are receiving multiple scans"
+              description: 'Bucket processors have processed bucket-task messages from multiple lifecycle conductor scans in parallel for more than 10 minutes.'
+              summary: 'Lifecycle bucket processors are receiving multiple scans'
 
   - name: LifecycleLatency
     interval: 10m
@@ -600,8 +599,8 @@ tests:
               type: transition
               location: us-east-1
             exp_annotations:
-              description: "Lifecycle latency for `transition` is above the warning threshold on location `us-east-1`."
-              summary: "High lifecycle latency"
+              description: 'Lifecycle latency for `transition` is above the warning threshold on location `us-east-1`.'
+              summary: 'High lifecycle latency'
       - alertname: LifecycleLatency
         eval_time: 60m
         exp_alerts:
@@ -610,15 +609,15 @@ tests:
               type: transition
               location: us-east-1
             exp_annotations:
-              description: "Lifecycle latency for `transition` is above the warning threshold on location `us-east-1`."
-              summary: "High lifecycle latency"
+              description: 'Lifecycle latency for `transition` is above the warning threshold on location `us-east-1`.'
+              summary: 'High lifecycle latency'
           - exp_labels:
               severity: critical
               type: transition
               location: us-east-1
             exp_annotations:
-              description: "Lifecycle latency for `transition` is above the critical threshold on location `us-east-1`."
-              summary: "Very high lifecycle latency"
+              description: 'Lifecycle latency for `transition` is above the critical threshold on location `us-east-1`.'
+              summary: 'Very high lifecycle latency'
 
   - name: KafkaConsumerSlowTask
     interval: 1m
@@ -692,7 +691,7 @@ tests:
         exp_alerts:
           - exp_labels:
               severity: critical
-              pod: "foo"
+              pod: 'foo'
             exp_annotations:
               summary: Kafka consumer has stopped consuming messages
               description: Kafka rebalance has timed out for pod `foo`, which indicates that the consumer is not working anymore, and should be restarted.
@@ -701,7 +700,7 @@ tests:
         exp_alerts:
           - exp_labels:
               severity: critical
-              pod: "foo"
+              pod: 'foo'
             exp_annotations:
               summary: Kafka consumer has stopped consuming messages
               description: Kafka rebalance has timed out for pod `foo`, which indicates that the consumer is not working anymore, and should be restarted.
@@ -710,7 +709,7 @@ tests:
         exp_alerts:
           - exp_labels:
               severity: critical
-              pod: "foo"
+              pod: 'foo'
             exp_annotations:
               summary: Kafka consumer has stopped consuming messages
               description: Kafka rebalance has timed out for pod `foo`, which indicates that the consumer is not working anymore, and should be restarted.
@@ -734,8 +733,8 @@ tests:
               severity: warning
               namespace: zenko
             exp_annotations:
-              summary: "Circuit breaker is unable to query prometheus"
-              description: "Circuit breaker is unable to query prometheus."
+              summary: 'Circuit breaker is unable to query prometheus'
+              description: 'Circuit breaker is unable to query prometheus.'
       - alertname: CircuitBreakerError
         eval_time: 10m
         exp_alerts: []

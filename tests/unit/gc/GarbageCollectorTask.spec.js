@@ -20,15 +20,17 @@ const version = 'testversion';
 const accountId = '834789881858';
 const owner = 'ownerinfo';
 
-const loc = [{
-    key: 'key',
-    size: 10,
-    start: 0,
-    dataStoreName: 'locationName',
-    dataStoreType: 'aws_s3',
-    dataStoreETag: 'tag',
-    dataStoreVersionId: '1234567890',
-}];
+const loc = [
+    {
+        key: 'key',
+        size: 10,
+        start: 0,
+        dataStoreName: 'locationName',
+        dataStoreType: 'aws_s3',
+        dataStoreETag: 'tag',
+        dataStoreVersionId: '1234567890',
+    },
+];
 
 describe('GarbageCollectorTask', () => {
     let gcTask;
@@ -60,7 +62,8 @@ describe('GarbageCollectorTask', () => {
             gcProducer,
             null,
             gcConfig,
-            new werelogs.Logger('test:GarbageCollectorTask'));
+            new werelogs.Logger('test:GarbageCollectorTask'),
+        );
         gcTask = new GarbageCollectorTask(gcProcessor);
     });
 
@@ -68,23 +71,24 @@ describe('GarbageCollectorTask', () => {
         backbeatClient.batchDeleteResponse = { error: null, res: null };
 
         const entry = ActionQueueEntry.create('deleteArchivedSourceData')
-              .addContext({
-                  origin: 'lifecycle',
-                  ruleType: 'archive',
-                  bucketName: bucket,
-                  objectKey: key,
-                  versionId: version,
-              })
-              .setAttribute('serviceName', 'lifecycle-transition')
-              .setAttribute('target.oldLocation', 'old-location')
-              .setAttribute('target.newLocation', 'new-location')
-              .setAttribute('target.bucket', bucket)
-              .setAttribute('target.key', version)
-              .setAttribute('target.version', key)
-              .setAttribute('target.accountId', accountId)
-              .setAttribute('target.owner', owner);
+            .addContext({
+                origin: 'lifecycle',
+                ruleType: 'archive',
+                bucketName: bucket,
+                objectKey: key,
+                versionId: version,
+            })
+            .setAttribute('serviceName', 'lifecycle-transition')
+            .setAttribute('target.oldLocation', 'old-location')
+            .setAttribute('target.newLocation', 'new-location')
+            .setAttribute('target.bucket', bucket)
+            .setAttribute('target.key', version)
+            .setAttribute('target.version', key)
+            .setAttribute('target.accountId', accountId)
+            .setAttribute('target.owner', owner);
 
-        mdObj.setLocation(loc)
+        mdObj
+            .setLocation(loc)
             .setDataStoreName('old-location')
             .setAmzStorageClass('old-location')
             .setTransitionInProgress(true);
@@ -108,23 +112,24 @@ describe('GarbageCollectorTask', () => {
         backbeatClient.batchDeleteResponse = { error: null, res: null };
 
         const entry = ActionQueueEntry.create('deleteArchivedSourceData')
-              .addContext({
-                  origin: 'lifecycle',
-                  ruleType: 'archive',
-                  bucketName: bucket,
-                  objectKey: key,
-                  versionId: version,
-              })
-              .setAttribute('serviceName', 'lifecycle-transition')
-              .setAttribute('target.oldLocation', 'old-location')
-              .setAttribute('target.newLocation', 'new-location')
-              .setAttribute('target.bucket', bucket)
-              .setAttribute('target.key', version)
-              .setAttribute('target.version', key)
-              .setAttribute('target.accountId', accountId)
-              .setAttribute('target.owner', owner);
+            .addContext({
+                origin: 'lifecycle',
+                ruleType: 'archive',
+                bucketName: bucket,
+                objectKey: key,
+                versionId: version,
+            })
+            .setAttribute('serviceName', 'lifecycle-transition')
+            .setAttribute('target.oldLocation', 'old-location')
+            .setAttribute('target.newLocation', 'new-location')
+            .setAttribute('target.bucket', bucket)
+            .setAttribute('target.key', version)
+            .setAttribute('target.version', key)
+            .setAttribute('target.accountId', accountId)
+            .setAttribute('target.owner', owner);
 
-        mdObj.setLocation(loc)
+        mdObj
+            .setLocation(loc)
             .setDataStoreName('old-location')
             .setAmzStorageClass('new-location')
             .setTransitionInProgress(true)
@@ -153,24 +158,25 @@ describe('GarbageCollectorTask', () => {
 
     it('should skip an object whose transition is already completed', done => {
         const entry = ActionQueueEntry.create('deleteArchivedSourceData')
-              .addContext({
-                  origin: 'lifecycle',
-                  ruleType: 'archive',
-                  bucketName: bucket,
-                  objectKey: key,
-                  versionId: version,
-              })
-              .setAttribute('serviceName', 'lifecycle-transition')
-              .setAttribute('target.oldLocation', 'old-location')
-              .setAttribute('target.newLocation', 'new-location')
-              .setAttribute('target.bucket', bucket)
-              .setAttribute('target.key', version)
-              .setAttribute('target.version', key)
-              .setAttribute('target.accountId', accountId)
-              .setAttribute('target.owner', owner);
+            .addContext({
+                origin: 'lifecycle',
+                ruleType: 'archive',
+                bucketName: bucket,
+                objectKey: key,
+                versionId: version,
+            })
+            .setAttribute('serviceName', 'lifecycle-transition')
+            .setAttribute('target.oldLocation', 'old-location')
+            .setAttribute('target.newLocation', 'new-location')
+            .setAttribute('target.bucket', bucket)
+            .setAttribute('target.key', version)
+            .setAttribute('target.version', key)
+            .setAttribute('target.accountId', accountId)
+            .setAttribute('target.owner', owner);
 
         // a previous GC entry went through, then the object was restored: the data must stay
-        mdObj.setLocation(loc)
+        mdObj
+            .setLocation(loc)
             .setDataStoreName('new-location')
             .setAmzStorageClass('new-location')
             .setTransitionInProgress(false)
@@ -193,23 +199,24 @@ describe('GarbageCollectorTask', () => {
 
     it('should complete the transition of an archived object without data', done => {
         const entry = ActionQueueEntry.create('deleteArchivedSourceData')
-              .addContext({
-                  origin: 'lifecycle',
-                  ruleType: 'archive',
-                  bucketName: bucket,
-                  objectKey: key,
-                  versionId: version,
-              })
-              .setAttribute('serviceName', 'lifecycle-transition')
-              .setAttribute('target.oldLocation', 'old-location')
-              .setAttribute('target.newLocation', 'new-location')
-              .setAttribute('target.bucket', bucket)
-              .setAttribute('target.key', version)
-              .setAttribute('target.version', key)
-              .setAttribute('target.accountId', accountId)
-              .setAttribute('target.owner', owner);
+            .addContext({
+                origin: 'lifecycle',
+                ruleType: 'archive',
+                bucketName: bucket,
+                objectKey: key,
+                versionId: version,
+            })
+            .setAttribute('serviceName', 'lifecycle-transition')
+            .setAttribute('target.oldLocation', 'old-location')
+            .setAttribute('target.newLocation', 'new-location')
+            .setAttribute('target.bucket', bucket)
+            .setAttribute('target.key', version)
+            .setAttribute('target.version', key)
+            .setAttribute('target.accountId', accountId)
+            .setAttribute('target.owner', owner);
 
-        mdObj.setLocation()
+        mdObj
+            .setLocation()
             .setDataStoreName('old-location')
             .setAmzStorageClass('new-location')
             .setTransitionInProgress(true);
@@ -231,23 +238,24 @@ describe('GarbageCollectorTask', () => {
         backbeatClient.batchDeleteResponse = { error: { statusCode: 404 }, res: null };
 
         const entry = ActionQueueEntry.create('deleteArchivedSourceData')
-              .addContext({
-                  origin: 'lifecycle',
-                  ruleType: 'archive',
-                  bucketName: bucket,
-                  objectKey: key,
-                  versionId: version,
-              })
-              .setAttribute('serviceName', 'lifecycle-transition')
-              .setAttribute('target.oldLocation', 'old-location')
-              .setAttribute('target.newLocation', 'new-location')
-              .setAttribute('target.bucket', bucket)
-              .setAttribute('target.key', version)
-              .setAttribute('target.version', key)
-              .setAttribute('target.accountId', accountId)
-              .setAttribute('target.owner', owner);
+            .addContext({
+                origin: 'lifecycle',
+                ruleType: 'archive',
+                bucketName: bucket,
+                objectKey: key,
+                versionId: version,
+            })
+            .setAttribute('serviceName', 'lifecycle-transition')
+            .setAttribute('target.oldLocation', 'old-location')
+            .setAttribute('target.newLocation', 'new-location')
+            .setAttribute('target.bucket', bucket)
+            .setAttribute('target.key', version)
+            .setAttribute('target.version', key)
+            .setAttribute('target.accountId', accountId)
+            .setAttribute('target.owner', owner);
 
-        mdObj.setLocation(loc)
+        mdObj
+            .setLocation(loc)
             .setDataStoreName('old-location')
             .setAmzStorageClass('old-location')
             .setTransitionInProgress(true);
@@ -271,23 +279,24 @@ describe('GarbageCollectorTask', () => {
         const onGcFailedSpy = sinon.spy(GarbageCollectorMetrics, 'onGcFailed');
 
         const entry = ActionQueueEntry.create('deleteArchivedSourceData')
-              .addContext({
-                  origin: 'lifecycle',
-                  ruleType: 'archive',
-                  bucketName: bucket,
-                  objectKey: key,
-                  versionId: version,
-              })
-              .setAttribute('serviceName', 'lifecycle-transition')
-              .setAttribute('target.oldLocation', 'old-location')
-              .setAttribute('target.newLocation', 'new-location')
-              .setAttribute('target.bucket', bucket)
-              .setAttribute('target.key', version)
-              .setAttribute('target.version', key)
-              .setAttribute('target.accountId', accountId)
-              .setAttribute('target.owner', owner);
+            .addContext({
+                origin: 'lifecycle',
+                ruleType: 'archive',
+                bucketName: bucket,
+                objectKey: key,
+                versionId: version,
+            })
+            .setAttribute('serviceName', 'lifecycle-transition')
+            .setAttribute('target.oldLocation', 'old-location')
+            .setAttribute('target.newLocation', 'new-location')
+            .setAttribute('target.bucket', bucket)
+            .setAttribute('target.key', version)
+            .setAttribute('target.version', key)
+            .setAttribute('target.accountId', accountId)
+            .setAttribute('target.owner', owner);
 
-        mdObj.setLocation(loc)
+        mdObj
+            .setLocation(loc)
             .setDataStoreName('old-location')
             .setAmzStorageClass('old-location')
             .setTransitionInProgress(true);
@@ -297,8 +306,7 @@ describe('GarbageCollectorTask', () => {
             assert.strictEqual(err.statusCode, 500);
             assert.strictEqual(commitInfo, undefined);
             assert.strictEqual(onGcFailedSpy.callCount, 1);
-            assert.deepStrictEqual(onGcFailedSpy.firstCall.args.slice(1),
-                ['archive', 'old-location']);
+            assert.deepStrictEqual(onGcFailedSpy.firstCall.args.slice(1), ['archive', 'old-location']);
             assert.strictEqual(backbeatMetadataProxyClient.getReceivedMd(), null);
 
             const objMD = backbeatMetadataProxyClient.mdObj;
@@ -316,23 +324,24 @@ describe('GarbageCollectorTask', () => {
         const onGcFailedSpy = sinon.spy(GarbageCollectorMetrics, 'onGcFailed');
 
         const entry = ActionQueueEntry.create('deleteArchivedSourceData')
-              .addContext({
-                  origin: 'lifecycle',
-                  ruleType: 'archive',
-                  bucketName: bucket,
-                  objectKey: key,
-                  versionId: version,
-              })
-              .setAttribute('serviceName', 'lifecycle-transition')
-              .setAttribute('target.oldLocation', 'old-location')
-              .setAttribute('target.newLocation', 'new-location')
-              .setAttribute('target.bucket', bucket)
-              .setAttribute('target.key', version)
-              .setAttribute('target.version', key)
-              .setAttribute('target.accountId', accountId)
-              .setAttribute('target.owner', owner);
+            .addContext({
+                origin: 'lifecycle',
+                ruleType: 'archive',
+                bucketName: bucket,
+                objectKey: key,
+                versionId: version,
+            })
+            .setAttribute('serviceName', 'lifecycle-transition')
+            .setAttribute('target.oldLocation', 'old-location')
+            .setAttribute('target.newLocation', 'new-location')
+            .setAttribute('target.bucket', bucket)
+            .setAttribute('target.key', version)
+            .setAttribute('target.version', key)
+            .setAttribute('target.accountId', accountId)
+            .setAttribute('target.owner', owner);
 
-        mdObj.setLocation(loc)
+        mdObj
+            .setLocation(loc)
             .setDataStoreName('old-location')
             .setAmzStorageClass('old-location')
             .setTransitionInProgress(true);
@@ -345,8 +354,7 @@ describe('GarbageCollectorTask', () => {
             assert.strictEqual(err.statusCode, 500);
             assert.strictEqual(commitInfo, undefined);
             assert.strictEqual(onGcFailedSpy.callCount, 1);
-            assert.deepStrictEqual(onGcFailedSpy.firstCall.args.slice(1),
-                ['archive', 'old-location']);
+            assert.deepStrictEqual(onGcFailedSpy.firstCall.args.slice(1), ['archive', 'old-location']);
             batchDeleteDataSpy.restore();
             onGcFailedSpy.restore();
             done();
@@ -357,21 +365,21 @@ describe('GarbageCollectorTask', () => {
         backbeatMetadataProxyClient.error = { statusCode: 404, name: 'ObjNotFound' };
 
         const entry = ActionQueueEntry.create('deleteArchivedSourceData')
-              .addContext({
-                  origin: 'lifecycle',
-                  ruleType: 'archive',
-                  bucketName: bucket,
-                  objectKey: key,
-                  versionId: version,
-              })
-              .setAttribute('serviceName', 'lifecycle-transition')
-              .setAttribute('target.oldLocation', 'old-location')
-              .setAttribute('target.newLocation', 'new-location')
-              .setAttribute('target.bucket', bucket)
-              .setAttribute('target.key', version)
-              .setAttribute('target.version', key)
-              .setAttribute('target.accountId', accountId)
-              .setAttribute('target.owner', owner);
+            .addContext({
+                origin: 'lifecycle',
+                ruleType: 'archive',
+                bucketName: bucket,
+                objectKey: key,
+                versionId: version,
+            })
+            .setAttribute('serviceName', 'lifecycle-transition')
+            .setAttribute('target.oldLocation', 'old-location')
+            .setAttribute('target.newLocation', 'new-location')
+            .setAttribute('target.bucket', bucket)
+            .setAttribute('target.key', version)
+            .setAttribute('target.version', key)
+            .setAttribute('target.accountId', accountId)
+            .setAttribute('target.owner', owner);
 
         backbeatMetadataProxyClient.setMdObj(undefined);
 
@@ -386,21 +394,21 @@ describe('GarbageCollectorTask', () => {
         backbeatMetadataProxyClient.error = { statusCode: 404, name: 'NoSuchBucket' };
 
         const entry = ActionQueueEntry.create('deleteArchivedSourceData')
-              .addContext({
-                  origin: 'lifecycle',
-                  ruleType: 'archive',
-                  bucketName: bucket,
-                  objectKey: key,
-                  versionId: version,
-              })
-              .setAttribute('serviceName', 'lifecycle-transition')
-              .setAttribute('target.oldLocation', 'old-location')
-              .setAttribute('target.newLocation', 'new-location')
-              .setAttribute('target.bucket', bucket)
-              .setAttribute('target.key', version)
-              .setAttribute('target.version', key)
-              .setAttribute('target.accountId', accountId)
-              .setAttribute('target.owner', owner);
+            .addContext({
+                origin: 'lifecycle',
+                ruleType: 'archive',
+                bucketName: bucket,
+                objectKey: key,
+                versionId: version,
+            })
+            .setAttribute('serviceName', 'lifecycle-transition')
+            .setAttribute('target.oldLocation', 'old-location')
+            .setAttribute('target.newLocation', 'new-location')
+            .setAttribute('target.bucket', bucket)
+            .setAttribute('target.key', version)
+            .setAttribute('target.version', key)
+            .setAttribute('target.accountId', accountId)
+            .setAttribute('target.owner', owner);
 
         backbeatMetadataProxyClient.setMdObj(undefined);
 
@@ -429,16 +437,16 @@ describe('GarbageCollectorTask', () => {
                 version: key,
                 accountId,
                 owner,
-                locations: [{
-                    key: 'locationKey',
-                    dataStoreName: 'dataStoreName',
-                    size: 'size',
-                    dataStoreVersionId: 'dataStoreVersionId',
-                }],
+                locations: [
+                    {
+                        key: 'locationKey',
+                        dataStoreName: 'dataStoreName',
+                        size: 'size',
+                        dataStoreVersionId: 'dataStoreVersionId',
+                    },
+                ],
             });
-        mdObj.setLocation(loc)
-            .setDataStoreName('locationName')
-            .setAmzStorageClass('STANDARD');
+        mdObj.setLocation(loc).setDataStoreName('locationName').setAmzStorageClass('STANDARD');
 
         backbeatMetadataProxyClient.setMdObj(mdObj);
 
@@ -483,16 +491,16 @@ describe('GarbageCollectorTask', () => {
                 version: key,
                 accountId,
                 owner,
-                locations: [{
-                    key: 'locationKey',
-                    dataStoreName: 'dataStoreName',
-                    size: 'size',
-                    dataStoreVersionId: 'dataStoreVersionId',
-                }],
+                locations: [
+                    {
+                        key: 'locationKey',
+                        dataStoreName: 'dataStoreName',
+                        size: 'size',
+                        dataStoreVersionId: 'dataStoreVersionId',
+                    },
+                ],
             });
-        mdObj.setLocation(loc)
-            .setDataStoreName('locationName')
-            .setAmzStorageClass('STANDARD');
+        mdObj.setLocation(loc).setDataStoreName('locationName').setAmzStorageClass('STANDARD');
 
         backbeatMetadataProxyClient.setMdObj(mdObj);
 
@@ -502,8 +510,7 @@ describe('GarbageCollectorTask', () => {
             assert.strictEqual(batchDeleteDataSpy.callCount, 4);
             assert.strictEqual(err.statusCode, 500);
             assert.strictEqual(onGcFailedSpy.callCount, 1);
-            assert.deepStrictEqual(onGcFailedSpy.firstCall.args.slice(1),
-                ['expiration', 'sourceStorageClass']);
+            assert.deepStrictEqual(onGcFailedSpy.firstCall.args.slice(1), ['expiration', 'sourceStorageClass']);
             batchDeleteDataSpy.restore();
             onGcFailedSpy.restore();
             done();
@@ -564,8 +571,7 @@ describe('GarbageCollectorTask', () => {
             backbeatClient.batchDeleteResponse = { error: null, res: null };
         });
 
-        it('should not delete anything and warn when all locations are on a ' +
-        'CRR location', done => {
+        it('should not delete anything and warn when all locations are on a ' + 'CRR location', done => {
             const entry = createDeleteDataEntry([crrLocation]);
             const batchDeleteDataSpy = sinon.spy(gcTask, '_batchDeleteData');
             const onGcCompletedSpy = sinon.spy(GarbageCollectorMetrics, 'onGcCompleted');
@@ -576,17 +582,14 @@ describe('GarbageCollectorTask', () => {
                 assert.strictEqual(backbeatClient.times.batchDeleteResponse, 0);
                 assert.strictEqual(onGcCompletedSpy.callCount, 0);
                 assert.strictEqual(log.warn.callCount, 1);
-                assert.strictEqual(
-                    log.warn.firstCall.args[1].dataStoreName,
-                    'location-crr-source');
+                assert.strictEqual(log.warn.firstCall.args[1].dataStoreName, 'location-crr-source');
                 batchDeleteDataSpy.restore();
                 onGcCompletedSpy.restore();
                 done();
             });
         });
 
-        it('should not delete anything for a multipart object on a CRR ' +
-        'location', done => {
+        it('should not delete anything for a multipart object on a CRR ' + 'location', done => {
             const secondCrrLocation = Object.assign({}, crrLocation, { key: 'crrKey2' });
             const entry = createDeleteDataEntry([crrLocation, secondCrrLocation]);
             const batchDeleteDataSpy = sinon.spy(gcTask, '_batchDeleteData');
@@ -600,17 +603,14 @@ describe('GarbageCollectorTask', () => {
             });
         });
 
-        it('should delete all locations and not warn when none is on a CRR ' +
-        'location', done => {
+        it('should delete all locations and not warn when none is on a CRR ' + 'location', done => {
             const entry = createDeleteDataEntry([regularLocation]);
             const batchDeleteDataSpy = sinon.spy(gcTask, '_batchDeleteData');
 
             gcTask.processActionEntry(entry, err => {
                 assert.ifError(err);
                 assert.strictEqual(batchDeleteDataSpy.callCount, 1);
-                assert.deepStrictEqual(
-                    batchDeleteDataSpy.firstCall.args[0].Locations,
-                    [regularLocation]);
+                assert.deepStrictEqual(batchDeleteDataSpy.firstCall.args[0].Locations, [regularLocation]);
                 assert.strictEqual(log.warn.callCount, 0);
                 batchDeleteDataSpy.restore();
                 done();

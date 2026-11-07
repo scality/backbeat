@@ -3,7 +3,6 @@ rule_files:
   - alerts.rendered.yaml
 
 tests:
-
   - name: ReplicationProducer Replicas
     interval: 1m
     input_series:
@@ -19,14 +18,14 @@ tests:
           - exp_labels:
               severity: critical
             exp_annotations:
-              description: "Less than 50% of replication producers are up and healthy"
-              summary: "Replication producer service is critical"
+              description: 'Less than 50% of replication producers are up and healthy'
+              summary: 'Replication producer service is critical'
 
   - name: ReplicationDataProcessor Replicas
     interval: 1m
     input_series:
       - series: up{namespace="zenko",job="backbeat-replication-data-processor-headless",pod="bucket-1"}
-        values: 1 1 1 
+        values: 1 1 1
       - series: up{namespace="zenko",job="backbeat-replication-data-processor-headless",pod="bucket-2"}
         values: 1 1 0
       - series: up{namespace="zenko",job="backbeat-replication-data-processor-headless",pod="bucket-3"}
@@ -44,8 +43,8 @@ tests:
           - exp_labels:
               severity: warning
             exp_annotations:
-              description: "Less than 100% of replication data processors are up and healthy"
-              summary: "Replication data processor service is degraded"
+              description: 'Less than 100% of replication data processors are up and healthy'
+              summary: 'Replication data processor service is degraded'
       - alertname: ReplicationDataProcessorCritical
         eval_time: 2m
         exp_alerts: []
@@ -55,22 +54,22 @@ tests:
           - exp_labels:
               severity: warning
             exp_annotations:
-              description: "Less than 100% of replication data processors are up and healthy"
-              summary: "Replication data processor service is degraded"
+              description: 'Less than 100% of replication data processors are up and healthy'
+              summary: 'Replication data processor service is degraded'
       - alertname: ReplicationDataProcessorCritical
         eval_time: 3m
         exp_alerts:
           - exp_labels:
               severity: critical
             exp_annotations:
-              description: "Less than 50% of replication data processors are up and healthy"
-              summary: "Replication data processor service is critical"
+              description: 'Less than 50% of replication data processors are up and healthy'
+              summary: 'Replication data processor service is critical'
 
   - name: ReplicationReplayProcessor Replicas
     interval: 1m
     input_series:
       - series: up{namespace="zenko",job="backbeat-replication-replay-processor-headless",pod="bucket-1"}
-        values: 1 1 1 
+        values: 1 1 1
       - series: up{namespace="zenko",job="backbeat-replication-replay-processor-headless",pod="bucket-2"}
         values: 1 1 0
       - series: up{namespace="zenko",job="backbeat-replication-replay-processor-headless",pod="bucket-3"}
@@ -88,8 +87,8 @@ tests:
           - exp_labels:
               severity: warning
             exp_annotations:
-              description: "Less than 100% of replication replay processors are up and healthy"
-              summary: "Replication replay processor service is degraded"
+              description: 'Less than 100% of replication replay processors are up and healthy'
+              summary: 'Replication replay processor service is degraded'
       - alertname: ReplicationReplayProcessorCritical
         eval_time: 2m
         exp_alerts: []
@@ -99,22 +98,22 @@ tests:
           - exp_labels:
               severity: warning
             exp_annotations:
-              description: "Less than 100% of replication replay processors are up and healthy"
-              summary: "Replication replay processor service is degraded"
+              description: 'Less than 100% of replication replay processors are up and healthy'
+              summary: 'Replication replay processor service is degraded'
       - alertname: ReplicationReplayProcessorCritical
         eval_time: 3m
         exp_alerts:
           - exp_labels:
               severity: critical
             exp_annotations:
-              description: "Less than 50% of replication replay processors are up and healthy"
-              summary: "Replication replay processor service is critical"
+              description: 'Less than 50% of replication replay processors are up and healthy'
+              summary: 'Replication replay processor service is critical'
 
   - name: ReplicationStatusProcessor Replicas
     interval: 1m
     input_series:
       - series: up{namespace="zenko",job="backbeat-replication-status-processor-headless",pod="bucket-1"}
-        values: 1 1 1 
+        values: 1 1 1
       - series: up{namespace="zenko",job="backbeat-replication-status-processor-headless",pod="bucket-2"}
         values: 1 1 0
       - series: up{namespace="zenko",job="backbeat-replication-status-processor-headless",pod="bucket-3"}
@@ -132,8 +131,8 @@ tests:
           - exp_labels:
               severity: warning
             exp_annotations:
-              description: "Less than 100% of replication status processors are up and healthy"
-              summary: "Replication status processor service is degraded"
+              description: 'Less than 100% of replication status processors are up and healthy'
+              summary: 'Replication status processor service is degraded'
       - alertname: ReplicationStatusProcessorCritical
         eval_time: 2m
         exp_alerts: []
@@ -143,16 +142,16 @@ tests:
           - exp_labels:
               severity: warning
             exp_annotations:
-              description: "Less than 100% of replication status processors are up and healthy"
-              summary: "Replication status processor service is degraded"
+              description: 'Less than 100% of replication status processors are up and healthy'
+              summary: 'Replication status processor service is degraded'
       - alertname: ReplicationStatusProcessorCritical
         eval_time: 3m
         exp_alerts:
           - exp_labels:
               severity: critical
             exp_annotations:
-              description: "Less than 50% of replication status processors are up and healthy"
-              summary: "Replication status processor service is critical"
+              description: 'Less than 50% of replication status processors are up and healthy'
+              summary: 'Replication status processor service is critical'
 
   - name: Replication Errors
     interval: 1m
@@ -321,7 +320,7 @@ tests:
           - exp_annotations:
               description: |
                 Replication latency is higher than 3000 seconds.
-                
+
                 This may indicate an issue with the data-processor or the remote replication site.
 
                 Replication latency is the time taken for an object to replicate successfully to the
@@ -340,7 +339,7 @@ tests:
           - exp_annotations:
               description: |
                 Replication latency is higher than 3000 seconds.
-                
+
                 This may indicate an issue with the data-processor or the remote replication site.
 
                 Replication latency is the time taken for an object to replicate successfully to the
@@ -359,7 +358,7 @@ tests:
           - exp_annotations:
               description: |
                 Replication latency is higher than 3000 seconds.
-                
+
                 This may indicate an issue with the data-processor or the remote replication site.
 
                 Replication latency is the time taken for an object to replicate successfully to the
@@ -374,7 +373,7 @@ tests:
           - exp_annotations:
               description: |
                 Replication latency is higher than 6000 seconds.
-                
+
                 This may indicate an issue with the data-processor or the remote replication site.
 
                 Replication latency is the time taken for an object to replicate successfully to the

@@ -32,7 +32,9 @@ describe('BackbeatConsumer._processTask', () => {
     const entry = { topic: 'test-topic', partition: 0 };
 
     describe('with OTEL enabled', () => {
-        beforeEach(() => { process.env.ENABLE_OTEL = 'true'; });
+        beforeEach(() => {
+            process.env.ENABLE_OTEL = 'true';
+        });
 
         it('runs the queue processor and forwards the result to done', done => {
             const self = makeSelf((e, cb) => cb(null, { ok: true }));
@@ -52,15 +54,17 @@ describe('BackbeatConsumer._processTask', () => {
         });
 
         it('ends the span and rethrows on a synchronous throw', () => {
-            const self = makeSelf(() => { throw new Error('boom'); });
-            assert.throws(
-                () => BackbeatConsumer.prototype._processTask.call(self, entry, () => {}),
-                /boom/);
+            const self = makeSelf(() => {
+                throw new Error('boom');
+            });
+            assert.throws(() => BackbeatConsumer.prototype._processTask.call(self, entry, () => {}), /boom/);
         });
     });
 
     describe('with OTEL disabled', () => {
-        beforeEach(() => { delete process.env.ENABLE_OTEL; });
+        beforeEach(() => {
+            delete process.env.ENABLE_OTEL;
+        });
 
         it('runs the queue processor with no span machinery', done => {
             const self = makeSelf((e, cb) => cb(null, { ok: true }));
@@ -102,29 +106,37 @@ describe('BackbeatConsumer subscription state', () => {
     it('should report paused rather than throw when subscription() fails', () => {
         // node-rdkafka throws ERR__STATE when the consumer is connected but
         // mid-unassign or closing
-        const self = makeSelf(() => { throw new Error('Local: Erroneous state'); });
+        const self = makeSelf(() => {
+            throw new Error('Local: Erroneous state');
+        });
         assert.strictEqual(proto.isPaused.call(self), true);
         assert.strictEqual(proto.getServiceStatus.call(self), false);
     });
 
     it('should not throw out of onEntryCommittable when subscription() fails', () => {
-        const self = makeSelf(() => { throw new Error('Local: Erroneous state'); });
+        const self = makeSelf(() => {
+            throw new Error('Local: Erroneous state');
+        });
         self._offsetLedger = {
             onOffsetProcessed: () => 42,
             toString: () => '',
         };
         self._consumer.isConnected = () => true;
-        self._consumer.offsetsStore =
-            () => assert.fail('offsetsStore must not be called while unavailable');
+        self._consumer.offsetsStore = () => assert.fail('offsetsStore must not be called while unavailable');
 
-        assert.doesNotThrow(() => proto.onEntryCommittable.call(self,
-            { topic: 'test-topic', partition: 0, offset: 42 }));
+        assert.doesNotThrow(() =>
+            proto.onEntryCommittable.call(self, { topic: 'test-topic', partition: 0, offset: 42 }),
+        );
     });
 
     it('should subscribe on resume when the subscription is unavailable', () => {
-        const self = makeSelf(() => { throw new Error('Local: Erroneous state'); });
+        const self = makeSelf(() => {
+            throw new Error('Local: Erroneous state');
+        });
         let subscribed = null;
-        self._consumer.subscribe = topics => { subscribed = topics; };
+        self._consumer.subscribe = topics => {
+            subscribed = topics;
+        };
 
         assert.doesNotThrow(() => proto.resume.call(self, 'test-site'));
         assert.deepStrictEqual(subscribed, ['test-topic']);

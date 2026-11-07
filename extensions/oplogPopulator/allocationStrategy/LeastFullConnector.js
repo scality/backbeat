@@ -10,7 +10,6 @@ const AllocationStrategy = require('./AllocationStrategy');
  * Connectors with the fewest buckets are filled first
  */
 class LeastFullConnector extends AllocationStrategy {
-
     /**
      * Get best connector to assign a bucket to.
      * If no connector is available, null is returned.

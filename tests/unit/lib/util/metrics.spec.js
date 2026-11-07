@@ -1,6 +1,5 @@
 const sinon = require('sinon');
-const { wrapCounterInc, wrapGaugeSet, wrapHistogramObserve } =
-    require('../../../../lib/util/metrics');
+const { wrapCounterInc, wrapGaugeSet, wrapHistogramObserve } = require('../../../../lib/util/metrics');
 
 describe('Metrics', () => {
     it('can wrap counter inc', () => {
@@ -16,8 +15,7 @@ describe('Metrics', () => {
         mockCounter.inc = sinon.spy();
         const incFn = wrapCounterInc(mockCounter, { defaultLabel: 'default' });
         incFn({ label: 'value' }, 1);
-        sinon.assert.calledOnceWithExactly(mockCounter.inc,
-            { defaultLabel: 'default', label: 'value' }, 1);
+        sinon.assert.calledOnceWithExactly(mockCounter.inc, { defaultLabel: 'default', label: 'value' }, 1);
     });
 
     it('can override default labels on wrapped counter', () => {
@@ -41,8 +39,7 @@ describe('Metrics', () => {
         mockGauge.set = sinon.spy();
         const setFn = wrapGaugeSet(mockGauge, { defaultLabel: 'default' });
         setFn({ label: 'value' }, 15);
-        sinon.assert.calledOnceWithExactly(mockGauge.set,
-            { defaultLabel: 'default', label: 'value' }, 15);
+        sinon.assert.calledOnceWithExactly(mockGauge.set, { defaultLabel: 'default', label: 'value' }, 15);
     });
 
     it('can override default labels to wrapped gauge', () => {
@@ -64,11 +61,9 @@ describe('Metrics', () => {
     it('can add default labels to wrapped histogram', () => {
         const mockHistogram = sinon.spy();
         mockHistogram.observe = sinon.spy();
-        const observeFn = wrapHistogramObserve(mockHistogram,
-            { defaultLabel: 'default' });
+        const observeFn = wrapHistogramObserve(mockHistogram, { defaultLabel: 'default' });
         observeFn({ label: 'value' }, 15);
-        sinon.assert.calledOnceWithExactly(mockHistogram.observe,
-            { defaultLabel: 'default', label: 'value' }, 15);
+        sinon.assert.calledOnceWithExactly(mockHistogram.observe, { defaultLabel: 'default', label: 'value' }, 15);
     });
 
     it('can add default labels to wrapped histogram', () => {

@@ -6,12 +6,15 @@ const ClientManager = require('../../../lib/clients/ClientManager');
 const fakeLogger = require('../../utils/fakeLogger');
 
 function createClientManager() {
-    return new ClientManager({
-        id: 'test-extension',
-        authConfig: { type: 'account', account: 'bart' },
-        s3Config: { host: 's3.zenko.local', port: 80 },
-        transport: 'http',
-    }, fakeLogger);
+    return new ClientManager(
+        {
+            id: 'test-extension',
+            authConfig: { type: 'account', account: 'bart' },
+            s3Config: { host: 's3.zenko.local', port: 80 },
+            transport: 'http',
+        },
+        fakeLogger,
+    );
 }
 
 describe('ClientManager', () => {
@@ -29,8 +32,7 @@ describe('ClientManager', () => {
         it('should not let the credentials sweep hold the event loop open', () => {
             clientManager.initCredentialsManager();
 
-            assert.strictEqual(
-                clientManager._deleteInactiveCredentialsInterval.hasRef(), false);
+            assert.strictEqual(clientManager._deleteInactiveCredentialsInterval.hasRef(), false);
         });
 
         it('should drop the clients of credentials that got removed', () => {
@@ -73,8 +75,7 @@ describe('ClientManager', () => {
 
         it('should stay silent while credentials are still cached', () => {
             const idle = sinon.stub();
-            sinon.stub(clientManager.credentialsManager, 'removeInactiveCredentials')
-                .returns(1);
+            sinon.stub(clientManager.credentialsManager, 'removeInactiveCredentials').returns(1);
             clientManager.initCredentialsManager();
             clientManager.on('idle', idle);
 
@@ -120,8 +121,7 @@ describe('ClientManager', () => {
 
             clientManager.close();
 
-            assert.strictEqual(
-                clientManager.credentialsManager.listenerCount('deleteCredentials'), 0);
+            assert.strictEqual(clientManager.credentialsManager.listenerCount('deleteCredentials'), 0);
         });
 
         it('should do nothing when initCredentialsManager was never called', () => {

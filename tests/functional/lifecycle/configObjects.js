@@ -60,7 +60,7 @@ const mongoConfig = {
     writeConcern: 'majority',
     replicaSet: 'rs0',
     readPreference: 'primary',
-    database: 'metadata'
+    database: 'metadata',
 };
 
 const testTimeout = 30000;

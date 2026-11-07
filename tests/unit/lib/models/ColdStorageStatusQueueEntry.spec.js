@@ -59,13 +59,15 @@ describe('ColdStorageStatusQueueEntry', () => {
             input: malformed,
             error: { message: 'malformed JSON in kafka entry' },
         },
-    ].forEach(({ msg, input, error }) => it(msg, () => {
-        const res = ColdStorageStatusQueueEntry.createFromKafkaEntry({ value: input });
+    ].forEach(({ msg, input, error }) =>
+        it(msg, () => {
+            const res = ColdStorageStatusQueueEntry.createFromKafkaEntry({ value: input });
 
-        if (error) {
-            assert.strictEqual(res.error.message, error.message);
-        } else {
-            assert.ifError(res.error);
-        }
-    }));
+            if (error) {
+                assert.strictEqual(res.error.message, error.message);
+            } else {
+                assert.ifError(res.error);
+            }
+        }),
+    );
 });

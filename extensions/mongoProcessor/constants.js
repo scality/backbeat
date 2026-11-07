@@ -1,6 +1,5 @@
 'use strict';
 
-
 const constants = {
     promMetricNames: {
         ingestionProcessedElapsedSeconds: 's3_ingestion_mongo_processed_elapsed_seconds',

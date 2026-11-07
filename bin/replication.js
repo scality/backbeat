@@ -6,15 +6,13 @@ const Logger = werelogs.Logger;
 const { RoundRobin } = require('@scality/arsenal').network;
 
 const config = require('../lib/Config');
-const SetupReplication =
-          require('../extensions/replication/utils/SetupReplication');
+const SetupReplication = require('../extensions/replication/utils/SetupReplication');
 const version = require('../package.json').version;
 
 werelogs.configure({
     level: config.log.logLevel,
     dump: config.log.dumpLevel,
 });
-
 
 function _createSetupReplication(command, options, log) {
     const sourceBucket = options.sourceBucket;
@@ -25,8 +23,7 @@ function _createSetupReplication(command, options, log) {
     const targetIsExternal = siteName !== undefined;
 
     // Required options
-    if (!sourceBucket || !targetBucket ||
-        !sourceProfile || (!targetProfile && !targetIsExternal)) {
+    if (!sourceBucket || !targetBucket || !sourceProfile || (!targetProfile && !targetIsExternal)) {
         program.commands.find(n => n._name === command).outputHelp();
         process.stdout.write('\n');
         process.exit(1);
@@ -35,9 +32,7 @@ function _createSetupReplication(command, options, log) {
     const { source, destination } = config.extensions.replication;
     const sourceCredentials = fromIni({ profile: sourceProfile });
     const targetCredentials = fromIni({ profile: targetProfile });
-    const destinationEndpoint =
-        config.getBootstrapList()
-        .find(dest => Array.isArray(dest.servers));
+    const destinationEndpoint = config.getBootstrapList().find(dest => Array.isArray(dest.servers));
     return new SetupReplication({
         source: {
             bucket: sourceBucket,
@@ -49,8 +44,7 @@ function _createSetupReplication(command, options, log) {
         target: {
             bucket: targetBucket,
             credentials: targetCredentials,
-            hosts: targetIsExternal ?
-                undefined : new RoundRobin(destinationEndpoint.servers),
+            hosts: targetIsExternal ? undefined : new RoundRobin(destinationEndpoint.servers),
             transport: destination.transport,
             isExternal: targetIsExternal,
             siteName,
@@ -82,13 +76,13 @@ program.version(version);
     program
         .command(cmd.name)
         .option('--source-bucket <name>', '[required] source bucket name')
-        .option('--source-profile <name>',
-                '[required] source aws/credentials profile')
+        .option('--source-profile <name>', '[required] source aws/credentials profile')
         .option('--target-bucket <name>', '[required] target bucket name')
-        .option('--target-profile <name>', '[optional] target ' +
-                'aws/credentials profile (optional if using external location)')
-        .option('--site-name <name>', '[optional] the site name (required if ' +
-                'using external location)')
+        .option(
+            '--target-profile <name>',
+            '[optional] target ' + 'aws/credentials profile (optional if using external location)',
+        )
+        .option('--site-name <name>', '[optional] the site name (required if ' + 'using external location)')
         .action(options => {
             const log = new Logger('BackbeatSetup').newRequestLogger();
             const s = _createSetupReplication(cmd.name, options, log);

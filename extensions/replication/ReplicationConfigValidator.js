@@ -1,19 +1,20 @@
 const fs = require('fs');
 const joi = require('joi');
-const { hostPortJoi, transportJoi, bootstrapListJoi, adminCredsJoi,
-        retryParamsJoi, probeServerJoi, probeServerPerSite, 
-        stsConfigJoi } =
-    require('../../lib/config/configItems.joi');
+const {
+    hostPortJoi,
+    transportJoi,
+    bootstrapListJoi,
+    adminCredsJoi,
+    retryParamsJoi,
+    probeServerJoi,
+    probeServerPerSite,
+    stsConfigJoi,
+} = require('../../lib/config/configItems.joi');
 const { extensionConfigValidator } = require('../../lib/config/extensionConfigValidator');
 const { parseJSON } = require('../../lib/config/envOverrides');
-const {
-    authTypeAccount,
-    authTypeAssumeRole,
-    authTypeRole,
-    authTypeService,
-} = require('../../lib/constants');
+const { authTypeAccount, authTypeAssumeRole, authTypeRole, authTypeService } = require('../../lib/constants');
 
-const { MAX_QUEUED_DEFAULT }  = require('../../lib/constants').backbeatConsumer;
+const { MAX_QUEUED_DEFAULT } = require('../../lib/constants').backbeatConsumer;
 
 const BOOTSTRAPLIST_MORE = 'EXTENSIONS_REPLICATION_DEST_BOOTSTRAPLIST_MORE';
 
@@ -57,14 +58,8 @@ const MAX_POLL_INTERVAL_MS_MIN = 45000;
 const MAX_POLL_INTERVAL_MS_MAX = 1800000;
 
 const destinationAuthJoi = joi.object({
-    type: joi.alternatives().try(
-        authTypeAccount,
-        authTypeRole,
-        authTypeService,
-        authTypeAssumeRole
-    ).required(),
-    account: joi.string()
-        .when('type', { is: authTypeAccount, then: joi.required() }),
+    type: joi.alternatives().try(authTypeAccount, authTypeRole, authTypeService, authTypeAssumeRole).required(),
+    account: joi.string().when('type', { is: authTypeAccount, then: joi.required() }),
     vault: joi.object({
         host: joi.string().optional(),
         port: joi.number().greater(0).optional(),
@@ -74,10 +69,10 @@ const destinationAuthJoi = joi.object({
     sts: stsConfigJoi
         .keys({
             // override port to make it optional, with default based on transport
-            port: joi.alternatives().try(
-                stsConfigJoi.extract('port'),
-                joi.string().optional().valid('', null).empty(['', null])
-            ).default(joi.ref('....transport', { adjust: transport => transport === 'http' ? 80 : 443 })),
+            port: joi
+                .alternatives()
+                .try(stsConfigJoi.extract('port'), joi.string().optional().valid('', null).empty(['', null]))
+                .default(joi.ref('....transport', { adjust: transport => (transport === 'http' ? 80 : 443) })),
         })
         .when('type', { is: authTypeAssumeRole, then: joi.required() }),
 });
@@ -86,86 +81,98 @@ const joiSchema = joi.object({
     source: {
         transport: transportJoi,
         s3: hostPortJoi.required(),
-        auth: joi.object({
-            type: joi.alternatives().try(
-                authTypeAccount,
-                authTypeRole,
-                authTypeService,
-            ).required(),
-            account: joi.string()
-                .when('type', { is: authTypeAccount, then: joi.required() })
-                .when('type', { is: authTypeService, then: joi.required() }),
-            vault: joi.object({
-                host: joi.string().required(),
-                port: joi.number().greater(0).required(),
-                adminPort: joi.number().greater(0)
-                    .when('adminCredentialsFile', {
-                        is: joi.exist(),
-                        then: joi.required(),
-                    }),
-                adminCredentialsFile: joi.string().optional(),
-            }).when('type', { is: authTypeRole, then: joi.required() }),
-        }).required(),
+        auth: joi
+            .object({
+                type: joi.alternatives().try(authTypeAccount, authTypeRole, authTypeService).required(),
+                account: joi
+                    .string()
+                    .when('type', { is: authTypeAccount, then: joi.required() })
+                    .when('type', { is: authTypeService, then: joi.required() }),
+                vault: joi
+                    .object({
+                        host: joi.string().required(),
+                        port: joi.number().greater(0).required(),
+                        adminPort: joi.number().greater(0).when('adminCredentialsFile', {
+                            is: joi.exist(),
+                            then: joi.required(),
+                        }),
+                        adminCredentialsFile: joi.string().optional(),
+                    })
+                    .when('type', { is: authTypeRole, then: joi.required() }),
+            })
+            .required(),
     },
-    destination: joi.object({
-        transport: transportJoi,
-        auth: destinationAuthJoi.optional(),
-        sites: joi.object().pattern(
-            joi.string(), // site name
-            joi.object({
-                transport: transportJoi,
-                auth: destinationAuthJoi,
-            }).required()
-        ).when('auth', {
-            is: joi.exist(),
-            then: joi.optional(),
-            otherwise: joi.required(),
-        }),
-        bootstrapList: bootstrapListJoi.meta({
-            env: 'BOOTSTRAPLIST',
-            envDecodeHook: decodeBootstrapList,
-        }),
-    }).required().custom(_validatePerSiteDestinationConfig).meta({ env: 'DEST' }),
+    destination: joi
+        .object({
+            transport: transportJoi,
+            auth: destinationAuthJoi.optional(),
+            sites: joi
+                .object()
+                .pattern(
+                    joi.string(), // site name
+                    joi
+                        .object({
+                            transport: transportJoi,
+                            auth: destinationAuthJoi,
+                        })
+                        .required(),
+                )
+                .when('auth', {
+                    is: joi.exist(),
+                    then: joi.optional(),
+                    otherwise: joi.required(),
+                }),
+            bootstrapList: bootstrapListJoi.meta({
+                env: 'BOOTSTRAPLIST',
+                envDecodeHook: decodeBootstrapList,
+            }),
+        })
+        .required()
+        .custom(_validatePerSiteDestinationConfig)
+        .meta({ env: 'DEST' }),
     topic: joi.string().required(),
     dataMoverTopic: joi.string().optional(),
     replicationStatusTopic: joi.string().required(),
     monitorReplicationFailures: joi.boolean().default(true),
     replicationFailedTopic: joi.string().required(),
-    monitorReplicationFailureExpiryTimeS:
-        joi.number().default(CRR_FAILURE_EXPIRY),
+    monitorReplicationFailureExpiryTimeS: joi.number().default(CRR_FAILURE_EXPIRY),
     replayTopics: joi.array().items(
         joi.object({
             topicName: joi.string().required(),
             retries: joi.number().required(),
-        })
+        }),
     ),
-    queueProcessor: joi.object({
-        groupId: joi.string().required(),
-        retry: qpRetryJoi,
-        concurrency: joi.number().greater(0).default(10),
-        maxPollIntervalMs: joi.number()
-            .min(MAX_POLL_INTERVAL_MS_MIN)
-            .max(MAX_POLL_INTERVAL_MS_MAX),
-        mpuPartsConcurrency: joi.number().greater(0).default(10),
-        maxQueued: joi.number().greater(0).default(MAX_QUEUED_DEFAULT),
-        minMPUSizeMB: joi.number().greater(0).default(20),
-        probeServer: joi.alternatives().try(
-            probeServerJoi,
-            probeServerPerSite,
-        ).default({ bindAddress: 'localhost', port: 4042 }),
-        circuitBreaker: joi.object().optional(),
-        sourceCheckIfSizeGreaterThanMB: joi.number().positive().default(100),
-    }).required(),
-    replicationStatusProcessor: joi.object({
-        groupId: joi.string().required(),
-        retry: retryParamsJoi,
-        concurrency: joi.number().greater(0).default(10),
-        maxQueued: joi.number().greater(0).default(MAX_QUEUED_DEFAULT),
-        probeServer: probeServerJoi.default(),
-    }).meta({ env: 'STATUS_PROCESSOR' }),
-    replayProcessor: joi.object({
-        probeServer: probeServerPerSite,
-    }).optional(),
+    queueProcessor: joi
+        .object({
+            groupId: joi.string().required(),
+            retry: qpRetryJoi,
+            concurrency: joi.number().greater(0).default(10),
+            maxPollIntervalMs: joi.number().min(MAX_POLL_INTERVAL_MS_MIN).max(MAX_POLL_INTERVAL_MS_MAX),
+            mpuPartsConcurrency: joi.number().greater(0).default(10),
+            maxQueued: joi.number().greater(0).default(MAX_QUEUED_DEFAULT),
+            minMPUSizeMB: joi.number().greater(0).default(20),
+            probeServer: joi
+                .alternatives()
+                .try(probeServerJoi, probeServerPerSite)
+                .default({ bindAddress: 'localhost', port: 4042 }),
+            circuitBreaker: joi.object().optional(),
+            sourceCheckIfSizeGreaterThanMB: joi.number().positive().default(100),
+        })
+        .required(),
+    replicationStatusProcessor: joi
+        .object({
+            groupId: joi.string().required(),
+            retry: retryParamsJoi,
+            concurrency: joi.number().greater(0).default(10),
+            maxQueued: joi.number().greater(0).default(MAX_QUEUED_DEFAULT),
+            probeServer: probeServerJoi.default(),
+        })
+        .meta({ env: 'STATUS_PROCESSOR' }),
+    replayProcessor: joi
+        .object({
+            probeServer: probeServerPerSite,
+        })
+        .optional(),
     objectSizeMetrics: joi.array().items(joi.number()).default(OBJECT_SIZE_METRICS),
 });
 
@@ -190,7 +197,7 @@ function _validatePerSiteDestinationConfig(destination, helpers) {
     });
     if (missingConfigs.length > 0) {
         return helpers.message({
-            custom: `missing destination configuration for sites: ${missingConfigs.join(',')}`
+            custom: `missing destination configuration for sites: ${missingConfigs.join(',')}`,
         });
     }
     return destination;
@@ -199,8 +206,7 @@ function _validatePerSiteDestinationConfig(destination, helpers) {
 function _loadAdminCredentialsFromFile(filePath) {
     const adminCredsJSON = fs.readFileSync(filePath);
     const adminCredsObj = JSON.parse(adminCredsJSON);
-    joi.attempt(adminCredsObj, adminCredsJoi,
-                'invalid admin credentials');
+    joi.attempt(adminCredsObj, adminCredsJoi, 'invalid admin credentials');
     const accessKey = Object.keys(adminCredsObj)[0];
     const secretKey = adminCredsObj[accessKey];
     return { accessKey, secretKey };
@@ -214,15 +220,13 @@ function configValidator(backbeatConfig, extConfig) {
     if (source.auth.vault) {
         const { adminCredentialsFile } = source.auth.vault;
         if (adminCredentialsFile) {
-            source.auth.vault.adminCredentials =
-                _loadAdminCredentialsFromFile(adminCredentialsFile);
+            source.auth.vault.adminCredentials = _loadAdminCredentialsFromFile(adminCredentialsFile);
         }
     }
     if (destination.auth?.vault) {
         const { adminCredentialsFile } = destination.auth.vault;
         if (adminCredentialsFile) {
-            destination.auth.vault.adminCredentials =
-                _loadAdminCredentialsFromFile(adminCredentialsFile);
+            destination.auth.vault.adminCredentials = _loadAdminCredentialsFromFile(adminCredentialsFile);
         }
     }
     if (destination.sites) {
@@ -231,8 +235,7 @@ function configValidator(backbeatConfig, extConfig) {
                 const { adminCredentialsFile } = site.auth.vault;
                 if (adminCredentialsFile) {
                     // eslint-disable-next-line no-param-reassign
-                    site.auth.vault.adminCredentials =
-                        _loadAdminCredentialsFromFile(adminCredentialsFile);
+                    site.auth.vault.adminCredentials = _loadAdminCredentialsFromFile(adminCredentialsFile);
                 }
             }
         });

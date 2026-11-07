@@ -1,5 +1,4 @@
-const ReplicationAPI =
-      require('../../../extensions/replication/ReplicationAPI');
+const ReplicationAPI = require('../../../extensions/replication/ReplicationAPI');
 
 const assert = require('assert');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');

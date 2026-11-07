@@ -27,7 +27,7 @@ joi.object({
         bar: joi.string(),
         baz: joi.object({ qux: joi.number() }),
     }),
-})
+});
 ```
 
 `foo.bar` is set by `FOO_BAR`, and `foo.baz.qux` by `FOO_BAZ_QUX`. Annotating

@@ -28,16 +28,15 @@ class RetainBucketsDecorator extends AllocationStrategy {
     bindConnectorEvents(connectorsManager, allocator, metricsHandler) {
         // Bind events from the connector manager to the strategy
         connectorsManager.on(constants.connectorUpdatedEvent, connector =>
-            this.onConnectorUpdatedOrDestroyed(connector));
+            this.onConnectorUpdatedOrDestroyed(connector),
+        );
 
         allocator.on(constants.bucketRemovedFromConnectorEvent, (bucket, connector) =>
-            this.onBucketRemoved(bucket, connector));
+            this.onBucketRemoved(bucket, connector),
+        );
 
         connectorsManager.on(constants.connectorsReconciledEvent, bucketsExceedingLimit => {
-            metricsHandler.onConnectorsReconciled(
-                bucketsExceedingLimit,
-                this.retainedBucketsCount,
-            );
+            metricsHandler.onConnectorsReconciled(bucketsExceedingLimit, this.retainedBucketsCount);
         });
     }
 
@@ -45,7 +44,9 @@ class RetainBucketsDecorator extends AllocationStrategy {
      * Get the number of retained buckets
      * @returns {Number} number of retained buckets
      */
-    get retainedBucketsCount() { return this._retainedBuckets.size; }
+    get retainedBucketsCount() {
+        return this._retainedBuckets.size;
+    }
 
     /**
      * Callback when a bucket is removed from a connector
@@ -86,8 +87,7 @@ class RetainBucketsDecorator extends AllocationStrategy {
      * @returns {Connector | null} connector
      */
     getConnector(connectors, bucket) {
-        return this._retainedBuckets.get(bucket) ||
-            this._strategy.getConnector(connectors, bucket);
+        return this._retainedBuckets.get(bucket) || this._strategy.getConnector(connectors, bucket);
     }
 
     /**

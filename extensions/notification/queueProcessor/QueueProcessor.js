@@ -72,18 +72,19 @@ class QueueProcessor extends EventEmitter {
      * @param {String} destinationId - resource name/id of destination
      * @param {Object} destinationAuth - destination authentication config
      */
-    constructor(mongoConfig, zkConfig, kafkaConfig, notifConfig, destinationId,
-        destinationAuth) {
+    constructor(mongoConfig, zkConfig, kafkaConfig, notifConfig, destinationId, destinationAuth) {
         super();
         this.mongoConfig = mongoConfig;
         this.zkConfig = zkConfig;
         this.kafkaConfig = kafkaConfig;
         this.notifConfig = notifConfig;
         this.destinationId = destinationId;
-        this.destinationConfig
-            = notifConfig.destinations.find(dest => dest.resource === destinationId);
-        assert(this.destinationConfig, `Invalid destination argument "${destinationId}".` +
-        ' Destination could not be found in destinations defined');
+        this.destinationConfig = notifConfig.destinations.find(dest => dest.resource === destinationId);
+        assert(
+            this.destinationConfig,
+            `Invalid destination argument "${destinationId}".` +
+                ' Destination could not be found in destinations defined',
+        );
         // overwriting destination auth config
         // if it was passed by env var
         if (destinationAuth) {
@@ -149,61 +150,65 @@ class QueueProcessor extends EventEmitter {
      * @return {undefined}
      */
     start(options, done) {
-        async.series([
-            next => this._setupNotificationConfigManager(next),
-            next => this._setupDestination(this.destinationConfig.type, next),
-            // if connection to destination fails, process will stop & restart
-            next => this._destination.init(next),
-            next => {
-                if (options && options.disableConsumer) {
-                    this.emit('ready');
-                    return next();
-                }
-                const { groupId, concurrency }
-                    = this.notifConfig.queueProcessor;
-                const consumerGroupId = `${groupId}-${this.destinationId}`;
-                const internalTopic = this.destinationConfig.internalTopic ||
-                    this.notifConfig.topic;
-                this._consumer = new BackbeatConsumer({
-                    kafka: {
-                        hosts: this.kafkaConfig.hosts,
-                        site: this.kafkaConfig.site,
-                        compressionType: this.kafkaConfig.compressionType,
-                        requiredAcks: this.kafkaConfig.requiredAcks,
-                        consumerParams: this.kafkaConfig.consumerParams,
-                    },
-                    topic: internalTopic,
-                    groupId: consumerGroupId,
-                    concurrency,
-                    maxQueued: this.notifConfig.queueProcessor.maxQueued,
-                    queueProcessor: this.processKafkaEntry.bind(this),
-                });
-                this._consumer.on('error', err => {
-                    this.logger.error('error starting notification consumer',
-                    { method: 'QueueProcessor.start', error: err.message });
-                    // crash if got error at startup
-                    if (!this.isReady()) {
-                        return next(err);
+        async.series(
+            [
+                next => this._setupNotificationConfigManager(next),
+                next => this._setupDestination(this.destinationConfig.type, next),
+                // if connection to destination fails, process will stop & restart
+                next => this._destination.init(next),
+                next => {
+                    if (options && options.disableConsumer) {
+                        this.emit('ready');
+                        return next();
                     }
+                    const { groupId, concurrency } = this.notifConfig.queueProcessor;
+                    const consumerGroupId = `${groupId}-${this.destinationId}`;
+                    const internalTopic = this.destinationConfig.internalTopic || this.notifConfig.topic;
+                    this._consumer = new BackbeatConsumer({
+                        kafka: {
+                            hosts: this.kafkaConfig.hosts,
+                            site: this.kafkaConfig.site,
+                            compressionType: this.kafkaConfig.compressionType,
+                            requiredAcks: this.kafkaConfig.requiredAcks,
+                            consumerParams: this.kafkaConfig.consumerParams,
+                        },
+                        topic: internalTopic,
+                        groupId: consumerGroupId,
+                        concurrency,
+                        maxQueued: this.notifConfig.queueProcessor.maxQueued,
+                        queueProcessor: this.processKafkaEntry.bind(this),
+                    });
+                    this._consumer.on('error', err => {
+                        this.logger.error('error starting notification consumer', {
+                            method: 'QueueProcessor.start',
+                            error: err.message,
+                        });
+                        // crash if got error at startup
+                        if (!this.isReady()) {
+                            return next(err);
+                        }
+                        return undefined;
+                    });
+                    this._consumer.on('ready', () => {
+                        this._consumer.subscribe();
+                        this.logger.info('queue processor is ready to consume ' + 'notification entries');
+                        this.emit('ready');
+                        return next();
+                    });
                     return undefined;
-                });
-                this._consumer.on('ready', () => {
-                    this._consumer.subscribe();
-                    this.logger.info('queue processor is ready to consume ' +
-                        'notification entries');
-                    this.emit('ready');
-                    return next();
-                });
-                return undefined;
+                },
+            ],
+            err => {
+                if (err) {
+                    this.logger.error('error starting notification queue processor', {
+                        method: 'QueueProcessor.start',
+                        error: err.message,
+                    });
+                    return done(err);
+                }
+                return done();
             },
-        ], err => {
-            if (err) {
-                this.logger.error('error starting notification queue processor',
-                    { method: 'QueueProcessor.start', error: err.message });
-                return done(err);
-            }
-            return done();
-        });
+        );
     }
 
     /**
@@ -254,7 +259,7 @@ class QueueProcessor extends EventEmitter {
                 if (notifConfig && Object.keys(notifConfig).length > 0) {
                     // get destination specific notification config
                     const queueConfig = notifConfig.notificationConfiguration.queueConfig.filter(
-                            c => c.queueArn.split(':').pop() === this.destinationId
+                        c => c.queueArn.split(':').pop() === this.destinationId,
                     );
                     if (!queueConfig.length) {
                         // skip, if there is no config for the current destination resource
@@ -278,8 +283,7 @@ class QueueProcessor extends EventEmitter {
                     if (isValid) {
                         // add notification configuration id to the message
                         sourceEntry.configurationId = matchingConfig.id;
-                        const message
-                            = messageUtil.transformToSpec(sourceEntry);
+                        const message = messageUtil.transformToSpec(sourceEntry);
                         const msg = {
                             // for Kafka keyed partitioning, to map a
                             // particular bucket and key to a partition
@@ -299,10 +303,7 @@ class QueueProcessor extends EventEmitter {
                             destination: this.destinationId,
                             matchingConfig,
                         });
-                        onQueueProcessorEventProcessed(
-                            this.destinationId,
-                            eventType,
-                        );
+                        onQueueProcessorEventProcessed(this.destinationId, eventType);
                         return this._destination.send([msg], done);
                     }
                 }

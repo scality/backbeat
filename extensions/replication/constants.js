@@ -3,8 +3,7 @@
 const testIsOn = process.env.CI === 'true';
 
 const constants = {
-    zookeeperNamespace:
-        testIsOn ? '/backbeattest/replication' : '/backbeat/replication',
+    zookeeperNamespace: testIsOn ? '/backbeattest/replication' : '/backbeat/replication',
     zkStatePath: '/state',
     zkReplayStatePath: '/replayState',
     zkStateProperties: ['paused', 'scheduledResume'],
@@ -29,8 +28,7 @@ const constants = {
         opsDone: testIsOn ? 'test:bb:opsdone' : 'bb:crr:opsdone',
         opsFail: testIsOn ? 'test:bb:opsfail' : 'bb:crr:opsfail',
         bytesDone: testIsOn ? 'test:bb:bytesdone' : 'bb:crr:bytesdone',
-        objectBytesDone: testIsOn ?
-            'test:bb:object:bytesdone' : 'bb:crr:object:bytesdone',
+        objectBytesDone: testIsOn ? 'test:bb:object:bytesdone' : 'bb:crr:object:bytesdone',
         bytesFail: testIsOn ? 'test:bb:bytesfail' : 'bb:crr:bytesfail',
         failedCRR: testIsOn ? 'test:bb:crr:failed' : 'bb:crr:failed',
     },

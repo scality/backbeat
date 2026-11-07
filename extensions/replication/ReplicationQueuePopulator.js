@@ -1,7 +1,6 @@
 const { usersBucket, mpuBucketPrefix, externalBackends } = require('@scality/arsenal').constants;
 
-const QueuePopulatorExtension =
-          require('../../lib/queuePopulator/QueuePopulatorExtension');
+const QueuePopulatorExtension = require('../../lib/queuePopulator/QueuePopulatorExtension');
 const ObjectQueueEntry = require('../../lib/models/ObjectQueueEntry');
 const ReplicationAPI = require('./ReplicationAPI');
 const ReplicationMetrics = require('./ReplicationMetrics');
@@ -46,18 +45,15 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
     }
 
     _filterBucketOp(entry) {
-        if (entry.type !== 'put' ||
-            entry.key.startsWith(mpuBucketPrefix)) {
+        if (entry.type !== 'put' || entry.key.startsWith(mpuBucketPrefix)) {
             return;
         }
         // remove logReader to prevent circular stringify
         const publishedEntry = Object.assign({}, entry);
         delete publishedEntry.logReader;
 
-        this.log.trace('publishing bucket replication entry',
-                       { bucket: entry.bucket });
-        this.publish(this.repConfig.topic,
-                     entry.bucket, JSON.stringify(publishedEntry));
+        this.log.trace('publishing bucket replication entry', { bucket: entry.bucket });
+        this.publish(this.repConfig.topic, entry.bucket, JSON.stringify(publishedEntry));
     }
 
     _filterKeyOp(entry) {
@@ -74,15 +70,15 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
                 bucket: entry.bucket,
                 key: entry.key,
                 type: entry.type,
-                raftId: entry.logReader
-                    && typeof entry.logReader.getMetricLabels === 'function'
-                    && entry.logReader.getMetricLabels().logId,
+                raftId:
+                    entry.logReader &&
+                    typeof entry.logReader.getMetricLabels === 'function' &&
+                    entry.logReader.getMetricLabels().logId,
                 error: error.message,
             });
             return;
         }
-        const queueEntry = new ObjectQueueEntry(entry.bucket,
-                                                entry.key, value);
+        const queueEntry = new ObjectQueueEntry(entry.bucket, entry.key, value);
         const sanityCheckRes = queueEntry.checkSanity();
         if (sanityCheckRes) {
             return;
@@ -111,11 +107,11 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
         // remove logReader to prevent circular stringify
         const repSites = queueEntry.getReplicationInfo().backends;
         const content = queueEntry.getReplicationContent();
-        const bytes = content.includes('DATA') ?
-            queueEntry.getContentLength() : 0;
+        const bytes = content.includes('DATA') ? queueEntry.getContentLength() : 0;
 
         // record replication metrics by site
-        repSites.filter(entry => entry.status === 'PENDING')
+        repSites
+            .filter(entry => entry.status === 'PENDING')
             .forEach(backend => {
                 this._incrementMetrics(backend.site, bytes);
             });
@@ -132,13 +128,14 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
 
         const traceHeaders = traceHeadersFromEntry(value);
 
-        this.log.trace('publishing object replication entry',
-                       { entry: queueEntry.getLogInfo() });
-        this.publish(this.repConfig.topic,
-                     `${queueEntry.getBucket()}/${queueEntry.getObjectKey()}`,
-                     JSON.stringify(publishedEntry),
-                     undefined,
-                     traceHeaders);
+        this.log.trace('publishing object replication entry', { entry: queueEntry.getLogInfo() });
+        this.publish(
+            this.repConfig.topic,
+            `${queueEntry.getBucket()}/${queueEntry.getObjectKey()}`,
+            JSON.stringify(publishedEntry),
+            undefined,
+            traceHeaders,
+        );
     }
 
     /**
@@ -209,20 +206,31 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
             storageClass: queueEntry.getDataStoreName(),
         });
 
-        LifecycleMetrics.onLifecycleTriggered(this.log, 'queuePopulator',
-            PULL_REPLICATION, targetLocation, Date.now() - transitionTime.getTime());
+        LifecycleMetrics.onLifecycleTriggered(
+            this.log,
+            'queuePopulator',
+            PULL_REPLICATION,
+            targetLocation,
+            Date.now() - transitionTime.getTime(),
+        );
 
         this.log.trace('publishing pull replication entry', { entry: queueEntry.getLogInfo() });
-        this.publish(ReplicationAPI.getDataMoverTopic(),
-                     `${bucket}/${objectKey}`,
-                     action.toKafkaMessage(),
-                     undefined,
-                     traceHeadersFromEntry(value));
+        this.publish(
+            ReplicationAPI.getDataMoverTopic(),
+            `${bucket}/${objectKey}`,
+            action.toKafkaMessage(),
+            undefined,
+            traceHeadersFromEntry(value),
+        );
 
         // Counterpart of the bytes the data mover reports once the copy
         // completed, to measure the pull replication backlog.
-        ReplicationMetrics.onReplicationQueued(PULL_REPLICATION,
-            queueEntry.getDataStoreName(), targetLocation, contentLength);
+        ReplicationMetrics.onReplicationQueued(
+            PULL_REPLICATION,
+            queueEntry.getDataStoreName(),
+            targetLocation,
+            contentLength,
+        );
 
         const metricLabels = {
             ...entry.logReader.getMetricLabels(),
@@ -254,12 +262,14 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
         }
 
         if (!this.defaultLocalLocation) {
-            this.log.error('invalid target location and no local location ' +
-                'to fall back to, skipping pull replication', {
-                method: 'ReplicationQueuePopulator._getPullReplicationTarget',
-                ...queueEntry.getLogInfo(),
-                targetLocation,
-            });
+            this.log.error(
+                'invalid target location and no local location ' + 'to fall back to, skipping pull replication',
+                {
+                    method: 'ReplicationQueuePopulator._getPullReplicationTarget',
+                    ...queueEntry.getLogInfo(),
+                    targetLocation,
+                },
+            );
             return undefined;
         }
 

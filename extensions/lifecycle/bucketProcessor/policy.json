@@ -17,9 +17,7 @@
                 "s3:ReplicateObject",
                 "scality:GetObjectArchiveInfo"
             ],
-            "Resource": [
-                "*"
-            ]
+            "Resource": ["*"]
         }
     ]
 }

@@ -1,7 +1,6 @@
 const assert = require('assert');
 
-const ReplicationMetric =
-    require('../../extensions/replication/ReplicationMetric');
+const ReplicationMetric = require('../../extensions/replication/ReplicationMetric');
 const ActionQueueEntry = require('../../lib/models/ActionQueueEntry');
 
 const mock = {
@@ -20,20 +19,18 @@ describe('ReplicationMetric', () => {
     let sentMessages;
 
     function setEntry() {
-        entry = ActionQueueEntry
-            .create()
-            .setAttribute('target', {
-                bucket: mock.bucketName,
-                key: mock.objectKey,
-                version: mock.versionId,
-            });
+        entry = ActionQueueEntry.create().setAttribute('target', {
+            bucket: mock.bucketName,
+            key: mock.objectKey,
+            version: mock.versionId,
+        });
     }
 
     function setReplicationMetric() {
         const producer = {
             send: messages => {
                 messages.forEach(message => sentMessages.push(message));
-            }
+            },
         };
         metric = new ReplicationMetric()
             .withProducer(producer)
@@ -52,8 +49,7 @@ describe('ReplicationMetric', () => {
 
     it('::_createProducerMessage should create a message', () => {
         const data = JSON.parse(metric._createProducerMessage());
-        Object.keys(mock)
-            .forEach(key => assert.strictEqual(data[key], mock[key]));
+        Object.keys(mock).forEach(key => assert.strictEqual(data[key], mock[key]));
     });
 
     ['lifecycle', 'pullReplication'].forEach(origin => {
@@ -65,18 +61,16 @@ describe('ReplicationMetric', () => {
         });
     });
 
-    it('::publish should not send data to topic if metrics are disabled',
-        () => {
-            metric.withProducer(null);
-            metric.publish();
-            assert.strictEqual(sentMessages.length, 0);
-        });
+    it('::publish should not send data to topic if metrics are disabled', () => {
+        metric.withProducer(null);
+        metric.publish();
+        assert.strictEqual(sentMessages.length, 0);
+    });
 
     it('::publish should send data to topic', () => {
         metric.publish();
         assert.strictEqual(sentMessages.length, 1);
         const data = JSON.parse(sentMessages[0].message);
-        Object.keys(mock)
-            .forEach(key => assert.strictEqual(data[key], mock[key]));
+        Object.keys(mock).forEach(key => assert.strictEqual(data[key], mock[key]));
     });
 });

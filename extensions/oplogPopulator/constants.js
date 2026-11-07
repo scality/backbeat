@@ -45,20 +45,28 @@ const constants = {
         'output.schema.key': JSON.stringify({
             type: 'record',
             name: 'keySchema',
-            fields: [{
-                name: 'ns',
-                type: [{
-                        name: 'ns',
-                        type: 'record',
-                        fields: [{
-                            name: 'coll',
-                            type: ['string', 'null'],
-                        }],
-                    }, 'null'],
-            }, {
-                name: 'key',
-                type: ['string', 'null'],
-            }],
+            fields: [
+                {
+                    name: 'ns',
+                    type: [
+                        {
+                            name: 'ns',
+                            type: 'record',
+                            fields: [
+                                {
+                                    name: 'coll',
+                                    type: ['string', 'null'],
+                                },
+                            ],
+                        },
+                        'null',
+                    ],
+                },
+                {
+                    name: 'key',
+                    type: ['string', 'null'],
+                },
+            ],
         }),
     },
 };

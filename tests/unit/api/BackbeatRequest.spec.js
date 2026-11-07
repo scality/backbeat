@@ -11,8 +11,7 @@ describe('BackbeatRequest helper class', () => {
     });
 
     describe('_parseRoute', () => {
-        it('should parse metrics routes and store internally as route details',
-        () => {
+        it('should parse metrics routes and store internally as route details', () => {
             const req = new BackbeatRequest({
                 url: '/_/metrics/crr/all',
                 method: 'GET',
@@ -43,8 +42,7 @@ describe('BackbeatRequest helper class', () => {
             assert.strictEqual(req.getContentType(), 'application/json');
         });
 
-        it('should parse crr failed routes and store internally as route ' +
-        'details', () => {
+        it('should parse crr failed routes and store internally as route ' + 'details', () => {
             const req = new BackbeatRequest({
                 url: '/_/crr/failed?marker=testmarker',
                 method: 'GET',
@@ -92,8 +90,7 @@ describe('BackbeatRequest helper class', () => {
             assert.strictEqual(details4.role, 'myrole');
         });
 
-        it('should parse monitoring routes and store internally as route ' +
-        'details', () => {
+        it('should parse monitoring routes and store internally as route ' + 'details', () => {
             const req = new BackbeatRequest({
                 url: '/_/monitoring/metrics',
                 method: 'POST',
@@ -106,13 +103,8 @@ describe('BackbeatRequest helper class', () => {
             assert.strictEqual(contentType, 'application/json');
         });
 
-        [
-            'crr',
-            'ingestion',
-            'lifecycle'
-        ].forEach(service => {
-            it(`should parse ${service} pause/resume routes and store internally` +
-            'as route details', () => {
+        ['crr', 'ingestion', 'lifecycle'].forEach(service => {
+            it(`should parse ${service} pause/resume routes and store internally` + 'as route details', () => {
                 const req = new BackbeatRequest({
                     url: `/_/${service}/resume/mysite`,
                     method: 'POST',
@@ -144,8 +136,7 @@ describe('BackbeatRequest helper class', () => {
         });
     });
 
-    it('should set route without prefix if valid route has valid prefix',
-    () => {
+    it('should set route without prefix if valid route has valid prefix', () => {
         const req = new BackbeatRequest({
             url: '/_/healthcheck',
             method: 'GET',

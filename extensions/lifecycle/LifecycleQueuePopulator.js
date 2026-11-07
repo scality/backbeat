@@ -3,8 +3,7 @@ const { constants } = require('@scality/arsenal');
 const { scaleMsPerDay } = require('@scality/arsenal').s3middleware.objectUtils;
 const { isMasterKey } = require('@scality/arsenal').versioning;
 const { mpuBucketPrefix } = constants;
-const QueuePopulatorExtension =
-    require('../../lib/queuePopulator/QueuePopulatorExtension');
+const QueuePopulatorExtension = require('../../lib/queuePopulator/QueuePopulatorExtension');
 const { authTypeAssumeRole } = require('../../lib/constants');
 const { v4: uuid } = require('uuid');
 const safeJsonParse = require('../../lib/util/safeJsonParse');
@@ -28,7 +27,6 @@ const locations = require('../../conf/locationConfig.json') || {};
 const nSecsPerDay = () => Math.ceil(scaleMsPerDay(config.timeOptions.timeProgressionFactor) / 1000);
 
 class LifecycleQueuePopulator extends QueuePopulatorExtension {
-
     /**
      * @constructor
      * @param {Object} params - constructor params
@@ -70,11 +68,10 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
         });
         producer.once('error', done);
         producer.once('ready', () => {
-            this.log.debug('producer is ready',
-                {
-                    kafkaConfig: this.kafkaConfig,
-                    topic,
-                });
+            this.log.debug('producer is ready', {
+                kafkaConfig: this.kafkaConfig,
+                topic,
+            });
             producer.removeAllListeners('error');
             producer.on('error', err => {
                 this.log.error('error from backbeat producer', { topic, error: err });
@@ -93,16 +90,26 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
      */
     setupProducers(cb) {
         const locConfigs = this.locationConfigs;
-        const coldLocations = Object.entries(locConfigs).filter(([, val]) => val.isCold).map(([key]) => key);
+        const coldLocations = Object.entries(locConfigs)
+            .filter(([, val]) => val.isCold)
+            .map(([key]) => key);
         if (coldLocations.length > 0) {
-            return async.eachLimit(coldLocations, 10, (location, done) => {
-                async.series([
-                    next => this._setupProducer(`${coldStorageRestoreAdjustTopicPrefix}${location}`, next),
-                    next => this._setupProducer(`${coldStorageRestoreTopicPrefix}${location}`, next),
-                    next => this._setupProducer(`${coldStorageGCTopicPrefix}${location}`, next),
-                    next => this._setupProducer(`${coldStorageArchiveTopicPrefix}${location}`, next),
-                ], done);
-            }, cb);
+            return async.eachLimit(
+                coldLocations,
+                10,
+                (location, done) => {
+                    async.series(
+                        [
+                            next => this._setupProducer(`${coldStorageRestoreAdjustTopicPrefix}${location}`, next),
+                            next => this._setupProducer(`${coldStorageRestoreTopicPrefix}${location}`, next),
+                            next => this._setupProducer(`${coldStorageGCTopicPrefix}${location}`, next),
+                            next => this._setupProducer(`${coldStorageArchiveTopicPrefix}${location}`, next),
+                        ],
+                        done,
+                    );
+                },
+                cb,
+            );
         } else {
             this.log.info('No cold locations found to setup producers', {
                 method: 'LifecycleQueuePopulator.setupProducers',
@@ -146,8 +153,9 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
 
     _getBucketNodeZkPath(attributes) {
         const { zookeeperPath } = this.extConfig;
-        return `${zookeeperPath}${LIFECYCLE_BUCKETS_ZK_PATH}/` +
-            `${attributes.owner}:${attributes.uid}:${attributes.name}`;
+        return (
+            `${zookeeperPath}${LIFECYCLE_BUCKETS_ZK_PATH}/` + `${attributes.owner}:${attributes.uid}:${attributes.name}`
+        );
     }
 
     /**
@@ -173,12 +181,10 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
                     });
                 }
                 if (!err) {
-                    this.log.info(
-                        'removed lifecycle zookeeper watch node for bucket',
-                        {
-                            owner: attributes.owner,
-                            bucket: attributes.name
-                        });
+                    this.log.info('removed lifecycle zookeeper watch node for bucket', {
+                        owner: attributes.owner,
+                        bucket: attributes.name,
+                    });
                 }
                 return undefined;
             });
@@ -192,12 +198,10 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
                 });
             }
             if (!err) {
-                this.log.info(
-                    'created lifecycle zookeeper watch node for bucket',
-                    {
-                        owner: attributes.owner,
-                        bucket: attributes.name
-                    });
+                this.log.info('created lifecycle zookeeper watch node for bucket', {
+                    owner: attributes.owner,
+                    bucket: attributes.name,
+                });
             }
             return undefined;
         });
@@ -220,8 +224,7 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
         //   key: bucket name
         //   value: bucket value
         // }
-        return entry.bucket === METASTORE &&
-            !(entry.key && entry.key.startsWith(mpuBucketPrefix));
+        return entry.bucket === METASTORE && !(entry.key && entry.key.startsWith(mpuBucketPrefix));
     }
 
     /**
@@ -270,10 +273,12 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
      * @return {boolean} true if a direct transition is pending for this object.
      */
     _isDirectToCold(md) {
-        return md['x-amz-scal-transition-in-progress']
-            && this._isColdLocation(md['x-amz-storage-class'])
-            && !this._isColdLocation(md.dataStoreName)
-            && !md.archive?.archiveInfo;
+        return (
+            md['x-amz-scal-transition-in-progress'] &&
+            this._isColdLocation(md['x-amz-storage-class']) &&
+            !this._isColdLocation(md.dataStoreName) &&
+            !md.archive?.archiveInfo
+        );
     }
 
     /**
@@ -317,16 +322,17 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
                 return;
             }
 
-            this.log.trace(
-                'publishing object transition entry',
-                { bucket: entry.bucket, key: entry.key, version: value.versionId, coldLocation },
-            );
+            this.log.trace('publishing object transition entry', {
+                bucket: entry.bucket,
+                key: entry.key,
+                version: value.versionId,
+                coldLocation,
+            });
 
             const topic = `${coldStorageArchiveTopicPrefix}${coldLocation}`;
             const key = `${entry.bucket}/${value.key}`;
 
-            const transitionTime = this._parseDate(
-                value['x-amz-scal-transition-time'] || value['last-modified']);
+            const transitionTime = this._parseDate(value['x-amz-scal-transition-time'] || value['last-modified']);
             const message = JSON.stringify({
                 accountId,
                 bucketName: entry.bucket,
@@ -341,8 +347,13 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
 
             const producer = this._producers[topic];
             if (producer) {
-                LifecycleMetrics.onLifecycleTriggered(this.log, 'queuePopulator', 'archive',
-                    coldLocation, Date.now() - transitionTime.getTime());
+                LifecycleMetrics.onLifecycleTriggered(
+                    this.log,
+                    'queuePopulator',
+                    'archive',
+                    coldLocation,
+                    Date.now() - transitionTime.getTime(),
+                );
 
                 const kafkaEntry = { key, message };
                 producer.send([kafkaEntry], err => {
@@ -396,8 +407,7 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
             return;
         }
 
-        if (!value.archive || !value.archive.restoreRequestedAt ||
-            !value.archive.restoreRequestedDays) {
+        if (!value.archive || !value.archive.restoreRequestedAt || !value.archive.restoreRequestedDays) {
             return;
         }
 
@@ -419,10 +429,11 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
                 return;
             }
 
-            this.log.trace(
-                'publishing object restore entry',
-                { bucket: entry.bucket, key: entry.key, version: value.versionId },
-            );
+            this.log.trace('publishing object restore entry', {
+                bucket: entry.bucket,
+                key: entry.key,
+                version: value.versionId,
+            });
 
             const topic = `${coldStorageRestoreTopicPrefix}${locationName}`;
             const key = `${entry.bucket}/${entry.key}`;
@@ -443,8 +454,13 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
 
             const producer = this._producers[topic];
             if (producer) {
-                LifecycleMetrics.onLifecycleTriggered(this.log, 'queuePopulator', 'restore',
-                    locationName, Date.now() - transitionTime.getTime());
+                LifecycleMetrics.onLifecycleTriggered(
+                    this.log,
+                    'queuePopulator',
+                    'restore',
+                    locationName,
+                    Date.now() - transitionTime.getTime(),
+                );
 
                 const kafkaEntry = { key: encodeURIComponent(key), message };
                 producer.send([kafkaEntry], err => {
@@ -549,10 +565,11 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
                 });
             }
 
-            this.log.trace(
-                'publishing object delete entry',
-                { bucket: entry.bucket, key: entry.key, version: value.versionId },
-            );
+            this.log.trace('publishing object delete entry', {
+                bucket: entry.bucket,
+                key: entry.key,
+                version: value.versionId,
+            });
 
             const topic = `${coldStorageGCTopicPrefix}${locationName}`;
             const key = `${entry.bucket}/${entry.key}`;
@@ -569,8 +586,13 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
 
             const producer = this._producers[topic];
             if (producer) {
-                LifecycleMetrics.onLifecycleTriggered(this.log, 'queuePopulator', 'archive:gc',
-                    locationName, Date.now() - entry.overheadFields.commitTimestamp);
+                LifecycleMetrics.onLifecycleTriggered(
+                    this.log,
+                    'queuePopulator',
+                    'archive:gc',
+                    locationName,
+                    Date.now() - entry.overheadFields.commitTimestamp,
+                );
 
                 const kafkaEntry = { key: encodeURIComponent(key), message };
                 producer.send([kafkaEntry], err => {
@@ -620,30 +642,30 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
         }
 
         switch (value.originOp) {
-        // supporting both 's3:ObjectRestore' and 's3:ObjectRestore:Post' to keep compatibility with
-        // older cloudserver versions, the switch to 's3:ObjectRestore:Post' was made to have the
-        // correct event type for bucket notifications.
-        // Also triggered on transition completion, to handle a deferred restore.
-        case 's3:ObjectRestore':
-        case 's3:ObjectRestore:Post':
-        case 's3:ObjectRestore:Retry':
-        case 's3:LifecycleTransition:Direct':
-            this._handleRestoreOp(entry, value);
-            break;
+            // supporting both 's3:ObjectRestore' and 's3:ObjectRestore:Post' to keep compatibility with
+            // older cloudserver versions, the switch to 's3:ObjectRestore:Post' was made to have the
+            // correct event type for bucket notifications.
+            // Also triggered on transition completion, to handle a deferred restore.
+            case 's3:ObjectRestore':
+            case 's3:ObjectRestore:Post':
+            case 's3:ObjectRestore:Retry':
+            case 's3:LifecycleTransition:Direct':
+                this._handleRestoreOp(entry, value);
+                break;
 
-        // Object creation is the only operation which may declare a cold storage class, and a retry
-        // asks for a new attempt: any other originOp comes from backbeat itself, and must not
-        // re-trigger a transition.
-        case 's3:ObjectCreated:Post':
-        case 's3:ObjectCreated:Put':
-        case 's3:ObjectCreated:CompleteMultipartUpload':
-        case 's3:ObjectCreated:Copy':
-        case 's3:LifecycleTransition:Retry':
-            this._handleTransitionOp(entry, value);
-            break;
+            // Object creation is the only operation which may declare a cold storage class, and a retry
+            // asks for a new attempt: any other originOp comes from backbeat itself, and must not
+            // re-trigger a transition.
+            case 's3:ObjectCreated:Post':
+            case 's3:ObjectCreated:Put':
+            case 's3:ObjectCreated:CompleteMultipartUpload':
+            case 's3:ObjectCreated:Copy':
+            case 's3:LifecycleTransition:Retry':
+                this._handleTransitionOp(entry, value);
+                break;
 
-        default:
-            break;
+            default:
+                break;
         }
 
         if (this.extConfig.conductor.bucketSource !== 'zookeeper') {
@@ -672,7 +694,6 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
         }
 
         return this._updateZkBucketNode(bucketValue);
-
     }
 }
 module.exports = LifecycleQueuePopulator;

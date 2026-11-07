@@ -30,9 +30,8 @@ class Rule {
             rule.Transitions = this.transitions;
         }
 
-
         const filter = {};
-        if ((this.prefix && this.tags.length) || (this.tags.length > 1)) {
+        if ((this.prefix && this.tags.length) || this.tags.length > 1) {
             // And rule
             const andRule = {};
 
@@ -78,12 +77,12 @@ class Rule {
     }
 
     /**
-    * Expiration
-    * @param {string} prop - Property must be defined in `validProps`
-    * @param {integer|boolean} value - integer for `Date` or `Days`, or
-    *   boolean for `ExpiredObjectDeleteMarker`
-    * @return {undefined}
-    */
+     * Expiration
+     * @param {string} prop - Property must be defined in `validProps`
+     * @param {integer|boolean} value - integer for `Date` or `Days`, or
+     *   boolean for `ExpiredObjectDeleteMarker`
+     * @return {undefined}
+     */
     addExpiration(prop, value) {
         const validProps = ['Date', 'Days', 'ExpiredObjectDeleteMarker'];
         if (validProps.indexOf(prop) > -1) {
@@ -94,20 +93,20 @@ class Rule {
     }
 
     /**
-    * NoncurrentVersionExpiration
-    * @param {integer} days - NoncurrentDays
-    * @return {undefined}
-    */
+     * NoncurrentVersionExpiration
+     * @param {integer} days - NoncurrentDays
+     * @return {undefined}
+     */
     addNCVExpiration(days) {
         this.ncvExpiration = { NoncurrentDays: days };
         return this;
     }
 
     /**
-    * AbortIncompleteMultipartUpload
-    * @param {integer} days - DaysAfterInitiation
-    * @return {undefined}
-    */
+     * AbortIncompleteMultipartUpload
+     * @param {integer} days - DaysAfterInitiation
+     * @return {undefined}
+     */
     addAbortMPU(days) {
         this.abortMPU = { DaysAfterInitiation: days };
         return this;

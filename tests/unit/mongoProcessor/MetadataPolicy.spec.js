@@ -2,21 +2,17 @@
 
 const assert = require('assert');
 
-const MetadataPolicy =
-    require('../../../extensions/mongoProcessor/metadataPolicy/MetadataPolicy');
+const MetadataPolicy = require('../../../extensions/mongoProcessor/metadataPolicy/MetadataPolicy');
 
 describe('MetadataPolicy', () => {
     const policy = new MetadataPolicy();
 
-    [
-        'skipsMetadataFetch',
-        'targetVersionId',
-        'apply',
-        'skipsDelete',
-    ].forEach(method => it(`should refuse to ${method}() without an ` +
-    'implementation', () => {
-        assert.throws(() => policy[method](),
-            new RegExp('sub-classes of MetadataPolicy must implement the ' +
-                `${method}\\(\\) method`));
-    }));
+    ['skipsMetadataFetch', 'targetVersionId', 'apply', 'skipsDelete'].forEach(method =>
+        it(`should refuse to ${method}() without an ` + 'implementation', () => {
+            assert.throws(
+                () => policy[method](),
+                new RegExp('sub-classes of MetadataPolicy must implement the ' + `${method}\\(\\) method`),
+            );
+        }),
+    );
 });

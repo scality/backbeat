@@ -1,8 +1,7 @@
 const assert = require('assert');
 const sinon = require('sinon');
 const config = require('../../config.json');
-const LifecycleObjectExpirationProcessor =
-    require('../../../extensions/lifecycle/objectProcessor/LifecycleObjectExpirationProcessor');
+const LifecycleObjectExpirationProcessor = require('../../../extensions/lifecycle/objectProcessor/LifecycleObjectExpirationProcessor');
 
 describe('LifecycleObjectExpirationProcessor', () => {
     let objectProcessor;
@@ -18,10 +17,7 @@ describe('LifecycleObjectExpirationProcessor', () => {
 
     it('should not pin fromOffset on the object tasks topic', () => {
         const consumerParams = objectProcessor.getConsumerParams();
-        assert.strictEqual(
-            consumerParams[config.extensions.lifecycle.objectTasksTopic].fromOffset,
-            undefined,
-        );
+        assert.strictEqual(consumerParams[config.extensions.lifecycle.objectTasksTopic].fromOffset, undefined);
     });
 
     it('should contain object tasks topic in consumer params', () => {

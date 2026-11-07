@@ -1,11 +1,9 @@
 'use strict';
 
 const LifecycleObjectProcessor = require('./LifecycleObjectProcessor');
-const LifecycleDeleteObjectTask =
-    require('../tasks/LifecycleDeleteObjectTask');
+const LifecycleDeleteObjectTask = require('../tasks/LifecycleDeleteObjectTask');
 
 class LifecycleObjectExpirationProcessor extends LifecycleObjectProcessor {
-
     /**
      * Constructor of LifecycleObjectProcessor
      *
@@ -62,10 +60,7 @@ class LifecycleObjectExpirationProcessor extends LifecycleObjectProcessor {
             case 'deleteMPU':
                 return new LifecycleDeleteObjectTask(this);
             default:
-                this._log.warn(
-                    `skipped unsupported action ${actionType}`,
-                    actionEntry.getLogInfo(),
-                );
+                this._log.warn(`skipped unsupported action ${actionType}`, actionEntry.getLogInfo());
                 return null;
         }
     }

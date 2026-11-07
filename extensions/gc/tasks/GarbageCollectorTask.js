@@ -48,36 +48,49 @@ class GarbageCollectorTask extends BackbeatTask {
 
             if (!backbeatClient) {
                 log.error('failed to get backbeat client', { accountId });
-                return done(errors.InternalError
-                    .customizeDescription('Unable to obtain client'));
+                return done(errors.InternalError.customizeDescription('Unable to obtain client'));
             }
 
             const { bucket, key, version } = entry.getAttribute('target');
-            return backbeatClient.getMetadata({
-                bucket,
-                objectKey: key,
-                versionId: version,
-            }, log, (err, blob) => {
-                if (err) {
-                    log.error('error getting metadata blob from S3', Object.assign({
-                        method: 'GarbageCollectorTask._getMetadata',
-                        error: err.message,
-                    }, entry.getLogInfo()));
-                    return done(err);
-                }
+            return backbeatClient.getMetadata(
+                {
+                    bucket,
+                    objectKey: key,
+                    versionId: version,
+                },
+                log,
+                (err, blob) => {
+                    if (err) {
+                        log.error(
+                            'error getting metadata blob from S3',
+                            Object.assign(
+                                {
+                                    method: 'GarbageCollectorTask._getMetadata',
+                                    error: err.message,
+                                },
+                                entry.getLogInfo(),
+                            ),
+                        );
+                        return done(err);
+                    }
 
-                const res = ObjectMD.createFromBlob(blob.Body);
-                if (res.error) {
-                    log.error('error parsing metadata blob', Object.assign({
-                        error: res.error,
-                        method: 'GarbageCollectorTask._getMetadata',
-                    }, entry.getLogInfo()));
-                    return done(
-                        errors.InternalError.
-                        customizeDescription('error parsing metadata blob'));
-                }
-                return done(null, res.result);
-            });
+                    const res = ObjectMD.createFromBlob(blob.Body);
+                    if (res.error) {
+                        log.error(
+                            'error parsing metadata blob',
+                            Object.assign(
+                                {
+                                    error: res.error,
+                                    method: 'GarbageCollectorTask._getMetadata',
+                                },
+                                entry.getLogInfo(),
+                            ),
+                        );
+                        return done(errors.InternalError.customizeDescription('error parsing metadata blob'));
+                    }
+                    return done(null, res.result);
+                },
+            );
         });
     }
 
@@ -90,29 +103,36 @@ class GarbageCollectorTask extends BackbeatTask {
             const backbeatClient = this.getBackbeatMetadataProxy(accountId);
             if (!backbeatClient) {
                 log.error('failed to get backbeat client', { accountId });
-                return done(errors.InternalError
-                    .customizeDescription('Unable to obtain client'));
+                return done(errors.InternalError.customizeDescription('Unable to obtain client'));
             }
 
             const { bucket, key, version } = entry.getAttribute('target');
-            return backbeatClient.putMetadata({
-                bucket,
-                objectKey: key,
-                versionId: version,
-                mdBlob: objMD.getSerialized(),
-            }, log, err => {
-                if (err) {
-                    log.error(
-                        'an error occurred when updating metadata for transition',
-                        Object.assign({
-                            method: 'GarbageCollectorTask._putMetadata',
-                            error: err.message,
-                        }, entry.getLogInfo()));
-                    return done(err);
-                }
+            return backbeatClient.putMetadata(
+                {
+                    bucket,
+                    objectKey: key,
+                    versionId: version,
+                    mdBlob: objMD.getSerialized(),
+                },
+                log,
+                err => {
+                    if (err) {
+                        log.error(
+                            'an error occurred when updating metadata for transition',
+                            Object.assign(
+                                {
+                                    method: 'GarbageCollectorTask._putMetadata',
+                                    error: err.message,
+                                },
+                                entry.getLogInfo(),
+                            ),
+                        );
+                        return done(err);
+                    }
 
-                return done();
-            });
+                    return done();
+                },
+            );
         });
     }
 
@@ -126,8 +146,7 @@ class GarbageCollectorTask extends BackbeatTask {
             const backbeatClient = this.getBackbeatClient(accountId);
             if (!backbeatClient) {
                 log.error('failed to get backbeat client', { accountId });
-                return done(errors.InternalError
-                    .customizeDescription('Unable to obtain client'));
+                return done(errors.InternalError.customizeDescription('Unable to obtain client'));
             }
 
             const command = new BatchDeleteCommand({
@@ -135,7 +154,8 @@ class GarbageCollectorTask extends BackbeatTask {
                 RequestUids: log.getSerializedUids(),
             });
 
-            return backbeatClient.send(command)
+            return backbeatClient
+                .send(command)
                 .then(() => done())
                 .catch(err => done(err));
         });
@@ -179,26 +199,39 @@ class GarbageCollectorTask extends BackbeatTask {
             entry.setEnd(err);
             log.info('action execution ended', entry.getLogInfo());
             if (err && err.statusCode === 412) {
-                log.info('precondition for garbage collection was not met',
-                    Object.assign({
-                        method: 'LifecycleObjectTask._executeDeleteData',
-                        lastModified: entry.getAttribute('source.lastModified'),
-                    }, entry.getLogInfo()));
+                log.info(
+                    'precondition for garbage collection was not met',
+                    Object.assign(
+                        {
+                            method: 'LifecycleObjectTask._executeDeleteData',
+                            lastModified: entry.getAttribute('source.lastModified'),
+                        },
+                        entry.getLogInfo(),
+                    ),
+                );
                 return done();
             }
             if (err) {
-                log.error('an error occurred on deleteData method to ' +
-                    'backbeat route',
-                    Object.assign({
-                        method: 'LifecycleObjectTask._executeDeleteData',
-                        error: err.message,
-                        httpStatus: err.statusCode,
-                    }, entry.getLogInfo()));
+                log.error(
+                    'an error occurred on deleteData method to ' + 'backbeat route',
+                    Object.assign(
+                        {
+                            method: 'LifecycleObjectTask._executeDeleteData',
+                            error: err.message,
+                            httpStatus: err.statusCode,
+                        },
+                        entry.getLogInfo(),
+                    ),
+                );
                 return done(err);
             }
 
-            GarbageCollectorMetrics.onGcCompleted(log, ruleType,
-                locations[0]?.dataStoreName, Date.now() - entry.getAttribute('timestamp'));
+            GarbageCollectorMetrics.onGcCompleted(
+                log,
+                ruleType,
+                locations[0]?.dataStoreName,
+                Date.now() - entry.getAttribute('timestamp'),
+            );
             return done();
         });
     }
@@ -211,154 +244,178 @@ class GarbageCollectorTask extends BackbeatTask {
             ruleType: entry.getContextAttribute('ruleType'),
         };
 
-        this.retry({
-            actionDesc: 'execute delete data',
-            logFields,
-            actionFunc: cb => this._executeDeleteDataOnce(entry, log, cb),
-            shouldRetryFunc: err => err.retryable,
-            log,
-        }, err => {
-            if (err) {
-                const ruleType = entry.getContextAttribute('ruleType');
-                log.error('task failed permanently after retries, committing offset', {
-                    method: 'GarbageCollectorTask._executeDeleteData',
-                    error: err.message,
-                    locations: entry.getAttribute('target.locations'),
-                    ...entry.getLogInfo(),
-                });
-                GarbageCollectorMetrics.onGcFailed(log, ruleType,
-                    entry.getAttribute('source.storageClass'));
-            }
-            return done(err);
-        });
+        this.retry(
+            {
+                actionDesc: 'execute delete data',
+                logFields,
+                actionFunc: cb => this._executeDeleteDataOnce(entry, log, cb),
+                shouldRetryFunc: err => err.retryable,
+                log,
+            },
+            err => {
+                if (err) {
+                    const ruleType = entry.getContextAttribute('ruleType');
+                    log.error('task failed permanently after retries, committing offset', {
+                        method: 'GarbageCollectorTask._executeDeleteData',
+                        error: err.message,
+                        locations: entry.getAttribute('target.locations'),
+                        ...entry.getLogInfo(),
+                    });
+                    GarbageCollectorMetrics.onGcFailed(log, ruleType, entry.getAttribute('source.storageClass'));
+                }
+                return done(err);
+            },
+        );
     }
 
     _deleteArchivedSourceDataOnce(entry, log, done) {
         const { bucket, key, version, oldLocation, newLocation } = entry.getAttribute('target');
 
-        async.waterfall([
-            next => this._getMetadata(entry, log, (err, objMD) => {
-                GarbageCollectorMetrics.onS3Request(log, 'getMetadata', 'archive', err);
-                return next(err, objMD);
-            }),
-            (objMD, next) => {
-                if (!objMD.getTransitionInProgress()) {
-                    log.warn('transition already completed, skipping', {
-                        method: 'GarbageCollectorTask._deleteArchivedSourceDataOnce',
+        async.waterfall(
+            [
+                next =>
+                    this._getMetadata(entry, log, (err, objMD) => {
+                        GarbageCollectorMetrics.onS3Request(log, 'getMetadata', 'archive', err);
+                        return next(err, objMD);
+                    }),
+                (objMD, next) => {
+                    if (!objMD.getTransitionInProgress()) {
+                        log.warn('transition already completed, skipping', {
+                            method: 'GarbageCollectorTask._deleteArchivedSourceDataOnce',
+                            bucket,
+                            key,
+                            version,
+                        });
+                        return done();
+                    }
+
+                    const locations = objMD.getLocation();
+                    if (!locations?.length) {
+                        return next(null, objMD);
+                    }
+
+                    const params = {
+                        Locations: locations.map(location => ({
+                            key: location.key,
+                            dataStoreName: location.dataStoreName,
+                            size: location.size,
+                            dataStoreVersionId: location.dataStoreVersionId,
+                        })),
+                        Bucket: bucket,
+                        Key: key,
+                        StorageClass: oldLocation,
+                        Tags: JSON.stringify({
+                            'scal-delete-marker': 'true',
+                            'scal-delete-service': entry.getAttribute('serviceName'),
+                        }),
+                    };
+
+                    return this._batchDeleteData(params, entry, log, err => {
+                        GarbageCollectorMetrics.onS3Request(log, 'batchdelete', 'archive', err);
+                        entry.setEnd(err);
+                        log.info('action execution ended', entry.getLogInfo());
+
+                        if (err && err.statusCode === 404) {
+                            log.info(
+                                'unable to find data to delete',
+                                Object.assign(
+                                    {
+                                        method: 'GarbageCollectorTask._deleteArchivedSourceData',
+                                        bucket,
+                                        key,
+                                        version,
+                                    },
+                                    entry.getLogInfo,
+                                ),
+                            );
+                            return next(null, objMD);
+                        }
+
+                        if (err) {
+                            // Stash the parts on the entry so the outer
+                            // retry-wrapper's failure log (in
+                            // _deleteArchivedSourceData) can surface them for ops
+                            // to reclaim manually if the delete never succeeds.
+                            entry.setAttribute('target.locations', locations);
+                            log.error(
+                                'an error occurred on batchDelete backbeat route',
+                                Object.assign(
+                                    {
+                                        method: 'GarbageCollectorTask._deleteArchivedSourceData',
+                                        error: err.message,
+                                        httpStatus: err.statusCode,
+                                    },
+                                    entry.getLogInfo(),
+                                ),
+                            );
+                            return next(err);
+                        }
+                        return next(null, objMD);
+                    });
+                },
+                (objMD, next) => {
+                    log.debug('successfully deleted location data', {
                         bucket,
                         key,
                         version,
                     });
-                    return done();
-                }
 
-                const locations = objMD.getLocation();
-                if (!locations?.length) {
-                    return next(null, objMD);
-                }
+                    // Only a direct transition can declare the cold class at this point.
+                    const isDirectToCold = objMD.getAmzStorageClass() === newLocation;
 
-                const params = {
-                    Locations: locations.map(location => ({
-                        key: location.key,
-                        dataStoreName: location.dataStoreName,
-                        size: location.size,
-                        dataStoreVersionId: location.dataStoreVersionId,
-                    })),
-                    Bucket: bucket,
-                    Key: key,
-                    StorageClass: oldLocation,
-                    Tags: JSON.stringify({
-                        'scal-delete-marker': 'true',
-                        'scal-delete-service': entry.getAttribute('serviceName'),
-                    }),
-                };
+                    objMD
+                        .setLocation()
+                        .setDataStoreName(newLocation)
+                        .setAmzStorageClass(newLocation)
+                        .setTransitionInProgress(false)
+                        .setOriginOp(isDirectToCold ? 's3:LifecycleTransition:Direct' : 's3:LifecycleTransition')
+                        .setUserMetadata({ [TRANSITION_ATTEMPT_MD]: undefined });
+                    this._putMetadata(entry, objMD, log, err => {
+                        GarbageCollectorMetrics.onS3Request(log, 'putMetadata', 'archive', err);
+                        if (!err) {
+                            log.end().info('completed expiration of archived data', entry.getLogInfo());
+                            GarbageCollectorMetrics.onGcCompleted(
+                                log,
+                                'archive',
+                                entry.getAttribute('target.oldLocation'),
+                                Date.now() - entry.getAttribute('timestamp'),
+                            );
+                        }
 
-                return this._batchDeleteData(params, entry, log, err => {
-                    GarbageCollectorMetrics.onS3Request(log, 'batchdelete', 'archive', err);
-                    entry.setEnd(err);
-                    log.info('action execution ended', entry.getLogInfo());
-
-                    if (err && err.statusCode === 404) {
-                        log.info('unable to find data to delete',
-                            Object.assign({
-                                method: 'GarbageCollectorTask._deleteArchivedSourceData',
-                                bucket,
-                                key,
-                                version,
-                            }, entry.getLogInfo));
-                        return next(null, objMD);
-                    }
-
-                    if (err) {
-                        // Stash the parts on the entry so the outer
-                        // retry-wrapper's failure log (in
-                        // _deleteArchivedSourceData) can surface them for ops
-                        // to reclaim manually if the delete never succeeds.
-                        entry.setAttribute('target.locations', locations);
-                        log.error('an error occurred on batchDelete backbeat route',
-                            Object.assign({
-                                method: 'GarbageCollectorTask._deleteArchivedSourceData',
-                                error: err.message,
-                                httpStatus: err.statusCode,
-                            }, entry.getLogInfo()));
-                        return next(err);
-                    }
-                    return next(null, objMD);
-                });
-            },
-            (objMD, next) => {
-                log.debug('successfully deleted location data', {
-                    bucket,
-                    key,
-                    version,
-                });
-
-                // Only a direct transition can declare the cold class at this point.
-                const isDirectToCold = objMD.getAmzStorageClass() === newLocation;
-
-                objMD.setLocation()
-                    .setDataStoreName(newLocation)
-                    .setAmzStorageClass(newLocation)
-                    .setTransitionInProgress(false)
-                    .setOriginOp(isDirectToCold ? 's3:LifecycleTransition:Direct' : 's3:LifecycleTransition')
-                    .setUserMetadata({ [TRANSITION_ATTEMPT_MD]: undefined });
-                this._putMetadata(entry, objMD, log, err => {
-                    GarbageCollectorMetrics.onS3Request(log, 'putMetadata', 'archive', err);
-                    if (!err) {
-                        log.end().info('completed expiration of archived data',
-                            entry.getLogInfo());
-                        GarbageCollectorMetrics.onGcCompleted(log, 'archive',
-                            entry.getAttribute('target.oldLocation'),
-                            Date.now() - entry.getAttribute('timestamp'));
-                    }
-
-                    next(err);
-                });
-            },
-        ], err => done(err));
+                        next(err);
+                    });
+                },
+            ],
+            err => done(err),
+        );
     }
 
     _deleteArchivedSourceData(entry, log, done) {
-        this.retry({
-            actionDesc: 'delete archived source data',
-            logFields: { bucket: entry.getAttribute('target').bucket,
-                key: entry.getAttribute('target').key, version: entry.getAttribute('target').version },
-            actionFunc: cb => this._deleteArchivedSourceDataOnce(entry, log, cb),
-            shouldRetryFunc: err => err.retryable,
-            log,
-        }, err => {
-            if (err && err.name !== 'ObjNotFound' && err.name !== 'NoSuchBucket') {
-                log.error('task failed permanently after retries, committing offset', {
-                    method: 'GarbageCollectorTask._deleteArchivedSourceData',
-                    error: err.message,
-                    locations: entry.getAttribute('target.locations'),
-                    ...entry.getLogInfo(),
-                });
-                GarbageCollectorMetrics.onGcFailed(log, 'archive',
-                    entry.getAttribute('target.oldLocation'));
-            }
-            return done(err);
-        });
+        this.retry(
+            {
+                actionDesc: 'delete archived source data',
+                logFields: {
+                    bucket: entry.getAttribute('target').bucket,
+                    key: entry.getAttribute('target').key,
+                    version: entry.getAttribute('target').version,
+                },
+                actionFunc: cb => this._deleteArchivedSourceDataOnce(entry, log, cb),
+                shouldRetryFunc: err => err.retryable,
+                log,
+            },
+            err => {
+                if (err && err.name !== 'ObjNotFound' && err.name !== 'NoSuchBucket') {
+                    log.error('task failed permanently after retries, committing offset', {
+                        method: 'GarbageCollectorTask._deleteArchivedSourceData',
+                        error: err.message,
+                        locations: entry.getAttribute('target.locations'),
+                        ...entry.getLogInfo(),
+                    });
+                    GarbageCollectorMetrics.onGcFailed(log, 'archive', entry.getAttribute('target.oldLocation'));
+                }
+                return done(err);
+            },
+        );
     }
 
     /**
@@ -375,13 +432,13 @@ class GarbageCollectorTask extends BackbeatTask {
         const log = this.logger.newRequestLogger();
 
         switch (entry.getActionType()) {
-        case 'deleteData':
-            return this._executeDeleteData(entry, log, done);
-        case 'deleteArchivedSourceData':
-            return this._deleteArchivedSourceData(entry, log, done);
-        default:
-            log.warn('skipped unsupported action', entry.getLogInfo());
-            return process.nextTick(done);
+            case 'deleteData':
+                return this._executeDeleteData(entry, log, done);
+            case 'deleteArchivedSourceData':
+                return this._deleteArchivedSourceData(entry, log, done);
+            default:
+                log.warn('skipped unsupported action', entry.getLogInfo());
+                return process.nextTick(done);
         }
     }
 }

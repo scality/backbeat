@@ -63,7 +63,7 @@ function filterConfigsByEvent(queueConfig, eventType) {
                 return eventType.toLowerCase().startsWith(starts.toLowerCase());
             }
             return eventType.toLowerCase() === evt.toLowerCase();
-        })
+        }),
     );
 }
 
@@ -82,7 +82,7 @@ function validateEntry(bnConfig, entry) {
      * if the event type is unavailable, it is an entry that is a
      * placeholder for deletion or cleanup, these entries should be ignored and
      * not be processed.
-    */
+     */
     if (!eventType) {
         return { isValid: false, matchingConfig: null };
     }

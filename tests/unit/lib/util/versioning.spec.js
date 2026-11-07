@@ -1,8 +1,15 @@
 const assert = require('assert');
-const { models: { ObjectMD }, versioning } = require('@scality/arsenal');
+const {
+    models: { ObjectMD },
+    versioning,
+} = require('@scality/arsenal');
 
-const { extractVersionId, getEncodedVersionId, hasVersionKey, isShadowedMaster } =
-    require('../../../../lib/util/versioning');
+const {
+    extractVersionId,
+    getEncodedVersionId,
+    hasVersionKey,
+    isShadowedMaster,
+} = require('../../../../lib/util/versioning');
 const { listEntries } = require('../../../utils/nullVersionRows');
 
 describe('versioning utils', () => {

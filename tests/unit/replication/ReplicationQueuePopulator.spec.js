@@ -3,12 +3,10 @@ const sinon = require('sinon');
 
 const { encode } = require('@scality/arsenal').versioning.VersionID;
 
-const ReplicationQueuePopulator =
-    require('../../../extensions/replication/ReplicationQueuePopulator');
+const ReplicationQueuePopulator = require('../../../extensions/replication/ReplicationQueuePopulator');
 const ReplicationAPI = require('../../../extensions/replication/ReplicationAPI');
 const ReplicationMetrics = require('../../../extensions/replication/ReplicationMetrics');
-const { LifecycleMetrics } =
-    require('../../../extensions/lifecycle/LifecycleMetrics');
+const { LifecycleMetrics } = require('../../../extensions/lifecycle/LifecycleMetrics');
 const config = require('../../../lib/Config');
 
 const fakeLogger = require('../../utils/fakeLogger');
@@ -20,11 +18,13 @@ const labels = { a: 10 }; // dummy metric labels
 
 const repInfo = {
     status: 'PENDING',
-    backends: [{
-        site: SITE,
-        status: 'PENDING',
-        dataStoreVersionId: '',
-    }],
+    backends: [
+        {
+            site: SITE,
+            status: 'PENDING',
+            dataStoreVersionId: '',
+        },
+    ],
     content: ['DATA', 'METADATA'],
     destination: 'arn:aws:s3:::test-bucket-target',
     storageClass: 'awsbackend',
@@ -64,10 +64,7 @@ const kafkaValue = {
 };
 
 const mdOnlyKafkaValue = Object.assign({}, kafkaValue);
-mdOnlyKafkaValue.replicationInfo = Object.assign({},
-    kafkaValue.replicationInfo,
-    { content: ['METADATA'] }
-);
+mdOnlyKafkaValue.replicationInfo = Object.assign({}, kafkaValue.replicationInfo, { content: ['METADATA'] });
 
 /**
  * This mock object is to overwrite the `publish` method and add a way of
@@ -144,55 +141,71 @@ describe('replication queue populator', () => {
     [
         {
             desc: 'object entry, not a master key',
-            entry: Object.assign({}, {
-                type: 'put',
-                bucket: 'test-bucket-source',
-                key: 'a-test-key',
-                logReader: {
-                    getMetricLabels: stubMetricLabels(),
+            entry: Object.assign(
+                {},
+                {
+                    type: 'put',
+                    bucket: 'test-bucket-source',
+                    key: 'a-test-key',
+                    logReader: {
+                        getMetricLabels: stubMetricLabels(),
+                    },
                 },
-            }, { value: JSON.stringify(kafkaValue) }),
+                { value: JSON.stringify(kafkaValue) },
+            ),
             results: {},
         },
         {
             desc: 'cold object entry',
-            entry: Object.assign({}, {
-                type: 'put',
-                bucket: 'test-bucket-source',
-                key: 'a-test-key\u000098477724999464999999RG001  1.30.12',
-                logReader: {
-                    getMetricLabels: stubMetricLabels(),
+            entry: Object.assign(
+                {},
+                {
+                    type: 'put',
+                    bucket: 'test-bucket-source',
+                    key: 'a-test-key\u000098477724999464999999RG001  1.30.12',
+                    logReader: {
+                        getMetricLabels: stubMetricLabels(),
+                    },
                 },
-            }, { value: overwriteDataStoreName(kafkaValue, 'location-dmf-v1') }),
+                { value: overwriteDataStoreName(kafkaValue, 'location-dmf-v1') },
+            ),
             results: {},
         },
         {
             desc: 'object entry, master key',
-            entry: Object.assign({}, {
-                type: 'put',
-                bucket: 'test-bucket-source',
-                key: 'a-test-key\u000098477724999464999999RG001  1.30.12',
-                logReader: {
-                    getMetricLabels: stubMetricLabels(),
+            entry: Object.assign(
+                {},
+                {
+                    type: 'put',
+                    bucket: 'test-bucket-source',
+                    key: 'a-test-key\u000098477724999464999999RG001  1.30.12',
+                    logReader: {
+                        getMetricLabels: stubMetricLabels(),
+                    },
                 },
-            }, { value: JSON.stringify(kafkaValue) }),
+                { value: JSON.stringify(kafkaValue) },
+            ),
             results: { [SITE]: { ops: 1, bytes: 128 } },
         },
         {
             desc: 'object entry, master key, multiple backend',
-            entry: Object.assign({}, {
-                type: 'put',
-                bucket: 'test-bucket-source',
-                key: 'a-test-key2\u000098477724999464999999RG001  1.30.12',
-                logReader: {
-                    getMetricLabels: stubMetricLabels(),
+            entry: Object.assign(
+                {},
+                {
+                    type: 'put',
+                    bucket: 'test-bucket-source',
+                    key: 'a-test-key2\u000098477724999464999999RG001  1.30.12',
+                    logReader: {
+                        getMetricLabels: stubMetricLabels(),
+                    },
                 },
-            }, { value:
-                overwriteBackends(kafkaValue, [
-                    { site: SITE, status: 'PENDING' },
-                    { site: SITE2, status: 'PENDING' },
-                ]),
-            }),
+                {
+                    value: overwriteBackends(kafkaValue, [
+                        { site: SITE, status: 'PENDING' },
+                        { site: SITE2, status: 'PENDING' },
+                    ]),
+                },
+            ),
             results: {
                 [SITE]: { ops: 1, bytes: 128 },
                 [SITE2]: { ops: 1, bytes: 128 },
@@ -200,14 +213,18 @@ describe('replication queue populator', () => {
         },
         {
             desc: 'metadata only entry, master key',
-            entry: Object.assign({}, {
-                type: 'put',
-                bucket: 'test-bucket-source',
-                key: 'a-test-key2\u000098477724999464999999RG001  1.30.12',
-                logReader: {
-                    getMetricLabels: stubMetricLabels(),
+            entry: Object.assign(
+                {},
+                {
+                    type: 'put',
+                    bucket: 'test-bucket-source',
+                    key: 'a-test-key2\u000098477724999464999999RG001  1.30.12',
+                    logReader: {
+                        getMetricLabels: stubMetricLabels(),
+                    },
                 },
-            }, { value: JSON.stringify(mdOnlyKafkaValue) }),
+                { value: JSON.stringify(mdOnlyKafkaValue) },
+            ),
             results: { [SITE]: { ops: 1, bytes: 0 } },
         },
     ].forEach(input => {
@@ -221,8 +238,7 @@ describe('replication queue populator', () => {
             delete expected.logReader;
 
             if (Object.keys(input.results).length) {
-                assert.deepStrictEqual(JSON.stringify(expected),
-                    rqp.getState().message);
+                assert.deepStrictEqual(JSON.stringify(expected), rqp.getState().message);
             } else {
                 assert.deepStrictEqual(rqp.getState(), {});
             }
@@ -230,39 +246,40 @@ describe('replication queue populator', () => {
     });
 
     it('publish prom metrics', () => {
-        const entry = Object.assign({}, {
-            type: 'put',
-            bucket: 'test-bucket-source',
-            key: 'a-test-key\u000098477724999464999999RG001  1.30.12',
-            logReader: {
-                getMetricLabels: stubMetricLabels(),
+        const entry = Object.assign(
+            {},
+            {
+                type: 'put',
+                bucket: 'test-bucket-source',
+                key: 'a-test-key\u000098477724999464999999RG001  1.30.12',
+                logReader: {
+                    getMetricLabels: stubMetricLabels(),
+                },
             },
-        }, { value: JSON.stringify(kafkaValue) });
+            { value: JSON.stringify(kafkaValue) },
+        );
 
         rqp._filterKeyOp(entry);
 
         const expectedLabels = { ...labels, direction: 'push' };
-        sinon.assert.calledOnceWithExactly(
-            params.metricsHandler.bytes,
-            expectedLabels,
-            128
-        );
-        sinon.assert.calledOnceWithExactly(
-            params.metricsHandler.objects,
-            expectedLabels
-        );
+        sinon.assert.calledOnceWithExactly(params.metricsHandler.bytes, expectedLabels, 128);
+        sinon.assert.calledOnceWithExactly(params.metricsHandler.objects, expectedLabels);
     });
 
     it('can publish when filtering bucket op', () => {
         const labels = { a: 10 }; // dummy metric labels
         const metricLabelsStub = sinon.stub();
         metricLabelsStub.returns(labels);
-        const entry = Object.assign({}, {
-            type: 'put',
-            bucket: 'test-bucket-source',
-            key: 'a-test-key\u000098477724999464999999RG001  1.30.12',
-            logReader: {},
-        }, { value: JSON.stringify(kafkaValue) });
+        const entry = Object.assign(
+            {},
+            {
+                type: 'put',
+                bucket: 'test-bucket-source',
+                key: 'a-test-key\u000098477724999464999999RG001  1.30.12',
+                logReader: {},
+            },
+            { value: JSON.stringify(kafkaValue) },
+        );
         // force the circular reference
         entry.logReader.entry = entry;
 
@@ -278,14 +295,18 @@ describe('replication queue populator', () => {
             ...kafkaValue,
         };
         delete customKafkaValue.versionId;
-        const entry = Object.assign({}, {
-            type: 'put',
-            bucket: 'test-bucket-source',
-            key: '\x7FMkey0',
-            logReader: {
-                getMetricLabels: () => {},
+        const entry = Object.assign(
+            {},
+            {
+                type: 'put',
+                bucket: 'test-bucket-source',
+                key: '\x7FMkey0',
+                logReader: {
+                    getMetricLabels: () => {},
+                },
             },
-        }, { value: JSON.stringify(customKafkaValue) });
+            { value: JSON.stringify(customKafkaValue) },
+        );
 
         rqp._filterKeyOp(entry);
 
@@ -299,14 +320,18 @@ describe('replication queue populator', () => {
             versionId: '98285859405462999999RG001  ',
             isNull: true,
         };
-        const entry = Object.assign({}, {
-            type: 'put',
-            bucket: 'test-bucket-source',
-            key: '\x7FMkey0',
-            logReader: {
-                getMetricLabels: () => {},
+        const entry = Object.assign(
+            {},
+            {
+                type: 'put',
+                bucket: 'test-bucket-source',
+                key: '\x7FMkey0',
+                logReader: {
+                    getMetricLabels: () => {},
+                },
             },
-        }, { value: JSON.stringify(customKafkaValue) });
+            { value: JSON.stringify(customKafkaValue) },
+        );
 
         rqp._filterKeyOp(entry);
 
@@ -319,14 +344,18 @@ describe('replication queue populator', () => {
             ...kafkaValue,
             versionId: '98285859405462999999RG001  ',
         };
-        const entry = Object.assign({}, {
-            type: 'put',
-            bucket: 'test-bucket-source',
-            key: '\x7FMkey0',
-            logReader: {
-                getMetricLabels: () => {},
+        const entry = Object.assign(
+            {},
+            {
+                type: 'put',
+                bucket: 'test-bucket-source',
+                key: '\x7FMkey0',
+                logReader: {
+                    getMetricLabels: () => {},
+                },
             },
-        }, { value: JSON.stringify(customKafkaValue) });
+            { value: JSON.stringify(customKafkaValue) },
+        );
 
         rqp._filterKeyOp(entry);
 
@@ -427,16 +456,18 @@ describe('replication queue populator: pull replication', () => {
         return JSON.stringify({
             ...kafkaValue,
             dataStoreName: CRR_LOCATION,
-            location: [{
-                key: 'some-data-key',
-                size: 128,
-                start: 0,
-                dataStoreName: CRR_LOCATION,
-                dataStoreETag: '1:d41d8cd98f00b204e9800118ecf8427e',
-                bucket: 'test-bucket-source',
-                role: 'arn:aws:iam::123456789012:role/source-read',
-                targetLocation: TARGET_LOCATION,
-            }],
+            location: [
+                {
+                    key: 'some-data-key',
+                    size: 128,
+                    start: 0,
+                    dataStoreName: CRR_LOCATION,
+                    dataStoreETag: '1:d41d8cd98f00b204e9800118ecf8427e',
+                    bucket: 'test-bucket-source',
+                    role: 'arn:aws:iam::123456789012:role/source-read',
+                    targetLocation: TARGET_LOCATION,
+                },
+            ],
             ...overrides,
         });
     }
@@ -504,33 +535,34 @@ describe('replication queue populator: pull replication', () => {
         });
         assert.strictEqual(action.metrics.fromLocation, CRR_LOCATION);
         assert.strictEqual(action.metrics.contentLength, 128);
-        assert.strictEqual(action.metrics.transitionTime,
-            '2024-05-06T10:11:12.000Z');
+        assert.strictEqual(action.metrics.transitionTime, '2024-05-06T10:11:12.000Z');
     });
 
     it('should report the transition as triggered', () => {
         rqp._filterKeyOp(makeEntry(makeValue()));
 
-        sinon.assert.calledOnceWithExactly(triggeredMetric, rqp.log,
-            'queuePopulator', 'pullReplication', TARGET_LOCATION,
-            sinon.match.number);
+        sinon.assert.calledOnceWithExactly(
+            triggeredMetric,
+            rqp.log,
+            'queuePopulator',
+            'pullReplication',
+            TARGET_LOCATION,
+            sinon.match.number,
+        );
     });
 
     it('should count the object on the populator metrics as pulled', () => {
         rqp._filterKeyOp(makeEntry(makeValue()));
 
         const expectedLabels = { ...labels, direction: 'pull' };
-        sinon.assert.calledOnceWithExactly(params.metricsHandler.objects,
-            expectedLabels);
-        sinon.assert.calledOnceWithExactly(params.metricsHandler.bytes,
-            expectedLabels, 128);
+        sinon.assert.calledOnceWithExactly(params.metricsHandler.objects, expectedLabels);
+        sinon.assert.calledOnceWithExactly(params.metricsHandler.bytes, expectedLabels, 128);
     });
 
     it('should report the object as queued for pull replication', () => {
         rqp._filterKeyOp(makeEntry(makeValue()));
 
-        sinon.assert.calledOnceWithExactly(queuedMetric, 'pullReplication',
-            CRR_LOCATION, TARGET_LOCATION, 128);
+        sinon.assert.calledOnceWithExactly(queuedMetric, 'pullReplication', CRR_LOCATION, TARGET_LOCATION, 128);
     });
 
     it('should not report an object it skipped as queued', () => {
@@ -640,10 +672,7 @@ describe('replication queue populator: pull replication', () => {
         rqp._filterKeyOp(makeEntry(value));
 
         sinon.assert.notCalled(triggeredMetric);
-        assert.strictEqual(
-            rqp.published.filter(
-                p => p.topic === ReplicationAPI.getDataMoverTopic()).length,
-            0);
+        assert.strictEqual(rqp.published.filter(p => p.topic === ReplicationAPI.getDataMoverTopic()).length, 0);
     });
 
     it('should not pull objects on a regular location', () => {
@@ -664,10 +693,7 @@ describe('replication queue populator: pull replication', () => {
 
         populator._filterKeyOp(makeEntry(makeValue()));
 
-        assert.strictEqual(
-            populator.published.filter(
-                p => p.topic === ReplicationAPI.getDataMoverTopic()).length,
-            0);
+        assert.strictEqual(populator.published.filter(p => p.topic === ReplicationAPI.getDataMoverTopic()).length, 0);
         sinon.assert.notCalled(triggeredMetric);
     });
 
@@ -680,14 +706,16 @@ describe('replication queue populator: pull replication', () => {
         it(`should pull to the default location with ${desc}`, () => {
             const warnSpy = sinon.spy(rqp.log, 'warn');
             const value = makeValue({
-                location: [{
-                    key: 'some-data-key',
-                    size: 128,
-                    start: 0,
-                    dataStoreName: CRR_LOCATION,
-                    dataStoreETag: '1:d41d8cd98f00b204e9800118ecf8427e',
-                    targetLocation,
-                }],
+                location: [
+                    {
+                        key: 'some-data-key',
+                        size: 128,
+                        start: 0,
+                        dataStoreName: CRR_LOCATION,
+                        dataStoreETag: '1:d41d8cd98f00b204e9800118ecf8427e',
+                        targetLocation,
+                    },
+                ],
             });
             rqp._filterKeyOp(makeEntry(value));
 
@@ -702,14 +730,16 @@ describe('replication queue populator: pull replication', () => {
         // no location in the config can hold a local copy of the data
         rqp.defaultLocalLocation = undefined;
         const value = makeValue({
-            location: [{
-                key: 'some-data-key',
-                size: 128,
-                start: 0,
-                dataStoreName: CRR_LOCATION,
-                dataStoreETag: '1:d41d8cd98f00b204e9800118ecf8427e',
-                targetLocation: 'a-deleted-location',
-            }],
+            location: [
+                {
+                    key: 'some-data-key',
+                    size: 128,
+                    start: 0,
+                    dataStoreName: CRR_LOCATION,
+                    dataStoreETag: '1:d41d8cd98f00b204e9800118ecf8427e',
+                    targetLocation: 'a-deleted-location',
+                },
+            ],
         });
         rqp._filterKeyOp(makeEntry(value));
 
@@ -775,8 +805,7 @@ describe('replication queue populator: default local location', () => {
 
     // other specs add locations to the shared configuration, so rule them all out
     it('should find no location when none can hold a local copy', () => {
-        Object.keys(locationsConfig).forEach(
-            name => sinon.stub(locationsConfig, name).value({ type: 'aws_s3' }));
+        Object.keys(locationsConfig).forEach(name => sinon.stub(locationsConfig, name).value({ type: 'aws_s3' }));
 
         assert.strictEqual(defaultLocalLocation(), undefined);
     });

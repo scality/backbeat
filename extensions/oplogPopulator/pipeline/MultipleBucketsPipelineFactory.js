@@ -44,8 +44,8 @@ class MultipleBucketsPipelineFactory extends PipelineFactory {
             $match: {
                 'ns.coll': {
                     $in: buckets,
-                }
-            }
+                },
+            },
         };
     }
 }

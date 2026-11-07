@@ -1,5 +1,8 @@
 const assert = require('assert');
-const { MongoClient, BSON: { EJSON } } = require('mongodb');
+const {
+    MongoClient,
+    BSON: { EJSON },
+} = require('mongodb');
 const { Logger } = require('werelogs');
 const {
     S3Client,
@@ -15,8 +18,7 @@ const { isMasterKey } = require('@scality/arsenal').versioning;
 const LogReader = require('../../../lib/queuePopulator/LogReader');
 const ShadowedMasterFilter = require('../../../lib/queuePopulator/ShadowedMasterFilter');
 const ListRecordStream = require('../../../lib/queuePopulator/KafkaLogConsumer/ListRecordStream');
-const MultipleBucketsPipelineFactory =
-    require('../../../extensions/oplogPopulator/pipeline/MultipleBucketsPipelineFactory');
+const MultipleBucketsPipelineFactory = require('../../../extensions/oplogPopulator/pipeline/MultipleBucketsPipelineFactory');
 
 const logger = new Logger('test:shadowedMaster');
 
@@ -51,10 +53,12 @@ class ObservedBucket {
         });
         const pipeline = JSON.parse(new MultipleBucketsPipelineFactory(0).getPipeline([bucket]));
         this._changeStream = mongo.db(DATABASE).collection(bucket).watch(pipeline);
-        this._changeStream.on('change', event => this._stream.write({
-            value: Buffer.from(EJSON.stringify(event)),
-            timestamp: Date.now(),
-        }));
+        this._changeStream.on('change', event =>
+            this._stream.write({
+                value: Buffer.from(EJSON.stringify(event)),
+                timestamp: Date.now(),
+            }),
+        );
         this._stream.on('data', record => {
             this._lastEvent = Date.now();
             this._reader._processLogEntry({}, record, record.entries[0], () => {});
@@ -67,21 +71,28 @@ class ObservedBucket {
         // a delete only carries the object metadata when a consumer needs
         // it, i.e. for an archived object or with notifications configured:
         // the latter is the cheap way to see which key a delete touches
-        await s3.send(new PutBucketNotificationConfigurationCommand({
-            Bucket: this.bucket,
-            NotificationConfiguration: {
-                QueueConfigurations: [{
-                    QueueArn: 'arn:scality:bucketnotif:::destination1',
-                    Events: ['s3:ObjectRemoved:*'],
-                }],
-            },
-        }));
+        await s3.send(
+            new PutBucketNotificationConfigurationCommand({
+                Bucket: this.bucket,
+                NotificationConfiguration: {
+                    QueueConfigurations: [
+                        {
+                            QueueArn: 'arn:scality:bucketnotif:::destination1',
+                            Events: ['s3:ObjectRemoved:*'],
+                        },
+                    ],
+                },
+            }),
+        );
     }
 
     async setVersioning(status) {
-        await s3.send(new PutBucketVersioningCommand({
-            Bucket: this.bucket, VersioningConfiguration: { Status: status },
-        }));
+        await s3.send(
+            new PutBucketVersioningCommand({
+                Bucket: this.bucket,
+                VersioningConfiguration: { Status: status },
+            }),
+        );
     }
 
     async put(key, body = 'data') {
@@ -90,10 +101,14 @@ class ObservedBucket {
     }
 
     async tag(key, versionId, value) {
-        await s3.send(new PutObjectTaggingCommand({
-            Bucket: this.bucket, Key: key, VersionId: versionId,
-            Tagging: { TagSet: [{ Key: 'k', Value: value }] },
-        }));
+        await s3.send(
+            new PutObjectTaggingCommand({
+                Bucket: this.bucket,
+                Key: key,
+                VersionId: versionId,
+                Tagging: { TagSet: [{ Key: 'k', Value: value }] },
+            }),
+        );
     }
 
     async delete(key, versionId) {
@@ -133,179 +148,196 @@ class ObservedBucket {
     }
 }
 
-const master = (type = 'put', flags = {}) =>
-    ({ type, key: 'master', isNull: false, isDeleteMarker: false, isPHD: false, ...flags });
-const version = (type = 'put', flags = {}) =>
-    ({ type, key: 'version', isNull: false, isDeleteMarker: false, isPHD: false, ...flags });
+const master = (type = 'put', flags = {}) => ({
+    type,
+    key: 'master',
+    isNull: false,
+    isDeleteMarker: false,
+    isPHD: false,
+    ...flags,
+});
+const version = (type = 'put', flags = {}) => ({
+    type,
+    key: 'version',
+    isNull: false,
+    isDeleteMarker: false,
+    isPHD: false,
+    ...flags,
+});
 
 // Every layout of a master and its version keys the MongoDB backend writes,
 // and the entries the extensions receive for it after the shadowed-master
 // filter. The layouts are those of
 // https://scality.atlassian.net/wiki/spaces/~88394258/pages/4305551381
-(process.env.PROFILE === 'mongo' ? describe : describe.skip)('Shadowed master filter on the MongoDB change stream',
-function suite() {
-    this.timeout(60000);
+(process.env.PROFILE === 'mongo' ? describe : describe.skip)(
+    'Shadowed master filter on the MongoDB change stream',
+    function suite() {
+        this.timeout(60000);
 
-    let mongo;
-    let bucket;
-    let counter = 0;
+        let mongo;
+        let bucket;
+        let counter = 0;
 
-    before(async () => {
-        mongo = await MongoClient.connect(MONGO_URL);
-    });
+        before(async () => {
+            mongo = await MongoClient.connect(MONGO_URL);
+        });
 
-    after(async () => {
-        await mongo.close();
-    });
+        after(async () => {
+            await mongo.close();
+        });
 
-    beforeEach(async () => {
-        counter += 1;
-        bucket = new ObservedBucket(mongo, `shadowed-master-${Date.now()}-${counter}`);
-        await bucket.create();
-        await bucket.drain();
-    });
+        beforeEach(async () => {
+            counter += 1;
+            bucket = new ObservedBucket(mongo, `shadowed-master-${Date.now()}-${counter}`);
+            await bucket.create();
+            await bucket.drain();
+        });
 
-    afterEach(async () => {
-        await bucket.close();
-    });
+        afterEach(async () => {
+            await bucket.close();
+        });
 
-    it('put in a non-versioned bucket', async () => {
-        await bucket.put('obj');
-        assert.deepStrictEqual(await bucket.drain(), [master()]);
-    });
+        it('put in a non-versioned bucket', async () => {
+            await bucket.put('obj');
+            assert.deepStrictEqual(await bucket.drain(), [master()]);
+        });
 
-    it('delete in a non-versioned bucket', async () => {
-        await bucket.put('obj');
-        await bucket.drain();
-        await bucket.delete('obj');
-        assert.deepStrictEqual(await bucket.drain(), [master('delete')]);
-    });
+        it('delete in a non-versioned bucket', async () => {
+            await bucket.put('obj');
+            await bucket.drain();
+            await bucket.delete('obj');
+            assert.deepStrictEqual(await bucket.drain(), [master('delete')]);
+        });
 
-    it('metadata update of an object put before versioning was enabled', async () => {
-        await bucket.put('obj');
-        await bucket.setVersioning('Enabled');
-        await bucket.drain();
-        // the object still lives in its master key only, with no version id
-        await bucket.tag('obj', undefined, 'v1');
-        assert.deepStrictEqual(await bucket.drain(), [master()]);
-    });
+        it('metadata update of an object put before versioning was enabled', async () => {
+            await bucket.put('obj');
+            await bucket.setVersioning('Enabled');
+            await bucket.drain();
+            // the object still lives in its master key only, with no version id
+            await bucket.tag('obj', undefined, 'v1');
+            assert.deepStrictEqual(await bucket.drain(), [master()]);
+        });
 
-    it('put in a versioned bucket', async () => {
-        await bucket.setVersioning('Enabled');
-        await bucket.put('obj');
-        // the master is a copy of the version too, but the extensions skip
-        // it on their own: the filter only acts on null versions
-        assert.deepStrictEqual(await bucket.drain(), [version(), master()]);
-    });
+        it('put in a versioned bucket', async () => {
+            await bucket.setVersioning('Enabled');
+            await bucket.put('obj');
+            // the master is a copy of the version too, but the extensions skip
+            // it on their own: the filter only acts on null versions
+            assert.deepStrictEqual(await bucket.drain(), [version(), master()]);
+        });
 
-    it('new version on top of another', async () => {
-        await bucket.setVersioning('Enabled');
-        await bucket.put('obj');
-        await bucket.drain();
-        await bucket.put('obj');
-        assert.deepStrictEqual(await bucket.drain(), [version(), master()]);
-    });
+        it('new version on top of another', async () => {
+            await bucket.setVersioning('Enabled');
+            await bucket.put('obj');
+            await bucket.drain();
+            await bucket.put('obj');
+            assert.deepStrictEqual(await bucket.drain(), [version(), master()]);
+        });
 
-    it('delete marker in a versioned bucket', async () => {
-        await bucket.setVersioning('Enabled');
-        await bucket.put('obj');
-        await bucket.drain();
-        await bucket.delete('obj');
-        assert.deepStrictEqual(await bucket.drain(), [version('put', { isDeleteMarker: true })]);
-    });
+        it('delete marker in a versioned bucket', async () => {
+            await bucket.setVersioning('Enabled');
+            await bucket.put('obj');
+            await bucket.drain();
+            await bucket.delete('obj');
+            assert.deepStrictEqual(await bucket.drain(), [version('put', { isDeleteMarker: true })]);
+        });
 
-    it('put in a suspended bucket', async () => {
-        await bucket.setVersioning('Suspended');
-        await bucket.put('obj');
-        assert.deepStrictEqual(await bucket.drain(), [master('put', { isNull: true })]);
-    });
+        it('put in a suspended bucket', async () => {
+            await bucket.setVersioning('Suspended');
+            await bucket.put('obj');
+            assert.deepStrictEqual(await bucket.drain(), [master('put', { isNull: true })]);
+        });
 
-    it('delete marker in a suspended bucket', async () => {
-        await bucket.setVersioning('Suspended');
-        await bucket.put('obj');
-        await bucket.drain();
-        await bucket.delete('obj');
-        // the null master is turned into a placeholder, deleted with the
-        // null version's metadata, then replaced by the delete marker
-        assert.deepStrictEqual(await bucket.drain(), [
-            master('delete', { isNull: true, isPHD: true }),
-            master('put', { isNull: true, isDeleteMarker: true }),
-        ]);
-    });
+        it('delete marker in a suspended bucket', async () => {
+            await bucket.setVersioning('Suspended');
+            await bucket.put('obj');
+            await bucket.drain();
+            await bucket.delete('obj');
+            // the null master is turned into a placeholder, deleted with the
+            // null version's metadata, then replaced by the delete marker
+            assert.deepStrictEqual(await bucket.drain(), [
+                master('delete', { isNull: true, isPHD: true }),
+                master('put', { isNull: true, isDeleteMarker: true }),
+            ]);
+        });
 
-    it('metadata update of a non-current null version', async () => {
-        await bucket.setVersioning('Suspended');
-        await bucket.put('obj');
-        await bucket.setVersioning('Enabled');
-        await bucket.put('obj');
-        await bucket.drain();
-        await bucket.tag('obj', 'null', 'v1');
-        // the null version lives in a version key of its own, named after
-        // its internal version id: MongoDB does not use the null key (empty
-        // version id) S3C stores it under. Should ARSN-632 bring the null
-        // key to MongoDB, the entry would still be a version key
-        assert.deepStrictEqual(await bucket.drain(), [version('put', { isNull: true })]);
-        assert.deepStrictEqual(bucket.drained.filter(e => e.key.endsWith('\x00')), []);
-    });
+        it('metadata update of a non-current null version', async () => {
+            await bucket.setVersioning('Suspended');
+            await bucket.put('obj');
+            await bucket.setVersioning('Enabled');
+            await bucket.put('obj');
+            await bucket.drain();
+            await bucket.tag('obj', 'null', 'v1');
+            // the null version lives in a version key of its own, named after
+            // its internal version id: MongoDB does not use the null key (empty
+            // version id) S3C stores it under. Should ARSN-632 bring the null
+            // key to MongoDB, the entry would still be a version key
+            assert.deepStrictEqual(await bucket.drain(), [version('put', { isNull: true })]);
+            assert.deepStrictEqual(
+                bucket.drained.filter(e => e.key.endsWith('\x00')),
+                [],
+            );
+        });
 
-    it('delete of a non-current null version', async () => {
-        await bucket.setVersioning('Suspended');
-        await bucket.put('obj');
-        await bucket.setVersioning('Enabled');
-        await bucket.put('obj');
-        await bucket.drain();
-        await bucket.delete('obj', 'null');
-        // only its version key is touched, so GC must process it
-        assert.deepStrictEqual(await bucket.drain(), [version('delete', { isNull: true })]);
-    });
+        it('delete of a non-current null version', async () => {
+            await bucket.setVersioning('Suspended');
+            await bucket.put('obj');
+            await bucket.setVersioning('Enabled');
+            await bucket.put('obj');
+            await bucket.drain();
+            await bucket.delete('obj', 'null');
+            // only its version key is touched, so GC must process it
+            assert.deepStrictEqual(await bucket.drain(), [version('delete', { isNull: true })]);
+        });
 
-    it('metadata update of a current null version', async () => {
-        await bucket.setVersioning('Suspended');
-        await bucket.put('obj');
-        await bucket.drain();
-        await bucket.tag('obj', 'null', 'v1');
-        // the master is copied into a version key, which is processed, and
-        // the master itself dropped
-        assert.deepStrictEqual(await bucket.drain(), [version('put', { isNull: true })]);
-    });
+        it('metadata update of a current null version', async () => {
+            await bucket.setVersioning('Suspended');
+            await bucket.put('obj');
+            await bucket.drain();
+            await bucket.tag('obj', 'null', 'v1');
+            // the master is copied into a version key, which is processed, and
+            // the master itself dropped
+            assert.deepStrictEqual(await bucket.drain(), [version('put', { isNull: true })]);
+        });
 
-    it('identical metadata update of a current null version', async () => {
-        await bucket.setVersioning('Suspended');
-        await bucket.put('obj');
-        await bucket.tag('obj', 'null', 'v1');
-        await bucket.drain();
-        await bucket.tag('obj', 'null', 'v1');
-        // a no-op write emits no event, so the twin pair is the only way to
-        // see the same master value twice in a row
-        assert.deepStrictEqual(await bucket.drain(), []);
-    });
+        it('identical metadata update of a current null version', async () => {
+            await bucket.setVersioning('Suspended');
+            await bucket.put('obj');
+            await bucket.tag('obj', 'null', 'v1');
+            await bucket.drain();
+            await bucket.tag('obj', 'null', 'v1');
+            // a no-op write emits no event, so the twin pair is the only way to
+            // see the same master value twice in a row
+            assert.deepStrictEqual(await bucket.drain(), []);
+        });
 
-    it('delete of a current null version copied into a version key', async () => {
-        await bucket.setVersioning('Suspended');
-        await bucket.put('obj');
-        await bucket.tag('obj', 'null', 'v1');
-        await bucket.drain();
-        await bucket.delete('obj', 'null');
-        // the version key is deleted with the null version's metadata, then
-        // the master, turned into a placeholder with a version id of its own:
-        // no field relates the two entries, so the filter lets both through
-        // and the consumers tolerate the duplicate. The same placeholder
-        // entry is the only one carrying the metadata when the null version
-        // has no version key, so it cannot be skipped on its own
-        assert.deepStrictEqual(await bucket.drain(), [
-            version('delete', { isNull: true }),
-            master('delete', { isNull: true, isPHD: true }),
-        ]);
-    });
+        it('delete of a current null version copied into a version key', async () => {
+            await bucket.setVersioning('Suspended');
+            await bucket.put('obj');
+            await bucket.tag('obj', 'null', 'v1');
+            await bucket.drain();
+            await bucket.delete('obj', 'null');
+            // the version key is deleted with the null version's metadata, then
+            // the master, turned into a placeholder with a version id of its own:
+            // no field relates the two entries, so the filter lets both through
+            // and the consumers tolerate the duplicate. The same placeholder
+            // entry is the only one carrying the metadata when the null version
+            // has no version key, so it cannot be skipped on its own
+            assert.deepStrictEqual(await bucket.drain(), [
+                version('delete', { isNull: true }),
+                master('delete', { isNull: true, isPHD: true }),
+            ]);
+        });
 
-    it('delete of the current version with older versions', async () => {
-        await bucket.setVersioning('Enabled');
-        await bucket.put('obj');
-        const current = await bucket.put('obj');
-        await bucket.drain();
-        await bucket.delete('obj', current);
-        // the placeholder set on the master carries no value and yields no
-        // entry; the later repair rewrites the master as a shadowed one
-        assert.deepStrictEqual(await bucket.drain(), [version('delete')]);
-    });
-});
+        it('delete of the current version with older versions', async () => {
+            await bucket.setVersioning('Enabled');
+            await bucket.put('obj');
+            const current = await bucket.put('obj');
+            await bucket.drain();
+            await bucket.delete('obj', current);
+            // the placeholder set on the master carries no value and yields no
+            // entry; the later repair rewrites the master as a shadowed one
+            assert.deepStrictEqual(await bucket.drain(), [version('delete')]);
+        });
+    },
+);
