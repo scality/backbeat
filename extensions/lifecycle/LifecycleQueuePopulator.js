@@ -93,8 +93,7 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
      */
     setupProducers(cb) {
         const locConfigs = this.locationConfigs;
-        // eslint-disable-next-line no-unused-vars
-        const coldLocations = Object.entries(locConfigs).filter(([key, val]) => val.isCold).map(([key]) => key);
+        const coldLocations = Object.entries(locConfigs).filter(([, val]) => val.isCold).map(([key]) => key);
         if (coldLocations.length > 0) {
             return async.eachLimit(coldLocations, 10, (location, done) => {
                 async.series([
