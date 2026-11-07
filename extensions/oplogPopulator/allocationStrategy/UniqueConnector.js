@@ -17,7 +17,8 @@ class UniqueConnector extends AllocationStrategy {
      * @param {String} bucket bucket name
      * @returns {Connector | null} connector
      */
-    getConnector(connectors, bucket) { // eslint-disable-line no-unused-vars
+    // eslint-disable-next-line no-unused-vars
+    getConnector(connectors, bucket) {
         if (!connectors.length) {
             return null;
         }

@@ -9,7 +9,8 @@ const getContentType = require('../utils/contentTypeHelper');
 const locationsConfig = require('../../../conf/locationConfig.json') || {};
 
 class PullReplicationMetadataPolicy extends MetadataPolicy {
-    skipsMetadataFetch(entry, bucketInfo) { // eslint-disable-line no-unused-vars
+    // eslint-disable-next-line no-unused-vars
+    skipsMetadataFetch(entry, bucketInfo) {
         // never: only the stored document tells a first write from an update,
         // and a source insert is redelivered on replay and overlaps the
         // bootstrap dump
@@ -96,7 +97,8 @@ class PullReplicationMetadataPolicy extends MetadataPolicy {
         }
     }
 
-    skipsDelete(entry, objMD, location) { // eslint-disable-line no-unused-vars
+    // eslint-disable-next-line no-unused-vars
+    skipsDelete(entry, objMD, location) {
         // must process every deletion, whatever the state of the object
         return false;
     }

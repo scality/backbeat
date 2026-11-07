@@ -32,7 +32,8 @@ class NotificationDestination {
      * @param {Object[]} messages - array of messages to be sent
      * @return {undefined}
      */
-    send(messages) { // eslint-disable-line no-unused-vars
+    // eslint-disable-next-line no-unused-vars
+    send(messages) {
         assert(false,
             'sub-classes of NotificationDestination must implement ' +
             'the send() method');

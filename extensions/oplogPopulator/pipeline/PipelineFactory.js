@@ -21,7 +21,8 @@ class PipelineFactory {
      * @param {string} pipeline pipeline
      * @returns {boolean} true if the pipeline is valid
      */
-    isValid(pipeline) { // eslint-disable-line no-unused-vars
+    // eslint-disable-next-line no-unused-vars
+    isValid(pipeline) {
         throw errors.NotImplemented;
     }
 
@@ -120,7 +121,8 @@ class PipelineFactory {
      * @param {string[] | undefined} buckets buckets assigned to this connector
      * @returns {object} connector pipeline stage
      */
-    getPipelineStage(buckets) { // eslint-disable-line no-unused-vars
+    // eslint-disable-next-line no-unused-vars
+    getPipelineStage(buckets) {
         throw errors.NotImplemented;
     }
 }
