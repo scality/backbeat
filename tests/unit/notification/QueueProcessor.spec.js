@@ -78,7 +78,7 @@ describe('notification QueueProcessor', () => {
     // also test the resilience of the producer, but at the time this
     // test was written Bucket Notification tests are not yet running
     // in Integration (refs: BB-419, INTGR-895)
-    it('should process 10K notifications with 1K concurrency to send to external destination', function test10KNotif(done) {
+    it('should process 10K notifications with 1K concurrency for external destination', function test10KNotif(done) {
         this.timeout(5000);
 
         const origLogger = qp.logger;

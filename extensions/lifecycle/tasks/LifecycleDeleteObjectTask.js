@@ -51,9 +51,9 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
             (err, blob) => {
                 LifecycleMetrics.onS3Request(log, 'getMetadata', 'expiration', err);
                 if (err) {
-                    // <!> Only in S3C <!> Backbeat API returns 'InvalidBucketState' error if the bucket is not versioned.
-                    // In this case, instead of logging an error, it should be logged as a debug message,
-                    // to avoid causing unnecessary concern to the customer.
+                    // <!> Only in S3C <!> Backbeat API returns 'InvalidBucketState' error if the bucket is not
+                    // versioned. In this case, instead of logging an error, it should be logged as a debug message, to
+                    // avoid causing unnecessary concern to the customer.
                     // TODO: BB-612
                     const logLevel = err.name === 'InvalidBucketState' ? 'debug' : 'error';
                     log[logLevel](

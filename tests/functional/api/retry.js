@@ -217,7 +217,7 @@ describe('CRR Retry feature', () => {
         });
     });
 
-    it('should get correct data for GET route: /_/crr/failed when the key has been created and there is one key', done => {
+    it('should get correct data for GET route: /_/crr/failed when the key was created and there is one key', done => {
         const member = getMember(`test-bucket-1:test-key:${testVersionId}`);
         addMembers(redisClient, 'test-site', [member], err => {
             assert.ifError(err);
@@ -410,7 +410,7 @@ describe('CRR Retry feature', () => {
         );
     });
 
-    it('should get correct data at scale for GET route: /_/crr/failed when failures occur across hours', function f(done) {
+    it('should get correct data at scale for GET route: /_/crr/failed when failures span hours', function f(done) {
         this.timeout(300000);
         const hours = Array.from(Array(24).keys());
         async.eachLimit(
@@ -469,7 +469,7 @@ describe('CRR Retry feature', () => {
         );
     });
 
-    it('should get correct data at scale for GET route: /_/crr/failed when failures occur in the same hour', function f(done) {
+    it('should get correct data at scale for GET route: /_/crr/failed for failures in the same hour', function f(done) {
         this.timeout(30000);
         const statsClient = new StatsModel(redisClient);
         const epoch = Date.now();

@@ -1078,7 +1078,7 @@ describe('queue processor functional tests with mocking', () => {
 
         describe('source S3 errors', () => {
             [errors.AccessDenied, errors.ObjNotFound].forEach(error => {
-                it(`replication should skip on ${error.code} (${error.message}) from source S3 on getObject`, async () => {
+                it(`replication should skip on ${error.code} (${error.message}) on source S3 getObject`, async () => {
                     s3mock.installS3ErrorResponder('source.s3.getObject', error);
                     await queueProcessorSF.processReplicationEntry(s3mock.getParam('kafkaEntry'));
                     assert(!s3mock.hasPutTargetData);
@@ -1086,7 +1086,7 @@ describe('queue processor functional tests with mocking', () => {
                     assert.strictEqual(s3mock.partsDeleted.length, 0);
                 });
 
-                it(`copy location should skip on ${error.code} (${error.message}) from source S3 on getObject`, done => {
+                it(`copy location should skip on ${error.code} (${error.message}) on source S3 getObject`, done => {
                     s3mock.installS3ErrorResponder('source.s3.getObject', error);
                     const sendAction = createCopyLocationSender(s3mock, queueProcessorSF);
                     sendAction(response => {
@@ -1153,7 +1153,7 @@ describe('queue processor functional tests with mocking', () => {
 
             ['getBucketReplication', 'getObject'].forEach(action => {
                 [errors.InternalError].forEach(error => {
-                    it(`replication should retry on ${error.code} (${error.message}) from source S3 on ${action}`, async () => {
+                    it(`replication retries on ${error.code} (${error.message}) on source S3 ${action}`, async () => {
                         s3mock.installS3ErrorResponder(`source.s3.${action}`, error, { once: true });
 
                         const sourceMdPut = waitForSourceMdPut(s3mock);

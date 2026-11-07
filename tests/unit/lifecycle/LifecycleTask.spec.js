@@ -190,7 +190,7 @@ describe('lifecycle task helper methods', () => {
             assert.deepStrictEqual(sortedList, expected);
         });
 
-        it('should merge and sort the arrays if the modified dates match and the version has the newest versionId', () => {
+        it('should merge and sort arrays if the modified dates match and the version has the newest versionId', () => {
             const versions = [
                 {
                     Key: 'obj-1',

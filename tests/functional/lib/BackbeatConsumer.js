@@ -1430,7 +1430,7 @@ describe('BackbeatConsumer fromOffset tests', () => {
         );
     });
 
-    it('should consume messages produced before the group existed with fromOffset earliest', function testEarliest(done) {
+    it('should consume messages produced before the group existed (fromOffset earliest)', function testEarliest(done) {
         this.timeout(120000);
         const marker = `marker-earliest-${Math.random()}`;
         async.series(
