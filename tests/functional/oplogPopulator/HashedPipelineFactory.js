@@ -4,7 +4,7 @@ const { MongoClient } = require('mongodb');
 const testConfig = require('../../config.json');
 const HashedPipelineFactory = require('../../../extensions/oplogPopulator/pipeline/HashedPipelineFactory');
 
-const mongoUrl = `mongodb://${testConfig.queuePopulator.mongo.replicaSetHosts}` + '/db?replicaSet=rs0';
+const mongoUrl = `mongodb://${testConfig.queuePopulator.mongo.replicaSetHosts}/db?replicaSet=rs0`;
 
 const nbConnectors = 3;
 const buckets = [...Array(30).keys()].map(i => `hashed-bucket-${i}`);

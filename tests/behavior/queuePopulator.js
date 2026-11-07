@@ -23,7 +23,7 @@ const Logger = require('werelogs').Logger;
 const log = new Logger('Backbeat:QueuePopulator');
 
 const s3config = {
-    endpoint: `${testConfig.s3.transport}://` + `${testConfig.s3.host}:${testConfig.s3.port}`,
+    endpoint: `${testConfig.s3.transport}://${testConfig.s3.host}:${testConfig.s3.port}`,
     forcePathStyle: true,
     credentials: {
         accessKeyId: testConfig.s3.accessKey,

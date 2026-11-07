@@ -4,7 +4,7 @@ const MongoClient = require('mongodb').MongoClient;
 const testConfig = require('../../config.json');
 const MultipleBucketsPipelineFactory = require('../../../extensions/oplogPopulator/pipeline/MultipleBucketsPipelineFactory');
 
-const mongoUrl = `mongodb://${testConfig.queuePopulator.mongo.replicaSetHosts}` + '/db?replicaSet=rs0';
+const mongoUrl = `mongodb://${testConfig.queuePopulator.mongo.replicaSetHosts}/db?replicaSet=rs0`;
 const client = new MongoClient(mongoUrl, {});
 const db = client.db('metadata', { ignoreUndefined: true });
 

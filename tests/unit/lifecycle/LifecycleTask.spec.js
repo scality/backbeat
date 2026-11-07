@@ -2684,7 +2684,7 @@ describe('lifecycle task helper methods', () => {
                 headStorageClass: 'location-dmf-v1',
             },
         ].forEach(({ desc, listedStorageClass, headStorageClass }) => {
-            it(`should queue the expiration of a ${desc} with the ` + 'archive-info storage class', done => {
+            it(`should queue the expiration of a ${desc} with the archive-info storage class`, done => {
                 class LifecycleTaskMock extends LifecycleTask {
                     _sendObjectAction(entry, cb) {
                         this.latestEntry = entry;

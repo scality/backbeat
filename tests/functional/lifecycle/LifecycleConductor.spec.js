@@ -38,7 +38,7 @@ const s3Config = {
     port: 8000,
 };
 
-const mongoUrl = `mongodb://${mongoConfig.replicaSetHosts}` + `/db?replicaSet=${mongoConfig.replicaSet}`;
+const mongoUrl = `mongodb://${mongoConfig.replicaSetHosts}/db?replicaSet=${mongoConfig.replicaSet}`;
 
 const bucketTasksTopic = 'backbeat-lifecycle-bucket-tasks-spec';
 

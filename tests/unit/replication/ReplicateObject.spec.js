@@ -1155,7 +1155,7 @@ describe('ReplicateObject', () => {
             const endpointObject = await task.backbeatDest.config.endpoint();
             const port = endpointObject.port || (endpointObject.protocol === 'https:' ? 443 : 80);
             const endpoint =
-                `${endpointObject.protocol}//` + `${endpointObject.hostname}:${port}` + `${endpointObject.path}`;
+                `${endpointObject.protocol}//${endpointObject.hostname}:${port}${endpointObject.path}`;
             const credentials = await task.backbeatDest.config.credentials();
             assert.strictEqual(credentials.accessKeyId, 'accessKeyNoAssumeRole');
             assert.strictEqual(credentials.secretAccessKey, 'secretKeyNoAssumeRole');
