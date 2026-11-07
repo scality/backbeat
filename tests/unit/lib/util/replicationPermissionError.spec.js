@@ -1,9 +1,6 @@
 const assert = require('assert');
 
-const {
-    isAccessDeniedError,
-    getAccessDeniedLogFields,
-} = require('../../../../lib/util/replicationPermissionError');
+const { isAccessDeniedError, getAccessDeniedLogFields } = require('../../../../lib/util/replicationPermissionError');
 
 describe('isAccessDeniedError', () => {
     it('should return true for AccessDenied error code', () => {
@@ -36,8 +33,7 @@ describe('getAccessDeniedLogFields', () => {
         const sourceRole = 'arn:aws:iam::123456789012:role/replication-role';
         const result = getAccessDeniedLogFields(bucket, sourceRole);
         assert.deepStrictEqual(result, {
-            accessDeniedHint: 'Verify that the source role has the required ' +
-                'permissions on the source bucket.',
+            accessDeniedHint: 'Verify that the source role has the required permissions on the source bucket.',
             sourceRole: 'arn:aws:iam::123456789012:role/replication-role',
             bucket: 'test-bucket',
         });
@@ -46,8 +42,7 @@ describe('getAccessDeniedLogFields', () => {
     it('should handle undefined values', () => {
         const result = getAccessDeniedLogFields(undefined, undefined);
         assert.deepStrictEqual(result, {
-            accessDeniedHint: 'Verify that the source role has the required ' +
-                'permissions on the source bucket.',
+            accessDeniedHint: 'Verify that the source role has the required permissions on the source bucket.',
             sourceRole: undefined,
             bucket: undefined,
         });

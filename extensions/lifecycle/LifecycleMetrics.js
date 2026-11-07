@@ -27,15 +27,16 @@ const SCAN_METRIC_RETENTION_MS = DEFAULT_SCAN_METRIC_RETENTION_S * 1000;
 
 const conductorLatestBatchStartTime = ZenkoMetrics.createGauge({
     name: 's3_lifecycle_latest_batch_start_time',
-    help: 'Conductor scheduling heartbeat: ms-since-epoch timestamp of ' +
-        'the most recent scan start. Use to detect that the conductor is ' +
-        'still scheduling scans (LifecycleLateScan alert).',
+    help:
+        'Conductor scheduling heartbeat: ms-since-epoch timestamp of the most recent scan start. ' +
+        'Use to detect that the conductor is still scheduling scans (LifecycleLateScan alert).',
     labelNames: [LIFECYCLE_LABEL_ORIGIN],
 });
 
 const conductorLatestBatchEndTime = ZenkoMetrics.createGauge({
     name: 's3_lifecycle_latest_batch_end_time',
-    help: 'Timestamp (ms since epoch) of the most recent lifecycle ' +
+    help:
+        'Timestamp (ms since epoch) of the most recent lifecycle ' +
         'conductor scan end after the scan reached bucket listing.',
     labelNames: [LIFECYCLE_LABEL_ORIGIN],
 });
@@ -84,18 +85,18 @@ const conductorLatestBatchBucketCount = ZenkoMetrics.createGauge({
 
 const bucketProcessorScanMessagesReceived = ZenkoMetrics.createCounter({
     name: 's3_lifecycle_bucket_processor_scan_messages_total',
-    help: 'Total number of bucket-task messages picked up by this bucket ' +
-        'processor, grouped by conductor scan id. Per-scan series are ' +
-        'auto-removed by a local cleanup timer (see setScanMetricTimeout) ' +
-        'to keep label cardinality bounded.',
+    help:
+        'Total number of bucket-task messages picked up by this bucket processor, ' +
+        'grouped by conductor scan id. Per-scan series are auto-removed by a local ' +
+        'cleanup timer (see setScanMetricTimeout) to keep label cardinality bounded.',
     labelNames: [LIFECYCLE_LABEL_ORIGIN, LIFECYCLE_LABEL_CONDUCTOR_SCAN_ID],
 });
 
 const bucketProcessorScanMessageAgeSeconds = ZenkoMetrics.createHistogram({
     name: 's3_lifecycle_bucket_processor_scan_message_age_seconds',
-    help: 'Elapsed wall-clock time in seconds between conductor scan start ' +
-        'and bucket-tasks topic message pickup by this bucket processor. ' +
-        'This is a dequeue/backlog age signal, not bucket processing duration.',
+    help:
+        'Elapsed wall-clock time in seconds between conductor scan start and bucket-tasks topic message pickup ' +
+        'by this bucket processor. This is a dequeue/backlog age signal, not bucket processing duration.',
     labelNames: [LIFECYCLE_LABEL_ORIGIN],
     buckets: [60, 300, 600, 1800, 3600, 7200, 14400, 28800, 43200, 86400],
 });
@@ -113,9 +114,10 @@ function removeBucketProcessorScanMetrics(conductorScanId) {
     } catch (err) {
         // Removing a non-existent series should not happen; if it does it
         // likely signals a bad conductorScanId or a missing metric label.
-        lifecycleMetricsLogger.warn(
-            'failed to remove bucket processor scan metric',
-            { conductorScanId, error: err.message });
+        lifecycleMetricsLogger.warn('failed to remove bucket processor scan metric', {
+            conductorScanId,
+            error: err.message,
+        });
     }
 }
 
@@ -146,17 +148,12 @@ function resetLifecycleScanMetricCleanupTimers() {
 const lifecycleS3Operations = ZenkoMetrics.createCounter({
     name: 's3_lifecycle_s3_operations_total',
     help: 'Total number of S3 operations by the lifecycle processes',
-    labelNames: [
-        LIFECYCLE_LABEL_ORIGIN,
-        LIFECYCLE_LABEL_OP,
-        LIFECYCLE_LABEL_STATUS,
-    ],
+    labelNames: [LIFECYCLE_LABEL_ORIGIN, LIFECYCLE_LABEL_OP, LIFECYCLE_LABEL_STATUS],
 });
 
 const lifecycleTriggerLatency = ZenkoMetrics.createHistogram({
     name: 's3_lifecycle_trigger_latency_seconds',
-    help: 'Delay between the theoretical date and identification of the object as eligible for ' +
-        'lifecycle operation',
+    help: 'Delay between the theoretical date and identification of the object as eligible for lifecycle operation',
     labelNames: [LIFECYCLE_LABEL_ORIGIN, LIFECYCLE_LABEL_TYPE, LIFECYCLE_LABEL_LOCATION],
     buckets: [60, 600, 3600, 2 * 3600, 4 * 3600, 8 * 3600, 16 * 3600, 24 * 3600, 48 * 3600],
 });
@@ -170,8 +167,7 @@ const lifecycleLatency = ZenkoMetrics.createHistogram({
 
 const lifecycleDuration = ZenkoMetrics.createHistogram({
     name: 's3_lifecycle_duration_seconds',
-    help: 'Duration of the lifecycle operation, calculated from the theoretical date to the end ' +
-        'of the operation',
+    help: 'Duration of the lifecycle operation, calculated from the theoretical date to the end of the operation',
     labelNames: [LIFECYCLE_LABEL_TYPE, LIFECYCLE_LABEL_LOCATION],
     buckets: [0.2, 1, 5, 30, 120, 600, 3600, 4 * 3600, 8 * 3600, 16 * 3600, 24 * 3600],
 });
@@ -199,10 +195,9 @@ const lifecycleKafkaPublish = {
 
 const lifecycleFailed = ZenkoMetrics.createCounter({
     name: 's3_lifecycle_failed_total',
-    help: 'Total number of lifecycle tasks that failed permanently after ' +
-        'retries were exhausted or on a non-retryable error. Offset is ' +
-        'committed to avoid ledger leaks; the underlying operation is not ' +
-        'retried.',
+    help:
+        'Total number of lifecycle tasks that failed permanently after retries were exhausted or on a ' +
+        'non-retryable error. Offset is committed to avoid ledger leaks; the underlying operation is not retried.',
     labelNames: [LIFECYCLE_LABEL_ORIGIN, LIFECYCLE_LABEL_TYPE, LIFECYCLE_LABEL_LOCATION],
 });
 
@@ -210,7 +205,9 @@ class LifecycleMetrics {
     static handleError(log, err, method, params = {}) {
         if (log) {
             log.error('failed to update prometheus metrics', {
-                error: err.toString(), method, ...params
+                error: err.toString(),
+                method,
+                ...params,
             });
         }
     }
@@ -225,9 +222,7 @@ class LifecycleMetrics {
      */
     static onProcessBuckets(log, scanStartTimestamp = Date.now()) {
         try {
-            conductorLatestBatchStartTime.set(
-                { [LIFECYCLE_LABEL_ORIGIN]: CONDUCTOR_ORIGIN },
-                scanStartTimestamp);
+            conductorLatestBatchStartTime.set({ [LIFECYCLE_LABEL_ORIGIN]: CONDUCTOR_ORIGIN }, scanStartTimestamp);
         } catch (err) {
             LifecycleMetrics.handleError(log, err, 'LifecycleMetrics.onProcessBuckets', {
                 scanStartTimestamp,
@@ -294,18 +289,22 @@ class LifecycleMetrics {
     static onConductorScanComplete(log, bucketCount) {
         try {
             const endTimestamp = Date.now();
-            conductorLatestBatchEndTime.set({
-                [LIFECYCLE_LABEL_ORIGIN]: CONDUCTOR_ORIGIN,
-            }, endTimestamp);
-            conductorLatestBatchBucketCount.set({
-                [LIFECYCLE_LABEL_ORIGIN]: CONDUCTOR_ORIGIN,
-            }, bucketCount);
-        } catch (err) {
-            LifecycleMetrics.handleError(
-                log, err, 'LifecycleMetrics.onConductorScanComplete', {
-                    bucketCount,
-                }
+            conductorLatestBatchEndTime.set(
+                {
+                    [LIFECYCLE_LABEL_ORIGIN]: CONDUCTOR_ORIGIN,
+                },
+                endTimestamp,
             );
+            conductorLatestBatchBucketCount.set(
+                {
+                    [LIFECYCLE_LABEL_ORIGIN]: CONDUCTOR_ORIGIN,
+                },
+                bucketCount,
+            );
+        } catch (err) {
+            LifecycleMetrics.handleError(log, err, 'LifecycleMetrics.onConductorScanComplete', {
+                bucketCount,
+            });
         }
     }
 
@@ -326,8 +325,7 @@ class LifecycleMetrics {
      * @param {number} [conductorScanStartTimestamp] - conductor scan start
      *   timestamp from contextInfo
      */
-    static onBucketProcessorScanMessageReceived(
-        log, conductorScanId, conductorScanStartTimestamp) {
+    static onBucketProcessorScanMessageReceived(log, conductorScanId, conductorScanStartTimestamp) {
         // Old conductor messages produced during rolling upgrades do not have
         // a scan id. Do not create a synthetic "undefined" scan-id series.
         if (!conductorScanId) {
@@ -345,64 +343,87 @@ class LifecycleMetrics {
             // 0 in the first histogram bucket.
             const ageSeconds = (Date.now() - conductorScanStartTimestamp) / 1000;
             if (Number.isFinite(ageSeconds) && ageSeconds >= 0) {
-                bucketProcessorScanMessageAgeSeconds.observe({
-                    [LIFECYCLE_LABEL_ORIGIN]: BUCKET_PROCESSOR_ORIGIN,
-                }, ageSeconds);
+                bucketProcessorScanMessageAgeSeconds.observe(
+                    {
+                        [LIFECYCLE_LABEL_ORIGIN]: BUCKET_PROCESSOR_ORIGIN,
+                    },
+                    ageSeconds,
+                );
             } else {
-                lifecycleMetricsLogger.warn(
-                    'skipping bucket processor scan message age observation',
-                    { conductorScanId, conductorScanStartTimestamp, ageSeconds });
+                lifecycleMetricsLogger.warn('skipping bucket processor scan message age observation', {
+                    conductorScanId,
+                    conductorScanStartTimestamp,
+                    ageSeconds,
+                });
             }
         } catch (err) {
-            LifecycleMetrics.handleError(
-                log, err,
-                'LifecycleMetrics.onBucketProcessorScanMessageReceived',
-                { conductorScanId, conductorScanStartTimestamp }
-            );
+            LifecycleMetrics.handleError(log, err, 'LifecycleMetrics.onBucketProcessorScanMessageReceived', {
+                conductorScanId,
+                conductorScanStartTimestamp,
+            });
         }
     }
 
     static onLifecycleTriggered(log, process, type, location, latencyMs) {
         try {
-            lifecycleTriggerLatency.observe({
-                [LIFECYCLE_LABEL_ORIGIN]: process,
-                [LIFECYCLE_LABEL_TYPE]: type,
-                [LIFECYCLE_LABEL_LOCATION]: location,
-            }, latencyMs / 1000);
+            lifecycleTriggerLatency.observe(
+                {
+                    [LIFECYCLE_LABEL_ORIGIN]: process,
+                    [LIFECYCLE_LABEL_TYPE]: type,
+                    [LIFECYCLE_LABEL_LOCATION]: location,
+                },
+                latencyMs / 1000,
+            );
         } catch (err) {
             LifecycleMetrics.handleError(log, err, 'LifecycleMetrics.onLifecycleTriggered', {
-                process, type, location, latencyMs,
+                process,
+                type,
+                location,
+                latencyMs,
             });
         }
     }
 
     static onLifecycleStarted(log, type, location, durationMs) {
         try {
-            lifecycleLatency.observe({
-                [LIFECYCLE_LABEL_TYPE]: type,
-                [LIFECYCLE_LABEL_LOCATION]: location,
-            }, durationMs / 1000);
+            lifecycleLatency.observe(
+                {
+                    [LIFECYCLE_LABEL_TYPE]: type,
+                    [LIFECYCLE_LABEL_LOCATION]: location,
+                },
+                durationMs / 1000,
+            );
         } catch (err) {
             LifecycleMetrics.handleError(log, err, 'LifecycleMetrics.onLifecycleStarted', {
-                type, location, durationMs,
+                type,
+                location,
+                durationMs,
             });
         }
     }
 
     static onLifecycleCompleted(log, type, location, durationMs) {
         try {
-            lifecycleDuration.observe({
-                [LIFECYCLE_LABEL_TYPE]: type,
-                [LIFECYCLE_LABEL_LOCATION]: location,
-            }, durationMs / 1000);
+            lifecycleDuration.observe(
+                {
+                    [LIFECYCLE_LABEL_TYPE]: type,
+                    [LIFECYCLE_LABEL_LOCATION]: location,
+                },
+                durationMs / 1000,
+            );
 
-            lifecycleLastTimestamp.set({
-                [LIFECYCLE_LABEL_TYPE]: type,
-                [LIFECYCLE_LABEL_LOCATION]: location,
-            }, new Date().getTime());
+            lifecycleLastTimestamp.set(
+                {
+                    [LIFECYCLE_LABEL_TYPE]: type,
+                    [LIFECYCLE_LABEL_LOCATION]: location,
+                },
+                new Date().getTime(),
+            );
         } catch (err) {
             LifecycleMetrics.handleError(log, err, 'LifecycleMetrics.onLifecycleCompleted', {
-                type, location, durationMs,
+                type,
+                location,
+                durationMs,
             });
         }
     }
@@ -417,20 +438,28 @@ class LifecycleMetrics {
             });
         } catch (err) {
             LifecycleMetrics.handleError(log, err, 'LifecycleMetrics.onS3Request', {
-                op, process, statusCode,
+                op,
+                process,
+                statusCode,
             });
         }
     }
 
     static onKafkaPublish(log, op, process, kafkaErr, count) {
         try {
-            lifecycleKafkaPublish[kafkaErr ? 'error' : 'success'].inc({
-                [LIFECYCLE_LABEL_ORIGIN]: process,
-                [LIFECYCLE_LABEL_OP]: op,
-            }, count);
+            lifecycleKafkaPublish[kafkaErr ? 'error' : 'success'].inc(
+                {
+                    [LIFECYCLE_LABEL_ORIGIN]: process,
+                    [LIFECYCLE_LABEL_OP]: op,
+                },
+                count,
+            );
         } catch (err) {
             LifecycleMetrics.handleError(log, err, 'LifecycleMetrics.onKafkaPublish', {
-                op, process, count, kafkaErr,
+                op,
+                process,
+                count,
+                kafkaErr,
             });
         }
     }
@@ -444,7 +473,9 @@ class LifecycleMetrics {
             });
         } catch (err) {
             LifecycleMetrics.handleError(log, err, 'LifecycleMetrics.onLifecycleFailed', {
-                process, type, location,
+                process,
+                type,
+                location,
             });
         }
     }
@@ -456,8 +487,7 @@ class LifecycleMetrics {
  * @return {string} metrics type
  */
 function getCopyLocationMetricsType(actionEntry) {
-    return actionEntry.getAttribute('metrics.origin') === PULL_REPLICATION ?
-        PULL_REPLICATION : TRANSITION_TYPE;
+    return actionEntry.getAttribute('metrics.origin') === PULL_REPLICATION ? PULL_REPLICATION : TRANSITION_TYPE;
 }
 
 module.exports = {

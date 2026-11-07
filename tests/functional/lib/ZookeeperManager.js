@@ -70,20 +70,24 @@ describe('ZookeeperManager', () => {
             const connectionStringWithoutNamespace = 'localhost:2181';
             const options = { autoCreateNamespace: true };
             zkClient = new ZookeeperManager(connectionStringWithoutNamespace, options, log);
-            zkClient.once('ready', () => zkClient.getData('/', err => {
-                assert.ifError(err);
-                done();
-            }));
+            zkClient.once('ready', () =>
+                zkClient.getData('/', err => {
+                    assert.ifError(err);
+                    done();
+                }),
+            );
         });
 
         it('should skip and fire ready event if autoCreateNamespace is true with / namespace', done => {
             const connectionStringWithoutNamespace = 'localhost:2181/';
             const options = { autoCreateNamespace: true };
             zkClient = new ZookeeperManager(connectionStringWithoutNamespace, options, log);
-            zkClient.once('ready', () => zkClient.getData('/', err => {
-                assert.ifError(err);
-                done();
-            }));
+            zkClient.once('ready', () =>
+                zkClient.getData('/', err => {
+                    assert.ifError(err);
+                    done();
+                }),
+            );
         });
 
         it('should not create the base path if autoCreateNamespace set to false', done => {
@@ -214,30 +218,38 @@ describe('ZookeeperManager', () => {
 
         it('should create a node and set, get data and then remove the node', done => {
             const expectedValue = 'testData';
-            async.series([
-                next => zkClient.create(path, err => {
-                    assert.ifError(err);
-                    next();
-                }),
-                next => zkClient.setData(path, Buffer.from(expectedValue), err => {
-                    assert.ifError(err);
-                    next();
-                }),
-                next => zkClient.getData(path, (err, data) => {
-                    assert.ifError(err);
-                    assert.strictEqual(data.toString(), expectedValue);
-                    next();
-                }),
-                next => zkClient.remove(path, err => {
-                    assert.ifError(err);
-                    next();
-                }),
-                next => zkClient.getData(path, err => {
-                    assert(err, 'Expected an error to be returned');
-                    assert.strictEqual(err.name, 'NO_NODE');
-                    next();
-                }),
-            ], done);
+            async.series(
+                [
+                    next =>
+                        zkClient.create(path, err => {
+                            assert.ifError(err);
+                            next();
+                        }),
+                    next =>
+                        zkClient.setData(path, Buffer.from(expectedValue), err => {
+                            assert.ifError(err);
+                            next();
+                        }),
+                    next =>
+                        zkClient.getData(path, (err, data) => {
+                            assert.ifError(err);
+                            assert.strictEqual(data.toString(), expectedValue);
+                            next();
+                        }),
+                    next =>
+                        zkClient.remove(path, err => {
+                            assert.ifError(err);
+                            next();
+                        }),
+                    next =>
+                        zkClient.getData(path, err => {
+                            assert(err, 'Expected an error to be returned');
+                            assert.strictEqual(err.name, 'NO_NODE');
+                            next();
+                        }),
+                ],
+                done,
+            );
         });
 
         it('should return the client state', () => {

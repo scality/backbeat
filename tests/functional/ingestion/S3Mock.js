@@ -21,7 +21,7 @@ function getClients(sourceInfo) {
         },
         region: 'us-east-1',
     });
-    
+
     const awsClient = new S3Client({
         endpoint: 'http://localhost:8000',
         credentials: {
@@ -53,7 +53,8 @@ function setupS3Mock(sourceInfo, cb) {
     const { backbeatClient, awsClient } = getClients(sourceInfo);
 
     const createCommand = new CreateBucketCommand({ Bucket: bucket });
-    awsClient.send(createCommand)
+    awsClient
+        .send(createCommand)
         .then(() => {
             const versionCommand = new PutBucketVersioningCommand({
                 Bucket: bucket,
@@ -88,7 +89,8 @@ function emptyAndDeleteVersionedBucket(sourceInfo, cb) {
     const { awsClient } = getClients(sourceInfo);
 
     const listCommand = new ListObjectVersionsCommand({ Bucket: bucket });
-    awsClient.send(listCommand)
+    awsClient
+        .send(listCommand)
         .then(data => {
             const list = [
                 ...(data.Versions || []).map(v => ({
@@ -118,8 +120,7 @@ function emptyAndDeleteVersionedBucket(sourceInfo, cb) {
         .catch(err => cb(err));
 }
 
-
 module.exports = {
     setupS3Mock,
-    emptyAndDeleteVersionedBucket
+    emptyAndDeleteVersionedBucket,
 };

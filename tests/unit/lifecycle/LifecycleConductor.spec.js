@@ -6,10 +6,8 @@ const fakeLogger = require('../../utils/fakeLogger');
 const { errors } = require('@scality/arsenal');
 const { splitter } = require('@scality/arsenal').constants;
 
-const LifecycleConductor = require(
-    '../../../extensions/lifecycle/conductor/LifecycleConductor');
-const { LifecycleMetrics } = require(
-    '../../../extensions/lifecycle/LifecycleMetrics');
+const LifecycleConductor = require('../../../extensions/lifecycle/conductor/LifecycleConductor');
+const { LifecycleMetrics } = require('../../../extensions/lifecycle/LifecycleMetrics');
 const {
     lifecycleTaskVersions,
     indexesForFeature,
@@ -17,13 +15,7 @@ const {
     masterKeyPrefixEnd,
 } = require('../../../lib/constants');
 
-const {
-    zkConfig,
-    kafkaConfig,
-    lcConfig,
-    repConfig,
-    s3Config,
-} = require('../../functional/lifecycle/configObjects');
+const { zkConfig, kafkaConfig, lcConfig, repConfig, s3Config } = require('../../functional/lifecycle/configObjects');
 const { BackbeatMetadataProxyMock } = require('../mocks');
 
 function getTask(isLifecycled = true) {
@@ -83,15 +75,11 @@ function makeLifecycleConductorWithFilters(options, markers) {
         },
     };
 
-    const lcConductor = new LifecycleConductor(zkConfig.zookeeper,
-        kafkaConfig, lifecycleConfig, repConfig, s3Config);
+    const lcConductor = new LifecycleConductor(zkConfig.zookeeper, kafkaConfig, lifecycleConfig, repConfig, s3Config);
 
     lcConductor._zkClient = {
         getChildren: (a, b, cb) => {
-            cb(null, [
-                `${account1}:bucketuid123:${bucket1}`,
-                `${account2}:bucketuid456:${bucket2}`,
-            ]);
+            cb(null, [`${account1}:bucketuid123:${bucket1}`, `${account2}:bucketuid456:${bucket2}`]);
         },
         getData: (a, cb) => cb(null, null, null),
         setData: (a, b, c, cb) => cb(null, {}),
@@ -101,22 +89,28 @@ function makeLifecycleConductorWithFilters(options, markers) {
         listObject: (a, b, { marker }, cb) => {
             if (marker) {
                 markers.push(marker);
-                return cb(null, JSON.stringify({
+                return cb(
+                    null,
+                    JSON.stringify({
+                        Contents: [
+                            {
+                                key: `${account2}..|..${bucket2}`,
+                            },
+                        ],
+                    }),
+                );
+            }
+            return cb(
+                null,
+                JSON.stringify({
                     Contents: [
                         {
-                            key: `${account2}..|..${bucket2}`,
+                            key: `${account1}..|..${bucket1}`,
                         },
                     ],
-                }));
-            }
-            return cb(null, JSON.stringify({
-                Contents: [
-                    {
-                        key: `${account1}..|..${bucket1}`,
-                    },
-                ],
-                IsTruncated: true,
-            }));
+                    IsTruncated: true,
+                }),
+            );
         },
     };
 
@@ -129,8 +123,11 @@ describe('indexesForFeature.lifecycle.v2', () => {
         const indexes = indexesForFeature.lifecycle.v2;
         assert.strictEqual(indexes.length, 2);
         for (const idx of indexes) {
-            assert.deepStrictEqual(idx.partialFilterExpression, expected,
-                `${idx.name} should have partialFilterExpression restricting to masters`);
+            assert.deepStrictEqual(
+                idx.partialFilterExpression,
+                expected,
+                `${idx.name} should have partialFilterExpression restricting to masters`,
+            );
         }
     });
 
@@ -150,8 +147,7 @@ describe('Lifecycle Conductor', () => {
         lcc.forceLegacyListing = false;
         lcc.autoCreateIndexes = true;
 
-        conductor = new LifecycleConductor(
-            zkConfig, kafkaConfig, lcc, repConfig, s3Config);
+        conductor = new LifecycleConductor(zkConfig, kafkaConfig, lcc, repConfig, s3Config);
         log = conductor.logger.newRequestLogger();
         conductor._accountIdCache.set('testid', '123456789012');
     });
@@ -170,17 +166,17 @@ describe('Lifecycle Conductor', () => {
                 getCollection: () => ({
                     find: () => ({
                         project: () => ({
-                            hasNext: () => new Promise((resolve, reject) => {
-                                reject(new Error('error'));
-                            })
-                        })
-                    })
-                })
+                            hasNext: () =>
+                                new Promise((resolve, reject) => {
+                                    reject(new Error('error'));
+                                }),
+                        }),
+                    }),
+                }),
             };
             conductor._zkClient = { getData: (_, cb) => cb(null, null, cb) };
 
-            sinon.stub(conductor, '_controlBacklog')
-                .callsFake(cb => cb(null));
+            sinon.stub(conductor, '_controlBacklog').callsFake(cb => cb(null));
             const metricStub = sinon.stub(LifecycleMetrics, 'onConductorScanComplete');
 
             conductor.processBuckets(err => {
@@ -199,20 +195,20 @@ describe('Lifecycle Conductor', () => {
                 getCollection: () => ({
                     find: () => ({
                         project: () => ({
-                            hasNext: () => new Promise(resolve => {
-                                resolve(null, false);
-                            })
-                        })
-                    })
-                })
+                            hasNext: () =>
+                                new Promise(resolve => {
+                                    resolve(null, false);
+                                }),
+                        }),
+                    }),
+                }),
             };
             conductor._zkClient = {
                 getData: (_, cb) => cb(null, null, cb),
-                setData: (path, data, version, cb) => cb(null, cb)
+                setData: (path, data, version, cb) => cb(null, cb),
             };
 
-            sinon.stub(conductor, '_controlBacklog')
-                .callsFake(cb => cb(null));
+            sinon.stub(conductor, '_controlBacklog').callsFake(cb => cb(null));
 
             conductor.processBuckets(done);
         });
@@ -250,7 +246,8 @@ describe('Lifecycle Conductor', () => {
             conductor._currentScanId = inFlightScanId;
             conductor._batchInProgress = true;
 
-            sinon.stub(conductor, '_controlBacklog')
+            sinon
+                .stub(conductor, '_controlBacklog')
                 .callsFake(cb => cb(errors.Throttling.customizeDescription('Batch in progress')));
             const onProcessBucketsStub = sinon.stub(LifecycleMetrics, 'onProcessBuckets');
 
@@ -271,8 +268,7 @@ describe('Lifecycle Conductor', () => {
             // scan starts); a failure after start is a generic error and must
             // reset the scan state.
             sinon.stub(conductor, '_controlBacklog').callsFake(cb => cb(null));
-            sinon.stub(conductor, 'listBuckets')
-                .callsFake((queue, log, cb) => cb(errors.InternalError));
+            sinon.stub(conductor, 'listBuckets').callsFake((queue, log, cb) => cb(errors.InternalError));
             const metricStub = sinon.stub(LifecycleMetrics, 'onConductorScanComplete');
 
             conductor.processBuckets(err => {
@@ -308,18 +304,16 @@ describe('Lifecycle Conductor', () => {
 
             sinon.stub(conductor, '_controlBacklog').callsFake(cb => cb(null));
             let capturedScanId = null;
-            sinon.stub(conductor, 'listBuckets')
-                .callsFake((queue, log, cb) => {
-                    const scanId = conductor._currentScanId;
-                    // Verify scanId is a valid UUID
-                    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-                    assert(uuidRegex.test(scanId),
-                        `conductorScanId should be a valid UUID v7, got: ${scanId}`);
-                    capturedScanId = scanId;
-                    assert(addDefaultFieldsStub.calledOnce);
-                    assert.strictEqual(addDefaultFieldsStub.firstCall.args[0].conductorScanId, scanId);
-                    cb(null, 0);
-                });
+            sinon.stub(conductor, 'listBuckets').callsFake((queue, log, cb) => {
+                const scanId = conductor._currentScanId;
+                // Verify scanId is a valid UUID
+                const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+                assert(uuidRegex.test(scanId), `conductorScanId should be a valid UUID v7, got: ${scanId}`);
+                capturedScanId = scanId;
+                assert(addDefaultFieldsStub.calledOnce);
+                assert.strictEqual(addDefaultFieldsStub.firstCall.args[0].conductorScanId, scanId);
+                cb(null, 0);
+            });
             const metricStub = sinon.stub(LifecycleMetrics, 'onConductorScanComplete');
 
             conductor.processBuckets(err => {
@@ -329,8 +323,10 @@ describe('Lifecycle Conductor', () => {
                 assert.strictEqual(logPassedToMetric, testLog);
                 assert(capturedScanId);
                 const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-                assert(uuidRegex.test(capturedScanId),
-                    `captured conductorScanId should be a valid UUID v7, got: ${capturedScanId}`);
+                assert(
+                    uuidRegex.test(capturedScanId),
+                    `captured conductorScanId should be a valid UUID v7, got: ${capturedScanId}`,
+                );
                 done();
             });
         });
@@ -342,33 +338,28 @@ describe('Lifecycle Conductor', () => {
             conductor._mongodbClient = { getIndexingJobs: () => {} };
             conductor._producer = { send: (msg, cb) => cb() };
 
-            sinon.stub(conductor, '_controlBacklog')
-                .callsFake(cb => cb(null));
-            sinon.stub(conductor._mongodbClient, 'getIndexingJobs')
-                .callsFake((_, cb) => cb(null, ['job1', 'job2']));
-            sinon.stub(conductor, 'listBuckets')
-                .callsFake((mQueue, log, cb) => {
-                    mQueue.push({
-                        bucketName: 'testbucket',
-                        canonicalId: 'testId',
-                        isLifecycle: true,
-                    });
-                    cb(null, 1);
+            sinon.stub(conductor, '_controlBacklog').callsFake(cb => cb(null));
+            sinon.stub(conductor._mongodbClient, 'getIndexingJobs').callsFake((_, cb) => cb(null, ['job1', 'job2']));
+            sinon.stub(conductor, 'listBuckets').callsFake((mQueue, log, cb) => {
+                mQueue.push({
+                    bucketName: 'testbucket',
+                    canonicalId: 'testId',
+                    isLifecycle: true,
                 });
-            sinon.stub(conductor, '_getAccountIds')
-                .callsFake((_a, _b, cb) => {
-                    order.push(1);
-                    // assert that activeIndexingJobRetrieved is set to
-                    // true while async operations are in progress
-                    assert(conductor.activeIndexingJobsRetrieved);
-                    setTimeout(() => cb(null, []), 1000);
-                });
-            sinon.stub(conductor, '_createBucketTaskMessages')
-                .callsFake((_a, _b, cb) => {
-                    order.push(2);
-                    assert(conductor.activeIndexingJobsRetrieved);
-                    setTimeout(() => cb(null, []), 1000);
-                });
+                cb(null, 1);
+            });
+            sinon.stub(conductor, '_getAccountIds').callsFake((_a, _b, cb) => {
+                order.push(1);
+                // assert that activeIndexingJobRetrieved is set to
+                // true while async operations are in progress
+                assert(conductor.activeIndexingJobsRetrieved);
+                setTimeout(() => cb(null, []), 1000);
+            });
+            sinon.stub(conductor, '_createBucketTaskMessages').callsFake((_a, _b, cb) => {
+                order.push(2);
+                assert(conductor.activeIndexingJobsRetrieved);
+                setTimeout(() => cb(null, []), 1000);
+            });
 
             conductor.processBuckets(() => {
                 order.push(3);
@@ -392,8 +383,7 @@ describe('Lifecycle Conductor', () => {
         it('should include conductor scan id in task context', () => {
             conductor._currentScanId = 'scan-id-test';
             conductor._currentScanStartTimestamp = 1700000000000;
-            const taskMessage = conductor._taskToMessage(
-                getTask(true), lifecycleTaskVersions.v2, log);
+            const taskMessage = conductor._taskToMessage(getTask(true), lifecycleTaskVersions.v2, log);
             const parsed = JSON.parse(taskMessage.message);
             assert.strictEqual(parsed.contextInfo.conductorScanId, 'scan-id-test');
             assert.strictEqual(parsed.contextInfo.conductorScanStartTimestamp, 1700000000000);
@@ -456,54 +446,22 @@ describe('Lifecycle Conductor', () => {
             ],
             [
                 'should return v2 if backend is not MongoDB',
-                [
-                    [],
-                    null,
-                    null,
-                    true,
-                    'bucketd',
-                ],
-                [
-                    [],
-                    null,
-                    lifecycleTaskVersions.v2,
-                ],
+                [[], null, null, true, 'bucketd'],
+                [[], null, lifecycleTaskVersions.v2],
             ],
             [
                 'should return v1: missing indexes + put indexes',
+                [[], [], null, true, 'mongodb'],
                 [
-                    [],
-                    [],
-                    null,
-                    true,
-                    'mongodb',
-                ],
-                [
-                    [
-                        { bucket: 'testbucket', indexes: indexesForFeature.lifecycle.v2 },
-                    ],
+                    [{ bucket: 'testbucket', indexes: indexesForFeature.lifecycle.v2 }],
                     indexesForFeature.lifecycle.v2,
                     lifecycleTaskVersions.v1,
                 ],
             ],
             [
                 'should return v1: missing indexes + skip put indexes when bucket is in job list',
-                [
-                    [
-                        { bucket: 'testbucket', indexes: indexesForFeature.lifecycle.v2 },
-                    ],
-                    [],
-                    null,
-                    true,
-                    'mongodb',
-                ],
-                [
-                    [
-                        { bucket: 'testbucket', indexes: indexesForFeature.lifecycle.v2 },
-                    ],
-                    null,
-                    lifecycleTaskVersions.v1,
-                ],
+                [[{ bucket: 'testbucket', indexes: indexesForFeature.lifecycle.v2 }], [], null, true, 'mongodb'],
+                [[{ bucket: 'testbucket', indexes: indexesForFeature.lifecycle.v2 }], null, lifecycleTaskVersions.v1],
             ],
             [
                 'should return v1: missing indexes + skip put indexes when job list is at limit',
@@ -528,33 +486,13 @@ describe('Lifecycle Conductor', () => {
             ],
             [
                 'should return v1: missing indexes + skip put indexes when in progress index request fails',
-                [
-                    [],
-                    [],
-                    null,
-                    false,
-                    'mongodb',
-                ],
-                [
-                    [],
-                    null,
-                    lifecycleTaskVersions.v1,
-                ],
+                [[], [], null, false, 'mongodb'],
+                [[], null, lifecycleTaskVersions.v1],
             ],
             [
                 'should return v1: index request fails',
-                [
-                    [],
-                    [],
-                    new Error('test error'),
-                    true,
-                    'mongodb',
-                ],
-                [
-                    [],
-                    null,
-                    lifecycleTaskVersions.v1,
-                ],
+                [[], [], new Error('test error'), true, 'mongodb'],
+                [[], null, lifecycleTaskVersions.v1],
             ],
         ];
 
@@ -570,9 +508,10 @@ describe('Lifecycle Conductor', () => {
                 conductor._bucketSource = bucektSource;
                 conductor._mongodbClient = {
                     getDiskUsage: cb => cb(null, { available: 10000000000, free: 10000000000, total: 20000000000 }),
-                    getCollectionStats: (bucketName, _log, cb) => cb(null, {
-                        indexSizes: { _id_: 80000 },
-                    }),
+                    getCollectionStats: (bucketName, _log, cb) =>
+                        cb(null, {
+                            indexSizes: { _id_: 80000 },
+                        }),
                 };
                 client.indexesObj = getIndexes;
                 client.error = mockError;
@@ -584,7 +523,8 @@ describe('Lifecycle Conductor', () => {
                     assert.deepStrictEqual(taskVersion, expectedVersion);
                     done();
                 });
-            }));
+            }),
+        );
 
         it('should return v1: SosAPI bucket skips index creation', done => {
             const client = new BackbeatMetadataProxyMock();
@@ -630,9 +570,10 @@ describe('Lifecycle Conductor', () => {
             conductor._bucketSource = 'mongodb';
             conductor._mongodbClient = {
                 getDiskUsage: cb => cb(new Error('dbStats failed')),
-                getCollectionStats: (bucketName, _log, cb) => cb(null, {
-                    indexSizes: { _id_: 80000 },
-                }),
+                getCollectionStats: (bucketName, _log, cb) =>
+                    cb(null, {
+                        indexSizes: { _id_: 80000 },
+                    }),
             };
             client.indexesObj = [];
             client.error = null;
@@ -654,9 +595,10 @@ describe('Lifecycle Conductor', () => {
             conductor._bucketSource = 'mongodb';
             conductor._mongodbClient = {
                 getDiskUsage: cb => cb(null, { available: 100000, free: 100000, total: 20000000000 }),
-                getCollectionStats: (bucketName, _log, cb) => cb(null, {
-                    indexSizes: { _id_: 80000000 },
-                }),
+                getCollectionStats: (bucketName, _log, cb) =>
+                    cb(null, {
+                        indexSizes: { _id_: 80000000 },
+                    }),
             };
             client.indexesObj = [];
             client.error = null;
@@ -678,25 +620,28 @@ describe('Lifecycle Conductor', () => {
             conductor._bucketSource = 'mongodb';
             conductor._mongodbClient = {
                 getDiskUsage: cb => cb(null, { free: 1e12, total: 2e12 }),
-                getCollectionStats: (bucketName, _log, cb) => cb(null, {
-                    indexSizes: { _id_: 1000 },
-                }),
+                getCollectionStats: (bucketName, _log, cb) =>
+                    cb(null, {
+                        indexSizes: { _id_: 1000 },
+                    }),
             };
             client.indexesObj = [];
-            client.putBucketIndexes = (bucket, indexes, _log, cb) =>
-                cb(new Error('mongo createIndexes failed'));
+            client.putBucketIndexes = (bucket, indexes, _log, cb) => cb(new Error('mongo createIndexes failed'));
 
             const metricsSpy = sinon.spy(LifecycleMetrics, 'onLegacyTask');
 
             conductor._indexesGetOrCreate(getTask(true), log, (err, taskVersion) => {
                 assert.ifError(err);
                 assert.deepStrictEqual(taskVersion, lifecycleTaskVersions.v1);
-                assert(metricsSpy.calledWith(sinon.match.any, 'putBucketIndexesFailed'),
-                    'expected LifecycleMetrics.onLegacyTask to be called with '
-                    + '\'putBucketIndexesFailed\'');
-                assert(!metricsSpy.calledWith(sinon.match.any, 'putBucketIndexes'),
-                    'expected LifecycleMetrics.onLegacyTask not to be called with '
-                    + '\'putBucketIndexes\' on the failure path');
+                assert(
+                    metricsSpy.calledWith(sinon.match.any, 'putBucketIndexesFailed'),
+                    "expected LifecycleMetrics.onLegacyTask to be called with 'putBucketIndexesFailed'",
+                );
+                assert(
+                    !metricsSpy.calledWith(sinon.match.any, 'putBucketIndexes'),
+                    'expected LifecycleMetrics.onLegacyTask not to be called with ' +
+                        "'putBucketIndexes' on the failure path",
+                );
                 done();
             });
         });
@@ -709,9 +654,10 @@ describe('Lifecycle Conductor', () => {
             conductor._bucketSource = 'mongodb';
             conductor._mongodbClient = {
                 getDiskUsage: cb => cb(null, { free: 1e12, total: 2e12 }),
-                getCollectionStats: (bucketName, _log, cb) => cb(null, {
-                    indexSizes: { _id_: 1000 },
-                }),
+                getCollectionStats: (bucketName, _log, cb) =>
+                    cb(null, {
+                        indexSizes: { _id_: 1000 },
+                    }),
             };
             client.indexesObj = [];
             client.putBucketIndexes = (bucket, indexes, _log, cb) => cb(null);
@@ -721,12 +667,15 @@ describe('Lifecycle Conductor', () => {
             conductor._indexesGetOrCreate(getTask(true), log, (err, taskVersion) => {
                 assert.ifError(err);
                 assert.deepStrictEqual(taskVersion, lifecycleTaskVersions.v1);
-                assert(metricsSpy.calledWith(sinon.match.any, 'putBucketIndexes'),
-                    'expected LifecycleMetrics.onLegacyTask to be called with '
-                    + '\'putBucketIndexes\'');
-                assert(!metricsSpy.calledWith(sinon.match.any, 'putBucketIndexesFailed'),
-                    'expected LifecycleMetrics.onLegacyTask not to be called with '
-                    + '\'putBucketIndexesFailed\' on the success path');
+                assert(
+                    metricsSpy.calledWith(sinon.match.any, 'putBucketIndexes'),
+                    "expected LifecycleMetrics.onLegacyTask to be called with 'putBucketIndexes'",
+                );
+                assert(
+                    !metricsSpy.calledWith(sinon.match.any, 'putBucketIndexesFailed'),
+                    'expected LifecycleMetrics.onLegacyTask not to be called with ' +
+                        "'putBucketIndexesFailed' on the success path",
+                );
                 done();
             });
         });
@@ -758,8 +707,12 @@ describe('Lifecycle Conductor', () => {
             conductor._bucketSource = 'mongodb';
             // Throw if either MongoDB call is made — the guard must short-circuit before.
             conductor._mongodbClient = {
-                getDiskUsage: () => { throw new Error('getDiskUsage should not be called'); },
-                getCollectionStats: () => { throw new Error('getCollectionStats should not be called'); },
+                getDiskUsage: () => {
+                    throw new Error('getDiskUsage should not be called');
+                },
+                getCollectionStats: () => {
+                    throw new Error('getCollectionStats should not be called');
+                },
             };
             client.indexesObj = [];
             client.error = null;
@@ -797,11 +750,12 @@ describe('Lifecycle Conductor', () => {
             conductor._bucketSource = 'mongodb';
             conductor._mongodbClient = {
                 getDiskUsage: cb => cb(null, { available: 1e12, free: 1e12, total: 2e12 }),
-                getCollectionStats: (bucketName, _log, cb) => cb(null, {
-                    indexSizes: { _id_: 1000 },
-                    count: 20000000,
-                    storageSize: 100,
-                }),
+                getCollectionStats: (bucketName, _log, cb) =>
+                    cb(null, {
+                        indexSizes: { _id_: 1000 },
+                        count: 20000000,
+                        storageSize: 100,
+                    }),
             };
             client.indexesObj = [];
             client.error = null;
@@ -823,11 +777,12 @@ describe('Lifecycle Conductor', () => {
             conductor._bucketSource = 'mongodb';
             conductor._mongodbClient = {
                 getDiskUsage: cb => cb(null, { available: 1e12, free: 1e12, total: 2e12 }),
-                getCollectionStats: (bucketName, _log, cb) => cb(null, {
-                    indexSizes: { _id_: 1000 },
-                    count: 100,
-                    storageSize: 20 * 1024 * 1024 * 1024,
-                }),
+                getCollectionStats: (bucketName, _log, cb) =>
+                    cb(null, {
+                        indexSizes: { _id_: 1000 },
+                        count: 100,
+                        storageSize: 20 * 1024 * 1024 * 1024,
+                    }),
             };
             client.indexesObj = [];
             client.error = null;
@@ -873,9 +828,12 @@ describe('Lifecycle Conductor', () => {
 
         it('should list buckets from bucketd', done => {
             const markers = [];
-            const lcConductor = makeLifecycleConductorWithFilters({
-                bucketSource: 'bucketd',
-            }, markers);
+            const lcConductor = makeLifecycleConductorWithFilters(
+                {
+                    bucketSource: 'bucketd',
+                },
+                markers,
+            );
             lcConductor.listBuckets(queue, fakeLogger, (err, length) => {
                 assert.strictEqual(length, 2);
                 assert.strictEqual(queue.length(), 2);
@@ -901,12 +859,14 @@ describe('Lifecycle Conductor', () => {
             const lcConductor = makeLifecycleConductorWithFilters({
                 bucketSource: 'zookeeper',
             });
-            sinon.stub(lcConductor._zkClient, 'getChildren').yields(null, [
-                `${account1}:bucketuid123:${bucket1}`,
-                `${account2}:bucketuid456:${bucket2}`,
-                'invalid:bucketuid789',
-                'invalid',
-            ]);
+            sinon
+                .stub(lcConductor._zkClient, 'getChildren')
+                .yields(null, [
+                    `${account1}:bucketuid123:${bucket1}`,
+                    `${account2}:bucketuid456:${bucket2}`,
+                    'invalid:bucketuid789',
+                    'invalid',
+                ]);
             lcConductor.listBuckets(queue, fakeLogger, (err, length) => {
                 assert.strictEqual(length, 2);
                 assert.strictEqual(queue.length(), 2);
@@ -946,10 +906,13 @@ describe('Lifecycle Conductor', () => {
 
         it('should filter by bucket when listing from bucketd', done => {
             const markers = [];
-            const lcConductor = makeLifecycleConductorWithFilters({
-                bucketsDenied: [bucket1],
-                bucketSource: 'bucketd',
-            }, markers);
+            const lcConductor = makeLifecycleConductorWithFilters(
+                {
+                    bucketsDenied: [bucket1],
+                    bucketSource: 'bucketd',
+                },
+                markers,
+            );
             lcConductor.listBuckets(queue, fakeLogger, (err, length) => {
                 assert.strictEqual(length, 1);
                 assert.strictEqual(queue.length(), 1);
@@ -987,10 +950,13 @@ describe('Lifecycle Conductor', () => {
 
         it('should filter by account when listing from bucketd', done => {
             const markers = [];
-            const lcConductor = makeLifecycleConductorWithFilters({
-                accountsDenied: [`${accountName1}:${account1}`],
-                bucketSource: 'bucketd',
-            }, markers);
+            const lcConductor = makeLifecycleConductorWithFilters(
+                {
+                    accountsDenied: [`${accountName1}:${account1}`],
+                    bucketSource: 'bucketd',
+                },
+                markers,
+            );
             lcConductor.listBuckets(queue, fakeLogger, (err, length) => {
                 assert.strictEqual(length, 1);
                 assert.strictEqual(queue.length(), 1);
@@ -1024,11 +990,14 @@ describe('Lifecycle Conductor', () => {
 
         it('should filter by account and bucket when listing from bucketd', done => {
             const markers = [];
-            const lcConductor = makeLifecycleConductorWithFilters({
-                accountsDenied: [`${accountName1}:${account1}`],
-                bucketsDenied: [bucket2],
-                bucketSource: 'bucketd',
-            }, markers);
+            const lcConductor = makeLifecycleConductorWithFilters(
+                {
+                    accountsDenied: [`${accountName1}:${account1}`],
+                    bucketsDenied: [bucket2],
+                    bucketSource: 'bucketd',
+                },
+                markers,
+            );
             lcConductor.listBuckets(queue, fakeLogger, (err, length) => {
                 assert.strictEqual(length, 0);
                 assert.strictEqual(queue.length(), 0);
@@ -1041,17 +1010,20 @@ describe('Lifecycle Conductor', () => {
         });
 
         it('should not use any filter when listing from from mongodb', done => {
-            const lcConductor = makeLifecycleConductorWithFilters({
-                bucketSource: 'mongodb',
-            }, []);
+            const lcConductor = makeLifecycleConductorWithFilters(
+                {
+                    bucketSource: 'mongodb',
+                },
+                [],
+            );
             const findStub = sinon.stub().returns({
                 project: () => ({
                     hasNext: sinon.stub().resolves(false),
-                })
+                }),
             });
             lcConductor._mongodbClient = {
                 getIndexingJobs: (_, cb) => cb(null, ['job1', 'job2']),
-                getCollection: () => ({ find: findStub })
+                getCollection: () => ({ find: findStub }),
             };
             sinon.stub(lcConductor._zkClient, 'getData').yields(null, null, null);
             lcConductor.listBuckets(queue, fakeLogger, err => {
@@ -1062,27 +1034,28 @@ describe('Lifecycle Conductor', () => {
         });
 
         it('should filter by account when listing from from mongodb', done => {
-            const lcConductor = makeLifecycleConductorWithFilters({
-                accountsDenied: [`${accountName1}:${account1}`],
-                bucketSource: 'mongodb',
-            }, []);
+            const lcConductor = makeLifecycleConductorWithFilters(
+                {
+                    accountsDenied: [`${accountName1}:${account1}`],
+                    bucketSource: 'mongodb',
+                },
+                [],
+            );
             const findStub = sinon.stub().returns({
                 project: () => ({
                     hasNext: sinon.stub().resolves(false),
-                })
+                }),
             });
             lcConductor._mongodbClient = {
                 getIndexingJobs: (_, cb) => cb(null, ['job1', 'job2']),
-                getCollection: () => ({ find: findStub })
+                getCollection: () => ({ find: findStub }),
             };
             sinon.stub(lcConductor._zkClient, 'getData').yields(null, null, null);
             lcConductor.listBuckets(queue, fakeLogger, err => {
                 assert.ifError(err);
                 assert.deepEqual(findStub.getCall(0).args[0], {
                     'value.owner': {
-                        $nin: [
-                            'ab288756448dc58f61482903131e7ae533553d20b52b0e2ef80235599a1b9143',
-                        ],
+                        $nin: ['ab288756448dc58f61482903131e7ae533553d20b52b0e2ef80235599a1b9143'],
                     },
                 });
                 done();
@@ -1090,18 +1063,21 @@ describe('Lifecycle Conductor', () => {
         });
 
         it('should filter by bucket when listing from from mongodb', done => {
-            const lcConductor = makeLifecycleConductorWithFilters({
-                bucketsDenied: [bucket2],
-                bucketSource: 'mongodb',
-            }, []);
+            const lcConductor = makeLifecycleConductorWithFilters(
+                {
+                    bucketsDenied: [bucket2],
+                    bucketSource: 'mongodb',
+                },
+                [],
+            );
             const findStub = sinon.stub().returns({
                 project: () => ({
                     hasNext: sinon.stub().resolves(false),
-                })
+                }),
             });
             lcConductor._mongodbClient = {
                 getIndexingJobs: (_, cb) => cb(null, ['job1', 'job2']),
-                getCollection: () => ({ find: findStub })
+                getCollection: () => ({ find: findStub }),
             };
             sinon.stub(lcConductor._zkClient, 'getData').yields(null, null, null);
             lcConductor.listBuckets(queue, fakeLogger, err => {
@@ -1116,17 +1092,20 @@ describe('Lifecycle Conductor', () => {
         });
 
         it('should use the resume marker when listing from from mongodb', done => {
-            const lcConductor = makeLifecycleConductorWithFilters({
-                bucketSource: 'mongodb',
-            }, []);
+            const lcConductor = makeLifecycleConductorWithFilters(
+                {
+                    bucketSource: 'mongodb',
+                },
+                [],
+            );
             const findStub = sinon.stub().returns({
                 project: () => ({
                     hasNext: sinon.stub().resolves(false),
-                })
+                }),
             });
             lcConductor._mongodbClient = {
                 getIndexingJobs: (_, cb) => cb(null, ['job1', 'job2']),
-                getCollection: () => ({ find: findStub })
+                getCollection: () => ({ find: findStub }),
             };
             sinon.stub(lcConductor._zkClient, 'getData').yields(null, Buffer.from('bucket1'), null);
             lcConductor.listBuckets(queue, fakeLogger, err => {
@@ -1141,19 +1120,22 @@ describe('Lifecycle Conductor', () => {
         });
 
         it('should filter by account and bucket when listing from from mongodb', done => {
-            const lcConductor = makeLifecycleConductorWithFilters({
-                accountsDenied: [`${accountName1}:${account1}`],
-                bucketsDenied: [bucket2],
-                bucketSource: 'mongodb',
-            }, []);
+            const lcConductor = makeLifecycleConductorWithFilters(
+                {
+                    accountsDenied: [`${accountName1}:${account1}`],
+                    bucketsDenied: [bucket2],
+                    bucketSource: 'mongodb',
+                },
+                [],
+            );
             const findStub = sinon.stub().returns({
                 project: () => ({
                     hasNext: sinon.stub().resolves(false),
-                })
+                }),
             });
             lcConductor._mongodbClient = {
                 getIndexingJobs: (_, cb) => cb(null, ['job1', 'job2']),
-                getCollection: () => ({ find: findStub })
+                getCollection: () => ({ find: findStub }),
             };
             sinon.stub(lcConductor._zkClient, 'getData').yields(null, Buffer.from('bucket1'), null);
             lcConductor.listBuckets(queue, fakeLogger, err => {
@@ -1164,9 +1146,7 @@ describe('Lifecycle Conductor', () => {
                         $nin: ['bucket2'],
                     },
                     'value.owner': {
-                        $nin: [
-                            'ab288756448dc58f61482903131e7ae533553d20b52b0e2ef80235599a1b9143',
-                        ],
+                        $nin: ['ab288756448dc58f61482903131e7ae533553d20b52b0e2ef80235599a1b9143'],
                     },
                 });
                 done();
@@ -1174,9 +1154,12 @@ describe('Lifecycle Conductor', () => {
         });
 
         it('should populate hasSosApi from bucket capabilities when listing from mongodb', done => {
-            const lcConductor = makeLifecycleConductorWithFilters({
-                bucketSource: 'mongodb',
-            }, []);
+            const lcConductor = makeLifecycleConductorWithFilters(
+                {
+                    bucketSource: 'mongodb',
+                },
+                [],
+            );
 
             const docs = [
                 { _id: 'veeam-bucket', value: { owner: 'acc', capabilities: { VeeamSOSApi: { foo: 'bar' } } } },
@@ -1193,7 +1176,9 @@ describe('Lifecycle Conductor', () => {
             lcConductor._mongodbClient = {
                 getIndexingJobs: (_, cb) => cb(null, []),
                 getCollection: name => {
-                    if (name === '__metastore') {return { find: findStub };}
+                    if (name === '__metastore') {
+                        return { find: findStub };
+                    }
                     return { collectionName: name };
                 },
                 _isSpecialCollection: () => false,
@@ -1213,9 +1198,12 @@ describe('Lifecycle Conductor', () => {
         });
 
         it('should populate hasMassExpirationRule from lifecycle rules when listing from mongodb', done => {
-            const lcConductor = makeLifecycleConductorWithFilters({
-                bucketSource: 'mongodb',
-            }, []);
+            const lcConductor = makeLifecycleConductorWithFilters(
+                {
+                    bucketSource: 'mongodb',
+                },
+                [],
+            );
 
             const docs = [
                 {
@@ -1223,10 +1211,7 @@ describe('Lifecycle Conductor', () => {
                     value: {
                         owner: 'acc',
                         lifecycleConfiguration: {
-                            rules: [
-                                { ruleStatus: 'Enabled',
-                                    actions: [{ actionName: 'Expiration', days: 0 }] },
-                            ],
+                            rules: [{ ruleStatus: 'Enabled', actions: [{ actionName: 'Expiration', days: 0 }] }],
                         },
                     },
                 },
@@ -1235,9 +1220,7 @@ describe('Lifecycle Conductor', () => {
                     value: {
                         owner: 'acc',
                         lifecycleConfiguration: {
-                            rules: [
-                                { ruleStatus: 'Enabled', actions: [{ actionName: 'Expiration', days: 30 }] },
-                            ],
+                            rules: [{ ruleStatus: 'Enabled', actions: [{ actionName: 'Expiration', days: 30 }] }],
                         },
                     },
                 },
@@ -1254,7 +1237,9 @@ describe('Lifecycle Conductor', () => {
             lcConductor._mongodbClient = {
                 getIndexingJobs: (_, cb) => cb(null, []),
                 getCollection: name => {
-                    if (name === '__metastore') {return { find: findStub };}
+                    if (name === '__metastore') {
+                        return { find: findStub };
+                    }
                     return { collectionName: name };
                 },
                 _isSpecialCollection: () => false,
@@ -1282,7 +1267,12 @@ describe('Lifecycle Conductor', () => {
         it('should close the client manager once the producer is closed', done => {
             const closeStub = sinon.stub(conductor.clientManager, 'close');
             const producerClosed = sinon.stub();
-            conductor._producer = { close: cb => { producerClosed(); cb(); } };
+            conductor._producer = {
+                close: cb => {
+                    producerClosed();
+                    cb();
+                },
+            };
 
             conductor.stop(err => {
                 assert.ifError(err);

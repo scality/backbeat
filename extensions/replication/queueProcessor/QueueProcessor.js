@@ -18,8 +18,7 @@ const VaultClientCache = require('../../../lib/clients/VaultClientCache');
 const ClientManagerCache = require('../../../lib/clients/ClientManagerCache');
 const QueueEntry = require('../../../lib/models/QueueEntry');
 const TaskScheduler = require('../../../lib/tasks/TaskScheduler');
-const { getTaskSchedulerQueueKey,
-        getTaskSchedulerDedupeKey } = require('./taskSchedulerHelpers');
+const { getTaskSchedulerQueueKey, getTaskSchedulerDedupeKey } = require('./taskSchedulerHelpers');
 const ReplicateObject = require('../tasks/ReplicateObject');
 const MultipleBackendTask = require('../tasks/MultipleBackendTask');
 const CopyLocationTask = require('../tasks/CopyLocationTask');
@@ -106,8 +105,7 @@ const timeElapsedMetric = ZenkoMetrics.createHistogram({
 
 const rpoMetric = ZenkoMetrics.createHistogram({
     name: 's3_replication_rpo_seconds',
-    help: 'Difference between the time the object is updated and the time it ' +
-          'is picked up for replication',
+    help: 'Difference between the time the object is updated and the time it is picked up for replication',
     labelNames: ['origin', 'serviceName', 'location'],
     buckets: [1, 10, 30, 60, 120, 300, 600],
 });
@@ -140,7 +138,6 @@ const metricsHandler = {
 };
 
 class QueueProcessor extends EventEmitter {
-
     /**
      * Create a queue processor object to activate Cross-Region
      * Replication from a kafka topic dedicated to store replication
@@ -195,14 +192,24 @@ class QueueProcessor extends EventEmitter {
      * @param {String} site - site name
      * @param {Object} circuitBreakerConfig - breakbeat configuration
      */
-    constructor(topic, zkConfig, zkClient, kafkaConfig,
-                sourceConfig, destConfig, repConfig,
-                redisConfig, mConfig, httpsConfig, internalHttpsConfig,
-                site, circuitBreakerConfig) {
+    constructor(
+        topic,
+        zkConfig,
+        zkClient,
+        kafkaConfig,
+        sourceConfig,
+        destConfig,
+        repConfig,
+        redisConfig,
+        mConfig,
+        httpsConfig,
+        internalHttpsConfig,
+        site,
+        circuitBreakerConfig,
+    ) {
         super();
         this.topic = topic;
-        this.isReplayTopic = repConfig.replayTopics &&
-            repConfig.replayTopics.some(t => t.topicName === topic);
+        this.isReplayTopic = repConfig.replayTopics && repConfig.replayTopics.some(t => t.topicName === topic);
         this.zkConfig = zkConfig;
         this.zkClient = zkClient;
         this.kafkaConfig = kafkaConfig;
@@ -221,15 +228,14 @@ class QueueProcessor extends EventEmitter {
         this._redis = null;
         this.site = site;
         this.mConfig = mConfig;
-        this.serviceName = this.isReplayTopic ?
-            libConstants.services.replicationReplayProcessor :
-            libConstants.services.replicationQueueProcessor;
+        this.serviceName = this.isReplayTopic
+            ? libConstants.services.replicationReplayProcessor
+            : libConstants.services.replicationQueueProcessor;
         this.echoMode = false;
         this.scheduledResume = null;
         this.circuitBreakerConfig = circuitBreakerConfig;
 
-        this.logger = new Logger(
-            `Backbeat:Replication:QueueProcessor:${this.site}`);
+        this.logger = new Logger(`Backbeat:Replication:QueueProcessor:${this.site}`);
 
         // clients to read data straight from the sites we replicate to, keyed
         // by endpoint and role, shared by all copy location tasks: they assume
@@ -269,8 +275,7 @@ class QueueProcessor extends EventEmitter {
         }
 
         if (Array.isArray(this.destConfig.replicationEndpoint.servers)) {
-            this.destHosts =
-                new RoundRobin(this.destConfig.replicationEndpoint.servers);
+            this.destHosts = new RoundRobin(this.destConfig.replicationEndpoint.servers);
             if (this.destConfig.replicationEndpoint.echo) {
                 this._setupEcho();
             }
@@ -283,50 +288,48 @@ class QueueProcessor extends EventEmitter {
 
     _createTaskScheduler() {
         return new TaskScheduler(
-            (ctx, done) => ctx.task.processQueueEntry(
-                ctx.entry, ctx.kafkaEntry, done),
+            (ctx, done) => ctx.task.processQueueEntry(ctx.entry, ctx.kafkaEntry, done),
             ctx => getTaskSchedulerQueueKey(ctx.entry),
             ctx => getTaskSchedulerDedupeKey(ctx.entry),
-            this.logger);
+            this.logger,
+        );
     }
 
     _setupVaultclientCache() {
         this.vaultclientCache = new VaultClientCache();
 
         if (this.sourceConfig.auth.type === 'role') {
-            const { host, port, adminPort, adminCredentials }
-                = this.sourceConfig.auth.vault;
-            this.vaultclientCache
-                .setHost('source:s3', host)
-                .setPort('source:s3', port);
+            const { host, port, adminPort, adminCredentials } = this.sourceConfig.auth.vault;
+            this.vaultclientCache.setHost('source:s3', host).setPort('source:s3', port);
             if (this.sourceConfig.transport === 'https') {
                 // provision HTTPS credentials for local Vault S3 route
                 this.vaultclientCache.setHttps(
-                    'source:s3', this.internalHttpsConfig.key,
+                    'source:s3',
+                    this.internalHttpsConfig.key,
                     this.internalHttpsConfig.cert,
-                    this.internalHttpsConfig.ca);
+                    this.internalHttpsConfig.ca,
+                );
             }
             if (adminCredentials) {
                 this.vaultclientCache
                     .setHost('source:admin', host)
                     .setPort('source:admin', adminPort)
-                    .loadAdminCredentials('source:admin',
-                        adminCredentials.accessKey,
-                        adminCredentials.secretKey);
+                    .loadAdminCredentials('source:admin', adminCredentials.accessKey, adminCredentials.secretKey);
                 if (this.sourceConfig.transport === 'https') {
                     // provision HTTPS credentials for local Vault admin route
                     this.vaultclientCache.setHttps(
-                        'source:admin', this.internalHttpsConfig.key,
+                        'source:admin',
+                        this.internalHttpsConfig.key,
                         this.internalHttpsConfig.cert,
-                        this.internalHttpsConfig.ca);
+                        this.internalHttpsConfig.ca,
+                    );
                 }
                 this.sourceAdminVaultConfigured = true;
             }
         }
         if (this.destConfig.auth.type === 'role') {
             if (this.destConfig.auth.vault) {
-                const { host, port, adminPort, adminCredentials }
-                    = this.destConfig.auth.vault;
+                const { host, port, adminPort, adminCredentials } = this.destConfig.auth.vault;
                 if (host) {
                     this.vaultclientCache.setHost('dest:s3', host);
                 }
@@ -342,36 +345,38 @@ class QueueProcessor extends EventEmitter {
                     } else {
                         // if dest vault admin port not configured, go
                         // through nginx proxy
-                        this.vaultclientCache.setProxyPath('dest:admin',
-                            proxyIAMPath);
+                        this.vaultclientCache.setProxyPath('dest:admin', proxyIAMPath);
                     }
                     this.vaultclientCache.loadAdminCredentials(
                         'dest:admin',
                         adminCredentials.accessKey,
-                        adminCredentials.secretKey);
+                        adminCredentials.secretKey,
+                    );
                     if (this.destConfig.transport === 'https') {
                         // provision HTTPS credentials for admin route
                         this.vaultclientCache.setHttps(
-                            'dest:admin', this.httpsConfig.key,
+                            'dest:admin',
+                            this.httpsConfig.key,
                             this.httpsConfig.cert,
-                            this.httpsConfig.ca);
+                            this.httpsConfig.ca,
+                        );
                     }
                     this.destAdminVaultConfigured = true;
                 }
             }
-            if (!this.destConfig.auth.vault ||
-                !this.destConfig.auth.vault.port) {
+            if (!this.destConfig.auth.vault || !this.destConfig.auth.vault.port) {
                 // if dest vault port not configured, go through nginx
                 // proxy
-                this.vaultclientCache.setProxyPath('dest:s3',
-                    proxyVaultPath);
+                this.vaultclientCache.setProxyPath('dest:s3', proxyVaultPath);
             }
             if (this.destConfig.transport === 'https') {
                 // provision HTTPS credentials for IAM route
                 this.vaultclientCache.setHttps(
-                    'dest:s3', this.httpsConfig.key,
+                    'dest:s3',
+                    this.httpsConfig.key,
                     this.httpsConfig.cert,
-                    this.httpsConfig.ca);
+                    this.httpsConfig.ca,
+                );
             }
         }
     }
@@ -401,8 +406,7 @@ class QueueProcessor extends EventEmitter {
 
     _createConsumer(topic, queueProcessorFunc, options) {
         let consumerReady = false;
-        const groupId =
-              `${this.repConfig.queueProcessor.groupId}-${this.site}`;
+        const groupId = `${this.repConfig.queueProcessor.groupId}-${this.site}`;
         const consumer = new BackbeatConsumer({
             zookeeper: {
                 connectionString: this.zkConfig.connectionString,
@@ -410,8 +414,7 @@ class QueueProcessor extends EventEmitter {
             kafka: {
                 hosts: this.kafkaConfig.hosts,
                 site: this.kafkaConfig.site,
-                backlogMetrics: options && options.enableBacklogMetrics ?
-                    this.kafkaConfig.backlogMetrics : undefined,
+                backlogMetrics: options && options.enableBacklogMetrics ? this.kafkaConfig.backlogMetrics : undefined,
                 compressionType: this.kafkaConfig.compressionType,
                 requiredAcks: this.kafkaConfig.requiredAcks,
                 consumerParams: this.kafkaConfig.consumerParams,
@@ -430,8 +433,7 @@ class QueueProcessor extends EventEmitter {
         });
         consumer.on('error', () => {
             if (!consumerReady) {
-                this.logger.fatal('queue processor failed to start a ' +
-                                  'backbeat consumer', { topic, groupId });
+                this.logger.fatal('queue processor failed to start a backbeat consumer', { topic, groupId });
                 process.exit(1);
             }
         });
@@ -445,23 +447,20 @@ class QueueProcessor extends EventEmitter {
 
     _setupEcho() {
         if (!this.sourceAdminVaultConfigured) {
-            throw new Error('echo mode not properly configured: missing ' +
-                'credentials for source Vault admin client');
+            throw new Error('echo mode not properly configured: missing credentials for source Vault admin client');
         }
         if (!this.destAdminVaultConfigured) {
-            throw new Error('echo mode not properly configured: missing ' +
-                'credentials for destination Vault ' +
-                'admin client');
+            throw new Error(
+                'echo mode not properly configured: missing credentials for destination Vault admin client',
+            );
         }
         if (process.env.BACKBEAT_ECHO_TEST_MODE === '1') {
-            this.logger.info('starting in echo mode',
-                {
-                    method: 'QueueProcessor.constructor',
-                    testMode: true,
-                });
+            this.logger.info('starting in echo mode', {
+                method: 'QueueProcessor.constructor',
+                testMode: true,
+            });
         } else {
-            this.logger.info('starting in echo mode',
-                { method: 'QueueProcessor.constructor' });
+            this.logger.info('starting in echo mode', { method: 'QueueProcessor.constructor' });
         }
         this.echoMode = true;
         this.accountCredsCache = {};
@@ -480,18 +479,17 @@ class QueueProcessor extends EventEmitter {
         const channelName = `${this.repConfig.topic}-${this.site}`;
         this._redis.subscribe(channelName, err => {
             if (err) {
-                this.logger.fatal('queue processor failed to subscribe to ' +
-                                  `crr redis channel for location ${this.site}`,
-                                  { method: 'QueueProcessor.constructor',
-                                    error: err });
+                this.logger.fatal(
+                    `queue processor failed to subscribe to crr redis channel for location ${this.site}`,
+                    { method: 'QueueProcessor.constructor', error: err },
+                );
                 process.exit(1);
             }
             this._redis.on('message', (channel, message) => {
                 const validActions = {
                     pauseService: this._pauseService.bind(this),
                     resumeService: this._resumeService.bind(this),
-                    deleteScheduledResumeService:
-                        this._deleteScheduledResumeService.bind(this),
+                    deleteScheduledResumeService: this._deleteScheduledResumeService.bind(this),
                 };
                 try {
                     const { action, date } = JSON.parse(message);
@@ -519,8 +517,7 @@ class QueueProcessor extends EventEmitter {
             // if currently resumed/active, attempt to pause
             this._updateZkStateNode('paused', true, err => {
                 if (err) {
-                    this.logger.trace('error occurred saving state to ' +
-                    'zookeeper', {
+                    this.logger.trace('error occurred saving state to zookeeper', {
                         method: 'QueueProcessor._pauseService',
                     });
                 } else {
@@ -528,8 +525,7 @@ class QueueProcessor extends EventEmitter {
                     if (this._dataMoverConsumer) {
                         this._dataMoverConsumer.pause(this.site);
                     }
-                    this.logger.info('paused replication for location: ' +
-                        `${this.site}`);
+                    this.logger.info(`paused replication for location: ${this.site}`);
                     this._deleteScheduledResumeService();
                 }
             });
@@ -556,8 +552,7 @@ class QueueProcessor extends EventEmitter {
         } else {
             this._updateZkStateNode('paused', false, err => {
                 if (err) {
-                    this.logger.trace('error occurred saving state to ' +
-                    'zookeeper', {
+                    this.logger.trace('error occurred saving state to zookeeper', {
                         method: 'QueueProcessor._resumeService',
                     });
                 } else {
@@ -565,8 +560,7 @@ class QueueProcessor extends EventEmitter {
                     if (this._dataMoverConsumer) {
                         this._dataMoverConsumer.resume(this.site);
                     }
-                    this.logger.info('resumed replication for location: ' +
-                        `${this.site}`);
+                    this.logger.info(`resumed replication for location: ${this.site}`);
                     this._deleteScheduledResumeService();
                 }
             });
@@ -586,8 +580,7 @@ class QueueProcessor extends EventEmitter {
             } else if (this.scheduledResume) {
                 this.scheduledResume.cancel();
                 this.scheduledResume = null;
-                this.logger.info('deleted scheduled CRR resume for location:' +
-                    ` ${this.site}`);
+                this.logger.info(`deleted scheduled CRR resume for location: ${this.site}`);
             }
         });
     }
@@ -616,63 +609,67 @@ class QueueProcessor extends EventEmitter {
             return cb(new Error('incorrect zookeeper state property given'));
         }
         const path = this._getZkSiteNode();
-        return async.waterfall([
-            next => this.zkClient.getData(path, (err, data) => {
-                if (err) {
-                    this.logger.error('could not get state from zookeeper', {
-                        method: 'QueueProcessor._updateZkStateNode',
-                        zookeeperPath: path,
-                        error: err.message,
-                    });
-                    return next(err);
-                }
-                try {
-                    const state = JSON.parse(data.toString());
-                    // set revised status
-                    state[key] = value;
-                    const bufferedData = Buffer.from(JSON.stringify(state));
-                    return next(null, bufferedData);
-                } catch (err) {
-                    this.logger.error('could not parse state data from ' +
-                    'zookeeper', {
-                        method: 'QueueProcessor._updateZkStateNode',
-                        zookeeperPath: path,
-                        error: err,
-                    });
-                    return next(err);
-                }
-            }),
-            (data, next) => this.zkClient.setData(path, data, err => {
-                if (err) {
-                    this.logger.error('could not save state data in ' +
-                    'zookeeper', {
-                        method: 'QueueProcessor._updateZkStateNode',
-                        zookeeperPath: path,
-                        error: err,
-                    });
-                    return next(err);
-                }
-                return next();
-            }),
-        ], cb);
+        return async.waterfall(
+            [
+                next =>
+                    this.zkClient.getData(path, (err, data) => {
+                        if (err) {
+                            this.logger.error('could not get state from zookeeper', {
+                                method: 'QueueProcessor._updateZkStateNode',
+                                zookeeperPath: path,
+                                error: err.message,
+                            });
+                            return next(err);
+                        }
+                        try {
+                            const state = JSON.parse(data.toString());
+                            // set revised status
+                            state[key] = value;
+                            const bufferedData = Buffer.from(JSON.stringify(state));
+                            return next(null, bufferedData);
+                        } catch (err) {
+                            this.logger.error('could not parse state data from zookeeper', {
+                                method: 'QueueProcessor._updateZkStateNode',
+                                zookeeperPath: path,
+                                error: err,
+                            });
+                            return next(err);
+                        }
+                    }),
+                (data, next) =>
+                    this.zkClient.setData(path, data, err => {
+                        if (err) {
+                            this.logger.error('could not save state data in zookeeper', {
+                                method: 'QueueProcessor._updateZkStateNode',
+                                zookeeperPath: path,
+                                error: err,
+                            });
+                            return next(err);
+                        }
+                        return next();
+                    }),
+            ],
+            cb,
+        );
     }
 
     scheduleResume(date) {
         function triggerResume() {
             this._updateZkStateNode('scheduledResume', null, err => {
                 if (err) {
-                    this.logger.error('error occurred saving state ' +
-                    'to zookeeper for resuming a scheduled resume. Retry ' +
-                    'again in 1 minute', {
-                        method: 'QueueProcessor.scheduleResume',
-                        error: err,
-                    });
+                    this.logger.error(
+                        'error occurred saving state to zookeeper for ' +
+                            'resuming a scheduled resume. Retry again in 1 minute',
+                        {
+                            method: 'QueueProcessor.scheduleResume',
+                            error: err,
+                        },
+                    );
                     // if an error occurs, need to retry
                     // for now, schedule minute from now
                     const date = new Date();
                     date.setMinutes(date.getMinutes() + 1);
-                    this.scheduleResume = schedule.scheduleJob(date,
-                        triggerResume.bind(this));
+                    this.scheduleResume = schedule.scheduleJob(date, triggerResume.bind(this));
                 } else {
                     if (this.scheduledResume) {
                         this.scheduledResume.cancel();
@@ -689,8 +686,7 @@ class QueueProcessor extends EventEmitter {
                     method: 'QueueProcessor.scheduleResume',
                 });
             } else {
-                this.scheduledResume = schedule.scheduleJob(date,
-                    triggerResume.bind(this));
+                this.scheduledResume = schedule.scheduleJob(date, triggerResume.bind(this));
                 this.logger.info('scheduled CRR resume', {
                     scheduleTime: date.toString(),
                 });
@@ -741,52 +737,57 @@ class QueueProcessor extends EventEmitter {
      */
     start(options) {
         this._mProducer = new MetricsProducer(this.kafkaConfig, this.mConfig);
-        return async.parallel([
-            done => this._mProducer.setupProducer(err => {
-                if (err) {
-                    this.logger.info('error setting up metrics producer',
-                                     { error: err.message });
-                    process.exit(1);
-                }
-                return done();
-            }),
-            done => this._setupProducer(err => {
-                if (err) {
-                    this.logger.info('error setting up kafka producer',
-                                     { error: err.message });
-                    process.exit(1);
-                }
-                return done();
-            }),
-            done => {
-                if (options && options.disableConsumer) {
-                    return done();
-                }
-                this._consumer = this._createConsumer(
-                    this.topic,
-                    callbackify(this.processReplicationEntry.bind(this)), options);
-                return this._consumer.once('canary', done);
+        return async.parallel(
+            [
+                done =>
+                    this._mProducer.setupProducer(err => {
+                        if (err) {
+                            this.logger.info('error setting up metrics producer', { error: err.message });
+                            process.exit(1);
+                        }
+                        return done();
+                    }),
+                done =>
+                    this._setupProducer(err => {
+                        if (err) {
+                            this.logger.info('error setting up kafka producer', { error: err.message });
+                            process.exit(1);
+                        }
+                        return done();
+                    }),
+                done => {
+                    if (options && options.disableConsumer) {
+                        return done();
+                    }
+                    this._consumer = this._createConsumer(
+                        this.topic,
+                        callbackify(this.processReplicationEntry.bind(this)),
+                        options,
+                    );
+                    return this._consumer.once('canary', done);
+                },
+                done => {
+                    if (options && options.disableConsumer) {
+                        return done();
+                    }
+                    if (this.isReplayTopic || !this.repConfig.dataMoverTopic) {
+                        // Do not process dataMover topic in replay processors
+                        // or if dataMover topic is not configured
+                        return done();
+                    }
+                    this._dataMoverConsumer = this._createConsumer(
+                        this.repConfig.dataMoverTopic,
+                        this.processDataMoverEntry.bind(this),
+                        Object.assign({ enableBacklogMetrics: true }, options),
+                    );
+                    return this._dataMoverConsumer.once('canary', done);
+                },
+            ],
+            () => {
+                this.logger.info(`queue processor is ready to consume replication entries from ${this.topic}`);
+                this.emit('ready');
             },
-            done  => {
-                if (options && options.disableConsumer) {
-                    return done();
-                }
-                if (this.isReplayTopic || !this.repConfig.dataMoverTopic) {
-                    // Do not process dataMover topic in replay processors
-                    // or if dataMover topic is not configured
-                    return done();
-                }
-                this._dataMoverConsumer = this._createConsumer(
-                    this.repConfig.dataMoverTopic,
-                    this.processDataMoverEntry.bind(this),
-                    Object.assign({ enableBacklogMetrics: true }, options));
-                return this._dataMoverConsumer.once('canary', done);
-            },
-        ], () => {
-            this.logger.info('queue processor is ready to consume ' +
-                             `replication entries from ${this.topic}`);
-            this.emit('ready');
-        });
+        );
     }
 
     /**
@@ -818,82 +819,85 @@ class QueueProcessor extends EventEmitter {
      * @return {undefined}
      */
     stop(done) {
-        async.series([
-            next => {
-                // drop the subscriber first so no pause/resume command is
-                // acted upon while we are shutting down
-                if (this._redis) {
-                    this.logger.debug('closing redis subscriber', {
+        async.series(
+            [
+                next => {
+                    // drop the subscriber first so no pause/resume command is
+                    // acted upon while we are shutting down
+                    if (this._redis) {
+                        this.logger.debug('closing redis subscriber', {
+                            method: 'QueueProcessor.stop',
+                            site: this.site,
+                        });
+                        this._redis.disconnect();
+                        this._redis = null;
+                    }
+                    return next();
+                },
+                next => {
+                    if (this.replicationStatusProducer) {
+                        this.logger.debug('closing replication status producer', {
+                            method: 'QueueProcessor.stop',
+                            site: this.site,
+                        });
+                        return this.replicationStatusProducer.close(next);
+                    }
+                    this.logger.debug('no replication status producer to close', {
                         method: 'QueueProcessor.stop',
                         site: this.site,
                     });
-                    this._redis.disconnect();
-                    this._redis = null;
-                }
-                return next();
-            },
-            next => {
-                if (this.replicationStatusProducer) {
-                    this.logger.debug('closing replication status producer', {
+                    return next();
+                },
+                next => {
+                    if (this._consumer) {
+                        this.logger.debug('closing kafka consumer', {
+                            method: 'QueueProcessor.stop',
+                            site: this.site,
+                        });
+                        return this._consumer.close(next);
+                    }
+                    this.logger.debug('no kafka consumer to close', {
                         method: 'QueueProcessor.stop',
                         site: this.site,
                     });
-                    return this.replicationStatusProducer.close(next);
-                }
-                this.logger.debug('no replication status producer to close', {
-                    method: 'QueueProcessor.stop',
-                    site: this.site,
-                });
-                return next();
-            },
-            next => {
-                if (this._consumer) {
-                    this.logger.debug('closing kafka consumer', {
+                    return next();
+                },
+                next => {
+                    if (this._dataMoverConsumer) {
+                        this.logger.debug('closing data mover consumer', {
+                            method: 'QueueProcessor.stop',
+                            site: this.site,
+                        });
+                        return this._dataMoverConsumer.close(next);
+                    }
+                    this.logger.debug('no data mover consumer to close', {
                         method: 'QueueProcessor.stop',
                         site: this.site,
                     });
-                    return this._consumer.close(next);
-                }
-                this.logger.debug('no kafka consumer to close', {
-                    method: 'QueueProcessor.stop',
-                    site: this.site,
-                });
-                return next();
-            },
-            next => {
-                if (this._dataMoverConsumer) {
-                    this.logger.debug('closing data mover consumer', {
+                    return next();
+                },
+                next => {
+                    if (this._mProducer) {
+                        this.logger.debug('closing metrics producer', {
+                            method: 'QueueProcessor.stop',
+                            site: this.site,
+                        });
+                        return this._mProducer.close(next);
+                    }
+                    this.logger.debug('no metrics producer to close', {
                         method: 'QueueProcessor.stop',
                         site: this.site,
                     });
-                    return this._dataMoverConsumer.close(next);
-                }
-                this.logger.debug('no data mover consumer to close', {
-                    method: 'QueueProcessor.stop',
-                    site: this.site,
-                });
-                return next();
+                    return next();
+                },
+            ],
+            err => {
+                // the tasks hold a reference to these caches, so empty them in place
+                this.sourceClientManagers.close();
+                this.destClientManagers.close();
+                return done(err);
             },
-            next => {
-                if (this._mProducer) {
-                    this.logger.debug('closing metrics producer', {
-                        method: 'QueueProcessor.stop',
-                        site: this.site,
-                    });
-                    return this._mProducer.close(next);
-                }
-                this.logger.debug('no metrics producer to close', {
-                    method: 'QueueProcessor.stop',
-                    site: this.site,
-                });
-                return next();
-            },
-        ], err => {
-            // the tasks hold a reference to these caches, so empty them in place
-            this.sourceClientManagers.close();
-            this.destClientManagers.close();
-            return done(err);
-        });
+        );
     }
 
     /**
@@ -931,8 +935,9 @@ class QueueProcessor extends EventEmitter {
 
             this.logger.debug('replication entry is being pushed', { entry: sourceEntry.getLogInfo() });
             await new Promise((resolve, reject) => {
-                this.taskScheduler.push({ task: new EchoBucket(this), entry: sourceEntry, kafkaEntry },
-                    err => err ? reject(err) : resolve());
+                this.taskScheduler.push({ task: new EchoBucket(this), entry: sourceEntry, kafkaEntry }, err =>
+                    err ? reject(err) : resolve(),
+                );
             });
             return;
         }
@@ -943,7 +948,8 @@ class QueueProcessor extends EventEmitter {
             return;
         }
 
-        const pendingBackends = sourceEntry.getReplicationBackends()
+        const pendingBackends = sourceEntry
+            .getReplicationBackends()
             .filter(b => b.status === 'PENDING' && b.site === this.site);
 
         if (pendingBackends.length === 0) {
@@ -973,9 +979,8 @@ class QueueProcessor extends EventEmitter {
 
             try {
                 await new Promise((resolve, reject) => {
-                    this.taskScheduler.push(
-                        { task, entry: perBackendEntry, kafkaEntry },
-                        err => err ? reject(err) : resolve(),
+                    this.taskScheduler.push({ task, entry: perBackendEntry, kafkaEntry }, err =>
+                        err ? reject(err) : resolve(),
                     );
                 });
             } catch (err) {
@@ -1006,9 +1011,7 @@ class QueueProcessor extends EventEmitter {
     processDataMoverEntry(kafkaEntry, done) {
         const actionEntry = ActionQueueEntry.createFromKafkaEntry(kafkaEntry);
         if (actionEntry.error) {
-            this.logger.error('error processing source entry',
-                              { error: actionEntry.error,
-                                entry: kafkaEntry.value });
+            this.logger.error('error processing source entry', { error: actionEntry.error, entry: kafkaEntry.value });
             return process.nextTick(() => done(errors.InternalError));
         }
         if (actionEntry.skip) {
@@ -1030,10 +1033,7 @@ class QueueProcessor extends EventEmitter {
             this.logger.debug('data mover entry is being pushed', {
                 entry: actionEntry.getLogInfo(),
             });
-            return this.dataMoverTaskScheduler.push(
-                { task, entry: actionEntry, kafkaEntry },
-                done,
-            );
+            return this.dataMoverTaskScheduler.push({ task, entry: actionEntry, kafkaEntry }, done);
         }
         this.logger.debug('skip data mover entry', {
             entry: actionEntry.getLogInfo(),
@@ -1042,9 +1042,12 @@ class QueueProcessor extends EventEmitter {
     }
 
     isReady() {
-        return this.replicationStatusProducer && this._consumer &&
+        return (
+            this.replicationStatusProducer &&
+            this._consumer &&
             this.replicationStatusProducer.isReady() &&
-            this._consumer.isReady();
+            this._consumer.isReady()
+        );
     }
 
     /** Check producer and consumer reporting on any bad state.
@@ -1052,13 +1055,12 @@ class QueueProcessor extends EventEmitter {
      *
      * @param {Logger} log - Logger
      * @returns {Array} Error responses or empty array
-    */
+     */
     handleLiveness(log) {
         const verboseLiveness = {};
         // track and return all errors in one response
         const responses = [];
-        if (this.replicationStatusProducer === undefined ||
-            this.replicationStatusProducer === null) {
+        if (this.replicationStatusProducer === undefined || this.replicationStatusProducer === null) {
             verboseLiveness.replicationStatusProducer = libConstants.statusUndefined;
             responses.push({
                 component: 'Replication Status Producer',

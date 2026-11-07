@@ -15,7 +15,6 @@ const BucketFileLogReader = require('../../../../lib/queuePopulator/BucketFileLo
 const RaftLogReader = require('../../../../lib/queuePopulator/RaftLogReader');
 const ShadowedMasterFilter = require('../../../../lib/queuePopulator/ShadowedMasterFilter');
 
-
 class MockLogConsumer {
     constructor(params) {
         this.params = params || {};
@@ -94,7 +93,7 @@ describe('LogReader', () => {
             zkClient: zkMock.createClient('localhost:2181'),
             logConsumer: new MockLogConsumer(),
             logger: new Logger('test:logReaderWithExtension'),
-            extensions: [mockExtension]
+            extensions: [mockExtension],
         });
         const record = {
             db: 'example-bucket',
@@ -139,7 +138,7 @@ describe('LogReader', () => {
             zkClient: zkMock.createClient('localhost:2181'),
             logConsumer: new MockLogConsumer(),
             logger: new Logger('test:logReaderWithExtension'),
-            extensions: [mockExtension]
+            extensions: [mockExtension],
         });
         const record = {
             db: 'example-bucket',
@@ -193,8 +192,7 @@ describe('LogReader', () => {
             const batchState = {
                 currentRecords: [1, 2],
             };
-            const processFilterEntryStb = sinon.stub(logReader, '_processFilterEntry')
-                .callsArg(2);
+            const processFilterEntryStb = sinon.stub(logReader, '_processFilterEntry').callsArg(2);
             logReader._processFilterEntries(batchState, err => {
                 assert.ifError(err);
                 assert(processFilterEntryStb.calledTwice);
@@ -205,8 +203,10 @@ describe('LogReader', () => {
 
     describe('_readLogOffset', () => {
         [true, false].forEach(managed => {
-            it(`should ${managed ? '' : 'not '}read offset from ` +
-                `zookeeper when offset is ${managed ? '' : 'not '}managed`, done => {
+            it(
+                `should ${managed ? '' : 'not '}read offset from ` +
+                    `zookeeper when offset is ${managed ? '' : 'not '}managed`,
+                done => {
                     const offsetManagedStub = sinon.stub(logReader, 'isOffsetManaged').returns(managed);
                     const zkClientStub = sinon.stub(logReader.zkClient, 'getData').yields();
                     logReader._readLogOffset(err => {
@@ -215,8 +215,8 @@ describe('LogReader', () => {
                         assert(managed ? zkClientStub.calledOnce : zkClientStub.notCalled);
                         done();
                     });
-                });
-
+                },
+            );
         });
     });
 
@@ -238,13 +238,12 @@ describe('LogReader', () => {
                 entriesToPublish: {},
             };
             const record = {
-                entries: [1]
+                entries: [1],
             };
             const setEntryBatchStb = sinon.stub(logReader, '_setEntryBatch');
             const unsetEntryBatchStb = sinon.stub(logReader, '_unsetEntryBatch');
-            const filterEntriesStb = sinon.stub(logReader, '_filterEntries')
-                .callsArg(2);
-            logReader._processFilterEntry(batchState, record,  err => {
+            const filterEntriesStb = sinon.stub(logReader, '_filterEntries').callsArg(2);
+            logReader._processFilterEntry(batchState, record, err => {
                 assert.ifError(err);
                 assert(filterEntriesStb.calledOnce);
                 assert(setEntryBatchStb.calledOnce);
@@ -262,11 +261,10 @@ describe('LogReader', () => {
                 },
             };
             const record = {
-                entries: [1, 2]
+                entries: [1, 2],
             };
-            const processLogEntryStb = sinon.stub(logReader, '_processLogEntry')
-                .callsArg(3);
-            logReader._filterEntries(batchState, record,  err => {
+            const processLogEntryStb = sinon.stub(logReader, '_processLogEntry').callsArg(3);
+            logReader._filterEntries(batchState, record, err => {
                 assert.ifError(err);
                 assert(processLogEntryStb.calledTwice);
                 assert.strictEqual(batchState.logStats.nbLogEntriesRead, 2);
@@ -280,12 +278,13 @@ describe('LogReader', () => {
             {
                 description: 'without overhead fields',
                 overhead: null,
-            }, {
+            },
+            {
                 description: 'with overhead fields',
                 overhead: {
                     versionId: '1234',
                 },
-            }
+            },
         ].forEach(params => {
             it(`should pass the proper fields to the filter method (${params.description})`, done => {
                 const date = Date.now();
@@ -307,18 +306,20 @@ describe('LogReader', () => {
                 ];
                 logReader._processLogEntry({}, record, entry, err => {
                     assert.ifError(err);
-                    assert(logReader._extensions[0].filter.calledWithExactly({
-                        type: 'put',
-                        bucket: 'example-bucket',
-                        key: 'example-key',
-                        value: null,
-                        logReader,
-                        overheadFields: {
-                            commitTimestamp: date,
-                            opTimestamp: date,
-                            ...params.overhead,
-                        },
-                    }));
+                    assert(
+                        logReader._extensions[0].filter.calledWithExactly({
+                            type: 'put',
+                            bucket: 'example-bucket',
+                            key: 'example-key',
+                            value: null,
+                            logReader,
+                            overheadFields: {
+                                commitTimestamp: date,
+                                opTimestamp: date,
+                                ...params.overhead,
+                            },
+                        }),
+                    );
                     done();
                 });
             });
@@ -441,11 +442,15 @@ describe('LogReader', () => {
                 logId: 'test-log-reader',
                 zkClient: zkMock.createClient('localhost:2181'),
                 logConsumer: new MockLogConsumer(),
-                extensions: [{
-                    filter: entry => { filteredEntries.push(entry); },
-                    setBatch: () => {},
-                    unsetBatch: () => {},
-                }],
+                extensions: [
+                    {
+                        filter: entry => {
+                            filteredEntries.push(entry);
+                        },
+                        setBatch: () => {},
+                        unsetBatch: () => {},
+                    },
+                ],
                 logger: new Logger('test:logReader'),
             });
             reader._processReadRecords = (params, batchState, done) => done();
@@ -485,21 +490,19 @@ describe('LogReader', () => {
             };
 
             reader.processLogEntries({}, () => {
-                assert.deepStrictEqual(filteredEntries,
-                    [
-                        {
-                            type: 'put',
-                            bucket: 'db',
-                            key: 'key',
-                            value: '{}',
-                            logReader: reader,
-                            overheadFields: {
-                                opTimestamp: undefined,
-                                commitTimestamp: 't1',
-                            },
+                assert.deepStrictEqual(filteredEntries, [
+                    {
+                        type: 'put',
+                        bucket: 'db',
+                        key: 'key',
+                        value: '{}',
+                        logReader: reader,
+                        overheadFields: {
+                            opTimestamp: undefined,
+                            commitTimestamp: 't1',
                         },
-                    ]
-                );
+                    },
+                ]);
                 done();
             });
         });
@@ -538,7 +541,7 @@ describe('LogReader', () => {
             });
         });
 
-        it('should consume and return if tailable stream doesn\'t have enough records', done => {
+        it("should consume and return if tailable stream doesn't have enough records", done => {
             const batchState = {
                 logRes: {
                     log: new MockRecordStream(),
@@ -571,36 +574,39 @@ describe('LogReader', () => {
         });
 
         [true, false].forEach(sourceHasMoreLog => {
-            it(`should ${sourceHasMoreLog ? '' : 'not '}report more log from a non tailable stream ` +
-            `below the limit when the source ${sourceHasMoreLog ? 'does' : 'does not'}`, done => {
-                const batchState = {
-                    logRes: {
-                        log: new MockRecordStream(),
-                        tailable: false,
-                        hasMoreLog: sourceHasMoreLog,
-                    },
-                    logStats: {
-                        nbLogRecordsRead: 0,
-                        nbLogEntriesRead: 0,
-                        hasMoreLog: false,
-                    },
-                    entriesToPublish: {},
-                    publishedEntries: {},
-                    currentRecords: [],
-                    maxRead: 3,
-                    startTime: Date.now(),
-                    timeoutMs: 60000,
-                    logger: logReader.log,
-                };
-                batchState.logRes.log.write({ entries: [] });
-                batchState.logRes.log.end();
-                logReader._processPrepareEntries(batchState, err => {
-                    assert.ifError(err);
-                    assert.strictEqual(batchState.logStats.nbLogRecordsRead, 1);
-                    assert.strictEqual(batchState.logStats.hasMoreLog, sourceHasMoreLog);
-                    done();
-                });
-            });
+            it(
+                `should ${sourceHasMoreLog ? '' : 'not '}report more log from a non tailable stream ` +
+                    `below the limit when the source ${sourceHasMoreLog ? 'does' : 'does not'}`,
+                done => {
+                    const batchState = {
+                        logRes: {
+                            log: new MockRecordStream(),
+                            tailable: false,
+                            hasMoreLog: sourceHasMoreLog,
+                        },
+                        logStats: {
+                            nbLogRecordsRead: 0,
+                            nbLogEntriesRead: 0,
+                            hasMoreLog: false,
+                        },
+                        entriesToPublish: {},
+                        publishedEntries: {},
+                        currentRecords: [],
+                        maxRead: 3,
+                        startTime: Date.now(),
+                        timeoutMs: 60000,
+                        logger: logReader.log,
+                    };
+                    batchState.logRes.log.write({ entries: [] });
+                    batchState.logRes.log.end();
+                    logReader._processPrepareEntries(batchState, err => {
+                        assert.ifError(err);
+                        assert.strictEqual(batchState.logStats.nbLogRecordsRead, 1);
+                        assert.strictEqual(batchState.logStats.hasMoreLog, sourceHasMoreLog);
+                        done();
+                    });
+                },
+            );
         });
 
         it('should consume all logs from a non tailable streams', done => {
@@ -636,7 +642,7 @@ describe('LogReader', () => {
             });
         });
 
-        it('should set hasMoreLog to false when a non tailable streams doesn\'t have enough records', done => {
+        it("should set hasMoreLog to false when a non tailable streams doesn't have enough records", done => {
             const batchState = {
                 logRes: {
                     log: new MockRecordStream(),
@@ -734,7 +740,7 @@ describe('LogReader', () => {
                 }
                 logReader._processSaveLogOffset(batchState, err => {
                     assert.ifError(err);
-                    assert(params.shouldSave  ? storeOffsetStub.calledOnce : storeOffsetStub.notCalled);
+                    assert(params.shouldSave ? storeOffsetStub.calledOnce : storeOffsetStub.notCalled);
                     done();
                 });
             });
@@ -742,41 +748,45 @@ describe('LogReader', () => {
     });
 
     describe('getMetricLabels', () => {
-        [{
-            name: 'KafkaLogReader',
-            Reader: KafkaLogReader,
-            config: {
-                kafkaConfig: {
-                    hosts: 'localhost:9092',
+        [
+            {
+                name: 'KafkaLogReader',
+                Reader: KafkaLogReader,
+                config: {
+                    kafkaConfig: {
+                        hosts: 'localhost:9092',
+                    },
+                    qpKafkaConfig: {
+                        logName: 'test-log',
+                    },
                 },
-                qpKafkaConfig: {
-                    logName: 'test-log',
-                },
+                logName: 'kafka-log',
             },
-            logName: 'kafka-log',
-        }, {
-            name: 'BucketFileLogReader',
-            Reader: BucketFileLogReader,
-            config: {
-                dmdConfig: {
-                    logName: 'test-log',
-                    host: 'localhost',
-                    port: 8000,
+            {
+                name: 'BucketFileLogReader',
+                Reader: BucketFileLogReader,
+                config: {
+                    dmdConfig: {
+                        logName: 'test-log',
+                        host: 'localhost',
+                        port: 8000,
+                    },
                 },
+                logName: 'bucket-file',
             },
-            logName: 'bucket-file',
-        }, {
-            name: 'RaftLogReader',
-            Reader: RaftLogReader,
-            config: {
-                raftId: 'test-log',
-                bucketdConfig: {
-                    host: 'localhost',
-                    port: 8000,
+            {
+                name: 'RaftLogReader',
+                Reader: RaftLogReader,
+                config: {
+                    raftId: 'test-log',
+                    bucketdConfig: {
+                        host: 'localhost',
+                        port: 8000,
+                    },
                 },
+                logName: 'raft-log',
             },
-            logName: 'raft-log',
-        }].forEach(params => {
+        ].forEach(params => {
             it(`should return proper ${params.name} metrics labels`, () => {
                 const reader = new params.Reader({
                     ...params.config,
@@ -794,41 +804,45 @@ describe('LogReader', () => {
     });
 
     describe('isOffsetManaged', () => {
-        [{
-            name: 'KafkaLogReader',
-            Reader: KafkaLogReader,
-            config: {
-                kafkaConfig: {
-                    hosts: 'localhost:9092',
+        [
+            {
+                name: 'KafkaLogReader',
+                Reader: KafkaLogReader,
+                config: {
+                    kafkaConfig: {
+                        hosts: 'localhost:9092',
+                    },
+                    qpKafkaConfig: {
+                        logName: 'test-log',
+                    },
                 },
-                qpKafkaConfig: {
-                    logName: 'test-log',
-                },
+                expected: false,
             },
-            expected: false,
-        }, {
-            name: 'BucketFileLogReader',
-            Reader: BucketFileLogReader,
-            config: {
-                dmdConfig: {
-                    logName: 'test-log',
-                    host: 'localhost',
-                    port: 8000,
+            {
+                name: 'BucketFileLogReader',
+                Reader: BucketFileLogReader,
+                config: {
+                    dmdConfig: {
+                        logName: 'test-log',
+                        host: 'localhost',
+                        port: 8000,
+                    },
                 },
+                expected: true,
             },
-            expected: true,
-        }, {
-            name: 'RaftLogReader',
-            Reader: RaftLogReader,
-            config: {
-                raftId: 'test-log',
-                bucketdConfig: {
-                    host: 'localhost',
-                    port: 8000,
+            {
+                name: 'RaftLogReader',
+                Reader: RaftLogReader,
+                config: {
+                    raftId: 'test-log',
+                    bucketdConfig: {
+                        host: 'localhost',
+                        port: 8000,
+                    },
                 },
+                expected: true,
             },
-            expected: true,
-        }].forEach(params => {
+        ].forEach(params => {
             it(`should ${params.expected ? '' : 'not'} manage ${params.name} offsets`, () => {
                 const reader = new params.Reader({
                     ...params.config,
@@ -874,7 +888,7 @@ describe('LogReader', () => {
 
         it('should call close on logConsumer if it exists and has close method', done => {
             logReader.logConsumer = mockLogConsumer;
-            
+
             logReader.close(err => {
                 assert.ifError(err);
                 sinon.assert.calledOnce(mockProducer1.close);
@@ -886,7 +900,7 @@ describe('LogReader', () => {
 
         it('should not call close on logConsumer if it does not exist', done => {
             logReader.logConsumer = null;
-            
+
             logReader.close(err => {
                 assert.ifError(err);
                 sinon.assert.calledOnce(mockProducer1.close);
@@ -900,7 +914,7 @@ describe('LogReader', () => {
             logReader.logConsumer = {
                 someOtherMethod: sinon.stub(),
             };
-            
+
             logReader.close(err => {
                 assert.ifError(err);
                 sinon.assert.calledOnce(mockProducer1.close);
@@ -913,7 +927,7 @@ describe('LogReader', () => {
         it('should handle producer close error', done => {
             const closeError = new Error('Producer close failed');
             mockProducer1.close = sinon.stub().yields(closeError);
-            
+
             logReader.close(err => {
                 assert.strictEqual(err, closeError);
                 sinon.assert.calledOnce(mockProducer1.close);
@@ -925,7 +939,7 @@ describe('LogReader', () => {
             const closeError = new Error('LogConsumer close failed');
             mockLogConsumer.close = sinon.stub().yields(closeError);
             logReader.logConsumer = mockLogConsumer;
-            
+
             logReader.close(err => {
                 assert.strictEqual(err, closeError);
                 sinon.assert.calledOnce(mockLogConsumer.close);
@@ -936,7 +950,7 @@ describe('LogReader', () => {
         it('should handle empty producers object', done => {
             logReader._producers = {};
             logReader.logConsumer = mockLogConsumer;
-            
+
             logReader.close(err => {
                 assert.ifError(err);
                 sinon.assert.notCalled(mockProducer1.close);
@@ -949,7 +963,7 @@ describe('LogReader', () => {
         it('should work with no producers and no logConsumer', done => {
             logReader._producers = {};
             logReader.logConsumer = null;
-            
+
             logReader.close(err => {
                 assert.ifError(err);
                 sinon.assert.notCalled(mockProducer1.close);

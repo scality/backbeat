@@ -8,15 +8,8 @@ const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const BackbeatMetadataProxy = require('../../../lib/BackbeatMetadataProxy');
 
-const {
-    metricsExtension,
-    metricsTypeCompleted,
-    metricsTypeFailed,
-} = require('../constants');
-const {
-    getSortedSetMember,
-    getSortedSetKey,
-} = require('../../../lib/util/sortedSetHelper');
+const { metricsExtension, metricsTypeCompleted, metricsTypeFailed } = require('../constants');
+const { getSortedSetMember, getSortedSetKey } = require('../../../lib/util/sortedSetHelper');
 const { isAccessDeniedError, getAccessDeniedLogFields } = require('../../../lib/util/replicationPermissionError');
 
 class UpdateReplicationStatus extends BackbeatTask {
@@ -37,17 +30,17 @@ class UpdateReplicationStatus extends BackbeatTask {
         this.s3sourceCredentials = null;
         const { transport, s3, auth } = this.sourceConfig;
         this.backbeatSourceClient = new BackbeatMetadataProxy(
-            `${transport}://${s3.host}:${s3.port}`, auth, this.sourceHTTPAgent);
-
+            `${transport}://${s3.host}:${s3.port}`,
+            auth,
+            this.sourceHTTPAgent,
+        );
     }
 
     processQueueEntry(sourceEntry, done) {
         const log = this.logger.newRequestLogger();
 
-        log.debug('updating replication status for entry',
-                  { entry: sourceEntry.getLogInfo() });
-        const { error } =
-            this.backbeatSourceClient.setupSourceRole(sourceEntry, log);
+        log.debug('updating replication status for entry', { entry: sourceEntry.getLogInfo() });
+        const { error } = this.backbeatSourceClient.setupSourceRole(sourceEntry, log);
         if (error) {
             return setImmediate(() => done(error));
         }
@@ -61,8 +54,7 @@ class UpdateReplicationStatus extends BackbeatTask {
             objectKey: sourceEntry.getObjectKey(),
             versionId: sourceEntry.getEncodedVersionId() || 'null',
         };
-        return this.backbeatSourceClient
-        .getMetadata(params, log, (err, blob) => {
+        return this.backbeatSourceClient.getMetadata(params, log, (err, blob) => {
             if (err) {
                 const logFields = {
                     method: 'UpdateReplicationStatus._refreshSourceEntry',
@@ -70,8 +62,7 @@ class UpdateReplicationStatus extends BackbeatTask {
                 };
                 if (isAccessDeniedError(err)) {
                     const sourceRole = sourceEntry.getReplicationRoles()?.split(',')[0];
-                    Object.assign(logFields, getAccessDeniedLogFields(
-                        sourceEntry.getBucket(), sourceRole));
+                    Object.assign(logFields, getAccessDeniedLogFields(sourceEntry.getBucket(), sourceRole));
                 }
                 log.error('error getting metadata blob from S3', logFields);
                 return cb(err);
@@ -82,12 +73,13 @@ class UpdateReplicationStatus extends BackbeatTask {
                     error: parsedEntry.error,
                     method: 'ReplicateObject._refreshSourceEntry',
                 });
-                return cb(errors.InternalError.
-                    customizeDescription('error parsing metadata blob'));
+                return cb(errors.InternalError.customizeDescription('error parsing metadata blob'));
             }
-            const refreshedEntry = new ObjectQueueEntry(sourceEntry.getBucket(),
-                sourceEntry.getObjectVersionedKey(), parsedEntry.result)
-                .setReplicationBackend(sourceEntry.getReplicationBackend());
+            const refreshedEntry = new ObjectQueueEntry(
+                sourceEntry.getBucket(),
+                sourceEntry.getObjectVersionedKey(),
+                parsedEntry.result,
+            ).setReplicationBackend(sourceEntry.getReplicationBackend());
             return cb(null, refreshedEntry);
         });
     }
@@ -129,11 +121,9 @@ class UpdateReplicationStatus extends BackbeatTask {
         const status = sourceEntry.getReplicationSiteStatus(sourceEntry.getReplicationBackend());
         // Report to MetricsProducer with completed/failed metrics.
         if (status === 'COMPLETED' || status === 'FAILED') {
-            const entryType = status === 'COMPLETED' ?
-                metricsTypeCompleted : metricsTypeFailed;
+            const entryType = status === 'COMPLETED' ? metricsTypeCompleted : metricsTypeFailed;
 
-            this.mProducer.publishMetrics(data, entryType, metricsExtension,
-            err => {
+            this.mProducer.publishMetrics(data, entryType, metricsExtension, err => {
                 if (err) {
                     this.logger.trace('error occurred in publishing metrics', {
                         error: err,
@@ -157,8 +147,7 @@ class UpdateReplicationStatus extends BackbeatTask {
      */
     _getNFSUpdatedSourceEntry(sourceEntry, refreshedEntry) {
         const backend = sourceEntry.getReplicationBackend();
-        const hasMD5Mismatch =
-            sourceEntry.getContentMd5() !== refreshedEntry.getContentMd5();
+        const hasMD5Mismatch = sourceEntry.getContentMd5() !== refreshedEntry.getContentMd5();
         if (hasMD5Mismatch) {
             return refreshedEntry.toPendingEntry(backend);
         }
@@ -199,11 +188,10 @@ class UpdateReplicationStatus extends BackbeatTask {
             // COMPLETED status since that means the replication
             // already happened successfully.
 
-            log.info('entry replication is already COMPLETED for this ' +
-                     'location, skipping metadata update', {
-                         entry: sourceEntry.getLogInfo(),
-                         location: site,
-                     });
+            log.info('entry replication is already COMPLETED for this location, skipping metadata update', {
+                entry: sourceEntry.getLogInfo(),
+                location: site,
+            });
             return null;
         }
         const newStatus = sourceEntry.getReplicationSiteStatus(backend);
@@ -238,7 +226,6 @@ class UpdateReplicationStatus extends BackbeatTask {
                 // since site replication status should stay "PENDING".
                 return null;
             }
-
         } else if (newStatus === 'PENDING') {
             entry = refreshedEntry.toPendingEntry(backend);
         }
@@ -256,23 +243,23 @@ class UpdateReplicationStatus extends BackbeatTask {
         if (isTransient && status === 'COMPLETED') {
             const locations = entry.getReducedLocations();
             // Schedule garbage collection of transient data locations array.
-            const sourceAttr =  {
+            const sourceAttr = {
                 bucket: entry.getBucket(),
                 objectKey: entry.getObjectKey(),
                 storageClass: dataStoreName,
                 lastModified: entry.getLastModified(),
             };
             const gcEntry = ActionQueueEntry.create('deleteData')
-                  .addContext({
-                      origin: 'transientSource',
-                      reqId: log.getSerializedUids(),
-                      ruleType: 'transient',
-                  })
-                  .addContext(entry.getLogInfo())
-                  .setAttribute('source', sourceAttr)
-                  .setAttribute('target.locations', locations)
-                  .setAttribute('target.accountId', entry.getAccountId())
-                  .setAttribute('target.owner', entry.getOwnerId());
+                .addContext({
+                    origin: 'transientSource',
+                    reqId: log.getSerializedUids(),
+                    ruleType: 'transient',
+                })
+                .addContext(entry.getLogInfo())
+                .setAttribute('source', sourceAttr)
+                .setAttribute('target.locations', locations)
+                .setAttribute('target.accountId', entry.getAccountId())
+                .setAttribute('target.owner', entry.getOwnerId());
             this.gcProducer.publishActionEntry(gcEntry);
         }
         return cb();
@@ -280,40 +267,43 @@ class UpdateReplicationStatus extends BackbeatTask {
 
     _putMetadata(updatedSourceEntry, log, cb) {
         const client = this.backbeatSourceClient;
-        return client.putMetadata({
-            bucket: updatedSourceEntry.getBucket(),
-            objectKey: updatedSourceEntry.getObjectKey(),
-            // non versioned object are also considered a null version
-            // in a versioned bucket, we should set the version id to 'null'
-            // for it to be handled correctly in cloudserver
-            versionId: updatedSourceEntry.getEncodedVersionId() || 'null',
-            mdBlob: updatedSourceEntry.getSerialized(),
-        }, log, err => {
-            const replicationStatus = updatedSourceEntry.getReplicationStatus();
-            if (err) {
-                const logFields = {
-                    method: 'UpdateReplicationStatus._putMetadata',
-                    entry: updatedSourceEntry.getLogInfo(),
-                    origin: 'source',
-                    peer: this.sourceConfig.s3,
-                    replicationStatus,
-                    error: err.message,
-                };
-                if (isAccessDeniedError(err)) {
-                    const sourceRole = updatedSourceEntry.getReplicationRoles()?.split(',')[0];
-                    Object.assign(logFields, getAccessDeniedLogFields(
-                        updatedSourceEntry.getBucket(), sourceRole));
+        return client.putMetadata(
+            {
+                bucket: updatedSourceEntry.getBucket(),
+                objectKey: updatedSourceEntry.getObjectKey(),
+                // non versioned object are also considered a null version
+                // in a versioned bucket, we should set the version id to 'null'
+                // for it to be handled correctly in cloudserver
+                versionId: updatedSourceEntry.getEncodedVersionId() || 'null',
+                mdBlob: updatedSourceEntry.getSerialized(),
+            },
+            log,
+            err => {
+                const replicationStatus = updatedSourceEntry.getReplicationStatus();
+                if (err) {
+                    const logFields = {
+                        method: 'UpdateReplicationStatus._putMetadata',
+                        entry: updatedSourceEntry.getLogInfo(),
+                        origin: 'source',
+                        peer: this.sourceConfig.s3,
+                        replicationStatus,
+                        error: err.message,
+                    };
+                    if (isAccessDeniedError(err)) {
+                        const sourceRole = updatedSourceEntry.getReplicationRoles()?.split(',')[0];
+                        Object.assign(logFields, getAccessDeniedLogFields(updatedSourceEntry.getBucket(), sourceRole));
+                    }
+                    log.error('an error occurred when updating metadata', logFields);
+                    return cb(err);
                 }
-                log.error('an error occurred when updating metadata', logFields);
-                return cb(err);
-            }
-            this.metricsHandler.status({ replicationStatus });
-            log.end().info('metadata updated', {
-                entry: updatedSourceEntry.getLogInfo(),
-                replicationStatus,
-            });
-            return cb();
-        });
+                this.metricsHandler.status({ replicationStatus });
+                log.end().info('metadata updated', {
+                    entry: updatedSourceEntry.getLogInfo(),
+                    replicationStatus,
+                });
+                return cb();
+            },
+        );
     }
 
     /**
@@ -342,13 +332,12 @@ class UpdateReplicationStatus extends BackbeatTask {
                 replayCount: this.replayTopics.length - count,
             });
         } else {
-            log.error('error pushing failed entry to the replay topic',
-                {
-                    entry: queueEntry.getLogInfo(),
-                    topicName,
-                    count,
-                    site,
-                });
+            log.error('error pushing failed entry to the replay topic', {
+                entry: queueEntry.getLogInfo(),
+                topicName,
+                count,
+                site,
+            });
         }
     }
 
@@ -397,7 +386,8 @@ class UpdateReplicationStatus extends BackbeatTask {
             return refreshedEntry.toFailedEntry(queueEntry.getReplicationBackend());
         }
         if (count > 0) {
-            if (count > totalAttempts) { // might happen if replay config has changed
+            if (count > totalAttempts) {
+                // might happen if replay config has changed
                 queueEntry.setReplayCount(totalAttempts);
             }
             this._pushReplayEntry(queueEntry, site, log);
@@ -414,12 +404,11 @@ class UpdateReplicationStatus extends BackbeatTask {
             this.metricsHandler.replayQueuedFileSizes(labels, queueEntry.getContentLength());
             return null;
         }
-        log.error('count value is invalid',
-            {
-                entry: queueEntry.getLogInfo(),
-                count,
-                site,
-            });
+        log.error('count value is invalid', {
+            entry: queueEntry.getLogInfo(),
+            count,
+            site,
+        });
         return null;
     }
 
@@ -430,8 +419,10 @@ class UpdateReplicationStatus extends BackbeatTask {
         } else if (replicationStatus) {
             result = 'success';
         }
-        this.metricsHandler.statusDuration({ result, replicationStatus },
-            (Date.now() - sourceEntry.getStartProcessing()) / 1000);
+        this.metricsHandler.statusDuration(
+            { result, replicationStatus },
+            (Date.now() - sourceEntry.getStartProcessing()) / 1000,
+        );
     }
 
     _updateReplicationStatus(sourceEntry, log, done) {
@@ -440,31 +431,28 @@ class UpdateReplicationStatus extends BackbeatTask {
             this._updateStatusDurationMetric(sourceEntry, error);
             return done(error);
         }
-        return this._refreshSourceEntry(sourceEntry, log,
-            (err, refreshedEntry) => {
+        return this._refreshSourceEntry(sourceEntry, log, (err, refreshedEntry) => {
+            if (err) {
+                this._updateStatusDurationMetric(sourceEntry, err);
+                return done(err);
+            }
+            const params = { sourceEntry, refreshedEntry };
+            const updatedSourceEntry = this._getUpdatedSourceEntry(params, log);
+            if (!updatedSourceEntry) {
+                this._updateStatusDurationMetric(sourceEntry);
+                return process.nextTick(done);
+            }
+            return this._putMetadata(updatedSourceEntry, log, err => {
+                this._updateStatusDurationMetric(sourceEntry, err, updatedSourceEntry.getReplicationStatus());
+
                 if (err) {
-                    this._updateStatusDurationMetric(sourceEntry, err);
                     return done(err);
                 }
-                const params = { sourceEntry, refreshedEntry };
-                const updatedSourceEntry = this._getUpdatedSourceEntry(params, log);
-                if (!updatedSourceEntry) {
-                    this._updateStatusDurationMetric(sourceEntry);
-                    return process.nextTick(done);
-                }
-                return this._putMetadata(updatedSourceEntry, log, err => {
-                    this._updateStatusDurationMetric(sourceEntry, err,
-                        updatedSourceEntry.getReplicationStatus());
 
-                    if (err) {
-                        return done(err);
-                    }
-
-                    this._reportMetrics(sourceEntry, updatedSourceEntry);
-                    return this._handleGarbageCollection(
-                        updatedSourceEntry, log, done);
-                });
+                this._reportMetrics(sourceEntry, updatedSourceEntry);
+                return this._handleGarbageCollection(updatedSourceEntry, log, done);
             });
+        });
     }
 }
 

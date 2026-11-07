@@ -8,8 +8,7 @@ const { v7: uuid } = require('uuid');
 const { constants, errors } = require('@scality/arsenal');
 const Logger = require('werelogs').Logger;
 const BucketClient = require('@scality/bucketclient').RESTClient;
-const MongoClient = require('@scality/arsenal').storage
-    .metadata.mongoclient.MongoClientInterface;
+const MongoClient = require('@scality/arsenal').storage.metadata.mongoclient.MongoClientInterface;
 
 const config = require('../../../lib/Config');
 const BackbeatProducer = require('../../../lib/BackbeatProducer');
@@ -20,10 +19,7 @@ const safeJsonParse = require('../../../lib/util/safeJsonParse');
 const { AccountIdCache } = require('../../utils/AccountIdCache');
 const VaultClientWrapper = require('../../../extensions/utils/VaultClientWrapper');
 const ClientManager = require('../../../lib/clients/ClientManager');
-const {
-    indexesForFeature,
-    lifecycleTaskVersions,
-} = require('../../../lib/constants');
+const { indexesForFeature, lifecycleTaskVersions } = require('../../../lib/constants');
 
 const { LifecycleMetrics } = require('../LifecycleMetrics');
 const { hasMassExpirationRule } = require('../util/mongoRules');
@@ -32,8 +28,7 @@ const {
     startCircuitBreakerMetricsExport,
     updateCircuitBreakerConfigForImplicitOutputQueue,
 } = require('../../../lib/CircuitBreaker');
-const { context: otelContext, trace, SpanKind, ROOT_CONTEXT } =
-    require('@opentelemetry/api');
+const { context: otelContext, trace, SpanKind, ROOT_CONTEXT } = require('@opentelemetry/api');
 const { stampTraceHeaders } = require('@scality/arsenal/build/lib/tracing').kafka;
 const tracing = require('../../../lib/tracing');
 
@@ -53,7 +48,6 @@ const LIFEYCLE_CONDUCTOR_CLIENT_ID = 'lifecycle-conductor';
  * Kafka.
  */
 class LifecycleConductor {
-
     /**
      * @constructor
      * @param {Object} zkConfig - zookeeper configuration object
@@ -96,8 +90,7 @@ class LifecycleConductor {
         this.repConfig = repConfig;
         this.s3Config = s3Config;
         this._cronRule = this.lcConfig.conductor.cronRule || DEFAULT_CRON_RULE;
-        this._concurrency =
-            this.lcConfig.conductor.concurrency || DEFAULT_CONCURRENCY;
+        this._concurrency = this.lcConfig.conductor.concurrency || DEFAULT_CONCURRENCY;
         this._maxInFlightBatchSize = this._concurrency * 2;
         this._bucketSource = this.lcConfig.conductor.bucketSource;
         this._bucketdConfig = this.lcConfig.conductor.bucketd;
@@ -140,12 +133,15 @@ class LifecycleConductor {
             this.logger,
         );
 
-        this.clientManager = new ClientManager({
-            id: 'lifecycle',
-            authConfig: this._authConfig,
-            s3Config: this.s3Config,
-            transport,
-        }, this.logger);
+        this.clientManager = new ClientManager(
+            {
+                id: 'lifecycle',
+                authConfig: this._authConfig,
+                s3Config: this.s3Config,
+                transport,
+            },
+            this.logger,
+        );
 
         this.activeIndexingJobsRetrieved = false;
         this.activeIndexingJobs = [];
@@ -202,10 +198,7 @@ class LifecycleConductor {
 
     initZkPaths(cb) {
         async.each(
-            [
-                this.getBucketsZkPath(),
-                this.getBucketProgressZkPath(),
-            ],
+            [this.getBucketsZkPath(), this.getBucketProgressZkPath()],
             (path, done) => this._zkClient.mkdirp(path, done),
             cb,
         );
@@ -244,7 +237,8 @@ class LifecycleConductor {
         }
 
         const backbeatMetadataProxy = this.clientManager.getBackbeatMetadataProxy(
-            this._accountIdCache.get(task.canonicalId));
+            this._accountIdCache.get(task.canonicalId),
+        );
         if (!backbeatMetadataProxy) {
             log.error('failed to obtain a backbeat client; skipping index check');
             LifecycleMetrics.onLegacyTask(log, 'getMetadataProxyFailed');
@@ -262,8 +256,8 @@ class LifecycleConductor {
                 return cb(null, lifecycleTaskVersions.v1);
             }
 
-            const isV2 = indexesForFeature.lifecycle.v2.every(
-                idx => bucketIndexes.some(bidx => bidx.name === idx.name)
+            const isV2 = indexesForFeature.lifecycle.v2.every(idx =>
+                bucketIndexes.some(bidx => bidx.name === idx.name),
             );
 
             if (isV2) {
@@ -297,7 +291,7 @@ class LifecycleConductor {
                 return cb(null, lifecycleTaskVersions.v1);
             }
 
-            if (this.activeIndexingJobs.some(j => (j.bucket === task.bucketName))) {
+            if (this.activeIndexingJobs.some(j => j.bucket === task.bucketName)) {
                 log.debug(`skipping index creation: indexing job for ${task.bucketName} in progress`);
                 LifecycleMetrics.onLegacyTask(log, 'indexingInProgress');
                 return cb(null, lifecycleTaskVersions.v1);
@@ -309,72 +303,74 @@ class LifecycleConductor {
                 return cb(null, lifecycleTaskVersions.v1);
             }
 
-            return async.series({
-                diskUsage: done => this._mongodbClient.getDiskUsage(done),
-                collStats: done => this._mongodbClient.getCollectionStats(
-                    task.bucketName, log, done),
-            }, (err, results) => {
-                if (err) {
-                    log.warn('unable to check disk space, skipping index creation', {
-                        bucket: task.bucketName,
-                        error: err,
-                    });
-                    LifecycleMetrics.onLegacyTask(log, 'diskSpaceCheckFailed');
-                    return cb(null, lifecycleTaskVersions.v1);
-                }
-
-                const fsFreeSize = results.diskUsage.free;
-                // Each lifecycle index is roughly the same size as the
-                // _id_ index. We create two, so 3x gives a safe margin
-                // accounting for _id_ index bloat from incremental inserts.
-                const idIndexSize = results.collStats.indexSizes?._id_ || 0;
-
-                if (fsFreeSize < 3 * idIndexSize) {
-                    log.warn('insufficient disk space for index creation', {
-                        bucket: task.bucketName,
-                        fsFreeSize,
-                        threshold: 3 * idIndexSize,
-                    });
-                    LifecycleMetrics.onLegacyTask(log, 'insufficientDiskSpace');
-                    return cb(null, lifecycleTaskVersions.v1);
-                }
-
-                const { maxAutoIndexDocCount, maxAutoIndexStorageBytes } =
-                    config.lifecycleConductorOptions;
-                const docCount = results.collStats.count || 0;
-                const storageSize = results.collStats.storageSize || 0;
-                if (docCount > maxAutoIndexDocCount || storageSize > maxAutoIndexStorageBytes) {
-                    log.warn('skipping index creation: collection too large', {
-                        bucket: task.bucketName,
-                        docCount,
-                        storageSize,
-                        maxDocCount: maxAutoIndexDocCount,
-                        maxStorageBytes: maxAutoIndexStorageBytes,
-                    });
-                    LifecycleMetrics.onLegacyTask(log, 'collectionTooBig');
-                    return cb(null, lifecycleTaskVersions.v1);
-                }
-
-                this.activeIndexingJobs.push({
-                    bucket: task.bucketName,
-                    indexes: indexesForFeature.lifecycle.v2,
-                });
-
-                return backbeatMetadataProxy.putBucketIndexes(
-                    task.bucketName,
-                    indexesForFeature.lifecycle.v2,
-                    log,
-                    err => {
-                        if (err) {
-                            log.warn('unable to create lifecycle indexes', {
-                                bucket: task.bucketName,
-                                error: err,
-                            });
-                        }
-                        LifecycleMetrics.onLegacyTask(log, err ? 'putBucketIndexesFailed' : 'putBucketIndexes');
+            return async.series(
+                {
+                    diskUsage: done => this._mongodbClient.getDiskUsage(done),
+                    collStats: done => this._mongodbClient.getCollectionStats(task.bucketName, log, done),
+                },
+                (err, results) => {
+                    if (err) {
+                        log.warn('unable to check disk space, skipping index creation', {
+                            bucket: task.bucketName,
+                            error: err,
+                        });
+                        LifecycleMetrics.onLegacyTask(log, 'diskSpaceCheckFailed');
                         return cb(null, lifecycleTaskVersions.v1);
+                    }
+
+                    const fsFreeSize = results.diskUsage.free;
+                    // Each lifecycle index is roughly the same size as the
+                    // _id_ index. We create two, so 3x gives a safe margin
+                    // accounting for _id_ index bloat from incremental inserts.
+                    const idIndexSize = results.collStats.indexSizes?._id_ || 0;
+
+                    if (fsFreeSize < 3 * idIndexSize) {
+                        log.warn('insufficient disk space for index creation', {
+                            bucket: task.bucketName,
+                            fsFreeSize,
+                            threshold: 3 * idIndexSize,
+                        });
+                        LifecycleMetrics.onLegacyTask(log, 'insufficientDiskSpace');
+                        return cb(null, lifecycleTaskVersions.v1);
+                    }
+
+                    const { maxAutoIndexDocCount, maxAutoIndexStorageBytes } = config.lifecycleConductorOptions;
+                    const docCount = results.collStats.count || 0;
+                    const storageSize = results.collStats.storageSize || 0;
+                    if (docCount > maxAutoIndexDocCount || storageSize > maxAutoIndexStorageBytes) {
+                        log.warn('skipping index creation: collection too large', {
+                            bucket: task.bucketName,
+                            docCount,
+                            storageSize,
+                            maxDocCount: maxAutoIndexDocCount,
+                            maxStorageBytes: maxAutoIndexStorageBytes,
+                        });
+                        LifecycleMetrics.onLegacyTask(log, 'collectionTooBig');
+                        return cb(null, lifecycleTaskVersions.v1);
+                    }
+
+                    this.activeIndexingJobs.push({
+                        bucket: task.bucketName,
+                        indexes: indexesForFeature.lifecycle.v2,
                     });
-            });
+
+                    return backbeatMetadataProxy.putBucketIndexes(
+                        task.bucketName,
+                        indexesForFeature.lifecycle.v2,
+                        log,
+                        err => {
+                            if (err) {
+                                log.warn('unable to create lifecycle indexes', {
+                                    bucket: task.bucketName,
+                                    error: err,
+                                });
+                            }
+                            LifecycleMetrics.onLegacyTask(log, err ? 'putBucketIndexesFailed' : 'putBucketIndexes');
+                            return cb(null, lifecycleTaskVersions.v1);
+                        },
+                    );
+                },
+            );
         });
     }
 
@@ -423,31 +419,37 @@ class LifecycleConductor {
                     return done();
                 });
             },
-            cb);
+            cb,
+        );
     }
 
     _createBucketTaskMessages(tasks, log, cb) {
         if (this.lcConfig.forceLegacyListing) {
-            return process.nextTick(cb, null, tasks.map(t =>
-                this._taskToMessage(t, lifecycleTaskVersions.v1, log)));
+            return process.nextTick(
+                cb,
+                null,
+                tasks.map(t => this._taskToMessage(t, lifecycleTaskVersions.v1, log)),
+            );
         }
 
-        return async.mapLimit(tasks, 10, (t, taskDone) =>
-            this._indexesGetOrCreate(t, log, (err, taskVersion) => {
-                if (err) {
-                    // should not happen as indexes methods would
-                    // ignore the errors and fallback to v1 listing
-                    return taskDone(null, this._taskToMessage(t, lifecycleTaskVersions.v1, log));
-                }
-                return taskDone(null, this._taskToMessage(t, taskVersion, log));
-            }), cb);
+        return async.mapLimit(
+            tasks,
+            10,
+            (t, taskDone) =>
+                this._indexesGetOrCreate(t, log, (err, taskVersion) => {
+                    if (err) {
+                        // should not happen as indexes methods would
+                        // ignore the errors and fallback to v1 listing
+                        return taskDone(null, this._taskToMessage(t, lifecycleTaskVersions.v1, log));
+                    }
+                    return taskDone(null, this._taskToMessage(t, taskVersion, log));
+                }),
+            cb,
+        );
     }
 
     _completeCurrentScan(log, nBucketsListed) {
-        LifecycleMetrics.onConductorScanComplete(
-            log,
-            nBucketsListed || 0,
-        );
+        LifecycleMetrics.onConductorScanComplete(log, nBucketsListed || 0);
         this._resetCurrentScan();
     }
 
@@ -464,15 +466,21 @@ class LifecycleConductor {
         // Root INTERNAL trace per cron firing (no upstream parent); the
         // in-process scan work (Mongo bucket listing) nests under it.
         const tracer = trace.getTracer('backbeat');
-        const span = tracer.startSpan('lifecycle.conductor.scan', {
-            kind: SpanKind.INTERNAL,
-        }, ROOT_CONTEXT);
+        const span = tracer.startSpan(
+            'lifecycle.conductor.scan',
+            {
+                kind: SpanKind.INTERNAL,
+            },
+            ROOT_CONTEXT,
+        );
         const ctx = trace.setSpan(ROOT_CONTEXT, span);
         otelContext.with(ctx, () => {
             try {
                 this._processBucketsInternal((err, res) => {
                     tracing.endSpan(span, err);
-                    if (cb) {cb(err, res);}
+                    if (cb) {
+                        cb(err, res);
+                    }
                 });
             } catch (err) {
                 // sync throw: end span (don't leak), then rethrow
@@ -495,125 +503,135 @@ class LifecycleConductor {
             }
 
             const unknownCanonicalIds = new Set(
-                tasks
-                    .map(t => t.canonicalId)
-                    .filter(c => !this._accountIdCache.isKnown(c))
+                tasks.map(t => t.canonicalId).filter(c => !this._accountIdCache.isKnown(c)),
             );
 
-            return async.waterfall([
-                // ignore error, it has been reported before and should not stop the whole cargo
-                next => this._getAccountIds(unknownCanonicalIds, log,
-                    () => next(null, tasks.filter(t => {
-                        if (!this._accountIdCache.has(t.canonicalId)) {
-                            log.warn('skipping bucket, unknown canonical id', {
-                                bucketName: t.bucketName,
-                                canonicalId: t.canonicalId,
-                            });
-                            return false;
-                        }
-                        return true;
-                    }))),
-                (tasksWithAccountId, next) => this._createBucketTaskMessages(
-                    tasksWithAccountId, log, next),
-            ],
-            (err, messages) => {
-                nBucketsQueued += tasks.length;
+            return async.waterfall(
+                [
+                    // ignore error, it has been reported before and should not stop the whole cargo
+                    next =>
+                        this._getAccountIds(unknownCanonicalIds, log, () =>
+                            next(
+                                null,
+                                tasks.filter(t => {
+                                    if (!this._accountIdCache.has(t.canonicalId)) {
+                                        log.warn('skipping bucket, unknown canonical id', {
+                                            bucketName: t.bucketName,
+                                            canonicalId: t.canonicalId,
+                                        });
+                                        return false;
+                                    }
+                                    return true;
+                                }),
+                            ),
+                        ),
+                    (tasksWithAccountId, next) => this._createBucketTaskMessages(tasksWithAccountId, log, next),
+                ],
+                (err, messages) => {
+                    nBucketsQueued += tasks.length;
 
-                log.info('bucket push progress', {
-                    nBucketsQueued,
-                    bucketsInCargo: tasks.length,
-                    kafkaBucketMessagesDeliveryReports: messageDeliveryReports,
-                    kafkaEnqueueRateHz: Math.round(
-                        nBucketsQueued * 1000 / (Date.now() - this._currentScanStartTimestamp)),
-                });
+                    log.info('bucket push progress', {
+                        nBucketsQueued,
+                        bucketsInCargo: tasks.length,
+                        kafkaBucketMessagesDeliveryReports: messageDeliveryReports,
+                        kafkaEnqueueRateHz: Math.round(
+                            (nBucketsQueued * 1000) / (Date.now() - this._currentScanStartTimestamp),
+                        ),
+                    });
 
-                this._accountIdCache.expireOldest();
+                    this._accountIdCache.expireOldest();
 
-                return this._producer.send(messages, (err, res) => {
-                    messageDeliveryReports += messages.length;
-                    LifecycleMetrics.onKafkaPublish(log, 'BucketTopic', 'conductor', err, messages.length);
-                    done(err, res);
-                });
-            });
+                    return this._producer.send(messages, (err, res) => {
+                        messageDeliveryReports += messages.length;
+                        LifecycleMetrics.onKafkaPublish(log, 'BucketTopic', 'conductor', err, messages.length);
+                        done(err, res);
+                    });
+                },
+            );
         });
 
-        async.waterfall([
-            next => this._controlBacklog(next),
-            next => {
-                // The scan has started: index handling and listing below are
-                // part of it, so timestamp the scan start here (right after
-                // the backlog-control gate, the only step that skips a scan).
-                this._currentScanId = scanId;
-                this._currentScanStartTimestamp = Date.now();
-                log.addDefaultFields({
-                    conductorScanId: scanId,
-                    conductorScanStartTimestamp: this._currentScanStartTimestamp,
-                });
-                LifecycleMetrics.onProcessBuckets(log, this._currentScanStartTimestamp);
-                this._batchInProgress = true;
-                log.info('starting new lifecycle batch', { bucketSource: this._bucketSource });
-                return next();
-            },
-            // error retrieving in progress jobs should not stop the current batch
-            // fallback to V1 listings
-            next => this._indexesGetInProgressJobs(log, () => next(null)),
-            next => this.listBuckets(messageSendQueue, log, (err, listedBucketsCount) => {
-                LifecycleMetrics.onBucketListing(log, err);
-                nBucketsListed = listedBucketsCount;
-                return next(err);
-            }),
-            next => {
-                async.until(
-                    () => nBucketsQueued === nBucketsListed,
-                    unext => setTimeout(unext, 1000),
-                    next);
-            },
-        ], err => {
-            if (err && err.Throttling) {
-                // Throttling only originates from the backlog-control gate,
-                // before the scan id is set, so no scan was started and there
-                // is no scan duration to report here.
-                log.info('not starting new lifecycle batch', {
-                    reason: err,
-                });
-                if (cb) {
-                    cb(err);
+        async.waterfall(
+            [
+                next => this._controlBacklog(next),
+                next => {
+                    // The scan has started: index handling and listing below are
+                    // part of it, so timestamp the scan start here (right after
+                    // the backlog-control gate, the only step that skips a scan).
+                    this._currentScanId = scanId;
+                    this._currentScanStartTimestamp = Date.now();
+                    log.addDefaultFields({
+                        conductorScanId: scanId,
+                        conductorScanStartTimestamp: this._currentScanStartTimestamp,
+                    });
+                    LifecycleMetrics.onProcessBuckets(log, this._currentScanStartTimestamp);
+                    this._batchInProgress = true;
+                    log.info('starting new lifecycle batch', { bucketSource: this._bucketSource });
+                    return next();
+                },
+                // error retrieving in progress jobs should not stop the current batch
+                // fallback to V1 listings
+                next => this._indexesGetInProgressJobs(log, () => next(null)),
+                next =>
+                    this.listBuckets(messageSendQueue, log, (err, listedBucketsCount) => {
+                        LifecycleMetrics.onBucketListing(log, err);
+                        nBucketsListed = listedBucketsCount;
+                        return next(err);
+                    }),
+                next => {
+                    async.until(
+                        () => nBucketsQueued === nBucketsListed,
+                        unext => setTimeout(unext, 1000),
+                        next,
+                    );
+                },
+            ],
+            err => {
+                if (err && err.Throttling) {
+                    // Throttling only originates from the backlog-control gate,
+                    // before the scan id is set, so no scan was started and there
+                    // is no scan duration to report here.
+                    log.info('not starting new lifecycle batch', {
+                        reason: err,
+                    });
+                    if (cb) {
+                        cb(err);
+                    }
+                    return;
                 }
-                return;
-            }
 
-            this.activeIndexingJobsRetrieved = false;
-            this.activeIndexingJobs = [];
-            this._batchInProgress = false;
-            const unknownCanonicalIdCount = this._accountIdCache.missCount;
-            const fullScanElapsedMs = Date.now() - this._currentScanStartTimestamp;
+                this.activeIndexingJobsRetrieved = false;
+                this.activeIndexingJobs = [];
+                this._batchInProgress = false;
+                const unknownCanonicalIdCount = this._accountIdCache.missCount;
+                const fullScanElapsedMs = Date.now() - this._currentScanStartTimestamp;
 
-            if (err) {
-                log.error('lifecycle batch failed', {
-                    error: err,
+                if (err) {
+                    log.error('lifecycle batch failed', {
+                        error: err,
+                        unknownCanonicalIdCount,
+                        fullScanElapsedMs,
+                        nBucketsListed,
+                        nBucketsQueued,
+                    });
+                    this._resetCurrentScan();
+                    if (cb) {
+                        cb(err);
+                    }
+                    return;
+                }
+
+                log.info('finished pushing lifecycle batch', {
+                    nBucketsQueued,
                     unknownCanonicalIdCount,
                     fullScanElapsedMs,
                     nBucketsListed,
-                    nBucketsQueued,
                 });
-                this._resetCurrentScan();
+                this._completeCurrentScan(log, nBucketsListed);
                 if (cb) {
-                    cb(err);
+                    cb(null, nBucketsQueued);
                 }
-                return;
-            }
-
-            log.info('finished pushing lifecycle batch', {
-                nBucketsQueued,
-                unknownCanonicalIdCount,
-                fullScanElapsedMs,
-                nBucketsListed,
-            });
-            this._completeCurrentScan(log, nBucketsListed);
-            if (cb) {
-                cb(null, nBucketsQueued);
-            }
-        });
+            },
+        );
     }
 
     listBuckets(queue, log, cb) {
@@ -636,45 +654,40 @@ class LifecycleConductor {
 
     listZookeeperBuckets(queue, log, cb) {
         const zkBucketsPath = this.getBucketsZkPath();
-        this._zkClient.getChildren(
-            zkBucketsPath,
-            null,
-            (err, buckets) => {
-                if (err) {
-                    log.error(
-                        'error getting list of buckets from zookeeper',
-                        { zkPath: zkBucketsPath, error: err.message });
-                    return cb(err);
-                }
+        this._zkClient.getChildren(zkBucketsPath, null, (err, buckets) => {
+            if (err) {
+                log.error('error getting list of buckets from zookeeper', {
+                    zkPath: zkBucketsPath,
+                    error: err.message,
+                });
+                return cb(err);
+            }
 
-                const batch = buckets
-                    .filter(bucket => {
-                        const [canonicalId, bucketUID, bucketName] =
-                                bucket.split(':');
-                        if (!canonicalId || !bucketUID || !bucketName) {
-                            log.error(
-                                'malformed zookeeper bucket entry, skipping',
-                                { zkPath: zkBucketsPath, bucket });
-                            return false;
-                        }
+            const batch = buckets
+                .filter(bucket => {
+                    const [canonicalId, bucketUID, bucketName] = bucket.split(':');
+                    if (!canonicalId || !bucketUID || !bucketName) {
+                        log.error('malformed zookeeper bucket entry, skipping', { zkPath: zkBucketsPath, bucket });
+                        return false;
+                    }
 
-                        if (this._isBlacklisted(canonicalId, bucketName)) {
-                            return false;
-                        }
+                    if (this._isBlacklisted(canonicalId, bucketName)) {
+                        return false;
+                    }
 
-                        return true;
-                    })
-                    .map(bucket => {
-                        const split = bucket.split(':');
-                        const canonicalId = split[0];
-                        const bucketName = split[2];
+                    return true;
+                })
+                .map(bucket => {
+                    const split = bucket.split(':');
+                    const canonicalId = split[0];
+                    const bucketName = split[2];
 
-                        return { canonicalId, bucketName };
-                    });
+                    return { canonicalId, bucketName };
+                });
 
-                queue.push(batch);
-                return process.nextTick(cb, null, batch.length);
-            });
+            queue.push(batch);
+            return process.nextTick(cb, null, batch.length);
+        });
     }
 
     checkpointBucket(bucketEntry, cb) {
@@ -734,70 +747,72 @@ class LifecycleConductor {
                     nEnqueuedToDownstream: nEnqueued,
                     inFlight: queue.length(),
                     maxInFlight: this._maxInFlightBatchSize,
-                    bucketListingPushRateHz: Math.round(nEnqueued * 1000 / (Date.now() - start)),
+                    bucketListingPushRateHz: Math.round((nEnqueued * 1000) / (Date.now() - start)),
                     breakerState,
                 };
 
-                if (queue.length() > this._maxInFlightBatchSize ||
-                    breakerState !== BreakerState.Nominal) {
+                if (queue.length() > this._maxInFlightBatchSize || breakerState !== BreakerState.Nominal) {
                     log.info('delaying bucket pull', queueInfo);
                     return this.checkpointBucket(this.lastSentId, () => {
                         setTimeout(next, 10000);
                     });
                 }
 
-                return retryWrapper.retry({
-                    actionDesc: 'list accounts+buckets',
-                    logFields: { marker },
-                    actionFunc: done =>
-                        this._bucketClient.listObject(
-                            constants.usersBucket,
-                            log.getSerializedUids(),
-                            { marker, prefix: '', maxKeys: this._concurrency },
-                            (err, resp) => {
-                                if (err) {
-                                    return done(err);
-                                }
-
-                                const { error, result } = safeJsonParse(resp);
-                                if (error) {
-                                    return done(error);
-                                }
-
-                                isTruncated = result.IsTruncated;
-                                let needCheckpoint = false;
-
-                                result.Contents.forEach(o => {
-                                    marker = o.key;
-                                    const [canonicalId, bucketName] = marker.split(constants.splitter);
-                                    if (!this._isBlacklisted(canonicalId, bucketName)) {
-                                        nEnqueued += 1;
-                                        queue.push({ canonicalId, bucketName });
-                                        this.lastSentId = o.key;
-                                    // Optimization:
-                                    // If we only blacklist by accounts, and the last bucket is blacklisted
-                                    // we can skip listing buckets until the next account.
-                                    // To start the next listing after the blacklisted account, we construct
-                                    // a marker by appending the blacklisted account with a semicolon character.
-                                    // 'canonicalid1;' > 'canonicalid1..|..bucketname1'
-                                    } else if (this.onlyBlacklistAccounts) {
-                                        marker = `${canonicalId};`;
+                return retryWrapper.retry(
+                    {
+                        actionDesc: 'list accounts+buckets',
+                        logFields: { marker },
+                        actionFunc: done =>
+                            this._bucketClient.listObject(
+                                constants.usersBucket,
+                                log.getSerializedUids(),
+                                { marker, prefix: '', maxKeys: this._concurrency },
+                                (err, resp) => {
+                                    if (err) {
+                                        return done(err);
                                     }
-                                    if (nEnqueued % BUCKET_CHECKPOINT_PUSH_NUMBER_BUCKETD === 0) {
-                                        needCheckpoint = true;
+
+                                    const { error, result } = safeJsonParse(resp);
+                                    if (error) {
+                                        return done(error);
                                     }
-                                });
 
-                                if (needCheckpoint) {
-                                    return this.checkpointBucket(marker, done);
-                                }
+                                    isTruncated = result.IsTruncated;
+                                    let needCheckpoint = false;
 
-                                return done();
-                            }
-                        ),
-                    shouldRetryFunc: () => true,
-                    log,
-                }, next);
+                                    result.Contents.forEach(o => {
+                                        marker = o.key;
+                                        const [canonicalId, bucketName] = marker.split(constants.splitter);
+                                        if (!this._isBlacklisted(canonicalId, bucketName)) {
+                                            nEnqueued += 1;
+                                            queue.push({ canonicalId, bucketName });
+                                            this.lastSentId = o.key;
+                                            // Optimization:
+                                            // If we only blacklist by accounts, and the last bucket is blacklisted
+                                            // we can skip listing buckets until the next account.
+                                            // To start the next listing after the blacklisted account, we construct
+                                            // a marker by appending the blacklisted account with a semicolon character.
+                                            // 'canonicalid1;' > 'canonicalid1..|..bucketname1'
+                                        } else if (this.onlyBlacklistAccounts) {
+                                            marker = `${canonicalId};`;
+                                        }
+                                        if (nEnqueued % BUCKET_CHECKPOINT_PUSH_NUMBER_BUCKETD === 0) {
+                                            needCheckpoint = true;
+                                        }
+                                    });
+
+                                    if (needCheckpoint) {
+                                        return this.checkpointBucket(marker, done);
+                                    }
+
+                                    return done();
+                                },
+                            ),
+                        shouldRetryFunc: () => true,
+                        log,
+                    },
+                    next,
+                );
             },
             () => isTruncated,
             err => {
@@ -813,7 +828,7 @@ class LifecycleConductor {
 
                     return cb(null, nEnqueued);
                 });
-            }
+            },
         );
     }
 
@@ -829,133 +844,132 @@ class LifecycleConductor {
                 return process.nextTick(cb);
             }
 
-            return this._zkClient.setData(
-                lastEntryPath,
-                Buffer.from(bucketEntry),
-                lastSentVersion,
-                (err, stat) => {
-                    if (err) {
-                        return cb(err);
-                    }
+            return this._zkClient.setData(lastEntryPath, Buffer.from(bucketEntry), lastSentVersion, (err, stat) => {
+                if (err) {
+                    return cb(err);
+                }
 
-                    lastSentVersion = stat.version;
-                    lastSentId = null;
+                lastSentVersion = stat.version;
+                lastSentId = null;
 
-                    return cb();
-                },
-            );
+                return cb();
+            });
         };
 
-        async.waterfall([
-            done => this._zkClient.getData(lastEntryPath, done),
-            (data, stat, done) => {
-                const entry = data?.toString('ascii');
-                if (stat) {
-                    lastSentVersion = stat.version;
-                }
+        async.waterfall(
+            [
+                done => this._zkClient.getData(lastEntryPath, done),
+                (data, stat, done) => {
+                    const entry = data?.toString('ascii');
+                    if (stat) {
+                        lastSentVersion = stat.version;
+                    }
 
-                const filter = {};
-                if (entry) {
-                    filter._id = { $gt: entry };
-                }
+                    const filter = {};
+                    if (entry) {
+                        filter._id = { $gt: entry };
+                    }
 
-                if (this.accountsBlacklisted.size > 0) {
-                    filter['value.owner'] = { $nin: Array.from(this.accountsBlacklisted) };
-                }
+                    if (this.accountsBlacklisted.size > 0) {
+                        filter['value.owner'] = { $nin: Array.from(this.accountsBlacklisted) };
+                    }
 
-                if (this.bucketsBlacklisted.size > 0) {
-                    filter._id = {
-                        ...filter._id,
-                        $nin: Array.from(this.bucketsBlacklisted),
-                   };
-                }
+                    if (this.bucketsBlacklisted.size > 0) {
+                        filter._id = {
+                            ...filter._id,
+                            $nin: Array.from(this.bucketsBlacklisted),
+                        };
+                    }
 
-                const cursor = this._mongodbClient
-                    .getCollection('__metastore')
-                    .find(filter)
-                    .project({
+                    const cursor = this._mongodbClient.getCollection('__metastore').find(filter).project({
                         '_id': 1,
                         'value.owner': 1,
                         'value.lifecycleConfiguration': 1,
                         'value.capabilities.VeeamSOSApi': 1,
                     });
 
-                return done(null, cursor);
-            },
-            (cursor, done) => {
-                async.during(
-                    test => process.nextTick(
-                        () => cursor.hasNext()
-                        .then(res => test(null, res))
-                        .catch(test)),
-                    next => {
-                        const breakerState = this._circuitBreaker.state;
-                        const queueInfo = {
-                            nEnqueuedToDownstream: nEnqueued,
-                            inFlight: queue.length(),
-                            maxInFlight: this._maxInFlightBatchSize,
-                            enqueueRateHz: Math.round(nEnqueued * 1000 / (Date.now() - start)),
-                            breakerState,
-                        };
+                    return done(null, cursor);
+                },
+                (cursor, done) => {
+                    async.during(
+                        test =>
+                            process.nextTick(() =>
+                                cursor
+                                    .hasNext()
+                                    .then(res => test(null, res))
+                                    .catch(test),
+                            ),
+                        next => {
+                            const breakerState = this._circuitBreaker.state;
+                            const queueInfo = {
+                                nEnqueuedToDownstream: nEnqueued,
+                                inFlight: queue.length(),
+                                maxInFlight: this._maxInFlightBatchSize,
+                                enqueueRateHz: Math.round((nEnqueued * 1000) / (Date.now() - start)),
+                                breakerState,
+                            };
 
-                        if (queue.length() > this._maxInFlightBatchSize ||
-                            breakerState !== BreakerState.Nominal) {
-                            log.info('delaying bucket pull', queueInfo);
-                            return checkpointBucket(lastSentId, () => {
-                                setTimeout(next, 10000);
-                            });
-                        }
-
-                        return cursor.next()
-                            .then(doc => {
-                                // reverse-lookup the name in case it is special and has been
-                                // rewritten by the client
-                                const name = this._mongodbClient.getCollection(doc._id).collectionName;
-                                if (!this._mongodbClient._isSpecialCollection(name)) {
-                                    queue.push({
-                                        bucketName: name,
-                                        canonicalId: doc.value.owner,
-                                        isLifecycled: !!doc.value.lifecycleConfiguration,
-                                        hasSosApi: !!doc.value.capabilities?.VeeamSOSApi,
-                                        hasMassExpirationRule: hasMassExpirationRule(
-                                            doc.value.lifecycleConfiguration?.rules),
-                                    });
-                                    nEnqueued += 1;
-                                    lastSentId = doc._id;
-
-                                    if (nEnqueued % BUCKET_CHECKPOINT_PUSH_NUMBER === 0) {
-                                        return checkpointBucket(doc._id, next);
-                                    }
-                                    // fallthrough
-                                }
-                                return next();
-                            })
-                            .catch(err => {
-                                log.info('error listing next bucket', {
-                                    ...queueInfo,
-                                    error: err,
+                            if (queue.length() > this._maxInFlightBatchSize || breakerState !== BreakerState.Nominal) {
+                                log.info('delaying bucket pull', queueInfo);
+                                return checkpointBucket(lastSentId, () => {
+                                    setTimeout(next, 10000);
                                 });
+                            }
 
-                                return setTimeout(next, 500);
-                            });
-                    },
-                    err => {
-                        if (!err) {
-                            // clear last seen bucket from zk
-                            return checkpointBucket('', err => {
-                                if (err) {
-                                    return done(err);
-                                }
+                            return cursor
+                                .next()
+                                .then(doc => {
+                                    // reverse-lookup the name in case it is special and has been
+                                    // rewritten by the client
+                                    const name = this._mongodbClient.getCollection(doc._id).collectionName;
+                                    if (!this._mongodbClient._isSpecialCollection(name)) {
+                                        queue.push({
+                                            bucketName: name,
+                                            canonicalId: doc.value.owner,
+                                            isLifecycled: !!doc.value.lifecycleConfiguration,
+                                            hasSosApi: !!doc.value.capabilities?.VeeamSOSApi,
+                                            hasMassExpirationRule: hasMassExpirationRule(
+                                                doc.value.lifecycleConfiguration?.rules,
+                                            ),
+                                        });
+                                        nEnqueued += 1;
+                                        lastSentId = doc._id;
 
-                                return done(null, nEnqueued);
-                            });
-                        }
+                                        if (nEnqueued % BUCKET_CHECKPOINT_PUSH_NUMBER === 0) {
+                                            return checkpointBucket(doc._id, next);
+                                        }
+                                        // fallthrough
+                                    }
+                                    return next();
+                                })
+                                .catch(err => {
+                                    log.info('error listing next bucket', {
+                                        ...queueInfo,
+                                        error: err,
+                                    });
 
-                        return done(err);
-                    }
-                );
-            }
-        ], cb);
+                                    return setTimeout(next, 500);
+                                });
+                        },
+                        err => {
+                            if (!err) {
+                                // clear last seen bucket from zk
+                                return checkpointBucket('', err => {
+                                    if (err) {
+                                        return done(err);
+                                    }
+
+                                    return done(null, nEnqueued);
+                                });
+                            }
+
+                            return done(err);
+                        },
+                    );
+                },
+            ],
+            cb,
+        );
     }
 
     _controlBacklog(done) {
@@ -964,8 +978,7 @@ class LifecycleConductor {
         // - backlog metrics not configured
         // - on first processing cycle (to guarantee progress in case
         //   of restarts)
-        if (!this.lcConfig.conductor.backlogControl.enabled ||
-            !this.kafkaConfig.backlogMetrics) {
+        if (!this.lcConfig.conductor.backlogControl.enabled || !this.kafkaConfig.backlogMetrics) {
             return process.nextTick(done);
         }
 
@@ -980,49 +993,62 @@ class LifecycleConductor {
         // all object states have been updated accordingly, to avoid
         // duplicated work - even though the triggered transition or
         // expiration may not have terminated.
-        return async.series({
-            // check that bucket tasks topic consumer lag is 0 (no
-            // need to allow any lag because the conductor expects
-            // everything to be processed in a single cycle before
-            // starting another one, so pass maxLag=0)
-            bucketTasksCheck:
-            next => this._kafkaBacklogMetrics.checkConsumerLag(
-                this.lcConfig.bucketTasksTopic,
-                this.lcConfig.bucketProcessor.groupId, 0, next),
+        return async.series(
+            {
+                // check that bucket tasks topic consumer lag is 0 (no
+                // need to allow any lag because the conductor expects
+                // everything to be processed in a single cycle before
+                // starting another one, so pass maxLag=0)
+                bucketTasksCheck: next =>
+                    this._kafkaBacklogMetrics.checkConsumerLag(
+                        this.lcConfig.bucketTasksTopic,
+                        this.lcConfig.bucketProcessor.groupId,
+                        0,
+                        next,
+                    ),
 
-            // check that object tasks topic consumer lag for
-            // expirations is 0. We don't need to check the
-            // transition processor, which is used to process
-            // events which are not related to the listing.
-            objectTasksExpirationCheck:
-            next => this._kafkaBacklogMetrics.checkConsumerLag(
-                this.lcConfig.objectTasksTopic,
-                this.lcConfig.objectProcessor.groupId, 0, next),
+                // check that object tasks topic consumer lag for
+                // expirations is 0. We don't need to check the
+                // transition processor, which is used to process
+                // events which are not related to the listing.
+                objectTasksExpirationCheck: next =>
+                    this._kafkaBacklogMetrics.checkConsumerLag(
+                        this.lcConfig.objectTasksTopic,
+                        this.lcConfig.objectProcessor.groupId,
+                        0,
+                        next,
+                    ),
 
-            // Check that data mover topic consumer has progressed
-            // beyond the latest lifecycle snapshot of topic offsets,
-            // which means everything from the latest lifecycle batch
-            // has been consumed.
-            // We don't need to check the cold-archive topics, since
-            // the bucket-processor marks the objects as transition
-            // in-progress immediately.
-            dataMoverCheck:
-            next => this._kafkaBacklogMetrics.checkConsumerProgress(
-                this.repConfig.dataMoverTopic, null, 'lifecycle', next),
-        }, (err, checkResults) => {
-            if (err) {
-                return done(err);
-            }
-            const doSkip = Object.keys(checkResults).some(
-                checkType => checkResults[checkType] !== undefined);
-            if (doSkip) {
-                this.logger.info('skipping lifecycle batch due to ' +
-                                 'previous operation still in progress',
-                                 checkResults);
-                return done(errors.Throttling);
-            }
-            return done();
-        });
+                // Check that data mover topic consumer has progressed
+                // beyond the latest lifecycle snapshot of topic offsets,
+                // which means everything from the latest lifecycle batch
+                // has been consumed.
+                // We don't need to check the cold-archive topics, since
+                // the bucket-processor marks the objects as transition
+                // in-progress immediately.
+                dataMoverCheck: next =>
+                    this._kafkaBacklogMetrics.checkConsumerProgress(
+                        this.repConfig.dataMoverTopic,
+                        null,
+                        'lifecycle',
+                        next,
+                    ),
+            },
+            (err, checkResults) => {
+                if (err) {
+                    return done(err);
+                }
+                const doSkip = Object.keys(checkResults).some(checkType => checkResults[checkType] !== undefined);
+                if (doSkip) {
+                    this.logger.info(
+                        'skipping lifecycle batch due to previous operation still in progress',
+                        checkResults,
+                    );
+                    return done(errors.Throttling);
+                }
+                return done();
+            },
+        );
     }
 
     _setupProducer(cb) {
@@ -1036,10 +1062,10 @@ class LifecycleConductor {
         });
         producer.once('error', cb);
         producer.once('ready', () => {
-            this.logger.debug(
-                'producer is ready',
-                { kafkaConfig: this.kafkaConfig,
-                    topic: this.lcConfig.bucketTasksTopic });
+            this.logger.debug('producer is ready', {
+                kafkaConfig: this.kafkaConfig,
+                topic: this.lcConfig.bucketTasksTopic,
+            });
             producer.removeAllListeners('error');
             producer.on('error', err => {
                 this.logger.error('error from backbeat producer', {
@@ -1085,18 +1111,18 @@ class LifecycleConductor {
             // emitted
             this._zkClient.removeAllListeners('error');
             this._zkClient.on('error', err => {
-                this.logger.error(
-                    'error from lifecycle conductor zookeeper client',
-                    { error: err });
+                this.logger.error('error from lifecycle conductor zookeeper client', { error: err });
             });
             this.initZkPaths(cb);
         });
     }
 
     needsZookeeper() {
-        return this._bucketSource === 'zookeeper' || // bucket list stored in zk
+        return (
+            this._bucketSource === 'zookeeper' || // bucket list stored in zk
             this._bucketSource === 'mongodb' || // bucket stream checkpoints in zk
-            this._bucketSource === 'bucketd'; // bucket stream checkpoints in zk
+            this._bucketSource === 'bucketd'
+        ); // bucket stream checkpoints in zk
     }
 
     /**
@@ -1117,18 +1143,23 @@ class LifecycleConductor {
         this.vaultClientWrapper.init();
         this.clientManager.initSTSConfig();
         this.clientManager.initCredentialsManager();
-        return async.series([
-            next => this._setupProducer(next),
-            next => this._setupZookeeperClient(next),
-            next => this._setupBucketdClient(next),
-            next => this._setupMongodbClient(next),
-            next => this._initKafkaBacklogMetrics(next),
-        ], done);
+        return async.series(
+            [
+                next => this._setupProducer(next),
+                next => this._setupZookeeperClient(next),
+                next => this._setupBucketdClient(next),
+                next => this._setupMongodbClient(next),
+                next => this._initKafkaBacklogMetrics(next),
+            ],
+            done,
+        );
     }
 
     _initKafkaBacklogMetrics(cb) {
         this._kafkaBacklogMetrics = new KafkaBacklogMetrics(
-            this.zkConfig.connectionString, this.kafkaConfig.backlogMetrics);
+            this.zkConfig.connectionString,
+            this.kafkaConfig.backlogMetrics,
+        );
         this._kafkaBacklogMetrics.init();
         this._kafkaBacklogMetrics.once('error', cb);
         this._kafkaBacklogMetrics.once('ready', () => {
@@ -1146,11 +1177,8 @@ class LifecycleConductor {
 
     _startCronJob() {
         if (!this._cronJob) {
-            this.logger.info('starting bucket queueing cron job',
-                             { cronRule: this._cronRule });
-            this._cronJob = schedule.scheduleJob(
-                this._cronRule,
-                () => this.processBuckets(null));
+            this.logger.info('starting bucket queueing cron job', { cronRule: this._cronRule });
+            this._cronJob = schedule.scheduleJob(this._cronRule, () => this.processBuckets(null));
         }
     }
 
@@ -1192,38 +1220,41 @@ class LifecycleConductor {
      */
     stop(done) {
         this._stopCronJob();
-        async.series([
-            next => {
-                if (!this._producer) {
-                    return process.nextTick(next);
-                }
-                this.logger.debug('closing producer');
-                return this._producer.close(() => {
-                    this._producer = null;
-                    this._zkClient = null;
-                    next();
-                });
+        async.series(
+            [
+                next => {
+                    if (!this._producer) {
+                        return process.nextTick(next);
+                    }
+                    this.logger.debug('closing producer');
+                    return this._producer.close(() => {
+                        this._producer = null;
+                        this._zkClient = null;
+                        next();
+                    });
+                },
+            ],
+            err => {
+                this.clientManager.close();
+                this._circuitBreaker.stop();
+                this._started = false;
+                return done(err);
             },
-        ], err => {
-            this.clientManager.close();
-            this._circuitBreaker.stop();
-            this._started = false;
-            return done(err);
-        });
+        );
     }
 
     isReady() {
-        const zkState = !this.needsZookeeper() ||
-            !!(this._zkClient && this._zkClient.getState());
+        const zkState = !this.needsZookeeper() || !!(this._zkClient && this._zkClient.getState());
 
-        const zkConnectState = !this.needsZookeeper() ||
+        const zkConnectState =
+            !this.needsZookeeper() ||
             (zkState && this._zkClient.getState().code === zookeeper.State.SYNC_CONNECTED.code);
 
         const components = {
             zkState,
             zkConnectState,
             producer: !!(this._producer && this._producer.isReady()),
-            kafkaBacklogMetrics: (!this._kafkaBacklogMetrics || this._kafkaBacklogMetrics.isReady()),
+            kafkaBacklogMetrics: !this._kafkaBacklogMetrics || this._kafkaBacklogMetrics.isReady(),
             tempCreds: this.vaultClientWrapper.tempCredentialsReady(),
         };
 

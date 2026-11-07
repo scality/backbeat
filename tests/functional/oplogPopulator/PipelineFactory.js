@@ -2,12 +2,9 @@ const assert = require('assert');
 const MongoClient = require('mongodb').MongoClient;
 
 const testConfig = require('../../config.json');
-const MultipleBucketsPipelineFactory =
-    require('../../../extensions/oplogPopulator/pipeline/MultipleBucketsPipelineFactory');
+const MultipleBucketsPipelineFactory = require('../../../extensions/oplogPopulator/pipeline/MultipleBucketsPipelineFactory');
 
-const mongoUrl =
-    `mongodb://${testConfig.queuePopulator.mongo.replicaSetHosts}` +
-    '/db?replicaSet=rs0';
+const mongoUrl = `mongodb://${testConfig.queuePopulator.mongo.replicaSetHosts}/db?replicaSet=rs0`;
 const client = new MongoClient(mongoUrl, {});
 const db = client.db('metadata', { ignoreUndefined: true });
 
@@ -90,10 +87,7 @@ describe('PipelineFactory', function () {
             await collection.insertOne(doc);
             const results = await collection.aggregate([setStage]).toArray();
             assert.strictEqual(results.length, 1);
-            assert.deepStrictEqual(
-                results[0].updateDescription.updatedFields.value.location,
-                [{ key: 'a' }]
-            );
+            assert.deepStrictEqual(results[0].updateDescription.updatedFields.value.location, [{ key: 'a' }]);
         });
 
         it('should preserve location when content-length is below threshold', async () => {
@@ -103,10 +97,7 @@ describe('PipelineFactory', function () {
             await collection.insertOne(doc);
             const results = await collection.aggregate([setStage]).toArray();
             assert.strictEqual(results.length, 1);
-            assert.deepStrictEqual(
-                results[0].updateDescription.updatedFields.value.location,
-                [{ key: 'a' }]
-            );
+            assert.deepStrictEqual(results[0].updateDescription.updatedFields.value.location, [{ key: 'a' }]);
         });
 
         it('should preserve location when content-length is zero', async () => {
@@ -116,10 +107,7 @@ describe('PipelineFactory', function () {
             await collection.insertOne(doc);
             const results = await collection.aggregate([setStage]).toArray();
             assert.strictEqual(results.length, 1);
-            assert.deepStrictEqual(
-                results[0].updateDescription.updatedFields.value.location,
-                [{ key: 'a' }]
-            );
+            assert.deepStrictEqual(results[0].updateDescription.updatedFields.value.location, [{ key: 'a' }]);
         });
 
         it('should strip location when content-length equals threshold', async () => {
@@ -130,10 +118,7 @@ describe('PipelineFactory', function () {
             await collection.insertOne(doc);
             const results = await collection.aggregate([setStage]).toArray();
             assert.strictEqual(results.length, 1);
-            assert.strictEqual(
-                results[0].updateDescription.updatedFields.value.location,
-                undefined
-            );
+            assert.strictEqual(results[0].updateDescription.updatedFields.value.location, undefined);
         });
 
         it('should strip location when content-length is above threshold', async () => {
@@ -143,10 +128,7 @@ describe('PipelineFactory', function () {
             await collection.insertOne(doc);
             const results = await collection.aggregate([setStage]).toArray();
             assert.strictEqual(results.length, 1);
-            assert.strictEqual(
-                results[0].updateDescription.updatedFields.value.location,
-                undefined
-            );
+            assert.strictEqual(results[0].updateDescription.updatedFields.value.location, undefined);
         });
     });
 

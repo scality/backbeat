@@ -1,5 +1,4 @@
-const { OplogPopulatorConfigValidator } =
-    require('./OplogPopulatorConfigValidator');
+const { OplogPopulatorConfigValidator } = require('./OplogPopulatorConfigValidator');
 
 module.exports = {
     name: 'oplogPopulator',

@@ -57,7 +57,8 @@ class S3Helper {
         const command = new CreateBucketCommand({
             Bucket: name,
         });
-        this.s3.send(command)
+        this.s3
+            .send(command)
             .then(() => cb())
             .catch(err => {
                 assert.ifError(err);
@@ -72,7 +73,8 @@ class S3Helper {
                 Status: status,
             },
         });
-        this.s3.send(command)
+        this.s3
+            .send(command)
             .then(() => cb())
             .catch(err => cb(err));
     }
@@ -86,7 +88,7 @@ class S3Helper {
             });
             return this.s3.send(command);
         });
-        
+
         Promise.all(promises)
             .then(() => cb())
             .catch(err => {
@@ -96,68 +98,67 @@ class S3Helper {
     }
 
     createVersions(scenarioNumber, cb) {
-        async.series([
-            next => this.setBucketVersioning('Enabled', next),
-            next => this.createObjects(scenarioNumber, next),
-        ], err => {
-            assert.ifError(err);
-            return cb();
-        });
+        async.series(
+            [next => this.setBucketVersioning('Enabled', next), next => this.createObjects(scenarioNumber, next)],
+            err => {
+                assert.ifError(err);
+                return cb();
+            },
+        );
     }
 
     emptyAndDeleteBucket(cb) {
         if (!this.bucket) {
             return cb();
         }
-        
+
         const getVersioningCommand = new GetBucketVersioningCommand({
             Bucket: this.bucket,
         });
-        return this.s3.send(getVersioningCommand)
+        return this.s3
+            .send(getVersioningCommand)
             .then(data => {
                 if (data.Status === 'Enabled' || data.Status === 'Suspended') {
                     // List object versions
                     const listVersionsCommand = new ListObjectVersionsCommand({
                         Bucket: this.bucket,
                     });
-                    return this.s3.send(listVersionsCommand)
-                        .then(versionsData => {
-                            const list = [
-                                ...(versionsData.Versions || []).map(v => ({
-                                    Key: v.Key,
-                                    VersionId: v.VersionId,
-                                })),
-                                ...(versionsData.DeleteMarkers || []).map(dm => ({
-                                    Key: dm.Key,
-                                    VersionId: dm.VersionId,
-                                })),
-                            ];
+                    return this.s3.send(listVersionsCommand).then(versionsData => {
+                        const list = [
+                            ...(versionsData.Versions || []).map(v => ({
+                                Key: v.Key,
+                                VersionId: v.VersionId,
+                            })),
+                            ...(versionsData.DeleteMarkers || []).map(dm => ({
+                                Key: dm.Key,
+                                VersionId: dm.VersionId,
+                            })),
+                        ];
 
-                            if (list.length === 0) {
-                                return null;
-                            }
+                        if (list.length === 0) {
+                            return null;
+                        }
 
-                            const deleteObjectsCommand = new DeleteObjectsCommand({
-                                Bucket: this.bucket,
-                                Delete: { Objects: list },
-                            });
-                            return this.s3.send(deleteObjectsCommand);
-                        });
-                }
-
-                // List objects without versions
-                const listObjectsCommand = new ListObjectsCommand({
-                    Bucket: this.bucket,
-                });
-                return this.s3.send(listObjectsCommand)
-                    .then(objectsData => {
-                        const list = (objectsData.Contents || []).map(c => ({ Key: c.Key }));
                         const deleteObjectsCommand = new DeleteObjectsCommand({
                             Bucket: this.bucket,
                             Delete: { Objects: list },
                         });
                         return this.s3.send(deleteObjectsCommand);
                     });
+                }
+
+                // List objects without versions
+                const listObjectsCommand = new ListObjectsCommand({
+                    Bucket: this.bucket,
+                });
+                return this.s3.send(listObjectsCommand).then(objectsData => {
+                    const list = (objectsData.Contents || []).map(c => ({ Key: c.Key }));
+                    const deleteObjectsCommand = new DeleteObjectsCommand({
+                        Bucket: this.bucket,
+                        Delete: { Objects: list },
+                    });
+                    return this.s3.send(deleteObjectsCommand);
+                });
             })
             .then(() => {
                 const deleteBucketCommand = new DeleteBucketCommand({
@@ -174,18 +175,21 @@ class S3Helper {
             Bucket: this.bucket,
             ReplicationConfiguration: {
                 Role: 'arn:aws:iam::0000:role/role-src,arn:aws:iam::0000:role/role-dst',
-                Rules: [{
-                    Destination: {
-                        Bucket: 'arn:aws:s3:::destination-bucket',
+                Rules: [
+                    {
+                        Destination: {
+                            Bucket: 'arn:aws:s3:::destination-bucket',
+                        },
+                        Prefix: '',
+                        Status: 'Enabled',
                     },
-                    Prefix: '',
-                    Status: 'Enabled',
-                }],
+                ],
             },
         };
-        
+
         const command = new PutBucketReplicationCommand(params);
-        this.s3.send(command)
+        this.s3
+            .send(command)
             .then(() => cb())
             .catch(err => cb(err));
     }
@@ -200,15 +204,14 @@ class S3Helper {
     before(done => {
         s3 = new S3Client(s3config);
         s3Helper = new S3Helper(s3);
-        qp = new QueuePopulator(zkConfig, kafkaConfig, qpConfig,
-            httpsConfig, mConfig, rConfig, vConfig, extConfigs);
+        qp = new QueuePopulator(zkConfig, kafkaConfig, qpConfig, httpsConfig, mConfig, rConfig, vConfig, extConfigs);
         qp.open(done);
     });
 
     afterEach(function afterEachHook(done) {
         // Add safety timeout
         this.timeout(35000);
-        
+
         s3Helper.emptyAndDeleteBucket(() => {
             done();
         });
@@ -225,15 +228,18 @@ class S3Helper {
     // });
 
     it('should process log entries without failure', done => {
-        async.series([
-            next => s3Helper.setAndCreateBucket('bucket-1', next),
-            next => s3Helper.setBucketVersioning('Enabled', next),
-            next => s3Helper.setBucketReplicationConfigurations(next),
-            next => s3Helper.createVersions(0, next),
-            next => qp.processLogEntries({ maxRead, timeoutMs }, next),
-        ], err => {
-            assert.ifError(err);
-            done();
-        });
+        async.series(
+            [
+                next => s3Helper.setAndCreateBucket('bucket-1', next),
+                next => s3Helper.setBucketVersioning('Enabled', next),
+                next => s3Helper.setBucketReplicationConfigurations(next),
+                next => s3Helper.createVersions(0, next),
+                next => qp.processLogEntries({ maxRead, timeoutMs }, next),
+            ],
+            err => {
+                assert.ifError(err);
+                done();
+            },
+        );
     });
 });

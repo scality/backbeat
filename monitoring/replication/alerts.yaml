@@ -1,252 +1,251 @@
 x-inputs:
-- name: namespace
-  type: constant
-  value: zenko
-- name: job_queue_populator
-  type: constant
-  value: artesca-data-backbeat-replication-producer-headless
-- name: job_data_processor
-  type: constant
-  value: artesca-data-backbeat-replication-data-processor-headless
-- name: job_replay_processor
-  type: constant
-  value: artesca-data-backbeat-replication-replay-processor-headless
-- name: job_status_processor
-  type: constant
-  value: artesca-data-backbeat-replication-status-processor-headless
-- name: queue_populator_replicas
-  type: config
-  value: 1
-- name: data_processor_replicas
-  type: config
-  value: 1
-- name: replay_processor_replicas
-  type: config
-  value: 1
-- name: status_processor_replicas
-  type: config
-  value: 1
-- name: replicationErrorsWarningThreshold
-  type: config
-  value: 0.1
-- name: replicationErrorsCriticalThreshold
-  type: config
-  value: 1
-- name: rpoWarningThreshold
-  type: config
-  value: 600
-- name: rpoCriticalThreshold
-  type: config
-  value: 900
-- name: latencyWarningThreshold
-  type: config
-  value: 3000
-- name: latencyCriticalThreshold
-  type: config
-  value: 6000
+  - name: namespace
+    type: constant
+    value: zenko
+  - name: job_queue_populator
+    type: constant
+    value: artesca-data-backbeat-replication-producer-headless
+  - name: job_data_processor
+    type: constant
+    value: artesca-data-backbeat-replication-data-processor-headless
+  - name: job_replay_processor
+    type: constant
+    value: artesca-data-backbeat-replication-replay-processor-headless
+  - name: job_status_processor
+    type: constant
+    value: artesca-data-backbeat-replication-status-processor-headless
+  - name: queue_populator_replicas
+    type: config
+    value: 1
+  - name: data_processor_replicas
+    type: config
+    value: 1
+  - name: replay_processor_replicas
+    type: config
+    value: 1
+  - name: status_processor_replicas
+    type: config
+    value: 1
+  - name: replicationErrorsWarningThreshold
+    type: config
+    value: 0.1
+  - name: replicationErrorsCriticalThreshold
+    type: config
+    value: 1
+  - name: rpoWarningThreshold
+    type: config
+    value: 600
+  - name: rpoCriticalThreshold
+    type: config
+    value: 900
+  - name: latencyWarningThreshold
+    type: config
+    value: 3000
+  - name: latencyCriticalThreshold
+    type: config
+    value: 6000
 
 groups:
-- name: Replication
-  rules:
+  - name: Replication
+    rules:
+      - alert: ReplicationProducerDegraded
+        expr: sum(up{namespace="${namespace}", job="${job_queue_populator}"}) < ${queue_populator_replicas}
+        for: '30s'
+        labels:
+          severity: warning
+        annotations:
+          description: 'Less than 100% of replication producers are up and healthy'
+          summary: 'Replication producer service is degraded'
 
-  - alert: ReplicationProducerDegraded
-    expr: sum(up{namespace="${namespace}", job="${job_queue_populator}"}) < ${queue_populator_replicas}
-    for: "30s"
-    labels:
-      severity: warning
-    annotations:
-      description: "Less than 100% of replication producers are up and healthy"
-      summary: "Replication producer service is degraded"
+      - alert: ReplicationProducerCritical
+        expr: sum(up{namespace="${namespace}", job="${job_queue_populator}"}) * 2 < ${queue_populator_replicas}
+        for: '30s'
+        labels:
+          severity: critical
+        annotations:
+          description: 'Less than 50% of replication producers are up and healthy'
+          summary: 'Replication producer service is critical'
 
-  - alert: ReplicationProducerCritical
-    expr: sum(up{namespace="${namespace}", job="${job_queue_populator}"}) * 2 < ${queue_populator_replicas}
-    for: "30s"
-    labels:
-      severity: critical
-    annotations:
-      description: "Less than 50% of replication producers are up and healthy"
-      summary: "Replication producer service is critical"
+      - alert: ReplicationDataProcessorDegraded
+        expr: sum(up{namespace="${namespace}", job="${job_data_processor}"}) < ${data_processor_replicas}
+        for: '30s'
+        labels:
+          severity: warning
+        annotations:
+          description: 'Less than 100% of replication data processors are up and healthy'
+          summary: 'Replication data processor service is degraded'
 
-  - alert: ReplicationDataProcessorDegraded
-    expr: sum(up{namespace="${namespace}", job="${job_data_processor}"}) < ${data_processor_replicas}
-    for: "30s"
-    labels:
-      severity: warning
-    annotations:
-      description: "Less than 100% of replication data processors are up and healthy"
-      summary: "Replication data processor service is degraded"
+      - alert: ReplicationDataProcessorCritical
+        expr: sum(up{namespace="${namespace}", job="${job_data_processor}"}) * 2 < ${data_processor_replicas}
+        for: '30s'
+        labels:
+          severity: critical
+        annotations:
+          description: 'Less than 50% of replication data processors are up and healthy'
+          summary: 'Replication data processor service is critical'
 
-  - alert: ReplicationDataProcessorCritical
-    expr: sum(up{namespace="${namespace}", job="${job_data_processor}"}) * 2 < ${data_processor_replicas}
-    for: "30s"
-    labels:
-      severity: critical
-    annotations:
-      description: "Less than 50% of replication data processors are up and healthy"
-      summary: "Replication data processor service is critical"
+      - alert: ReplicationReplayProcessorDegraded
+        expr: sum(up{namespace="${namespace}", job="${job_replay_processor}"}) < ${replay_processor_replicas}
+        for: '30s'
+        labels:
+          severity: warning
+        annotations:
+          description: 'Less than 100% of replication replay processors are up and healthy'
+          summary: 'Replication replay processor service is degraded'
 
-  - alert: ReplicationReplayProcessorDegraded
-    expr: sum(up{namespace="${namespace}", job="${job_replay_processor}"}) < ${replay_processor_replicas}
-    for: "30s"
-    labels:
-      severity: warning
-    annotations:
-      description: "Less than 100% of replication replay processors are up and healthy"
-      summary: "Replication replay processor service is degraded"
+      - alert: ReplicationReplayProcessorCritical
+        expr: sum(up{namespace="${namespace}", job="${job_replay_processor}"}) * 2 < ${replay_processor_replicas}
+        for: '30s'
+        labels:
+          severity: critical
+        annotations:
+          description: 'Less than 50% of replication replay processors are up and healthy'
+          summary: 'Replication replay processor service is critical'
 
-  - alert: ReplicationReplayProcessorCritical
-    expr: sum(up{namespace="${namespace}", job="${job_replay_processor}"}) * 2 < ${replay_processor_replicas}
-    for: "30s"
-    labels:
-      severity: critical
-    annotations:
-      description: "Less than 50% of replication replay processors are up and healthy"
-      summary: "Replication replay processor service is critical"
+      - alert: ReplicationStatusProcessorDegraded
+        expr: sum(up{namespace="${namespace}", job="${job_status_processor}"}) < ${status_processor_replicas}
+        for: '30s'
+        labels:
+          severity: warning
+        annotations:
+          description: 'Less than 100% of replication status processors are up and healthy'
+          summary: 'Replication status processor service is degraded'
 
-  - alert: ReplicationStatusProcessorDegraded
-    expr: sum(up{namespace="${namespace}", job="${job_status_processor}"}) < ${status_processor_replicas}
-    for:   "30s"
-    labels:
-      severity: warning
-    annotations:
-      description: "Less than 100% of replication status processors are up and healthy"
-      summary: "Replication status processor service is degraded"
+      - alert: ReplicationStatusProcessorCritical
+        expr: sum(up{namespace="${namespace}", job="${job_status_processor}"}) * 2 < ${status_processor_replicas}
+        for: '30s'
+        labels:
+          severity: critical
+        annotations:
+          description: 'Less than 50% of replication status processors are up and healthy'
+          summary: 'Replication status processor service is critical'
 
-  - alert: ReplicationStatusProcessorCritical
-    expr: sum(up{namespace="${namespace}", job="${job_status_processor}"}) * 2 < ${status_processor_replicas}
-    for: "30s"
-    labels:
-      severity: critical
-    annotations:
-      description: "Less than 50% of replication status processors are up and healthy"
-      summary: "Replication status processor service is critical"
-
-  - alert: ReplicationErrorsWarning
-    expr: |
-      100 / (1 + sum(rate(s3_replication_status_changed_total{namespace="${namespace}",
-                              job="${job_status_processor}", replicationStatus='FAILED'}
-                              [1m]))
-                   /
-                 sum(rate(s3_replication_status_changed_total{namespace="${namespace}",
-                              job="${job_status_processor}", replicationStatus='COMPLETED'}
-                              [1m]))
-            ) <= 100 - ${replicationErrorsWarningThreshold}
-    for: 5m
-    labels:
-      severity: warning
-    annotations:
-      description: "Replication error rate is higher than ${replicationErrorsWarningThreshold}%"
-      summary: "High ratio of replication errors"
-
-  - alert: ReplicationErrorsCritical
-    expr: |
-      100 / (1 + sum(rate(s3_replication_status_changed_total{namespace="${namespace}",
-                             job="${job_status_processor}", replicationStatus='FAILED'}
-                             [1m]))
-                   /
-                 sum(rate(s3_replication_status_changed_total{namespace="${namespace}",
+      - alert: ReplicationErrorsWarning
+        expr: |
+          100 / (1 + sum(rate(s3_replication_status_changed_total{namespace="${namespace}",
+                                  job="${job_status_processor}", replicationStatus='FAILED'}
+                                  [1m]))
+                       /
+                     sum(rate(s3_replication_status_changed_total{namespace="${namespace}",
                                   job="${job_status_processor}", replicationStatus='COMPLETED'}
                                   [1m]))
-            ) <= 100 - ${replicationErrorsCriticalThreshold}
-    for: 5m
-    labels:
-      severity: critical
-    annotations:
-      description: "Replication error rate is higher than ${replicationErrorsCriticalThreshold}%"
-      summary: "Very high ratio of replication errors"
+                ) <= 100 - ${replicationErrorsWarningThreshold}
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          description: 'Replication error rate is higher than ${replicationErrorsWarningThreshold}%'
+          summary: 'High ratio of replication errors'
 
-  - alert: ReplicationRpoWarning
-    expr: |
-      sum(rate(s3_replication_rpo_seconds_sum{namespace="${namespace}", job="${job_data_processor}"}[1m]))
-          / sum(rate(s3_replication_rpo_seconds_count{namespace="${namespace}", job="${job_data_processor}"}[1m]))
-        >= ${rpoWarningThreshold}
-    for: 5m
-    labels:
-      severity: warning
-    annotations:
-      description: |
-        Replication RPO is higher than ${rpoWarningThreshold} seconds.
+      - alert: ReplicationErrorsCritical
+        expr: |
+          100 / (1 + sum(rate(s3_replication_status_changed_total{namespace="${namespace}",
+                                 job="${job_status_processor}", replicationStatus='FAILED'}
+                                 [1m]))
+                       /
+                     sum(rate(s3_replication_status_changed_total{namespace="${namespace}",
+                                      job="${job_status_processor}", replicationStatus='COMPLETED'}
+                                      [1m]))
+                ) <= 100 - ${replicationErrorsCriticalThreshold}
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          description: 'Replication error rate is higher than ${replicationErrorsCriticalThreshold}%'
+          summary: 'Very high ratio of replication errors'
 
-        This may indicate an issue with Kafka or the data-processor.
+      - alert: ReplicationRpoWarning
+        expr: |
+          sum(rate(s3_replication_rpo_seconds_sum{namespace="${namespace}", job="${job_data_processor}"}[1m]))
+              / sum(rate(s3_replication_rpo_seconds_count{namespace="${namespace}", job="${job_data_processor}"}[1m]))
+            >= ${rpoWarningThreshold}
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          description: |
+            Replication RPO is higher than ${rpoWarningThreshold} seconds.
 
-        RPO is the delay between the time the object is updated and when it is picked up by the
-        replication-processor.
-      summary: "High replication RPO"
+            This may indicate an issue with Kafka or the data-processor.
 
-  - alert: ReplicationRpoCritical
-    expr: |
-      sum(rate(s3_replication_rpo_seconds_sum{namespace="${namespace}", job="${job_data_processor}"}[1m]))
-          / sum(rate(s3_replication_rpo_seconds_count{namespace="${namespace}", job="${job_data_processor}"}[1m]))
-        >= ${rpoCriticalThreshold}
-    for: 5m
-    labels:
-      severity: critical
-    annotations:
-      description: |
-        Replication RPO is higher than ${rpoCriticalThreshold} seconds.
-        
-        This may indicate an issue with Kafka or the data-processor.
+            RPO is the delay between the time the object is updated and when it is picked up by the
+            replication-processor.
+          summary: 'High replication RPO'
 
-        RPO is the delay between the time the object is updated and when it is picked up by the
-        replication-processor.
-      summary: "Very high replication RPO"
+      - alert: ReplicationRpoCritical
+        expr: |
+          sum(rate(s3_replication_rpo_seconds_sum{namespace="${namespace}", job="${job_data_processor}"}[1m]))
+              / sum(rate(s3_replication_rpo_seconds_count{namespace="${namespace}", job="${job_data_processor}"}[1m]))
+            >= ${rpoCriticalThreshold}
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          description: |
+            Replication RPO is higher than ${rpoCriticalThreshold} seconds.
 
-  - alert: ReplicationLatencyWarning
-    expr: |
-      sum(rate(s3_replication_latency_seconds_sum{namespace="${namespace}", job="${job_status_processor}"}[1m]))
-            by(location)
-        /
-      sum(rate(s3_replication_latency_seconds_count{namespace="${namespace}", job="${job_status_processor}"}[1m]))
-            by(location)
-      >= ${latencyWarningThreshold}
-    for: 5m
-    labels:
-      severity: warning
-    annotations:
-      description: |
-        Replication latency is higher than ${latencyWarningThreshold} seconds.
-        
-        This may indicate an issue with the data-processor or the remote replication site.
+            This may indicate an issue with Kafka or the data-processor.
 
-        Replication latency is the time taken for an object to replicate successfully to the
-        destination.
-      summary: "High replication latency"
+            RPO is the delay between the time the object is updated and when it is picked up by the
+            replication-processor.
+          summary: 'Very high replication RPO'
 
-  - alert: ReplicationLatencyCritical
-    expr: |
-      sum(rate(s3_replication_latency_seconds_sum{namespace="${namespace}", job="${job_status_processor}"}[1m]))
-            by(location)
-        /
-      sum(rate(s3_replication_latency_seconds_count{namespace="${namespace}", job="${job_status_processor}"}[1m]))
-            by(location)
-      >= ${latencyCriticalThreshold}
-    for: 5m
-    labels:
-      severity: critical
-    annotations:
-      description: |
-        Replication latency is higher than ${latencyCriticalThreshold} seconds.
-        
-        This may indicate an issue with the data-processor or the remote replication site.
+      - alert: ReplicationLatencyWarning
+        expr: |
+          sum(rate(s3_replication_latency_seconds_sum{namespace="${namespace}", job="${job_status_processor}"}[1m]))
+                by(location)
+            /
+          sum(rate(s3_replication_latency_seconds_count{namespace="${namespace}", job="${job_status_processor}"}[1m]))
+                by(location)
+          >= ${latencyWarningThreshold}
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          description: |
+            Replication latency is higher than ${latencyWarningThreshold} seconds.
 
-        Replication latency is the time taken for an object to replicate successfully to the
-        destination.
-      summary: "Very high replication latency"
+            This may indicate an issue with the data-processor or the remote replication site.
 
-  - alert: ReplicationBacklogGrowing
-    expr: |
-      sum(round(increase(s3_replication_replay_objects_completed_total{
-                             namespace='${namespace}', job="${job_status_processor}",
-                             replicationStatus=~'FAILED|COMPLETED'
-                         }[30m]))) by(location)
-        -
-      sum(round(increase(s3_replication_rpo_seconds_count{
-                             namespace="${namespace}", job="${job_data_processor}",
-                         }[30m]))) by(location)
-      < 0
-    for: 3h
-    labels:
-      severity: critical
-    annotations:
-      description: Alert if processing is slower than the backlog for 3 hours
-      summary: "Replication backlog grows faster than it is processed"
+            Replication latency is the time taken for an object to replicate successfully to the
+            destination.
+          summary: 'High replication latency'
+
+      - alert: ReplicationLatencyCritical
+        expr: |
+          sum(rate(s3_replication_latency_seconds_sum{namespace="${namespace}", job="${job_status_processor}"}[1m]))
+                by(location)
+            /
+          sum(rate(s3_replication_latency_seconds_count{namespace="${namespace}", job="${job_status_processor}"}[1m]))
+                by(location)
+          >= ${latencyCriticalThreshold}
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          description: |
+            Replication latency is higher than ${latencyCriticalThreshold} seconds.
+
+            This may indicate an issue with the data-processor or the remote replication site.
+
+            Replication latency is the time taken for an object to replicate successfully to the
+            destination.
+          summary: 'Very high replication latency'
+
+      - alert: ReplicationBacklogGrowing
+        expr: |
+          sum(round(increase(s3_replication_replay_objects_completed_total{
+                                 namespace='${namespace}', job="${job_status_processor}",
+                                 replicationStatus=~'FAILED|COMPLETED'
+                             }[30m]))) by(location)
+            -
+          sum(round(increase(s3_replication_rpo_seconds_count{
+                                 namespace="${namespace}", job="${job_data_processor}",
+                             }[30m]))) by(location)
+          < 0
+        for: 3h
+        labels:
+          severity: critical
+        annotations:
+          description: Alert if processing is slower than the backlog for 3 hours
+          summary: 'Replication backlog grows faster than it is processed'

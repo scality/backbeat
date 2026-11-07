@@ -5,10 +5,7 @@ const { HeadObjectCommand, AbortMultipartUploadCommand, DeleteObjectCommand } = 
 
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const { LifecycleMetrics } = require('../LifecycleMetrics');
-const { 
-    DeleteObjectFromExpirationCommand,
-    attachReqUids,
-} = require('@scality/cloudserverclient');
+const { DeleteObjectFromExpirationCommand, attachReqUids } = require('@scality/cloudserverclient');
 /** @typedef { import('../objectProcessor/LifecycleObjectProcessor.js') } LifecycleObjectProcessor */
 
 class ObjectLockedError extends Error {}
@@ -40,42 +37,55 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
                 canonicalId,
                 accountId,
             });
-            return done(errors.InternalError
-                .customizeDescription('Unable to obtain client'));
+            return done(errors.InternalError.customizeDescription('Unable to obtain client'));
         }
 
         const { bucket, key, version } = entry.getAttribute('target');
-        return backbeatClient.getMetadata({
-            bucket,
-            objectKey: key,
-            versionId: version,
-        }, log, (err, blob) => {
-            LifecycleMetrics.onS3Request(log, 'getMetadata', 'expiration', err);
-            if (err) {
-                // <!> Only in S3C <!> Backbeat API returns 'InvalidBucketState' error if the bucket is not versioned.
-                // In this case, instead of logging an error, it should be logged as a debug message,
-                // to avoid causing unnecessary concern to the customer.
-                // TODO: BB-612
-                const logLevel = err.name === 'InvalidBucketState' ? 'debug' : 'error';
-                log[logLevel]('error getting metadata blob from S3', Object.assign({
-                    method: 'LifecycleDeleteObjectTask._getMetadata',
-                    error: err.message,
-                }, entry.getLogInfo()));
-                return done(err);
-            }
-            const res = ObjectMD.createFromBlob(blob.Body);
-            if (res.error) {
-                log.error('error parsing metadata blob', Object.assign({
-                    error: res.error,
-                    method: 'LifecycleDeleteObjectTask._getMetadata',
-                }, entry.getLogInfo()));
-                return done(
-                    errors.InternalError.
-                        customizeDescription('error parsing metadata blob'));
-            }
-            this.objectMD = res.result;
-            return done(null, this.objectMD);
-        });
+        return backbeatClient.getMetadata(
+            {
+                bucket,
+                objectKey: key,
+                versionId: version,
+            },
+            log,
+            (err, blob) => {
+                LifecycleMetrics.onS3Request(log, 'getMetadata', 'expiration', err);
+                if (err) {
+                    // <!> Only in S3C <!> Backbeat API returns 'InvalidBucketState' error if the bucket is not
+                    // versioned. In this case, instead of logging an error, it should be logged as a debug message, to
+                    // avoid causing unnecessary concern to the customer.
+                    // TODO: BB-612
+                    const logLevel = err.name === 'InvalidBucketState' ? 'debug' : 'error';
+                    log[logLevel](
+                        'error getting metadata blob from S3',
+                        Object.assign(
+                            {
+                                method: 'LifecycleDeleteObjectTask._getMetadata',
+                                error: err.message,
+                            },
+                            entry.getLogInfo(),
+                        ),
+                    );
+                    return done(err);
+                }
+                const res = ObjectMD.createFromBlob(blob.Body);
+                if (res.error) {
+                    log.error(
+                        'error parsing metadata blob',
+                        Object.assign(
+                            {
+                                error: res.error,
+                                method: 'LifecycleDeleteObjectTask._getMetadata',
+                            },
+                            entry.getLogInfo(),
+                        ),
+                    );
+                    return done(errors.InternalError.customizeDescription('error parsing metadata blob'));
+                }
+                this.objectMD = res.result;
+                return done(null, this.objectMD);
+            },
+        );
     }
 
     _checkDate(entry, log, done) {
@@ -83,8 +93,7 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
         const s3Client = this.getS3Client(accountId);
         if (!s3Client) {
             log.error('failed to get S3 client', { accountId });
-            return done(errors.InternalError
-                .customizeDescription('Unable to obtain client'));
+            return done(errors.InternalError.customizeDescription('Unable to obtain client'));
         }
 
         const bucket = entry.getAttribute('target.bucket');
@@ -98,7 +107,8 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
             };
             const command = new HeadObjectCommand(reqParams);
             attachReqUids(command, log.getSerializedUids());
-            return s3Client.send(command)
+            return s3Client
+                .send(command)
                 .then(res => {
                     LifecycleMetrics.onS3Request(log, 'headObject', 'expiration', null);
                     return done(null, res);
@@ -120,16 +130,14 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
                 actionType: 'deleteMPU',
                 method: 'LifecycleDeleteObjectTask._abortMPU',
             });
-            done(errors.InternalError
-                .customizeDescription('Unable to obtain s3 client'));
+            done(errors.InternalError.customizeDescription('Unable to obtain s3 client'));
             return;
         }
-        LifecycleMetrics.onLifecycleStarted(log,
-            'expiration:mpu',
-            location, startTime - transitionTime);
+        LifecycleMetrics.onLifecycleStarted(log, 'expiration:mpu', location, startTime - transitionTime);
         const command = new AbortMultipartUploadCommand(reqParams);
         attachReqUids(command, log.getSerializedUids());
-        client.send(command)
+        client
+            .send(command)
             .then(() => done(null))
             .catch(done);
     }
@@ -143,37 +151,34 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
         const client = this.getBackbeatClient(accountId);
         if (!client) {
             log.error('failed to get s3 backbeat client', logDetails);
-            done(errors.InternalError
-                .customizeDescription('Unable to obtain s3 client'));
+            done(errors.InternalError.customizeDescription('Unable to obtain s3 client'));
             return;
         }
-        LifecycleMetrics.onLifecycleStarted(log,
-            'expiration',
-            location, startTime - transitionTime);
+        LifecycleMetrics.onLifecycleStarted(log, 'expiration', location, startTime - transitionTime);
         const command = new DeleteObjectFromExpirationCommand({
             ...reqParams,
             RequestUids: log.getSerializedUids(),
         });
-        
-        client.send(command)
+
+        client
+            .send(command)
             .then(() => {
                 done(null);
             })
             .catch(err => {
                 if (err?.$metadata?.httpStatusCode === errors.MethodNotAllowed.code) {
-                    log.warn('deleteObjectFromExpiration API not supported, falling back to deleteObject',
-                        logDetails);
+                    log.warn('deleteObjectFromExpiration API not supported, falling back to deleteObject', logDetails);
                     // fallback to s3 deleteObject when using a cloudserver that
                     // doesn't support deleteObjectFromExpiration
                     const s3Client = this.getS3Client(accountId);
                     if (!s3Client) {
                         log.error('failed to get s3 client', logDetails);
-                        return done(errors.InternalError
-                            .customizeDescription('Unable to obtain client'));
+                        return done(errors.InternalError.customizeDescription('Unable to obtain client'));
                     }
                     const s3Command = new DeleteObjectCommand(reqParams);
                     attachReqUids(s3Command, log.getSerializedUids());
-                    return s3Client.send(s3Command)
+                    return s3Client
+                        .send(s3Command)
                         .then(() => done(null))
                         .catch(done);
                 }
@@ -212,16 +217,24 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
 
         actionMethod(reqParams, accountId, transitionTime, startTime, location, log, err => {
             LifecycleMetrics.onS3Request(log, reqMethod, 'expiration', err);
-            LifecycleMetrics.onLifecycleCompleted(log,
+            LifecycleMetrics.onLifecycleCompleted(
+                log,
                 actionType === 'deleteMPU' ? 'expiration:mpu' : 'expiration',
-                location, Date.now() - entry.getAttribute('transitionTime'));
+                location,
+                Date.now() - entry.getAttribute('transitionTime'),
+            );
             if (err) {
                 log.error(
-                    `an error occurred on ${reqMethod} to S3`, Object.assign({
-                        method: 'LifecycleDeleteObjectTask._executeDelete',
-                        error: err.message,
-                        httpStatus: err.statusCode,
-                    }, entry.getLogInfo()));
+                    `an error occurred on ${reqMethod} to S3`,
+                    Object.assign(
+                        {
+                            method: 'LifecycleDeleteObjectTask._executeDelete',
+                            error: err.message,
+                            httpStatus: err.statusCode,
+                        },
+                        entry.getLogInfo(),
+                    ),
+                );
                 return done(err);
             }
             return done();
@@ -247,7 +260,6 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
 
             const retentionMode = objMD.getRetentionMode();
             const retentionDate = objMD.getRetentionDate();
-
 
             if (!retentionMode || !retentionDate) {
                 return done();
@@ -291,7 +303,8 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
             const replicationStatus = objMD.getReplicationStatus();
             if (['PENDING', 'PROCESSING', 'FAILED'].includes(replicationStatus)) {
                 const error = new PendingReplicationError(
-                    `object has a pending replication status: ${replicationStatus}`);
+                    `object has a pending replication status: ${replicationStatus}`,
+                );
                 return done(error);
             }
             return done();
@@ -316,34 +329,35 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
         });
         log.addDefaultFields(entry.getLogInfo());
 
-        return async.series([
-            next => this._checkDate(entry, log, next),
-            next => this._checkObjectLockState(entry, log, next),
-            next => this._checkReplicationStatus(entry, log, next),
-            next => this._executeDelete(entry, startTime, log, next),
-        ], err => {
-            if (err && err instanceof ObjectLockedError) {
-                log.debug('Object is locked, skipping',
-                    entry.getLogInfo());
-                return done();
-            }
-            if (err && err instanceof PendingReplicationError) {
-                log.debug('Object has pending replication status, skipping',
-                    entry.getLogInfo());
-                return done();
-            }
-            if (err && err.statusCode === 404) {
-                log.debug('Unable to find object to delete, skipping',
-                    entry.getLogInfo());
-                return done();
-            }
-            if (err && err.statusCode === 412) {
-                log.info('Object was modified after delete entry ' +
-                         'created so object was not deleted',
-                         entry.getLogInfo());
-            }
-            return done(err);
-        });
+        return async.series(
+            [
+                next => this._checkDate(entry, log, next),
+                next => this._checkObjectLockState(entry, log, next),
+                next => this._checkReplicationStatus(entry, log, next),
+                next => this._executeDelete(entry, startTime, log, next),
+            ],
+            err => {
+                if (err && err instanceof ObjectLockedError) {
+                    log.debug('Object is locked, skipping', entry.getLogInfo());
+                    return done();
+                }
+                if (err && err instanceof PendingReplicationError) {
+                    log.debug('Object has pending replication status, skipping', entry.getLogInfo());
+                    return done();
+                }
+                if (err && err.statusCode === 404) {
+                    log.debug('Unable to find object to delete, skipping', entry.getLogInfo());
+                    return done();
+                }
+                if (err && err.statusCode === 412) {
+                    log.info(
+                        'Object was modified after delete entry created so object was not deleted',
+                        entry.getLogInfo(),
+                    );
+                }
+                return done(err);
+            },
+        );
     }
 }
 

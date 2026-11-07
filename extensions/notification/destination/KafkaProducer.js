@@ -5,11 +5,8 @@ const BackbeatProducer = require('../../../lib/BackbeatProducer');
 const authUtil = require('../utils/auth');
 
 class KafkaProducer extends BackbeatProducer {
-
     getConfigJoi() {
-        return super.getConfigJoi()
-            .append({ auth: authSchema })
-            .keys({ topic: joi.string() });
+        return super.getConfigJoi().append({ auth: authSchema }).keys({ topic: joi.string() });
     }
 
     getClientId() {
@@ -25,10 +22,9 @@ class KafkaProducer extends BackbeatProducer {
         const base = super.producerConfig;
         return {
             ...base,
-            ...this._auth
+            ...this._auth,
         };
     }
-
 }
 
 module.exports = KafkaProducer;

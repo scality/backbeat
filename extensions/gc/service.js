@@ -4,11 +4,8 @@ tracing.init();
 
 const { errors } = require('@scality/arsenal');
 const werelogs = require('werelogs');
-const {
-    DEFAULT_LIVE_ROUTE,
-    DEFAULT_READY_ROUTE,
-    DEFAULT_METRICS_ROUTE,
-} = require('@scality/arsenal').network.probe.ProbeServer;
+const { DEFAULT_LIVE_ROUTE, DEFAULT_READY_ROUTE, DEFAULT_METRICS_ROUTE } =
+    require('@scality/arsenal').network.probe.ProbeServer;
 const { sendSuccess, sendError } = require('@scality/arsenal').network.probe.Utils;
 const { ZenkoMetrics } = require('@scality/arsenal').metrics;
 
@@ -29,8 +26,7 @@ const garbageCollector = new GarbageCollector({
     transport,
 });
 
-werelogs.configure({ level: config.log.logLevel,
-                     dump: config.log.dumpLevel });
+werelogs.configure({ level: config.log.logLevel, dump: config.log.dumpLevel });
 const logger = new werelogs.Logger('Backbeat:GC:service');
 
 /**
@@ -40,7 +36,7 @@ const logger = new werelogs.Logger('Backbeat:GC:service');
  * @param {Logger} log - Logger
  * @returns {undefined}
  */
- function handleLiveness(res, log) {
+function handleLiveness(res, log) {
     if (garbageCollector.isReady()) {
         sendSuccess(res, log);
     } else {
@@ -55,7 +51,7 @@ const logger = new werelogs.Logger('Backbeat:GC:service');
  * @param {Logger} log - Logger
  * @returns {undefined}
  */
- async function handleMetrics(res, log) {
+async function handleMetrics(res, log) {
     log.debug('metrics requested');
     res.writeHead(200, {
         'Content-Type': ZenkoMetrics.asPrometheusContentType(),
@@ -65,37 +61,40 @@ const logger = new werelogs.Logger('Backbeat:GC:service');
 }
 
 function initAndStart() {
-    initManagement({
-        serviceName: 'gc',
-        serviceAccount: gcConfig.auth.account,
-    }, error => {
-        if (error) {
-            logger.error('could not load management db', { error });
-            setTimeout(initAndStart, 5000);
-            return;
-        }
-        logger.info('management init done');
-        startProbeServer(gcConfig.probeServer, (err, probeServer) => {
-            if (err) {
-                logger.error('error starting probe server', { error: err });
+    initManagement(
+        {
+            serviceName: 'gc',
+            serviceAccount: gcConfig.auth.account,
+        },
+        error => {
+            if (error) {
+                logger.error('could not load management db', { error });
+                setTimeout(initAndStart, 5000);
+                return;
             }
-            if (probeServer !== undefined) {
-                // following the same pattern as other extensions, where liveness
-                // and readiness are handled by the same handler
-                probeServer.addHandler([DEFAULT_LIVE_ROUTE, DEFAULT_READY_ROUTE], handleLiveness);
-                // retaining the old route and adding support to new route, until
-                // metrics handling is consolidated
-                probeServer.addHandler(['/_/monitoring/metrics', DEFAULT_METRICS_ROUTE], handleMetrics);
-            }
-            garbageCollector.start(err => {
+            logger.info('management init done');
+            startProbeServer(gcConfig.probeServer, (err, probeServer) => {
                 if (err) {
-                    logger.error('error during garbage collector initialization', { error: err.message });
-                } else {
-                    logger.info('garbage collector is running');
+                    logger.error('error starting probe server', { error: err });
                 }
+                if (probeServer !== undefined) {
+                    // following the same pattern as other extensions, where liveness
+                    // and readiness are handled by the same handler
+                    probeServer.addHandler([DEFAULT_LIVE_ROUTE, DEFAULT_READY_ROUTE], handleLiveness);
+                    // retaining the old route and adding support to new route, until
+                    // metrics handling is consolidated
+                    probeServer.addHandler(['/_/monitoring/metrics', DEFAULT_METRICS_ROUTE], handleMetrics);
+                }
+                garbageCollector.start(err => {
+                    if (err) {
+                        logger.error('error during garbage collector initialization', { error: err.message });
+                    } else {
+                        logger.info('garbage collector is running');
+                    }
+                });
             });
-        });
-    });
+        },
+    );
 }
 
 initAndStart();

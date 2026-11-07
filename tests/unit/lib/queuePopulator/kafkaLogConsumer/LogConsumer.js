@@ -4,10 +4,8 @@ const werelogs = require('werelogs');
 const { errors } = require('@scality/arsenal');
 const kafka = require('node-rdkafka');
 const logger = new werelogs.Logger('KafkaLogConsumer');
-const ListRecordStream =
-    require('../../../../../lib/queuePopulator/KafkaLogConsumer/ListRecordStream');
-const LogConsumer =
-    require('../../../../../lib/queuePopulator/KafkaLogConsumer/LogConsumer');
+const ListRecordStream = require('../../../../../lib/queuePopulator/KafkaLogConsumer/ListRecordStream');
+const LogConsumer = require('../../../../../lib/queuePopulator/KafkaLogConsumer/LogConsumer');
 
 const kafkaConfig = {
     hosts: 'localhost:9092',
@@ -32,9 +30,9 @@ const changeStreamDocument = {
     },
     fullDocument: {
         value: {
-            field: 'value'
-        }
-    }
+            field: 'value',
+        },
+    },
 };
 
 function getKafkaMessage(partition = 0, offset = 0) {
@@ -71,20 +69,22 @@ describe('LogConsumer', () => {
                 subscribe: () => {},
             };
             const ctor = sinon.stub(kafka, 'KafkaConsumer').returns(fakeConsumer);
-            const consumer = new LogConsumer({
-                ...kafkaConfig,
-                consumerParams: {
-                    'security.protocol': 'ssl',
-                    'partition.assignment.strategy': 'hijacked',
+            const consumer = new LogConsumer(
+                {
+                    ...kafkaConfig,
+                    consumerParams: {
+                        'security.protocol': 'ssl',
+                        'partition.assignment.strategy': 'hijacked',
+                    },
                 },
-            }, logger);
+                logger,
+            );
 
             consumer.setup(() => {
                 const params = ctor.firstCall.args[0];
                 assert.strictEqual(params['security.protocol'], 'ssl');
                 // the keys the consumer sets itself still win
-                assert.strictEqual(params['partition.assignment.strategy'],
-                    'range,roundrobin');
+                assert.strictEqual(params['partition.assignment.strategy'], 'range,roundrobin');
                 done();
             });
         });
@@ -94,7 +94,7 @@ describe('LogConsumer', () => {
         it('should initialize record stream', () => {
             logConsumer._resetRecordStream();
             assert(logConsumer._listRecordStream instanceof ListRecordStream);
-            assert.strictEqual(typeof(logConsumer._listRecordStream.getOffset), 'function');
+            assert.strictEqual(typeof logConsumer._listRecordStream.getOffset, 'function');
         });
     });
 
@@ -114,14 +114,16 @@ describe('LogConsumer', () => {
                     assert.deepEqual(msg, {
                         timestamp: new Date(kafkaMessage.timestamp),
                         db: 'example-bucket',
-                        entries: [{
-                            key: 'example-key',
-                            type: 'put',
-                            value: JSON.stringify({
-                                field: 'value'
-                            }),
-                            timestamp: '2023-11-29T15:05:57.000Z',
-                        }],
+                        entries: [
+                            {
+                                key: 'example-key',
+                                type: 'put',
+                                value: JSON.stringify({
+                                    field: 'value',
+                                }),
+                                timestamp: '2023-11-29T15:05:57.000Z',
+                            },
+                        ],
                     });
                     return done();
                 });
@@ -213,15 +215,14 @@ describe('LogConsumer', () => {
 
     describe('readRecords', () => {
         it('should return stream', done => {
-            const consumeKafkaStub = sinon.stub(logConsumer, '_consumeKafkaMessages')
-                .callsArg(1);
+            const consumeKafkaStub = sinon.stub(logConsumer, '_consumeKafkaMessages').callsArg(1);
             logConsumer._resetRecordStream();
             logConsumer.readRecords({ limit: 1 }, (err, res) => {
                 assert(consumeKafkaStub.called);
                 assert.ifError(err);
                 assert(res.log instanceof ListRecordStream);
                 assert.strictEqual(res.tailable, false);
-                assert.strictEqual(typeof(res.log.getOffset), 'function');
+                assert.strictEqual(typeof res.log.getOffset, 'function');
                 return done();
             });
         });
@@ -275,8 +276,9 @@ describe('LogConsumer', () => {
             });
         });
 
-        it('should fail if it can\'t consume kafka messages', done => {
-            const consumeKafkaStub = sinon.stub(logConsumer, '_consumeKafkaMessages')
+        it("should fail if it can't consume kafka messages", done => {
+            const consumeKafkaStub = sinon
+                .stub(logConsumer, '_consumeKafkaMessages')
                 .callsArgWith(1, errors.InternalError);
             logConsumer.readRecords({ limit: 1 }, err => {
                 assert(consumeKafkaStub.called);
@@ -339,8 +341,7 @@ describe('LogConsumer', () => {
             sinon.assert.calledOnce(drained);
         });
 
-        it('should not call offsetsStore but still emit drained when consumer ' +
-        'is not connected', () => {
+        it('should not call offsetsStore but still emit drained when consumer is not connected', () => {
             const offsetsStore = sinon.stub(logConsumer._consumer, 'offsetsStore').returns(null);
             sinon.stub(logConsumer._consumer, 'isConnected').returns(false);
             logConsumer._topicPartition = [{ topic: 'oplog-topic', partition: 0, offset: 5 }];
@@ -353,7 +354,8 @@ describe('LogConsumer', () => {
         });
 
         it('should not crash and still emit drained when offsetsStore throws', () => {
-            const offsetsStore = sinon.stub(logConsumer._consumer, 'offsetsStore')
+            const offsetsStore = sinon
+                .stub(logConsumer._consumer, 'offsetsStore')
                 .throws(new Error('Local: Erroneous state'));
             logConsumer._topicPartition = [{ topic: 'oplog-topic', partition: 0, offset: 5 }];
 
@@ -411,7 +413,7 @@ describe('LogConsumer', () => {
             const logDebugSpy = sinon.spy(logConsumer._log, 'debug');
             const topicPartitions = [
                 { topic: 'oplog-topic', partition: 0, offset: 10 },
-                { topic: 'oplog-topic', partition: 1, offset: 20 }
+                { topic: 'oplog-topic', partition: 1, offset: 20 },
             ];
 
             const result = logConsumer._onOffsetCommit(null, topicPartitions);
@@ -468,14 +470,16 @@ describe('LogConsumer', () => {
                 logConsumer._topicPartition = [];
 
                 let unassignHandler;
-                const unassignPromise = new Promise(resolve => { unassignHandler = resolve; });
+                const unassignPromise = new Promise(resolve => {
+                    unassignHandler = resolve;
+                });
 
                 logConsumer.once('unassigned', unassignHandler);
 
                 logConsumer._onRebalance({ code: kafka.CODES.ERRORS.ERR__REVOKE_PARTITIONS }, assignment);
                 clock.tick(1000);
 
-                void await unassignPromise;
+                void (await unassignPromise);
 
                 sinon.assert.calledOnce(commitStub);
                 sinon.assert.calledOnce(unassignStub);
@@ -495,7 +499,9 @@ describe('LogConsumer', () => {
                 logConsumer._topicPartition = [{ topic: 'test', partition: 0, offset: 1 }];
 
                 let unassignHandler;
-                const unassignPromise = new Promise(resolve => { unassignHandler = resolve; });
+                const unassignPromise = new Promise(resolve => {
+                    unassignHandler = resolve;
+                });
 
                 logConsumer.once('unassigned', unassignHandler);
 
@@ -509,7 +515,7 @@ describe('LogConsumer', () => {
                 // releases the drain
                 logConsumer.storeOffsets();
 
-                void await unassignPromise;
+                void (await unassignPromise);
 
                 sinon.assert.calledOnce(offsetsStoreStub);
                 sinon.assert.calledOnce(commitStub);
@@ -529,14 +535,16 @@ describe('LogConsumer', () => {
                 logConsumer._topicPartition = [];
 
                 let unassignHandler;
-                const unassignPromise = new Promise(resolve => { unassignHandler = resolve; });
+                const unassignPromise = new Promise(resolve => {
+                    unassignHandler = resolve;
+                });
 
                 logConsumer.once('unassigned', unassignHandler);
 
                 logConsumer._onRebalance({ code: kafka.CODES.ERRORS.ERR__REVOKE_PARTITIONS }, []);
                 clock.tick(1000);
 
-                void await unassignPromise;
+                void (await unassignPromise);
 
                 sinon.assert.calledOnce(commitStub);
                 sinon.assert.calledOnce(unassignStub);
@@ -556,7 +564,9 @@ describe('LogConsumer', () => {
                 logConsumer._topicPartition = [{ topic: 'test', partition: 0, offset: 1 }];
 
                 let unassignHandler;
-                const unassignPromise = new Promise(resolve => { unassignHandler = resolve; });
+                const unassignPromise = new Promise(resolve => {
+                    unassignHandler = resolve;
+                });
 
                 logConsumer.once('unassigned', unassignHandler);
 
@@ -565,7 +575,7 @@ describe('LogConsumer', () => {
                 // Advance time to trigger timeout (maxPollIntervalMs - 1000)
                 clock.tick(4000);
 
-                void await unassignPromise;
+                void (await unassignPromise);
 
                 sinon.assert.calledOnce(unassignStub);
                 sinon.assert.calledOnce(disconnectStub);
@@ -585,7 +595,9 @@ describe('LogConsumer', () => {
                 logConsumer._topicPartition = [{ topic: 'test', partition: 0, offset: 1 }];
 
                 let unassignHandler;
-                const unassignPromise = new Promise(resolve => { unassignHandler = resolve; });
+                const unassignPromise = new Promise(resolve => {
+                    unassignHandler = resolve;
+                });
 
                 logConsumer.once('unassigned', unassignHandler);
 
@@ -599,7 +611,7 @@ describe('LogConsumer', () => {
                 // maxPollIntervalMs - 1000
                 clock.tick(2000);
 
-                void await unassignPromise;
+                void (await unassignPromise);
 
                 sinon.assert.calledOnce(unassignStub);
                 sinon.assert.calledOnce(disconnectStub);
@@ -632,7 +644,7 @@ describe('LogConsumer', () => {
             logConsumer._consumer = {
                 isConnected: () => false,
             };
-            
+
             assert.strictEqual(logConsumer.isReady(), false);
         });
     });
@@ -648,9 +660,9 @@ describe('LogConsumer', () => {
                 disconnect: disconnectStub,
                 once: sinon.stub(),
             };
-            
+
             logConsumer._consumer.once.withArgs('disconnected').callsArg(1);
-            
+
             logConsumer.close(err => {
                 assert.ifError(err);
                 sinon.assert.calledOnce(unsubscribeStub);
@@ -658,7 +670,7 @@ describe('LogConsumer', () => {
                 sinon.assert.calledWith(logConsumer._consumer.once, 'disconnected');
                 return done();
             });
-            
+
             setImmediate(() => {
                 logConsumer.emit('unassigned');
             });
@@ -672,9 +684,9 @@ describe('LogConsumer', () => {
                 disconnect: disconnectStub,
                 once: sinon.stub(),
             };
-            
+
             logConsumer._consumer.once.withArgs('disconnected').callsArg(1);
-            
+
             logConsumer.close(err => {
                 assert.ifError(err);
                 sinon.assert.calledOnce(disconnectStub);
@@ -687,7 +699,7 @@ describe('LogConsumer', () => {
             logConsumer._consumer = {
                 isConnected: () => false,
             };
-            
+
             logConsumer.close(err => {
                 assert.ifError(err);
                 return done();
@@ -696,7 +708,7 @@ describe('LogConsumer', () => {
 
         it('should handle case when consumer is null', done => {
             logConsumer._consumer = null;
-            
+
             logConsumer.close(err => {
                 assert.ifError(err);
                 return done();

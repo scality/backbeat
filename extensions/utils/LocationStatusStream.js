@@ -22,7 +22,6 @@ const ChangeStream = require('../../lib/wrappers/ChangeStream');
  * for a service (crr, ingestion, lifecycle)
  */
 class LocationStatusStream {
-
     /**
      * @constructor
      * @param {string} serviceName service name (i.e crr, ingestion, lifecycle)
@@ -48,11 +47,14 @@ class LocationStatusStream {
      * @return {undefined}
      */
     start(done) {
-        async.series([
-            done => this._setupMongoClient(done),
-            done => this._setChangeStream(done),
-            done => this._initializeLocationStatuses(done),
-        ], done);
+        async.series(
+            [
+                done => this._setupMongoClient(done),
+                done => this._setChangeStream(done),
+                done => this._initializeLocationStatuses(done),
+            ],
+            done,
+        );
     }
 
     /**
@@ -64,38 +66,41 @@ class LocationStatusStream {
     _setupMongoClient(cb) {
         const mongoUrl = constructConnectionString(this._mongoConfig);
         const client = new MongoClient(mongoUrl, {
-                replicaSet: this._mongoConfig.replicaSet,
-                useNewUrlParser: true,
+            replicaSet: this._mongoConfig.replicaSet,
+            useNewUrlParser: true,
         });
-        return client.connect().then(client => {
-            // connect to metadata DB
-            this._mongoClient = client.db(this._mongoConfig.database, {
-                ignoreUndefined: true,
+        return client
+            .connect()
+            .then(client => {
+                // connect to metadata DB
+                this._mongoClient = client.db(this._mongoConfig.database, {
+                    ignoreUndefined: true,
+                });
+                this._locationStatusColl = this._mongoClient.collection(locationStatusCollection);
+                this._log.info('Connected to MongoDB', {
+                    method: 'ServiceStatusManager._setupMongoClient',
+                });
+                // get mongodb version
+                getMongoVersion(this._mongoClient, (err, version) => {
+                    if (err) {
+                        this._log.error('Could not get MongoDB version', {
+                            method: 'ServiceStatusManager._setupMongoClient',
+                            error: err.message,
+                        });
+                        return cb(err);
+                    }
+                    this._mongoVersion = version;
+                    return cb();
+                });
+                return undefined;
+            })
+            .catch(err => {
+                this._log.error('Could not connect to MongoDB', {
+                    method: 'ServiceStatusManager._setupMongoClient',
+                    error: err.message,
+                });
+                return cb(err);
             });
-            this._locationStatusColl = this._mongoClient.collection(locationStatusCollection);
-            this._log.info('Connected to MongoDB', {
-                method: 'ServiceStatusManager._setupMongoClient',
-            });
-            // get mongodb version
-            getMongoVersion(this._mongoClient, (err, version) => {
-                if (err) {
-                    this._log.error('Could not get MongoDB version', {
-                        method: 'ServiceStatusManager._setupMongoClient',
-                        error: err.message,
-                    });
-                    return cb(err);
-                }
-                this._mongoVersion = version;
-                return cb();
-            });
-            return undefined;
-        }).catch(err => {
-            this._log.error('Could not connect to MongoDB', {
-                method: 'ServiceStatusManager._setupMongoClient',
-                error: err.message,
-            });
-            return cb(err);
-        });
     }
 
     /**
@@ -104,24 +109,25 @@ class LocationStatusStream {
      * @returns {undefined}
      */
     _initializeLocationStatuses(cb) {
-        this._locationStatusColl.find({})
-        .toArray()
-        .then(locations => {
-            locations.forEach(location => {
-                const isPaused = location.value[this._serviceName].paused;
-                if (isPaused) {
-                    this._pauseServiceForLocation(location._id);
-                }
+        this._locationStatusColl
+            .find({})
+            .toArray()
+            .then(locations => {
+                locations.forEach(location => {
+                    const isPaused = location.value[this._serviceName].paused;
+                    if (isPaused) {
+                        this._pauseServiceForLocation(location._id);
+                    }
+                });
+                return cb();
+            })
+            .catch(err => {
+                this._log.error('Could not fetch location statuses from mongo', {
+                    method: 'ServiceStatusManager._initializeLocationStatuses',
+                    error: err.message,
+                });
+                return cb(err);
             });
-            return cb();
-        })
-        .catch(err => {
-            this._log.error('Could not fetch location statuses from mongo', {
-                method: 'ServiceStatusManager._initializeLocationStatuses',
-                error: err.message,
-            });
-            return cb(err);
-        });
     }
 
     /**
@@ -160,22 +166,22 @@ class LocationStatusStream {
      * @returns {undefined}
      */
     _handleChangeStreamChangeEvent(changeEvent) {
-            const location = changeEvent.documentKey._id;
-            if (changeEvent.operationType === 'delete') {
-                this._resumeServiceForLocation(location);
+        const location = changeEvent.documentKey._id;
+        if (changeEvent.operationType === 'delete') {
+            this._resumeServiceForLocation(location);
+        } else {
+            const status = changeEvent.fullDocument.value[this._serviceName];
+            if (status.paused) {
+                this._pauseServiceForLocation(location);
             } else {
-                const status = changeEvent.fullDocument.value[this._serviceName];
-                if (status.paused) {
-                    this._pauseServiceForLocation(location);
-                } else {
-                    this._resumeServiceForLocation(location);
-                }
+                this._resumeServiceForLocation(location);
             }
-            this._log.info('Change stream event processed', {
-                method: 'ServiceStatusManager._handleChangeStreamChangeEvent',
-                opType: changeEvent.operationType,
-                location,
-            });
+        }
+        this._log.info('Change stream event processed', {
+            method: 'ServiceStatusManager._handleChangeStreamChangeEvent',
+            opType: changeEvent.operationType,
+            location,
+        });
     }
 }
 

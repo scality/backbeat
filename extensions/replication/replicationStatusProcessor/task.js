@@ -20,45 +20,53 @@ const gcConfig = config.extensions.gc;
 const { initManagement } = require('../../../lib/management/index');
 
 const replicationStatusProcessor = new ReplicationStatusProcessor(
-    kafkaConfig, sourceConfig, repConfig, internalHttpsConfig, mConfig, gcConfig);
+    kafkaConfig,
+    sourceConfig,
+    repConfig,
+    internalHttpsConfig,
+    mConfig,
+    gcConfig,
+);
 
-werelogs.configure({ level: config.log.logLevel,
-     dump: config.log.dumpLevel });
+werelogs.configure({ level: config.log.logLevel, dump: config.log.dumpLevel });
 
 const logger = new werelogs.Logger('backbeat:ReplicationStatusProcessor:Init');
 
 function initAndStart() {
-    initManagement({
-        serviceName: 'replication',
-        serviceAccount: sourceConfig.auth.account,
-    }, error => {
-        if (error) {
-            logger.error('could not load management db', { error });
-            setTimeout(initAndStart, 5000);
-            return;
-        }
-        replicationStatusProcessor.start(null, startProbeServer(
-            repConfig.replicationStatusProcessor.probeServer,
-            (err, probeServer) => {
-                if (err) {
-                    logger.error('error starting probe server', {
-                        error: err,
-                        method: 'ReplicationStatusProcessor::startProbeServer',
-                    });
-                    return;
-                }
-                if (probeServer !== undefined) {
-                    probeServer.addHandler([DEFAULT_LIVE_ROUTE, DEFAULT_READY_ROUTE],
-                        (res, log) => replicationStatusProcessor.handleLiveness(res, log)
-                    );
-                    probeServer.addHandler(DEFAULT_METRICS_ROUTE,
-                        (res, log) => replicationStatusProcessor.handleMetrics(res, log)
-                    );
-                }
-                logger.info('management init done');
+    initManagement(
+        {
+            serviceName: 'replication',
+            serviceAccount: sourceConfig.auth.account,
+        },
+        error => {
+            if (error) {
+                logger.error('could not load management db', { error });
+                setTimeout(initAndStart, 5000);
+                return;
             }
-        ));
-    });
+            replicationStatusProcessor.start(
+                null,
+                startProbeServer(repConfig.replicationStatusProcessor.probeServer, (err, probeServer) => {
+                    if (err) {
+                        logger.error('error starting probe server', {
+                            error: err,
+                            method: 'ReplicationStatusProcessor::startProbeServer',
+                        });
+                        return;
+                    }
+                    if (probeServer !== undefined) {
+                        probeServer.addHandler([DEFAULT_LIVE_ROUTE, DEFAULT_READY_ROUTE], (res, log) =>
+                            replicationStatusProcessor.handleLiveness(res, log),
+                        );
+                        probeServer.addHandler(DEFAULT_METRICS_ROUTE, (res, log) =>
+                            replicationStatusProcessor.handleMetrics(res, log),
+                        );
+                    }
+                    logger.info('management init done');
+                }),
+            );
+        },
+    );
 }
 
 initAndStart();

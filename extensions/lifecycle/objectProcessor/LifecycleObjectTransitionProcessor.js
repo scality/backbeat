@@ -9,8 +9,7 @@ const LifecycleObjectProcessor = require('./LifecycleObjectProcessor');
 const LifecycleUpdateExpirationTask = require('../tasks/LifecycleUpdateExpirationTask');
 const LifecycleUpdateTransitionTask = require('../tasks/LifecycleUpdateTransitionTask');
 const LifecycleColdStatusArchiveTask = require('../tasks/LifecycleColdStatusArchiveTask');
-const { LifecycleResetTransitionInProgressTask } =
-      require('../tasks/LifecycleResetTransitionInProgressTask');
+const { LifecycleResetTransitionInProgressTask } = require('../tasks/LifecycleResetTransitionInProgressTask');
 const { updateCircuitBreakerConfigForImplicitOutputQueue } = require('../../../lib/CircuitBreaker');
 const { LifecycleRetriggerRestoreTask } = require('../tasks/LifecycleRetriggerRestoreTask');
 const BackbeatProducer = require('../../../lib/BackbeatProducer');
@@ -20,7 +19,6 @@ const { AccountIdCache } = require('../../utils/AccountIdCache');
 const { authTypeAssumeRole } = require('../../../lib/constants');
 
 class LifecycleObjectTransitionProcessor extends LifecycleObjectProcessor {
-
     /**
      * Constructor of LifecycleObjectProcessor
      *
@@ -51,8 +49,7 @@ class LifecycleObjectTransitionProcessor extends LifecycleObjectProcessor {
      * @param {Object} [vaultAdminConfig] - vault admin endpoint, used to
      *  resolve canonical ids into account ids
      */
-    constructor(zkConfig, kafkaConfig, lcConfig, s3Config, transport = 'http',
-        vaultAdminConfig = undefined) {
+    constructor(zkConfig, kafkaConfig, lcConfig, s3Config, transport = 'http', vaultAdminConfig = undefined) {
         super(zkConfig, kafkaConfig, lcConfig, s3Config, transport);
 
         const authConfig = this.getAuthConfig(this._lcConfig);
@@ -63,8 +60,7 @@ class LifecycleObjectTransitionProcessor extends LifecycleObjectProcessor {
                 authConfig,
                 this._log,
             );
-            this._accountIdCache = new AccountIdCache(
-                this._processConfig.concurrency);
+            this._accountIdCache = new AccountIdCache(this._processConfig.concurrency);
         }
     }
 
@@ -120,14 +116,17 @@ class LifecycleObjectTransitionProcessor extends LifecycleObjectProcessor {
      */
     start(done) {
         this.vaultClientWrapper?.init();
-        async.waterfall([
-            next => super.start(next),
-            next => {
-                this._gcProducer = new GarbageCollectorProducer();
-                this._gcProducer.setupProducer(next);
-            },
-            next => this.setupProducer(next),
-        ], done);
+        async.waterfall(
+            [
+                next => super.start(next),
+                next => {
+                    this._gcProducer = new GarbageCollectorProducer();
+                    this._gcProducer.setupProducer(next);
+                },
+                next => this.setupProducer(next),
+            ],
+            done,
+        );
     }
 
     /**
@@ -151,7 +150,8 @@ class LifecycleObjectTransitionProcessor extends LifecycleObjectProcessor {
                 this._log.error('error from backbeat producer', {
                     method: 'LifecycleObjectTransitionProcessor.setupProducer',
                     error: err,
-                }));
+                }),
+            );
             this._coldProducer = producer;
             return cb();
         });
@@ -233,10 +233,9 @@ class LifecycleObjectTransitionProcessor extends LifecycleObjectProcessor {
                 if (actionEntry.getContextAttribute('ruleType') === 'transition') {
                     return new LifecycleUpdateTransitionTask(this);
                 }
-                // fall through
+            // fall through
             default:
-                this._log.warn(`skipped unsupported  action ${actionType}`,
-                            actionEntry.getLogInfo());
+                this._log.warn(`skipped unsupported  action ${actionType}`, actionEntry.getLogInfo());
                 return null;
         }
     }
@@ -263,26 +262,28 @@ class LifecycleObjectTransitionProcessor extends LifecycleObjectProcessor {
                 return process.nextTick(done);
         }
 
-        return this.retryWrapper.retry({
-            actionDesc: 'process cold storage status entry',
-            logFields: entry.getLogInfo(),
-            actionFunc: done => task.processEntry(coldLocation, entry, done),
-            shouldRetryFunc: err => err.retryable,
-            log: this._log,
-        }, err => {
-            if (err) {
-                this._log.error('task failed permanently after retries, committing offset', {
-                    method: 'LifecycleObjectTransitionProcessor.processColdStorageStatusEntry',
-                    error: err.message,
-                    op: entry.op,
-                    coldLocation,
-                    ...entry.getLogInfo(),
-                });
-                LifecycleMetrics.onLifecycleFailed(this._log, this.getProcessorType(),
-                    entry.op, coldLocation);
-            }
-            return done(err);
-        });
+        return this.retryWrapper.retry(
+            {
+                actionDesc: 'process cold storage status entry',
+                logFields: entry.getLogInfo(),
+                actionFunc: done => task.processEntry(coldLocation, entry, done),
+                shouldRetryFunc: err => err.retryable,
+                log: this._log,
+            },
+            err => {
+                if (err) {
+                    this._log.error('task failed permanently after retries, committing offset', {
+                        method: 'LifecycleObjectTransitionProcessor.processColdStorageStatusEntry',
+                        error: err.message,
+                        op: entry.op,
+                        coldLocation,
+                        ...entry.getLogInfo(),
+                    });
+                    LifecycleMetrics.onLifecycleFailed(this._log, this.getProcessorType(), entry.op, coldLocation);
+                }
+                return done(err);
+            },
+        );
     }
 
     getStateVars() {

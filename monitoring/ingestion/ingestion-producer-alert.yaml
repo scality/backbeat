@@ -7,151 +7,150 @@ x-inputs:
     type: constant
 
 groups:
-- name: IngestionProducer
-  rules:
+  - name: IngestionProducer
+    rules:
+      - alert: IngestionProducerDown
+        Expr: sum(up{namespace="${namespace}", job="${job_ingestion_producer}"}) == 0
+        For: '30s'
+        Labels:
+          severity: critical
+        Annotations:
+          zenko_service: backbeat-ingestion-producer
+          description: 'Ingestion Producer pod has been down for 30 seconds'
+          summary: 'Ingestion Producer service is down'
 
-  - alert: IngestionProducerDown
-    Expr: sum(up{namespace="${namespace}", job="${job_ingestion_producer}"}) == 0
-    For:   "30s"
-    Labels:
-      severity: critical
-    Annotations:
-      zenko_service: backbeat-ingestion-producer
-      description: "Ingestion Producer pod has been down for 30 seconds"
-      summary: "Ingestion Producer service is down"
+      - alert: IngestionProducerLagIncreasedBy3Percent
+        Expr: |
+          ((sum(s3_ingestion_metadata_journal_size{namespace="${namespace}", job="${job_ingestion_producer}"} -
+            s3_ingestion_read_offset{namespace="${namespace}", job="${job_ingestion_producer}"}+1) -
+          sum((s3_ingestion_metadata_journal_size{namespace="${namespace}", job="${job_ingestion_producer}"} offset 5m) -
+            (s3_ingestion_read_offset{namespace="${namespace}", job="${job_ingestion_producer}"} offset 5m)+1))
+            /
+          sum((s3_ingestion_metadata_journal_size{namespace="${namespace}", job="${job_ingestion_producer}"} offset 5m) -
+            (s3_ingestion_read_offset{namespace="${namespace}", job="${job_ingestion_producer}"} offset 5m)+1))
+          > 0.03
+        For: '5m'
+        Labels:
+          severity: warning
+        Annotations:
+          zenko_service: backbeat-ingestion-producer
+          description: 'Ingestion lag across all locations has increased to 3% in the last 5 minutes'
+          summary: 'Overall ingestion lag has increased'
 
-  - alert: IngestionProducerLagIncreasedBy3Percent
-    Expr: |
-      ((sum(s3_ingestion_metadata_journal_size{namespace="${namespace}", job="${job_ingestion_producer}"} -
-        s3_ingestion_read_offset{namespace="${namespace}", job="${job_ingestion_producer}"}+1) -
-      sum((s3_ingestion_metadata_journal_size{namespace="${namespace}", job="${job_ingestion_producer}"} offset 5m) -
-        (s3_ingestion_read_offset{namespace="${namespace}", job="${job_ingestion_producer}"} offset 5m)+1))
-        /
-      sum((s3_ingestion_metadata_journal_size{namespace="${namespace}", job="${job_ingestion_producer}"} offset 5m) -
-        (s3_ingestion_read_offset{namespace="${namespace}", job="${job_ingestion_producer}"} offset 5m)+1))
-      > 0.03
-    For:   "5m"
-    Labels:
-      severity: warning
-    Annotations:
-      zenko_service: backbeat-ingestion-producer
-      description: "Ingestion lag across all locations has increased to 3% in the last 5 minutes"
-      summary: "Overall ingestion lag has increased"
+      - alert: IngestionProducerLagIncreasedBy5Percent
+        Expr: |
+          ((sum(s3_ingestion_metadata_journal_size{namespace="${namespace}", job="${job_ingestion_producer}"} -
+            s3_ingestion_read_offset{namespace="${namespace}", job="${job_ingestion_producer}"}+1) -
+          sum((s3_ingestion_metadata_journal_size{namespace="${namespace}", job="${job_ingestion_producer}"} offset 5m) -
+            (s3_ingestion_read_offset{namespace="${namespace}", job="${job_ingestion_producer}"} offset 5m)+1))
+            /
+          sum((s3_ingestion_metadata_journal_size{namespace="${namespace}", job="${job_ingestion_producer}"} offset 5m) -
+            (s3_ingestion_read_offset{namespace="${namespace}", job="${job_ingestion_producer}"} offset 5m)+1))
+          > 0.05
+        For: '5m'
+        Labels:
+          severity: critical
+        Annotations:
+          zenko_service: backbeat-ingestion-producer
+          description: 'Ingestion lag across all locations has increased to 5% in the last 5 minutes'
+          summary: 'Overall ingestion lag has increased'
 
-  - alert: IngestionProducerLagIncreasedBy5Percent
-    Expr: |
-      ((sum(s3_ingestion_metadata_journal_size{namespace="${namespace}", job="${job_ingestion_producer}"} -
-        s3_ingestion_read_offset{namespace="${namespace}", job="${job_ingestion_producer}"}+1) -
-      sum((s3_ingestion_metadata_journal_size{namespace="${namespace}", job="${job_ingestion_producer}"} offset 5m) -
-        (s3_ingestion_read_offset{namespace="${namespace}", job="${job_ingestion_producer}"} offset 5m)+1))
-        /
-      sum((s3_ingestion_metadata_journal_size{namespace="${namespace}", job="${job_ingestion_producer}"} offset 5m) -
-        (s3_ingestion_read_offset{namespace="${namespace}", job="${job_ingestion_producer}"} offset 5m)+1))
-      > 0.05
-    For:   "5m"
-    Labels:
-      severity: critical
-    Annotations:
-      zenko_service: backbeat-ingestion-producer
-      description: "Ingestion lag across all locations has increased to 5% in the last 5 minutes"
-      summary: "Overall ingestion lag has increased"
+      - alert: NoMessagesQueued
+        Expr: |
+          ((sum(s3_ingestion_metadata_journal_size{namespace="${namespace}", job="${job_ingestion_producer}"} -
+            s3_ingestion_read_offset{namespace="${namespace}", job="${job_ingestion_producer}"}+1)) > 1)
+          and
+          ((sum(rate(s3_ingestion_objects_queued_total{namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))) == 0)
+        For: '5m'
+        Labels:
+          severity: warning
+        Annotations:
+          zenko_service: backbeat-ingestion-producer
+          description: 'Ingestion producer has not queued any messages in the last 5 minutes'
+          summary: 'Ingestion producer has not queued messages'
 
-  - alert: NoMessagesQueued
-    Expr: |
-      ((sum(s3_ingestion_metadata_journal_size{namespace="${namespace}", job="${job_ingestion_producer}"} -
-        s3_ingestion_read_offset{namespace="${namespace}", job="${job_ingestion_producer}"}+1)) > 1)
-      and
-      ((sum(rate(s3_ingestion_objects_queued_total{namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))) == 0)
-    For:   "5m"
-    Labels:
-      severity: warning
-    Annotations:
-      zenko_service: backbeat-ingestion-producer
-      description: "Ingestion producer has not queued any messages in the last 5 minutes"
-      summary: "Ingestion producer has not queued messages"
+      # Ratio per source op so a stuck getRaftId is not hidden by getRaftLog
+      # volume, and a later getRaftLog failure is the same alert on that op.
+      - alert: IngestionProducerSourceErrorRate3Percent
+        Expr: |
+          sum by (op) (rate(s3_ingestion_source_operations_total{status="error", namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
+            /
+          sum by (op) (rate(s3_ingestion_source_operations_total{namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
+          > 0.03
+        For: '5m'
+        Labels:
+          severity: warning
+        Annotations:
+          zenko_service: backbeat-ingestion-producer
+          description: 'Ingestion producer source error rate has increased to 3% in the last 5 minutes'
+          summary: 'Ingestion producer source error rate has increased'
 
-  # Ratio per source op so a stuck getRaftId is not hidden by getRaftLog
-  # volume, and a later getRaftLog failure is the same alert on that op.
-  - alert: IngestionProducerSourceErrorRate3Percent
-    Expr: |
-      sum by (op) (rate(s3_ingestion_source_operations_total{status="error", namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
-        /
-      sum by (op) (rate(s3_ingestion_source_operations_total{namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
-      > 0.03
-    For:   "5m"
-    Labels:
-      severity: warning
-    Annotations:
-      zenko_service: backbeat-ingestion-producer
-      description: "Ingestion producer source error rate has increased to 3% in the last 5 minutes"
-      summary: "Ingestion producer source error rate has increased"
+      - alert: IngestionProducerSourceErrorRate3Percent
+        Expr: |
+          sum by (op) (rate(s3_ingestion_source_operations_total{status="error", namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
+            /
+          sum by (op) (rate(s3_ingestion_source_operations_total{namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
+          > 0.05
+        For: '5m'
+        Labels:
+          severity: critical
+        Annotations:
+          zenko_service: backbeat-ingestion-producer
+          description: 'Ingestion producer source error rate has increased to 5% in the last 5 minutes'
+          summary: 'Ingestion producer source error rate has increased'
 
-  - alert: IngestionProducerSourceErrorRate3Percent
-    Expr: |
-      sum by (op) (rate(s3_ingestion_source_operations_total{status="error", namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
-        /
-      sum by (op) (rate(s3_ingestion_source_operations_total{namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
-      > 0.05
-    For:   "5m"
-    Labels:
-      severity: critical
-    Annotations:
-      zenko_service: backbeat-ingestion-producer
-      description: "Ingestion producer source error rate has increased to 5% in the last 5 minutes"
-      summary: "Ingestion producer source error rate has increased"
+      - alert: IngestionProducerZookeeperErrorRate3Percent
+        Expr: |
+          sum(rate(s3_ingestion_zookeeper_operations_total{status="error", namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
+            /
+          sum(rate(s3_ingestion_zookeeper_operations_total{namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
+          > 0.03
+        For: '5m'
+        Labels:
+          severity: warning
+        Annotations:
+          zenko_service: backbeat-ingestion-producer
+          description: 'Ingestion producer zookeeper error rate has increased to 3% in the last 5 minutes'
+          summary: 'Ingestion producer zookeeper error rate has increased'
 
-  - alert: IngestionProducerZookeeperErrorRate3Percent
-    Expr: |
-      sum(rate(s3_ingestion_zookeeper_operations_total{status="error", namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
-        /
-      sum(rate(s3_ingestion_zookeeper_operations_total{namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
-      > 0.03
-    For:   "5m"
-    Labels:
-      severity: warning
-    Annotations:
-      zenko_service: backbeat-ingestion-producer
-      description: "Ingestion producer zookeeper error rate has increased to 3% in the last 5 minutes"
-      summary: "Ingestion producer zookeeper error rate has increased"
+      - alert: IngestionProducerZookeeperErrorRate5Percent
+        Expr: |
+          sum(rate(s3_ingestion_zookeeper_operations_total{status="error", namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
+            /
+          sum(rate(s3_ingestion_zookeeper_operations_total{namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
+          > 0.05
+        For: '5m'
+        Labels:
+          severity: critical
+        Annotations:
+          zenko_service: backbeat-ingestion-producer
+          description: 'Ingestion producer zookeeper error rate has increased to 5% in the last 5 minutes'
+          summary: 'Ingestion producer zookeeper error rate has increased'
 
-  - alert: IngestionProducerZookeeperErrorRate5Percent
-    Expr: |
-      sum(rate(s3_ingestion_zookeeper_operations_total{status="error", namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
-        /
-      sum(rate(s3_ingestion_zookeeper_operations_total{namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
-      > 0.05
-    For:   "5m"
-    Labels:
-      severity: critical
-    Annotations:
-      zenko_service: backbeat-ingestion-producer
-      description: "Ingestion producer zookeeper error rate has increased to 5% in the last 5 minutes"
-      summary: "Ingestion producer zookeeper error rate has increased"
+      - alert: IngestionProducerTopicPublishErrorIncreasedBy3Percent
+        Expr: |
+          sum(rate(s3_ingestion_kafka_publish_status_total{status="error", namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
+            /
+          sum(rate(s3_ingestion_kafka_publish_status_total{namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
+          > 0.03
+        For: '5m'
+        Labels:
+          severity: warning
+        Annotations:
+          zenko_service: backbeat-ingestion-producer
+          description: 'Errors in publishing messages to ingestion topic has increased to 3% in the last 5 minutes'
+          summary: 'Ingestion producer error publishing messages'
 
-  - alert: IngestionProducerTopicPublishErrorIncreasedBy3Percent
-    Expr: |
-      sum(rate(s3_ingestion_kafka_publish_status_total{status="error", namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
-        /
-      sum(rate(s3_ingestion_kafka_publish_status_total{namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
-      > 0.03
-    For:   "5m"
-    Labels:
-      severity: warning
-    Annotations:
-      zenko_service: backbeat-ingestion-producer
-      description: "Errors in publishing messages to ingestion topic has increased to 3% in the last 5 minutes"
-      summary: "Ingestion producer error publishing messages"
-
-  - alert: IngestionProducerTopicPublishErrorIncreasedBy5Percent
-    Expr: |
-      sum(rate(s3_ingestion_kafka_publish_status_total{status="error", namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
-        /
-      sum(rate(s3_ingestion_kafka_publish_status_total{namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
-      > 0.05
-    For:   "5m"
-    Labels:
-      severity: critical
-    Annotations:
-      zenko_service: backbeat-ingestion-producer
-      description: "Errors in publishing messages to ingestion topic has increased to 5% in the last 5 minutes"
-      summary: "Ingestion producer error publishing messages"
+      - alert: IngestionProducerTopicPublishErrorIncreasedBy5Percent
+        Expr: |
+          sum(rate(s3_ingestion_kafka_publish_status_total{status="error", namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
+            /
+          sum(rate(s3_ingestion_kafka_publish_status_total{namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
+          > 0.05
+        For: '5m'
+        Labels:
+          severity: critical
+        Annotations:
+          zenko_service: backbeat-ingestion-producer
+          description: 'Errors in publishing messages to ingestion topic has increased to 5% in the last 5 minutes'
+          summary: 'Ingestion producer error publishing messages'

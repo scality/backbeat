@@ -25,7 +25,6 @@ const connectorParams = joi.object({
  * or removing buckets from it
  */
 class Connector extends EventEmitter {
-
     /**
      * @constructor
      * @param {Object} params connector config
@@ -72,32 +71,42 @@ class Connector extends EventEmitter {
      * Getter for connector name
      * @returns {string} connector name
      */
-    get name() { return this._name; }
+    get name() {
+        return this._name;
+    }
 
     /**
      * Getter for connector buckets
      * @returns {string[]} buckets assigned to this connector
      */
-    get buckets() { return [...this._buckets]; }
+    get buckets() {
+        return [...this._buckets];
+    }
 
     /**
      * Get number of buckets assigned to this
      * connector
      * @returns {Number} number of buckets
      */
-    get bucketCount() { return this._buckets.size; }
+    get bucketCount() {
+        return this._buckets.size;
+    }
 
     /**
      * Get connector config
      * @returns {Object} connector config
      */
-    get config() { return this._config; }
+    get config() {
+        return this._config;
+    }
 
     /**
      * Getter for connector running state
      * @returns {Boolean} connector running state
      */
-    get isRunning() { return this._isRunning; }
+    get isRunning() {
+        return this._isRunning;
+    }
 
     /**
      * Calculate config size in bytes
@@ -131,7 +140,7 @@ class Connector extends EventEmitter {
      * to the connector.
      * @param {Date} eventDate oplog event date
      * @returns {undefined}
-    */
+     */
     setResumePoint(eventDate) {
         if (this._config['startup.mode.timestamp.start.at.operation.time']) {
             return;
@@ -296,8 +305,8 @@ class Connector extends EventEmitter {
         // need to check if any update occured while asynchronously
         // updating the connector, as those operations were not included
         // in the update
-        const shouldUpdateState = !bucketsGotModified && !!timeBeforeUpdate &&
-            timeBeforeUpdate >= this._state.lastUpdated;
+        const shouldUpdateState =
+            !bucketsGotModified && !!timeBeforeUpdate && timeBeforeUpdate >= this._state.lastUpdated;
         // If updating to true (a bucket got added/removed or update failed)
         // directly update the value as checking is not required
         if (bucketsGotModified || shouldUpdateState) {
@@ -333,8 +342,8 @@ class Connector extends EventEmitter {
         try {
             if (doUpdate && this._isRunning) {
                 if (!updateSupported) {
-                    const sameBuckets = this._liveBuckets.size === this._buckets.size &&
-                        this._liveBuckets.isSubsetOf(this._buckets);
+                    const sameBuckets =
+                        this._liveBuckets.size === this._buckets.size && this._liveBuckets.isSubsetOf(this._buckets);
                     if (!sameBuckets) {
                         this._logger.info('Skipping pipeline update: match stage differs', {
                             method: 'Connector.updatePipeline',
@@ -367,7 +376,6 @@ class Connector extends EventEmitter {
             throw errors.InternalError.customizeDescription(err.description);
         }
     }
-
 }
 
 module.exports = Connector;

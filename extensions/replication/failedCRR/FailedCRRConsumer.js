@@ -110,29 +110,32 @@ class FailedCRRConsumer {
      * @return {undefined}
      */
     _addSortedSetMember(data, kafkaEntry, log, cb) {
-        this._backbeatTask.retry({
-            actionDesc: 'add redis sorted set member',
-            logFields: {},
-            actionFunc: done => this._addSortedSetMemberOnce(data, done),
-            shouldRetryFunc: err => err.retryable,
-            log,
-        }, err => {
-            if (err && err.retryable === true) {
-                log.info('publishing entry back into the kafka queue');
-                const entry = Buffer.from(kafkaEntry.value).toString();
-                this._failedCRRProducer.publishFailedCRREntry(entry);
+        this._backbeatTask.retry(
+            {
+                actionDesc: 'add redis sorted set member',
+                logFields: {},
+                actionFunc: done => this._addSortedSetMemberOnce(data, done),
+                shouldRetryFunc: err => err.retryable,
+                log,
+            },
+            err => {
+                if (err && err.retryable === true) {
+                    log.info('publishing entry back into the kafka queue');
+                    const entry = Buffer.from(kafkaEntry.value).toString();
+                    this._failedCRRProducer.publishFailedCRREntry(entry);
+                    return cb();
+                }
+                if (err) {
+                    log.error('could not add redis sorted set member', {
+                        error: err,
+                        data,
+                    });
+                    return cb(err);
+                }
+                log.info('successfully added redis sorted set member');
                 return cb();
-            }
-            if (err) {
-                log.error('could not add redis sorted set member', {
-                    error: err,
-                    data,
-                });
-                return cb(err);
-            }
-            log.info('successfully added redis sorted set member');
-            return cb();
-        });
+            },
+        );
     }
 
     /**

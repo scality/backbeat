@@ -11,7 +11,8 @@ const {
 
 // cluster time (t: 0x6ac50e0c, i: 3) followed by the rest of the KeyString
 const eventToken = {
-    _data: '826AC50E0C000000032B042C0100296E5A10046C2C6A1B4F6C4A9E8D' +
+    _data:
+        '826AC50E0C000000032B042C0100296E5A10046C2C6A1B4F6C4A9E8D' +
         '4B1D7E0B0B9C4F463C6F7065726174696F6E54797065003C696E7365727400' +
         '46646F63756D656E744B65790046645F6964006466AF0E0C2A5D0B1A2C3D4E5F000004',
 };
@@ -22,18 +23,18 @@ const heartbeatToken = { _data: '826AC50E0D000000012B0429296E1404' };
 describe('resumeToken', () => {
     describe('timestampFromMongoResumeToken', () => {
         it('should decode the cluster time of an event token', () => {
-            assert.deepStrictEqual(timestampFromMongoResumeToken(eventToken),
-                { t: 0x6ac50e0c, i: 3 });
+            assert.deepStrictEqual(timestampFromMongoResumeToken(eventToken), { t: 0x6ac50e0c, i: 3 });
         });
 
         it('should decode the cluster time of a heartbeat token', () => {
-            assert.deepStrictEqual(timestampFromMongoResumeToken(heartbeatToken),
-                { t: 0x6ac50e0d, i: 1 });
+            assert.deepStrictEqual(timestampFromMongoResumeToken(heartbeatToken), { t: 0x6ac50e0d, i: 1 });
         });
 
         it('should decode unsigned values', () => {
-            assert.deepStrictEqual(timestampFromMongoResumeToken({ _data: '82FFFFFFFFFFFFFFFF04' }),
-                { t: 0xffffffff, i: 0xffffffff });
+            assert.deepStrictEqual(timestampFromMongoResumeToken({ _data: '82FFFFFFFFFFFFFFFF04' }), {
+                t: 0xffffffff,
+                i: 0xffffffff,
+            });
         });
 
         [
@@ -51,15 +52,17 @@ describe('resumeToken', () => {
 
     describe('timestampFromConnectorOffset', () => {
         it('should decode an event offset', () => {
-            assert.deepStrictEqual(
-                timestampFromConnectorOffset({ _id: JSON.stringify(eventToken) }),
-                { t: 0x6ac50e0c, i: 3 });
+            assert.deepStrictEqual(timestampFromConnectorOffset({ _id: JSON.stringify(eventToken) }), {
+                t: 0x6ac50e0c,
+                i: 3,
+            });
         });
 
         it('should decode a heartbeat offset', () => {
             assert.deepStrictEqual(
                 timestampFromConnectorOffset({ _id: JSON.stringify(heartbeatToken), HEARTBEAT: 'true' }),
-                { t: 0x6ac50e0d, i: 1 });
+                { t: 0x6ac50e0d, i: 1 },
+            );
         });
 
         it('should return null on unparsable offsets', () => {
@@ -71,8 +74,10 @@ describe('resumeToken', () => {
 
     describe('timestampFromConnectorStartupTime', () => {
         it('should parse extended JSON timestamps', () => {
-            assert.deepStrictEqual(timestampFromConnectorStartupTime(connectorStartupTime({ t: 12, i: 3 })),
-                { t: 12, i: 3 });
+            assert.deepStrictEqual(timestampFromConnectorStartupTime(connectorStartupTime({ t: 12, i: 3 })), {
+                t: 12,
+                i: 3,
+            });
         });
 
         it('should return null when unset, invalid or in another format', () => {
@@ -93,8 +98,14 @@ describe('resumeToken', () => {
         });
 
         it('should return the earliest timestamp', () => {
-            assert.deepStrictEqual(minTimestamp([{ t: 2, i: 0 }, { t: 1, i: 5 }, { t: 1, i: 4 }]),
-                { t: 1, i: 4 });
+            assert.deepStrictEqual(
+                minTimestamp([
+                    { t: 2, i: 0 },
+                    { t: 1, i: 5 },
+                    { t: 1, i: 4 },
+                ]),
+                { t: 1, i: 4 },
+            );
             assert.strictEqual(minTimestamp([]), null);
         });
     });

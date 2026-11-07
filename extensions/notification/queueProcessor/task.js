@@ -6,11 +6,8 @@ const assert = require('assert');
 const { errors } = require('@scality/arsenal');
 const async = require('async');
 const werelogs = require('werelogs');
-const {
-    DEFAULT_LIVE_ROUTE,
-    DEFAULT_READY_ROUTE,
-    DEFAULT_METRICS_ROUTE,
-} = require('@scality/arsenal').network.probe.ProbeServer;
+const { DEFAULT_LIVE_ROUTE, DEFAULT_READY_ROUTE, DEFAULT_METRICS_ROUTE } =
+    require('@scality/arsenal').network.probe.ProbeServer;
 const { sendSuccess, sendError } = require('@scality/arsenal').network.probe.Utils;
 const QueueProcessor = require('./QueueProcessor');
 const { startProbeServer } = require('../../../lib/util/probe');
@@ -51,13 +48,18 @@ Object.keys(destinationAuth).forEach(key => {
         delete destinationAuth[key];
     }
 });
-const isDestinationAuthEmpty = Object.values(destinationAuth)
-    .every(x => !x);
+const isDestinationAuthEmpty = Object.values(destinationAuth).every(x => !x);
 if (isDestinationAuthEmpty) {
     destinationAuth = null;
 }
 const queueProcessor = new QueueProcessor(
-    mongoConfig, zkConfig, kafkaConfig, notifConfig, destination, destinationAuth);
+    mongoConfig,
+    zkConfig,
+    kafkaConfig,
+    notifConfig,
+    destination,
+    destinationAuth,
+);
 
 /**
  * Handle ProbeServer liveness check
@@ -66,7 +68,7 @@ const queueProcessor = new QueueProcessor(
  * @param {Logger} log - Logger
  * @returns {undefined}
  */
- function handleLiveness(res, log) {
+function handleLiveness(res, log) {
     if (queueProcessor.isReady()) {
         sendSuccess(res, log);
     } else {
@@ -75,32 +77,34 @@ const queueProcessor = new QueueProcessor(
     }
 }
 
-async.series([
-    next => queueProcessor.start(null, next),
-    next => startProbeServer(notifConfig.probeServer, (err, probeServer) => {
+async.series(
+    [
+        next => queueProcessor.start(null, next),
+        next =>
+            startProbeServer(notifConfig.probeServer, (err, probeServer) => {
+                if (err) {
+                    log.error('error starting probe server', { error: err });
+                    return next(err);
+                }
+                if (probeServer !== undefined) {
+                    // following the same pattern as other extensions, where liveness
+                    // and readiness are handled by the same handler
+                    probeServer.addHandler([DEFAULT_LIVE_ROUTE, DEFAULT_READY_ROUTE], handleLiveness);
+                    probeServer.addHandler(DEFAULT_METRICS_ROUTE, (res, log) => queueProcessor.handleMetrics(res, log));
+                }
+                return next();
+            }),
+    ],
+    err => {
         if (err) {
-            log.error('error starting probe server', { error: err });
-            return next(err);
+            log.error('error starting notification queue processor task', {
+                method: 'notification.task.queueProcessor',
+                error: err,
+            });
+            process.emit('SIGTERM');
         }
-        if (probeServer !== undefined) {
-            // following the same pattern as other extensions, where liveness
-            // and readiness are handled by the same handler
-            probeServer.addHandler([DEFAULT_LIVE_ROUTE, DEFAULT_READY_ROUTE], handleLiveness);
-            probeServer.addHandler(DEFAULT_METRICS_ROUTE,
-                (res, log) => queueProcessor.handleMetrics(res, log)
-            );
-        }
-        return next();
-    })
-], err => {
-    if (err) {
-        log.error('error starting notification queue processor task', {
-            method: 'notification.task.queueProcessor',
-            error: err,
-        });
-        process.emit('SIGTERM');
-    }
-});
+    },
+);
 
 process.on('SIGTERM', () => {
     log.info('received SIGTERM, exiting');
@@ -114,4 +118,3 @@ process.on('SIGTERM', () => {
         tracing.close().finally(() => process.exit(0));
     });
 });
-

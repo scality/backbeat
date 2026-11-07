@@ -21,7 +21,8 @@ class PipelineFactory {
      * @param {string} pipeline pipeline
      * @returns {boolean} true if the pipeline is valid
      */
-    isValid(pipeline) { // eslint-disable-line no-unused-vars
+    // eslint-disable-next-line no-unused-vars
+    isValid(pipeline) {
         throw errors.NotImplemented;
     }
 
@@ -31,8 +32,7 @@ class PipelineFactory {
      * @returns {string[]} list of buckets
      */
     extractBucketsFromConfig(connectorConfig) {
-        const pipeline = connectorConfig.pipeline ?
-            JSON.parse(connectorConfig.pipeline) : null;
+        const pipeline = connectorConfig.pipeline ? JSON.parse(connectorConfig.pipeline) : null;
         if (!pipeline || pipeline.length === 0) {
             return [];
         }
@@ -78,10 +78,7 @@ class PipelineFactory {
             {
                 $addFields: {
                     key: {
-                        $ifNull: [
-                            '$fullDocument.value.key',
-                            '$updateDescription.updatedFields.value.key',
-                        ],
+                        $ifNull: ['$fullDocument.value.key', '$updateDescription.updatedFields.value.key'],
                     },
                 },
             },
@@ -91,25 +88,24 @@ class PipelineFactory {
                 $set: {
                     'fullDocument.value.location': {
                         $cond: {
-                            if: { $gte: [
-                                '$fullDocument.value.content-length',
-                                this._locationStrippingBytesThreshold,
-                            ] },
+                            if: { $gte: ['$fullDocument.value.content-length', this._locationStrippingBytesThreshold] },
                             then: '$$REMOVE',
                             else: '$fullDocument.value.location',
                         },
                     },
                     'updateDescription.updatedFields.value.location': {
                         $cond: {
-                            if: { $gte: [
-                                '$updateDescription.updatedFields.value.content-length',
-                                this._locationStrippingBytesThreshold,
-                            ] },
+                            if: {
+                                $gte: [
+                                    '$updateDescription.updatedFields.value.content-length',
+                                    this._locationStrippingBytesThreshold,
+                                ],
+                            },
                             then: '$$REMOVE',
                             else: '$updateDescription.updatedFields.value.location',
                         },
                     },
-                }
+                },
             });
         }
         return JSON.stringify(pipeline);
@@ -120,7 +116,8 @@ class PipelineFactory {
      * @param {string[] | undefined} buckets buckets assigned to this connector
      * @returns {object} connector pipeline stage
      */
-    getPipelineStage(buckets) { // eslint-disable-line no-unused-vars
+    // eslint-disable-next-line no-unused-vars
+    getPipelineStage(buckets) {
         throw errors.NotImplemented;
     }
 }

@@ -40,16 +40,16 @@ Where:
 - `<extension-type>` can currently only support `crr` for replication
   metrics and `ingestion` for ingestion metrics
 - `<location-name>` represents any current destination replication locations you
-   have defined. To display metrics for all locations, use `all`.
+  have defined. To display metrics for all locations, use `all`.
 - `<metric-type>` is an optional field **only for replication metrics**. If you
-   specify a metric type, Backbeat returns the specified metric. If you omit it,
-   Backbeat returns all available metrics for the given extension and location.
+  specify a metric type, Backbeat returns the specified metric. If you omit it,
+  Backbeat returns all available metrics for the given extension and location.
 - `<bucket>` is an optional field. It carries the name of the bucket in which
-   the object is expected to exist.
+  the object is expected to exist.
 - `<key>` is an optional field. When getting CRR metrics for a particular object,
-   it contains the object's key.
+  it contains the object's key.
 - `<version-id>` is an optional field. When getting CRR metrics for a particular
-   object, it contains the object's version ID.
+  object, it contains the object's version ID.
 
 ### Location Name
 

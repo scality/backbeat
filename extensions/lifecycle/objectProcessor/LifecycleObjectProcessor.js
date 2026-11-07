@@ -54,12 +54,15 @@ class LifecycleObjectProcessor extends EventEmitter {
         this._processConfig = this.getProcessConfig(this._lcConfig);
         this._consumers = null;
 
-        this.clientManager = new ClientManager({
-            id: this.getProcessorType(),
-            authConfig: this.getAuthConfig(this._lcConfig),
-            s3Config,
-            transport,
-        }, this._log);
+        this.clientManager = new ClientManager(
+            {
+                id: this.getProcessorType(),
+                authConfig: this.getAuthConfig(this._lcConfig),
+                s3Config,
+                transport,
+            },
+            this._log,
+        );
 
         this.retryWrapper = new BackbeatTask(this._processConfig.retry);
     }
@@ -100,18 +103,14 @@ class LifecycleObjectProcessor extends EventEmitter {
     }
 
     _setupConsumers(cb) {
-        this._consumers = new BackbeatConsumerManager(
-            this.getProcessorType(),
-            this.getConsumerParams(),
-            this._log
-        );
+        this._consumers = new BackbeatConsumerManager(this.getProcessorType(), this.getConsumerParams(), this._log);
 
         this._consumers.setupConsumers(err => {
             if (err) {
-                 this._log.fatal('unable to start lifecycle consumers', {
-                     error: err,
-                     method: 'LifecycleObjectProcessor._setupConsumer',
-                 });
+                this._log.fatal('unable to start lifecycle consumers', {
+                    error: err,
+                    method: 'LifecycleObjectProcessor._setupConsumer',
+                });
 
                 process.exit(1);
             }
@@ -198,21 +197,23 @@ class LifecycleObjectProcessor extends EventEmitter {
             });
             return process.nextTick(done);
         }
-        this._log.debug('processing lifecycle object entry',
-                          actionEntry.getLogInfo());
+        this._log.debug('processing lifecycle object entry', actionEntry.getLogInfo());
         const task = this.getTask(actionEntry);
 
         if (task === null) {
             return process.nextTick(done);
         }
 
-        return this.retryWrapper.retry({
-            actionDesc: 'process lifecycle object entry',
-            logFields: actionEntry.getLogInfo(),
-            actionFunc: done => task.processActionEntry(actionEntry, done),
-            shouldRetryFunc: err => err.retryable,
-            log: this._log,
-        }, done);
+        return this.retryWrapper.retry(
+            {
+                actionDesc: 'process lifecycle object entry',
+                logFields: actionEntry.getLogInfo(),
+                actionFunc: done => task.processActionEntry(actionEntry, done),
+                shouldRetryFunc: err => err.retryable,
+                log: this._log,
+            },
+            done,
+        );
     }
 
     getStateVars() {
@@ -220,12 +221,9 @@ class LifecycleObjectProcessor extends EventEmitter {
             s3Config: this._s3Config,
             lcConfig: this._lcConfig,
             processConfig: this._processConfig,
-            getS3Client:
-                this.clientManager.getS3Client.bind(this.clientManager),
-            getBackbeatClient:
-                this.clientManager.getBackbeatClient.bind(this.clientManager),
-            getBackbeatMetadataProxy:
-                this.clientManager.getBackbeatMetadataProxy.bind(this.clientManager),
+            getS3Client: this.clientManager.getS3Client.bind(this.clientManager),
+            getBackbeatClient: this.clientManager.getBackbeatClient.bind(this.clientManager),
+            getBackbeatMetadataProxy: this.clientManager.getBackbeatMetadataProxy.bind(this.clientManager),
             logger: this._log,
         };
     }

@@ -26,9 +26,12 @@ class MongoProcessorMetrics {
     }
 
     static onIngestionProcessed(elapsedMs, status) {
-        ingestionProcessedElapsedSeconds.observe({
-            status,
-        }, elapsedMs / 1000);
+        ingestionProcessedElapsedSeconds.observe(
+            {
+                status,
+            },
+            elapsedMs / 1000,
+        );
     }
 
     static onIngestionKafkaConsume(status) {

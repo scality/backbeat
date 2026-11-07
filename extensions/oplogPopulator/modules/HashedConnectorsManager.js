@@ -12,16 +12,21 @@ const ConnectorNameGenerator = require('./ConnectorNameGenerator');
 const ListedConnector = require('./ListedConnector');
 const { connectorStartupTime, minTimestamp } = require('./resumeToken');
 
-const paramsJoi = joi.object({
-    config: joi.object({
-        numberOfConnectors: joi.number().integer().min(1).required(),
-    }).unknown().required(),
-    database: joi.string().required(),
-    mongoUrl: joi.string().required(),
-    metricsHandler: joi.object().instance(OplogPopulatorMetrics).required(),
-    getClusterTime: joi.func().required(),
-    logger: joi.object().required(),
-}).required();
+const paramsJoi = joi
+    .object({
+        config: joi
+            .object({
+                numberOfConnectors: joi.number().integer().min(1).required(),
+            })
+            .unknown()
+            .required(),
+        database: joi.string().required(),
+        mongoUrl: joi.string().required(),
+        metricsHandler: joi.object().instance(OplogPopulatorMetrics).required(),
+        getClusterTime: joi.func().required(),
+        logger: joi.object().required(),
+    })
+    .required();
 
 const eachLimit = util.promisify(async.eachLimit);
 const mapLimit = util.promisify(async.mapLimit);
@@ -178,12 +183,14 @@ class HashedConnectorsManager {
                         fields: drifted,
                     });
                 } else if (state === 'failed') {
-                    connector.failedTasks.forEach(task => this._logger.error('connector task failed', {
-                        method: 'HashedConnectorsManager._repairConnectors',
-                        connector: name,
-                        taskId: task.id,
-                        error: task.trace,
-                    }));
+                    connector.failedTasks.forEach(task =>
+                        this._logger.error('connector task failed', {
+                            method: 'HashedConnectorsManager._repairConnectors',
+                            connector: name,
+                            taskId: task.id,
+                            error: task.trace,
+                        }),
+                    );
                     await this._kafkaConnect.restartConnector(name, true, true);
                     this._metricsHandler.onConnectorRestart({ name });
                 } else if (state === 'paused') {
@@ -219,8 +226,9 @@ class HashedConnectorsManager {
             connectors: outdated.map(({ connector }) => connector.name),
         });
         const stopRequestedAt = await this._getClusterTime();
-        const results = await mapLimit(outdated, kafkaConnectConcurrency,
-            async ({ connector }) => this._stopConnector(connector, stopRequestedAt));
+        const results = await mapLimit(outdated, kafkaConnectConcurrency, async ({ connector }) =>
+            this._stopConnector(connector, stopRequestedAt),
+        );
         return results.filter(Boolean);
     }
 
@@ -253,7 +261,7 @@ class HashedConnectorsManager {
             connector.oplogTime = connector.oplogTimeFrom(before, stopRequestedAt);
             return undefined;
         }
-        if (!await this._waitStopped(name)) {
+        if (!(await this._waitStopped(name))) {
             return { connector: name, reason: 'connector tasks still running' };
         }
         // stopped tasks commit their final offsets before kafka connect
@@ -373,8 +381,9 @@ class HashedConnectorsManager {
      * @returns {string[]} drifted field names
      */
     _configDrift(live, spec) {
-        return Object.keys(spec).filter(key =>
-            !unmanagedConfigKeys.has(key) && String(live[key]) !== String(spec[key]));
+        return Object.keys(spec).filter(
+            key => !unmanagedConfigKeys.has(key) && String(live[key]) !== String(spec[key]),
+        );
     }
 
     /**
@@ -386,8 +395,11 @@ class HashedConnectorsManager {
      * @returns {Object|null} `{ t, i }`, or null if none is known
      */
     _startTime(index, outdated) {
-        const covering = outdated.filter(({ connector, parsedName }) => connector.oplogTime && (!parsedName ||
-            parsedName.nbConnectors !== this._nbConnectors || parsedName.index === index));
+        const covering = outdated.filter(
+            ({ connector, parsedName }) =>
+                connector.oplogTime &&
+                (!parsedName || parsedName.nbConnectors !== this._nbConnectors || parsedName.index === index),
+        );
         return minTimestamp(covering.map(({ connector }) => connector.oplogTime));
     }
 }

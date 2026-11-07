@@ -3,12 +3,15 @@ const { metadataPolicies, defaultMode } = require('./metadataPolicy');
 const { retryParamsJoi, probeServerJoi, logJoiOptional } = require('../../lib/config/configItems.joi');
 const { extensionConfigValidator } = require('../../lib/config/extensionConfigValidator');
 
-const { MAX_QUEUED_DEFAULT }  = require('../../lib/constants').backbeatConsumer;
+const { MAX_QUEUED_DEFAULT } = require('../../lib/constants').backbeatConsumer;
 
 const joiSchema = joi.object({
     topic: joi.string().required(),
     groupId: joi.string().required(),
-    mode: joi.string().valid(...Object.keys(metadataPolicies)).default(defaultMode),
+    mode: joi
+        .string()
+        .valid(...Object.keys(metadataPolicies))
+        .default(defaultMode),
     retry: retryParamsJoi,
     concurrency: joi.number().greater(0).default(1),
     maxQueued: joi.number().greater(0).default(MAX_QUEUED_DEFAULT),
