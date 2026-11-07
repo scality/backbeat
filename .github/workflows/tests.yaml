@@ -91,6 +91,8 @@ jobs:
       run: yarn run --silent lint_md
     - name: Lint Javascript
       run: yarn run --silent lint
+    - name: Check formatting
+      run: yarn run --silent prettier:check
     - name: Typecheck
       run: yarn run --silent typecheck
 

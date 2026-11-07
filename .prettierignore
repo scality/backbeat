@@ -1,0 +1,4 @@
+node_modules/
+coverage/
+bucket-scanner/
+monitoring/**/dashboard.json
