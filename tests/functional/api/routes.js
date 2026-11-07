@@ -1167,7 +1167,7 @@ describe('API routes', () => {
 
             it(
                 'should remove a scheduled resume request when receiving a ' +
-                    'DELETE request to route' +
+                    'DELETE request to route ' +
                     `/_/${svc.name}/resume/${secondSite}/schedule`,
                 done => {
                     const options = Object.assign({}, defaultOptions, {
