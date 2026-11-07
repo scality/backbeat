@@ -142,94 +142,91 @@ describe('LogConsumer rebalance tests', () => {
         );
     }
 
-    it(
-        'should commit stored offsets, release partitions promptly on rebalance and keep consuming',
-        function testPromptRelease(done) {
-            this.timeout(60000);
-            async.series(
-                [
-                    next => setupConsumer(true, next),
-                    next => {
-                        // pre-fix, the revoke below would stall for
-                        // maxPollIntervalMs - 1000 = 44s waiting for a commit
-                        // callback that librdkafka only delivers after
-                        // unassign: the 15s cap proves the drain no longer
-                        // gates on it
-                        const unassignDeadline = setTimeout(() => {
-                            next(new Error('partitions were not released within 15s of the rebalance'));
-                        }, 15000);
-                        consumer.once('unassigned', () => {
-                            clearTimeout(unassignDeadline);
-                            next();
-                        });
-                        consumer2 = new LogConsumer(
-                            {
-                                hosts: producerKafkaConf.hosts,
-                                topic,
-                                consumerGroupId: groupId,
-                            },
-                            log,
-                        );
-                        consumer2.setup(() => startPolling(consumer2, true));
-                    },
-                    next => {
-                        assert.strictEqual(
-                            consumer._consumer.isConnected(),
-                            true,
-                            'consumer should stay connected after releasing partitions',
-                        );
-                        consumer._consumer.committed(
-                            [...lastStored.values()].map(tp => ({ topic: tp.topic, partition: tp.partition })),
-                            10000,
-                            (err, committed) => {
-                                if (err) {
-                                    return next(err);
-                                }
-                                lastStored.forEach(stored => {
-                                    const part = committed.find(c => c.partition === stored.partition);
-                                    assert(part, 'no committed offset for ' + `partition ${stored.partition}`);
-                                    assert.strictEqual(
-                                        part.offset,
-                                        stored.offset,
-                                        'committed offset should match the last stored offset after the rebalance',
-                                    );
-                                });
-                                return next();
-                            },
-                        );
-                    },
-                    next => {
-                        // no zombie: once the second consumer leaves, the
-                        // first must take the partitions back and consume again
-                        consumer2.close(() => {
-                            consumer2 = null;
-                            waitFor(
-                                () => consumer._consumer.assignments().length > 0,
-                                30000,
-                                'partitions to be re-assigned',
-                                next,
-                            );
-                        });
-                    },
-                    next => {
-                        const storedBefore = [...lastStored.values()].reduce((sum, tp) => sum + tp.offset, 0);
-                        producer.send([messages[0]], err => {
+    it('should commit stored offsets, release partitions promptly on rebalance and keep consuming', function testPromptRelease(done) {
+        this.timeout(60000);
+        async.series(
+            [
+                next => setupConsumer(true, next),
+                next => {
+                    // pre-fix, the revoke below would stall for
+                    // maxPollIntervalMs - 1000 = 44s waiting for a commit
+                    // callback that librdkafka only delivers after
+                    // unassign: the 15s cap proves the drain no longer
+                    // gates on it
+                    const unassignDeadline = setTimeout(() => {
+                        next(new Error('partitions were not released within 15s of the rebalance'));
+                    }, 15000);
+                    consumer.once('unassigned', () => {
+                        clearTimeout(unassignDeadline);
+                        next();
+                    });
+                    consumer2 = new LogConsumer(
+                        {
+                            hosts: producerKafkaConf.hosts,
+                            topic,
+                            consumerGroupId: groupId,
+                        },
+                        log,
+                    );
+                    consumer2.setup(() => startPolling(consumer2, true));
+                },
+                next => {
+                    assert.strictEqual(
+                        consumer._consumer.isConnected(),
+                        true,
+                        'consumer should stay connected after releasing partitions',
+                    );
+                    consumer._consumer.committed(
+                        [...lastStored.values()].map(tp => ({ topic: tp.topic, partition: tp.partition })),
+                        10000,
+                        (err, committed) => {
                             if (err) {
                                 return next(err);
                             }
-                            return waitFor(
-                                () => [...lastStored.values()].reduce((sum, tp) => sum + tp.offset, 0) > storedBefore,
-                                30000,
-                                'a batch to be consumed after the rebalance',
-                                next,
-                            );
-                        });
-                    },
-                ],
-                done,
-            );
-        },
-    );
+                            lastStored.forEach(stored => {
+                                const part = committed.find(c => c.partition === stored.partition);
+                                assert(part, 'no committed offset for ' + `partition ${stored.partition}`);
+                                assert.strictEqual(
+                                    part.offset,
+                                    stored.offset,
+                                    'committed offset should match the last stored offset after the rebalance',
+                                );
+                            });
+                            return next();
+                        },
+                    );
+                },
+                next => {
+                    // no zombie: once the second consumer leaves, the
+                    // first must take the partitions back and consume again
+                    consumer2.close(() => {
+                        consumer2 = null;
+                        waitFor(
+                            () => consumer._consumer.assignments().length > 0,
+                            30000,
+                            'partitions to be re-assigned',
+                            next,
+                        );
+                    });
+                },
+                next => {
+                    const storedBefore = [...lastStored.values()].reduce((sum, tp) => sum + tp.offset, 0);
+                    producer.send([messages[0]], err => {
+                        if (err) {
+                            return next(err);
+                        }
+                        return waitFor(
+                            () => [...lastStored.values()].reduce((sum, tp) => sum + tp.offset, 0) > storedBefore,
+                            30000,
+                            'a batch to be consumed after the rebalance',
+                            next,
+                        );
+                    });
+                },
+            ],
+            done,
+        );
+    });
 
     it('should time out and disconnect when the in-flight batch never completes', function testDrainTimeout(done) {
         this.timeout(150000);

@@ -153,65 +153,62 @@ describe('BackbeatConsumer main tests', () => {
         assert(metrics.ZenkoMetrics.getMetric('rdkafka_cgrp_assignment_size') !== undefined);
     }).timeout(30000);
 
-    it(
-        'should not consume messages when paused and when resumed, consume messages from the previous offset',
-        done => {
-            let totalConsumed = 0;
-            const kafkaConsumer = consumer._consumer;
-            consumer.subscribe();
+    it('should not consume messages when paused and when resumed, consume messages from the previous offset', done => {
+        let totalConsumed = 0;
+        const kafkaConsumer = consumer._consumer;
+        consumer.subscribe();
 
-            async.series(
-                [
-                    next => {
-                        assert.equal(kafkaConsumer.subscription().length, 1);
-                        consumer.on('consumed', messagesConsumed => {
-                            totalConsumed += messagesConsumed;
-                            if (totalConsumed === 1) {
-                                consumer.pause();
-                                next();
-                            }
-                        });
-                        producer.send([messages[0]], err => {
-                            assert.ifError(err);
-                        });
-                    },
-                    next => {
-                        assert.equal(kafkaConsumer.subscription().length, 0);
-                        consumer.on('consumed', messagesConsumed => {
-                            totalConsumed += messagesConsumed;
-                            // should not consume when paused
-                            return next(new Error('expected consumer to be paused, messages were still consumed'));
-                        });
-                        // wait 5 seconds to see if any messages were consumed
-                        setTimeout(() => {
-                            consumer.removeAllListeners('consumed');
-                            assert.equal(totalConsumed, 1);
-                            return next();
-                        }, 5000);
-                        producer.send(messages, err => {
-                            assert.ifError(err);
-                        });
-                    },
-                    next => {
-                        consumer.resume();
-                        assert.equal(kafkaConsumer.subscription().length, 1);
-                        consumer.on('consumed', messagesConsumed => {
-                            totalConsumed += messagesConsumed;
-                            if (totalConsumed === messages.length + 1) {
-                                next();
-                            }
-                        });
-                    },
-                ],
-                err => {
-                    assert.ifError(err);
-                    // when resumed, the messages are read from previous offset
-                    assert.equal(totalConsumed, 4);
-                    done();
+        async.series(
+            [
+                next => {
+                    assert.equal(kafkaConsumer.subscription().length, 1);
+                    consumer.on('consumed', messagesConsumed => {
+                        totalConsumed += messagesConsumed;
+                        if (totalConsumed === 1) {
+                            consumer.pause();
+                            next();
+                        }
+                    });
+                    producer.send([messages[0]], err => {
+                        assert.ifError(err);
+                    });
                 },
-            );
-        },
-    ).timeout(30000);
+                next => {
+                    assert.equal(kafkaConsumer.subscription().length, 0);
+                    consumer.on('consumed', messagesConsumed => {
+                        totalConsumed += messagesConsumed;
+                        // should not consume when paused
+                        return next(new Error('expected consumer to be paused, messages were still consumed'));
+                    });
+                    // wait 5 seconds to see if any messages were consumed
+                    setTimeout(() => {
+                        consumer.removeAllListeners('consumed');
+                        assert.equal(totalConsumed, 1);
+                        return next();
+                    }, 5000);
+                    producer.send(messages, err => {
+                        assert.ifError(err);
+                    });
+                },
+                next => {
+                    consumer.resume();
+                    assert.equal(kafkaConsumer.subscription().length, 1);
+                    consumer.on('consumed', messagesConsumed => {
+                        totalConsumed += messagesConsumed;
+                        if (totalConsumed === messages.length + 1) {
+                            next();
+                        }
+                    });
+                },
+            ],
+            err => {
+                assert.ifError(err);
+                // when resumed, the messages are read from previous offset
+                assert.equal(totalConsumed, 4);
+                done();
+            },
+        );
+    }).timeout(30000);
 });
 
 describe('BackbeatConsumer rebalance tests', () => {
@@ -1433,31 +1430,28 @@ describe('BackbeatConsumer fromOffset tests', () => {
         );
     });
 
-    it(
-        'should consume messages produced before the group existed with fromOffset earliest',
-        function testEarliest(done) {
-            this.timeout(120000);
-            const marker = `marker-earliest-${Math.random()}`;
-            async.series(
-                [
-                    next => producer.send([{ key: 'k', message: marker }], next),
-                    // without fromOffset 'earliest', the client default
-                    // ('latest') would position past this pre-existing
-                    // message and never deliver it
-                    next => startConsumer(next),
-                    // wide budget: a consumer group's first join can take a
-                    // session timeout (45s) to settle when a rebalance hits
-                    // its joining window
-                    next =>
-                        waitFor(
-                            () => consumedMessages.includes(marker),
-                            75000,
-                            'the pre-existing message to be consumed',
-                            next,
-                        ),
-                ],
-                done,
-            );
-        },
-    );
+    it('should consume messages produced before the group existed with fromOffset earliest', function testEarliest(done) {
+        this.timeout(120000);
+        const marker = `marker-earliest-${Math.random()}`;
+        async.series(
+            [
+                next => producer.send([{ key: 'k', message: marker }], next),
+                // without fromOffset 'earliest', the client default
+                // ('latest') would position past this pre-existing
+                // message and never deliver it
+                next => startConsumer(next),
+                // wide budget: a consumer group's first join can take a
+                // session timeout (45s) to settle when a rebalance hits
+                // its joining window
+                next =>
+                    waitFor(
+                        () => consumedMessages.includes(marker),
+                        75000,
+                        'the pre-existing message to be consumed',
+                        next,
+                    ),
+            ],
+            done,
+        );
+    });
 });

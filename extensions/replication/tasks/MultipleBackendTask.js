@@ -126,15 +126,12 @@ class MultipleBackendTask extends ReplicateObject {
             throw errors.BadRole.customizeDescription(errMessage);
         }
         if (roles[0] !== entryRoles[0]) {
-            log.error(
-                'role in replication entry for source does not match role in bucket replication configuration',
-                {
-                    method: 'MultipleBackendTask._setupRolesOnce',
-                    entry: entry.getLogInfo(),
-                    entryRole: entryRoles[0],
-                    bucketRole: roles[0],
-                },
-            );
+            log.error('role in replication entry for source does not match role in bucket replication configuration', {
+                method: 'MultipleBackendTask._setupRolesOnce',
+                entry: entry.getLogInfo(),
+                entryRole: entryRoles[0],
+                bucketRole: roles[0],
+            });
             throw errors.BadRole;
         }
     }

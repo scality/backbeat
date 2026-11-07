@@ -120,8 +120,7 @@ describe('queuePopulator', () => {
                     const command = new PutBucketReplicationCommand({
                         Bucket: testBucket,
                         ReplicationConfiguration: {
-                            Role:
-                                'arn:aws:iam::123456789012:role/backbeat,arn:aws:iam::123456789012:role/backbeat',
+                            Role: 'arn:aws:iam::123456789012:role/backbeat,arn:aws:iam::123456789012:role/backbeat',
                             Rules: [
                                 {
                                     Destination: {
@@ -431,8 +430,7 @@ describe('queuePopulator', () => {
                         next => doesBucketNodeExist(false, zkClient, testBucket, next),
                     ],
                     done,
-                ),
-            );
+                ));
         });
     });
 });
