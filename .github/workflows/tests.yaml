@@ -90,7 +90,7 @@ jobs:
     - name: Lint markdown
       run: yarn run --silent lint_md
     - name: Lint Javascript
-      run: yarn run --silent lint
+      run: yarn run --silent lint --max-warnings 0
     - name: Check formatting
       run: yarn run --silent prettier:check
     - name: Typecheck
