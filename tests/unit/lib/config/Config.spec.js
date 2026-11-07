@@ -25,14 +25,11 @@ describe('Config', () => {
         assert.throws(() => config._parseConfig(testConfig));
     });
 
-    it(
-        'should make the probeserver config in the queuePoulatoroptional when only notification config is specified',
-        () => {
-            delete testConfig.queuePopulator.probeServer;
-            testConfig.extensions = { notification: testConfig.extensions.notification };
-            assert.doesNotThrow(() => config._parseConfig(testConfig));
-        },
-    );
+    it('should make the probeserver config in the queuePoulatoroptional when only notification config is specified', () => {
+        delete testConfig.queuePopulator.probeServer;
+        testConfig.extensions = { notification: testConfig.extensions.notification };
+        assert.doesNotThrow(() => config._parseConfig(testConfig));
+    });
 
     it('should accept a config serving no API, as a D/R sink does', () => {
         delete testConfig.server;

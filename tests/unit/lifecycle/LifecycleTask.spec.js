@@ -190,32 +190,29 @@ describe('lifecycle task helper methods', () => {
             assert.deepStrictEqual(sortedList, expected);
         });
 
-        it(
-            'should merge and sort the arrays if the modified dates match and the version has the newest versionId',
-            () => {
-                const versions = [
-                    {
-                        Key: 'obj-1',
-                        VersionId: '39383331323130353631353130353939393939395247303031202038363935392e3130',
-                        IsLatest: false,
-                        LastModified: '2018-04-04T23:16:44.000Z',
-                    },
-                ];
-                const dms = [
-                    {
-                        Key: 'obj-1',
-                        IsLatest: false,
-                        VersionId: '39383331323130353632373431383939393939395247303031202038363935392e39',
-                        LastModified: '2018-04-04T23:16:44.000Z',
-                    },
-                ];
+        it('should merge and sort the arrays if the modified dates match and the version has the newest versionId', () => {
+            const versions = [
+                {
+                    Key: 'obj-1',
+                    VersionId: '39383331323130353631353130353939393939395247303031202038363935392e3130',
+                    IsLatest: false,
+                    LastModified: '2018-04-04T23:16:44.000Z',
+                },
+            ];
+            const dms = [
+                {
+                    Key: 'obj-1',
+                    IsLatest: false,
+                    VersionId: '39383331323130353632373431383939393939395247303031202038363935392e39',
+                    LastModified: '2018-04-04T23:16:44.000Z',
+                },
+            ];
 
-                const expected = [versions[0], dms[0]];
-                const { error, sortedList } = lct._mergeSortedVersionsAndDeleteMarkers(versions, dms, fakeLogger);
-                assert.ifError(error);
-                assert.deepStrictEqual(sortedList, expected);
-            },
-        );
+            const expected = [versions[0], dms[0]];
+            const { error, sortedList } = lct._mergeSortedVersionsAndDeleteMarkers(versions, dms, fakeLogger);
+            assert.ifError(error);
+            assert.deepStrictEqual(sortedList, expected);
+        });
 
         it('should merge and sort arrays that include a null version id version', () => {
             const versions = [
