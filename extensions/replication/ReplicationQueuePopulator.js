@@ -262,14 +262,11 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
         }
 
         if (!this.defaultLocalLocation) {
-            this.log.error(
-                'invalid target location and no local location to fall back to, skipping pull replication',
-                {
-                    method: 'ReplicationQueuePopulator._getPullReplicationTarget',
-                    ...queueEntry.getLogInfo(),
-                    targetLocation,
-                },
-            );
+            this.log.error('invalid target location and no local location to fall back to, skipping pull replication', {
+                method: 'ReplicationQueuePopulator._getPullReplicationTarget',
+                ...queueEntry.getLogInfo(),
+                targetLocation,
+            });
             return undefined;
         }
 

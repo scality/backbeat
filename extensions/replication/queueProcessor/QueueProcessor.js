@@ -447,9 +447,7 @@ class QueueProcessor extends EventEmitter {
 
     _setupEcho() {
         if (!this.sourceAdminVaultConfigured) {
-            throw new Error(
-                'echo mode not properly configured: missing credentials for source Vault admin client',
-            );
+            throw new Error('echo mode not properly configured: missing credentials for source Vault admin client');
         }
         if (!this.destAdminVaultConfigured) {
             throw new Error(

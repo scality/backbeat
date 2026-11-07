@@ -291,15 +291,12 @@ class ReplicateObject extends BackbeatTask {
             throw errors.BadRole;
         }
         if (roles[0] !== entryRoles[0]) {
-            log.error(
-                'role in replication entry for source does not match role in bucket replication configuration ',
-                {
-                    method: 'ReplicateObject._setupRolesOnce',
-                    entry: entry.getLogInfo(),
-                    entryRole: entryRoles[0],
-                    bucketRole: roles[0],
-                },
-            );
+            log.error('role in replication entry for source does not match role in bucket replication configuration ', {
+                method: 'ReplicateObject._setupRolesOnce',
+                entry: entry.getLogInfo(),
+                entryRole: entryRoles[0],
+                bucketRole: roles[0],
+            });
             throw errors.BadRole;
         }
         // Pick the rule for this specific backend (multi-destination
@@ -331,15 +328,12 @@ class ReplicateObject extends BackbeatTask {
             expectedDestRole = roles[0];
         }
         if (expectedDestRole !== entryRoles[1]) {
-            log.error(
-                'role in replication entry for target does not match role in bucket replication configuration ',
-                {
-                    method: 'ReplicateObject._setupRolesOnce',
-                    entry: entry.getLogInfo(),
-                    entryRole: entryRoles[1],
-                    bucketRole: expectedDestRole,
-                },
-            );
+            log.error('role in replication entry for target does not match role in bucket replication configuration ', {
+                method: 'ReplicateObject._setupRolesOnce',
+                entry: entry.getLogInfo(),
+                entryRole: entryRoles[1],
+                bucketRole: expectedDestRole,
+            });
             throw errors.BadRole;
         }
         return [entryRoles[0], entryRoles[1]];

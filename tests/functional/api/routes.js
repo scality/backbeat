@@ -833,8 +833,7 @@ describe('API routes', () => {
                         progress: '0%',
                     });
                     done();
-                }),
-            );
+                }));
 
             it('should return a response even if redis data does not exist: object throughput CRR metrics', done =>
                 getRequest(`/_/metrics/crr/${site1}/throughput/bucket/object` + '?versionId=version', (err, res) => {
@@ -844,8 +843,7 @@ describe('API routes', () => {
                         throughput: '0.00',
                     });
                     done();
-                }),
-            );
+                }));
         });
     });
 

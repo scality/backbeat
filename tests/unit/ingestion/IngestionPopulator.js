@@ -324,21 +324,18 @@ describe('Ingestion Populator', () => {
             });
         });
 
-        it(
-            'should not queue a log reader again when its setup fails and its source is no longer configured',
-            done => {
-                const logReader = addLogReader('bucket1');
-                logReader.setup.yieldsAsync(errors.InternalError);
-                ip._ingestionSources.delete('bucket1');
+        it('should not queue a log reader again when its setup fails and its source is no longer configured', done => {
+            const logReader = addLogReader('bucket1');
+            logReader.setup.yieldsAsync(errors.InternalError);
+            ip._ingestionSources.delete('bucket1');
 
-                ip._setupUpdatedReaders(err => {
-                    assert.ifError(err);
-                    assert.deepStrictEqual(ip.logReaders, new Map());
-                    assert.deepStrictEqual(ip.logReadersUpdate, new Map());
-                    done();
-                });
-            },
-        );
+            ip._setupUpdatedReaders(err => {
+                assert.ifError(err);
+                assert.deepStrictEqual(ip.logReaders, new Map());
+                assert.deepStrictEqual(ip.logReadersUpdate, new Map());
+                done();
+            });
+        });
 
         it(
             'should not queue a log reader again when its setup fails and ' +
@@ -359,21 +356,18 @@ describe('Ingestion Populator', () => {
             },
         );
 
-        it(
-            'should not activate a log reader when its setup succeeds and its source is no longer configured',
-            done => {
-                const logReader = addLogReader('bucket1');
-                logReader.setup.yieldsAsync(null);
-                ip._ingestionSources.delete('bucket1');
+        it('should not activate a log reader when its setup succeeds and its source is no longer configured', done => {
+            const logReader = addLogReader('bucket1');
+            logReader.setup.yieldsAsync(null);
+            ip._ingestionSources.delete('bucket1');
 
-                ip._setupUpdatedReaders(err => {
-                    assert.ifError(err);
-                    assert.deepStrictEqual(ip.logReaders, new Map());
-                    assert.deepStrictEqual(ip.logReadersUpdate, new Map());
-                    done();
-                });
-            },
-        );
+            ip._setupUpdatedReaders(err => {
+                assert.ifError(err);
+                assert.deepStrictEqual(ip.logReaders, new Map());
+                assert.deepStrictEqual(ip.logReadersUpdate, new Map());
+                done();
+            });
+        });
 
         it(
             'should not activate a log reader when its setup succeeds and ' +
