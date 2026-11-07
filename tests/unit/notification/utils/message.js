@@ -1,4 +1,4 @@
-/* eslint-disable quote-props */
+ 
 const assert = require('assert');
 
 const messageUtil
