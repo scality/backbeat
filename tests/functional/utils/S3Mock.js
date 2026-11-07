@@ -3,7 +3,7 @@ const url = require('url');
 class S3Mock {
     getMetadata(objectKey) {
         return JSON.stringify({
-            /* eslint-disable quote-props */
+             
             Body: JSON.stringify({
                 'owner-display-name': 'retryuser',
                 'owner-id': '1d79449d2b781e585051d057ecf99cad1898120cda80b7b2' +
@@ -66,7 +66,7 @@ class S3Mock {
                 'last-modified': '2018-03-30T22:22:34.384Z',
                 'md-model-version': 3,
             }),
-            /* eslint-enable quote-props */
+             
         });
     }
 
