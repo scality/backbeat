@@ -121,7 +121,7 @@ describe('queuePopulator', () => {
                         Bucket: testBucket,
                         ReplicationConfiguration: {
                             Role:
-                                'arn:aws:iam::123456789012:role/backbeat,' + 'arn:aws:iam::123456789012:role/backbeat',
+                                'arn:aws:iam::123456789012:role/backbeat,arn:aws:iam::123456789012:role/backbeat',
                             Rules: [
                                 {
                                     Destination: {
@@ -415,7 +415,7 @@ describe('queuePopulator', () => {
                     done,
                 ));
 
-            it('should delete lifecycle bucket data path if lifecycle config ' + 'is deleted', done =>
+            it('should delete lifecycle bucket data path if lifecycle config is deleted', done =>
                 async.series(
                     [
                         next => queuePopulator.processLogEntries({ maxRead: 10 }, next),

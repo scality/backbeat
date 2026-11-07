@@ -40,7 +40,7 @@ describe('ActionQueueEntry', () => {
         assert.deepStrictEqual(entry.getAttribute('details'), { roundTrip: true });
     });
 
-    it('should set an error when retrieving an unset attribute and ' + '"required" option is set', () => {
+    it('should set an error when retrieving an unset attribute and "required" option is set', () => {
         const entry = ActionQueueEntry.create('sendPigeon').setAttribute('toCountry', 'Finland');
         assert.strictEqual(entry.getAttribute('cost', { required: true }), undefined);
         assert(entry.getError());
@@ -70,7 +70,7 @@ describe('ActionQueueEntry', () => {
         assert.strictEqual(entry.getLogInfo().isRoundTrip, true);
     });
 
-    it('should add some contextual info with addContext() that gets logged ' + 'under "actionContext" field', () => {
+    it('should add some contextual info with addContext() that gets logged under "actionContext" field', () => {
         const entry = ActionQueueEntry.create('sendPigeon')
             .setAttribute('toCountry', 'Finland')
             .setAttribute('cost', 500)

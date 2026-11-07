@@ -351,7 +351,7 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
                 }
                 if (err && err.statusCode === 412) {
                     log.info(
-                        'Object was modified after delete entry ' + 'created so object was not deleted',
+                        'Object was modified after delete entry created so object was not deleted',
                         entry.getLogInfo(),
                     );
                 }

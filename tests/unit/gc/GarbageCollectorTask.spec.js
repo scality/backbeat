@@ -571,7 +571,7 @@ describe('GarbageCollectorTask', () => {
             backbeatClient.batchDeleteResponse = { error: null, res: null };
         });
 
-        it('should not delete anything and warn when all locations are on a ' + 'CRR location', done => {
+        it('should not delete anything and warn when all locations are on a CRR location', done => {
             const entry = createDeleteDataEntry([crrLocation]);
             const batchDeleteDataSpy = sinon.spy(gcTask, '_batchDeleteData');
             const onGcCompletedSpy = sinon.spy(GarbageCollectorMetrics, 'onGcCompleted');
@@ -589,7 +589,7 @@ describe('GarbageCollectorTask', () => {
             });
         });
 
-        it('should not delete anything for a multipart object on a CRR ' + 'location', done => {
+        it('should not delete anything for a multipart object on a CRR location', done => {
             const secondCrrLocation = Object.assign({}, crrLocation, { key: 'crrKey2' });
             const entry = createDeleteDataEntry([crrLocation, secondCrrLocation]);
             const batchDeleteDataSpy = sinon.spy(gcTask, '_batchDeleteData');
@@ -603,7 +603,7 @@ describe('GarbageCollectorTask', () => {
             });
         });
 
-        it('should delete all locations and not warn when none is on a CRR ' + 'location', done => {
+        it('should delete all locations and not warn when none is on a CRR location', done => {
             const entry = createDeleteDataEntry([regularLocation]);
             const batchDeleteDataSpy = sinon.spy(gcTask, '_batchDeleteData');
 

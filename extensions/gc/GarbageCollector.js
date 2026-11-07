@@ -158,7 +158,7 @@ class GarbageCollector extends EventEmitter {
         this._consumer = new BackbeatConsumer(this._getConsumerOptions());
         this._consumer.on('error', () => {
             if (!consumerReady) {
-                this._logger.error('garbage collector failed to start the ' + 'kafka consumer');
+                this._logger.error('garbage collector failed to start the kafka consumer');
                 process.exit(1);
             }
         });

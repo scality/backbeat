@@ -85,7 +85,7 @@ describe('backbeatProducer', () => {
         assert.strictEqual(backbeatProducer._maxRequestSize, 1234567);
     });
 
-    it('should return an error if send() called on producer with no default ' + 'topic', done => {
+    it('should return an error if send() called on producer with no default topic', done => {
         const backbeatProducer = new BackbeatProducer({
             kafka,
         });

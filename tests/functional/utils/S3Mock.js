@@ -5,7 +5,7 @@ class S3Mock {
         return JSON.stringify({
             Body: JSON.stringify({
                 'owner-display-name': 'retryuser',
-                'owner-id': '1d79449d2b781e585051d057ecf99cad1898120cda80b7b2' + 'a94e3fe99d8cad82',
+                'owner-id': '1d79449d2b781e585051d057ecf99cad1898120cda80b7b2a94e3fe99d8cad82',
                 'cache-control': '',
                 'content-disposition': '',
                 'content-encoding': '',

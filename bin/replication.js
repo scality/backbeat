@@ -80,9 +80,9 @@ program.version(version);
         .option('--target-bucket <name>', '[required] target bucket name')
         .option(
             '--target-profile <name>',
-            '[optional] target ' + 'aws/credentials profile (optional if using external location)',
+            '[optional] target aws/credentials profile (optional if using external location)',
         )
-        .option('--site-name <name>', '[optional] the site name (required if ' + 'using external location)')
+        .option('--site-name <name>', '[optional] the site name (required if using external location)')
         .action(options => {
             const log = new Logger('BackbeatSetup').newRequestLogger();
             const s = _createSetupReplication(cmd.name, options, log);

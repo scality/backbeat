@@ -30,14 +30,14 @@ class ZKStateHelper {
         const path = `${this.statePath}/${site}`;
         this.zkClient.getData(path, (err, data) => {
             if (err) {
-                process.stdout.write('Zookeeper test helper error in ' + 'ZKStateHelper.get at zkClient.getData');
+                process.stdout.write('Zookeeper test helper error in ZKStateHelper.get at zkClient.getData');
                 return cb(err);
             }
             let state;
             try {
                 state = JSON.parse(data.toString());
             } catch (parseErr) {
-                process.stdout.write('Zookeeper test helper error in ' + 'ZKStateHelper.get at JSON.parse');
+                process.stdout.write('Zookeeper test helper error in ZKStateHelper.get at JSON.parse');
                 return cb(parseErr);
             }
             return cb(null, state);
@@ -92,7 +92,7 @@ class ZKStateHelper {
                 ],
                 err => {
                     if (err) {
-                        process.stdout.write('Zookeeper test helper error in ' + 'ZKStateHelper.init');
+                        process.stdout.write('Zookeeper test helper error in ZKStateHelper.init');
                         return cb(err);
                     }
                     return cb();
@@ -126,7 +126,7 @@ class ZKStateHelper {
             ],
             err => {
                 if (err) {
-                    process.stdout.write('Zookeeper test helper error in ' + 'ZKStateHelper.reset');
+                    process.stdout.write('Zookeeper test helper error in ZKStateHelper.reset');
                     return cb(err);
                 }
                 return cb();

@@ -58,7 +58,7 @@ describe('Metrics class', () => {
             assert.ifError(err);
             const expected = {
                 pending: {
-                    description: 'Number of pending replication operations ' + '(count) and bytes (size)',
+                    description: 'Number of pending replication operations (count) and bytes (size)',
                     results: {
                         count: 0,
                         size: 0,

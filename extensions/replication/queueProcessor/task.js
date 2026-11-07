@@ -41,7 +41,7 @@ function getTopic(topic) {
     }
 
     const isTopicUsed = repConfig.replayTopics.some(t => t.topicName === topic);
-    assert(isTopicUsed, 'Invalid topic argument. Topic must match ' + 'one of the replay topic defined');
+    assert(isTopicUsed, 'Invalid topic argument. Topic must match one of the replay topic defined');
     return topic;
 }
 

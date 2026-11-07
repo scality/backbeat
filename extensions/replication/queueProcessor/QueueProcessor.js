@@ -105,7 +105,7 @@ const timeElapsedMetric = ZenkoMetrics.createHistogram({
 
 const rpoMetric = ZenkoMetrics.createHistogram({
     name: 's3_replication_rpo_seconds',
-    help: 'Difference between the time the object is updated and the time it ' + 'is picked up for replication',
+    help: 'Difference between the time the object is updated and the time it is picked up for replication',
     labelNames: ['origin', 'serviceName', 'location'],
     buckets: [1, 10, 30, 60, 120, 300, 600],
 });
@@ -433,7 +433,7 @@ class QueueProcessor extends EventEmitter {
         });
         consumer.on('error', () => {
             if (!consumerReady) {
-                this.logger.fatal('queue processor failed to start a ' + 'backbeat consumer', { topic, groupId });
+                this.logger.fatal('queue processor failed to start a backbeat consumer', { topic, groupId });
                 process.exit(1);
             }
         });
@@ -448,12 +448,12 @@ class QueueProcessor extends EventEmitter {
     _setupEcho() {
         if (!this.sourceAdminVaultConfigured) {
             throw new Error(
-                'echo mode not properly configured: missing ' + 'credentials for source Vault admin client',
+                'echo mode not properly configured: missing credentials for source Vault admin client',
             );
         }
         if (!this.destAdminVaultConfigured) {
             throw new Error(
-                'echo mode not properly configured: missing ' + 'credentials for destination Vault ' + 'admin client',
+                'echo mode not properly configured: missing credentials for destination Vault admin client',
             );
         }
         if (process.env.BACKBEAT_ECHO_TEST_MODE === '1') {
@@ -519,7 +519,7 @@ class QueueProcessor extends EventEmitter {
             // if currently resumed/active, attempt to pause
             this._updateZkStateNode('paused', true, err => {
                 if (err) {
-                    this.logger.trace('error occurred saving state to ' + 'zookeeper', {
+                    this.logger.trace('error occurred saving state to zookeeper', {
                         method: 'QueueProcessor._pauseService',
                     });
                 } else {
@@ -554,7 +554,7 @@ class QueueProcessor extends EventEmitter {
         } else {
             this._updateZkStateNode('paused', false, err => {
                 if (err) {
-                    this.logger.trace('error occurred saving state to ' + 'zookeeper', {
+                    this.logger.trace('error occurred saving state to zookeeper', {
                         method: 'QueueProcessor._resumeService',
                     });
                 } else {
@@ -630,7 +630,7 @@ class QueueProcessor extends EventEmitter {
                             const bufferedData = Buffer.from(JSON.stringify(state));
                             return next(null, bufferedData);
                         } catch (err) {
-                            this.logger.error('could not parse state data from ' + 'zookeeper', {
+                            this.logger.error('could not parse state data from zookeeper', {
                                 method: 'QueueProcessor._updateZkStateNode',
                                 zookeeperPath: path,
                                 error: err,
@@ -641,7 +641,7 @@ class QueueProcessor extends EventEmitter {
                 (data, next) =>
                     this.zkClient.setData(path, data, err => {
                         if (err) {
-                            this.logger.error('could not save state data in ' + 'zookeeper', {
+                            this.logger.error('could not save state data in zookeeper', {
                                 method: 'QueueProcessor._updateZkStateNode',
                                 zookeeperPath: path,
                                 error: err,

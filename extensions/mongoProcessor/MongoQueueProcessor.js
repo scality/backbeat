@@ -362,7 +362,7 @@ class MongoQueueProcessor {
                 }
                 if (err) {
                     this._normalizePendingMetric(location);
-                    log.end().error('error deleting object metadata ' + 'from mongo', {
+                    log.end().error('error deleting object metadata from mongo', {
                         bucket,
                         key,
                         error: err.message,
@@ -453,7 +453,7 @@ class MongoQueueProcessor {
             return this._mongoClient.putObject(bucket, key, objVal, params, this.logger, err => {
                 if (err) {
                     this._normalizePendingMetric(location);
-                    log.end().error('error putting object metadata ' + 'to mongo', {
+                    log.end().error('error putting object metadata to mongo', {
                         bucket,
                         key,
                         versionId: sourceEntry.getEncodedVersionId(),
@@ -529,7 +529,7 @@ class MongoQueueProcessor {
         }
         return this._mongoClient.getBucketAttributes(bucketName, log, (err, bucketInfo) => {
             if (err) {
-                log.error('error getting bucket owner ' + 'details', {
+                log.error('error getting bucket owner details', {
                     method: 'MongoQueueProcessor.processKafkaEntry',
                     entry: sourceEntry.getLogInfo(),
                     error: err.message,
