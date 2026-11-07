@@ -154,7 +154,7 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
     _getBucketNodeZkPath(attributes) {
         const { zookeeperPath } = this.extConfig;
         return (
-            `${zookeeperPath}${LIFECYCLE_BUCKETS_ZK_PATH}/` + `${attributes.owner}:${attributes.uid}:${attributes.name}`
+            `${zookeeperPath}${LIFECYCLE_BUCKETS_ZK_PATH}/${attributes.owner}:${attributes.uid}:${attributes.name}`
         );
     }
 

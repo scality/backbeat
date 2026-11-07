@@ -955,7 +955,7 @@ describe('BackbeatConsumer "deferred committable" tests', () => {
         for (let i = 0; i < 1000; ++i) {
             boatloadOfMessages.push({
                 key: `message-${i}`,
-                message: `{"message_index":"${i}",` + `"deferred":${i % 2 === 0 ? 'true' : 'false'}}`,
+                message: `{"message_index":"${i}","deferred":${i % 2 === 0 ? 'true' : 'false'}}`,
             });
         }
         setTimeout(

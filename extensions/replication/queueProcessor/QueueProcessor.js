@@ -480,7 +480,7 @@ class QueueProcessor extends EventEmitter {
         this._redis.subscribe(channelName, err => {
             if (err) {
                 this.logger.fatal(
-                    'queue processor failed to subscribe to ' + `crr redis channel for location ${this.site}`,
+                    `queue processor failed to subscribe to crr redis channel for location ${this.site}`,
                     { method: 'QueueProcessor.constructor', error: err },
                 );
                 process.exit(1);
@@ -525,7 +525,7 @@ class QueueProcessor extends EventEmitter {
                     if (this._dataMoverConsumer) {
                         this._dataMoverConsumer.pause(this.site);
                     }
-                    this.logger.info('paused replication for location: ' + `${this.site}`);
+                    this.logger.info(`paused replication for location: ${this.site}`);
                     this._deleteScheduledResumeService();
                 }
             });
@@ -560,7 +560,7 @@ class QueueProcessor extends EventEmitter {
                     if (this._dataMoverConsumer) {
                         this._dataMoverConsumer.resume(this.site);
                     }
-                    this.logger.info('resumed replication for location: ' + `${this.site}`);
+                    this.logger.info(`resumed replication for location: ${this.site}`);
                     this._deleteScheduledResumeService();
                 }
             });
@@ -580,7 +580,7 @@ class QueueProcessor extends EventEmitter {
             } else if (this.scheduledResume) {
                 this.scheduledResume.cancel();
                 this.scheduledResume = null;
-                this.logger.info('deleted scheduled CRR resume for location:' + ` ${this.site}`);
+                this.logger.info(`deleted scheduled CRR resume for location: ${this.site}`);
             }
         });
     }
@@ -784,7 +784,7 @@ class QueueProcessor extends EventEmitter {
                 },
             ],
             () => {
-                this.logger.info('queue processor is ready to consume ' + `replication entries from ${this.topic}`);
+                this.logger.info(`queue processor is ready to consume replication entries from ${this.topic}`);
                 this.emit('ready');
             },
         );

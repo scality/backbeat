@@ -36,7 +36,7 @@ describe('ReplicationMetrics', () => {
 
     [123456, '123456'].forEach(contentLength => {
         it(
-            'should maintain replication queuing metrics with ' + `content-length as ${typeof contentLength}`,
+            `should maintain replication queuing metrics with content-length as ${typeof contentLength}`,
             async () => {
                 ReplicationMetrics.onReplicationQueued('testOrigin', 'fromLoc', 'toLoc', contentLength, 2);
 
@@ -75,7 +75,7 @@ describe('ReplicationMetrics', () => {
 
     [12345678, '12345678'].forEach(contentLength => {
         it(
-            'should maintain replication processed metrics with ' + `content-length as ${typeof contentLength}`,
+            `should maintain replication processed metrics with content-length as ${typeof contentLength}`,
             async () => {
                 // Push a few "processed" metrics
                 // object of 123456 bytes processed successfully in 300ms

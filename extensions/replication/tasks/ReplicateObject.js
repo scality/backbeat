@@ -778,7 +778,7 @@ class ReplicateObject extends BackbeatTask {
         // putData route in order to fetch data again from source).
         const sourceS3 = this.sourceConfig.s3;
         this.S3source = new S3Client({
-            endpoint: `${this.sourceConfig.transport}://` + `${sourceS3.host}:${sourceS3.port}`,
+            endpoint: `${this.sourceConfig.transport}://${sourceS3.host}:${sourceS3.port}`,
             credentials: this.s3sourceCredentials.getCredentialsProvider(),
             region: 'us-east-1',
             tls: this.sourceConfig.transport === 'https',
@@ -800,7 +800,7 @@ class ReplicateObject extends BackbeatTask {
             connectionTimeout: TIMEOUT_MS,
         };
         this.backbeatSource = new BackbeatRoutesClient({
-            endpoint: `${this.sourceConfig.transport}://` + `${sourceS3.host}:${sourceS3.port}`,
+            endpoint: `${this.sourceConfig.transport}://${sourceS3.host}:${sourceS3.port}`,
             credentials: this.s3sourceCredentials.getCredentialsProvider(),
             region: 'us-east-1',
             maxAttempts: 1,
@@ -813,7 +813,7 @@ class ReplicateObject extends BackbeatTask {
             priority: 'high',
         });
         this.backbeatSourceProxy = new BackbeatMetadataProxy(
-            `${this.sourceConfig.transport}://` + `${sourceS3.host}:${sourceS3.port}`,
+            `${this.sourceConfig.transport}://${sourceS3.host}:${sourceS3.port}`,
             this.sourceConfig.auth,
             this.sourceHTTPAgent,
         );
@@ -860,7 +860,7 @@ class ReplicateObject extends BackbeatTask {
             requestTimeout: TIMEOUT_MS,
         };
         this.backbeatDest = new BackbeatRoutesClient({
-            endpoint: `${this.destConfig.transport}://` + `${this.destBackbeatHost.host}:${this.destBackbeatHost.port}`,
+            endpoint: `${this.destConfig.transport}://${this.destBackbeatHost.host}:${this.destBackbeatHost.port}`,
             credentials: this.s3destCredentials.getCredentialsProvider(),
             region: 'us-east-1',
             maxAttempts: 1,

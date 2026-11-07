@@ -20,7 +20,7 @@ function constructConnectionString(mongoConfig) {
         const password = encodeURIComponent(authCredentials.password);
         cred = `${username}:${password}@`;
     }
-    let url = `mongodb://${cred}${replicaSetHosts}/` + `?w=${writeConcern}&readPreference=${readPreference}`;
+    let url = `mongodb://${cred}${replicaSetHosts}/?w=${writeConcern}&readPreference=${readPreference}`;
     if (replicaSet) {
         url += `&replicaSet=${replicaSet}`;
     }

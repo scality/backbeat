@@ -18,7 +18,7 @@ class BackbeatTestConsumer extends BackbeatConsumer {
                 assert.deepStrictEqual(
                     message.key.toString(),
                     expectedMsg.key,
-                    `unexpected message key ${message.key}, ` + `expected ${expectedMsg.key}`,
+                    `unexpected message key ${message.key}, expected ${expectedMsg.key}`,
                 );
             }
             if (expectedMsg.value !== undefined) {
@@ -48,7 +48,7 @@ class BackbeatTestConsumer extends BackbeatConsumer {
                 assert.deepStrictEqual(
                     parsedMsg,
                     expectedValue,
-                    `unexpected message value ${parsedMsg}, ` + `expected ${expectedValue}`,
+                    `unexpected message value ${parsedMsg}, expected ${expectedValue}`,
                 );
             }
         }
