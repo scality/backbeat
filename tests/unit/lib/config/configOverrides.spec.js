@@ -30,7 +30,7 @@ describe('config overrides', () => {
             [[1, 2], { a: 'b', c: null }, { a: 'b' }],
             [{}, { a: { bb: { ccc: null } } }, { a: { bb: {} } }],
         ].forEach(([target, patch, expected]) => {
-            const title = `${JSON.stringify(target)} + ${JSON.stringify(patch)} ` + `= ${JSON.stringify(expected)}`;
+            const title = `${JSON.stringify(target)} + ${JSON.stringify(patch)} = ${JSON.stringify(expected)}`;
             it(`should merge ${title}`, () => {
                 assert.deepStrictEqual(mergePatch(target, patch), expected);
             });

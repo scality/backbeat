@@ -84,8 +84,8 @@ describe('BackbeatAPI', () => {
         { url: '/_/lifecycle/resume/all/schedule', method: 'POST' },
         { url: '/_/lifecycle/resume', method: 'GET' },
         { url: '/_/lifecycle/status', method: 'GET' },
-        { url: `/_/metrics/crr/${site}/throughput/mybucket/mykey` + '?versionId=test-myvId', method: 'GET' },
-        { url: `/_/metrics/crr/${site}/progress/mybucket/mykey` + '?versionId=test-myvId', method: 'GET' },
+        { url: `/_/metrics/crr/${site}/throughput/mybucket/mykey?versionId=test-myvId`, method: 'GET' },
+        { url: `/_/metrics/crr/${site}/progress/mybucket/mykey?versionId=test-myvId`, method: 'GET' },
         // valid site for given service
         { url: `/_/crr/pause/${site}`, method: 'POST' },
         { url: `/_/crr/resume/${site}`, method: 'POST' },

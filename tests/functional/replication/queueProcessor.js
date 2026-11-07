@@ -678,7 +678,7 @@ class S3Mock extends TestConfigurator {
         const sourceLocation = this.getParam('source.md.location');
         const location = [
             {
-                key: `${this.getParam('source.bucket')}/` + `${this.getParam('key')}`,
+                key: `${this.getParam('source.bucket')}/${this.getParam('key')}`,
                 start: 0,
                 size: sourceLocation && sourceLocation.length > 0 ? 30 : 0,
                 dataStoreName: 'sf',
@@ -1078,7 +1078,7 @@ describe('queue processor functional tests with mocking', () => {
         describe('source S3 errors', () => {
             [errors.AccessDenied, errors.ObjNotFound].forEach(error => {
                 it(
-                    `replication should skip on ${error.code} ` + `(${error.message}) from source S3 on getObject`,
+                    `replication should skip on ${error.code} (${error.message}) from source S3 on getObject`,
                     async () => {
                         s3mock.installS3ErrorResponder('source.s3.getObject', error);
                         await queueProcessorSF.processReplicationEntry(s3mock.getParam('kafkaEntry'));
@@ -1089,7 +1089,7 @@ describe('queue processor functional tests with mocking', () => {
                 );
 
                 it(
-                    `copy location should skip on ${error.code} ` + `(${error.message}) from source S3 on getObject`,
+                    `copy location should skip on ${error.code} (${error.message}) from source S3 on getObject`,
                     done => {
                         s3mock.installS3ErrorResponder('source.s3.getObject', error);
                         const sendAction = createCopyLocationSender(s3mock, queueProcessorSF);
@@ -1159,7 +1159,7 @@ describe('queue processor functional tests with mocking', () => {
             ['getBucketReplication', 'getObject'].forEach(action => {
                 [errors.InternalError].forEach(error => {
                     it(
-                        `replication should retry on ${error.code} ` + `(${error.message}) from source S3 on ${action}`,
+                        `replication should retry on ${error.code} (${error.message}) from source S3 on ${action}`,
                         async () => {
                             s3mock.installS3ErrorResponder(`source.s3.${action}`, error, { once: true });
 
@@ -1178,7 +1178,7 @@ describe('queue processor functional tests with mocking', () => {
                 s3mock.installS3ErrorResponder('source.s3.getObject', errors.InternalError, { once: true });
                 const expectedLocation = [
                     {
-                        key: `${s3mock.getParam('source.bucket')}/` + `${s3mock.getParam('key')}`,
+                        key: `${s3mock.getParam('source.bucket')}/${s3mock.getParam('key')}`,
                         start: 0,
                         size: 30,
                         dataStoreName: 'sf',
@@ -1228,7 +1228,7 @@ describe('queue processor functional tests with mocking', () => {
         describe('target Vault errors', () => {
             ['getAccountsCanonicalIds', 'assumeRoleBackbeat'].forEach(action => {
                 [errors.AccessDenied, errors.NoSuchEntity].forEach(err => {
-                    it(`should fail on ${err.code} (${err.message}) ` + `from target Vault on ${action}`, async () => {
+                    it(`should fail on ${err.code} (${err.message}) from target Vault on ${action}`, async () => {
                         s3mock.installVaultErrorResponder(`target.${action}`, err);
                         s3mock.setExpectedReplicationStatus('FAILED');
 
@@ -1245,7 +1245,7 @@ describe('queue processor functional tests with mocking', () => {
             ['getAccountsCanonicalIds', 'assumeRoleBackbeat'].forEach(action => {
                 [errors.InternalError].forEach(error => {
                     it(
-                        `should retry on ${error.code} (${error.message}) ` + `from target Vault on ${action}`,
+                        `should retry on ${error.code} (${error.message}) from target Vault on ${action}`,
                         async () => {
                             s3mock.installVaultErrorResponder(`target.${action}`, error, { once: true });
 
@@ -1267,7 +1267,7 @@ describe('queue processor functional tests with mocking', () => {
         describe('target S3 errors', () => {
             ['putData', 'putMetadata'].forEach(action => {
                 [errors.AccessDenied].forEach(error => {
-                    it(`should fail on ${error.code} (${error.message}) ` + `from target S3 on ${action}`, async () => {
+                    it(`should fail on ${error.code} (${error.message}) from target S3 on ${action}`, async () => {
                         s3mock.installS3ErrorResponder(`target.${action}`, error);
                         s3mock.setExpectedReplicationStatus('FAILED');
 
@@ -1292,7 +1292,7 @@ describe('queue processor functional tests with mocking', () => {
             ['putData', 'putMetadata'].forEach(action => {
                 [errors.InternalError].forEach(error => {
                     it(
-                        `should retry on ${error.code} (${error.message}) ` + `from target S3 on ${action}`,
+                        `should retry on ${error.code} (${error.message}) from target S3 on ${action}`,
                         async () => {
                             s3mock.installS3ErrorResponder(`target.${action}`, error, { once: true });
                             const sourceMdPut = waitForSourceMdPut(s3mock);
@@ -1314,7 +1314,7 @@ describe('queue processor functional tests with mocking', () => {
                 s3mock.installS3ErrorResponder('source.s3.putObject', errors.InternalError, { once: true });
                 const expectedLocation = [
                     {
-                        key: `${s3mock.getParam('source.bucket')}/` + `${s3mock.getParam('key')}`,
+                        key: `${s3mock.getParam('source.bucket')}/${s3mock.getParam('key')}`,
                         start: 0,
                         size: 30,
                         dataStoreName: 'sf',

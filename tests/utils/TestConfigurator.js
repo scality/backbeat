@@ -8,7 +8,7 @@ class TestConfigurator {
         const testParam = this._lookupParam(paramPath, this.testParams);
         const persistentParam = this._lookupParam(paramPath, this.persistentParams);
         if (testParam === undefined && persistentParam === undefined) {
-            throw new Error(`error looking up param '${paramPath}': ` + 'not defined');
+            throw new Error(`error looking up param '${paramPath}': not defined`);
         }
         return this._mergeParams(testParam, persistentParam);
     }

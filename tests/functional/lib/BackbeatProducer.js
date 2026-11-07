@@ -57,7 +57,7 @@ const oneBigMessage = [{ key: 'large-foo', message: Buffer.alloc(3000000).fill('
             });
         }).timeout(30000);
 
-        it('should be able to send a big ' + `${oneBigMessage[0].message.length / 1000000}MB message`, done => {
+        it(`should be able to send a big ${oneBigMessage[0].message.length / 1000000}MB message`, done => {
             producer.send(oneBigMessage, err => {
                 assert.ifError(err);
                 done();

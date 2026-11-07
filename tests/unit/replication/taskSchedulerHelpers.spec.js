@@ -81,7 +81,7 @@ describe('QueueProcessor::getTaskSchedulerQueueKey', () => {
             assert.strictEqual(queueKey1, queueKey2);
         });
 
-        it(`should return different keys of ${entryClass} with different ` + 'master keys', () => {
+        it(`should return different keys of ${entryClass} with different master keys`, () => {
             const [queueKey1, queueKey2] = makeQueueKeyPair(entryClass, {
                 distinctKey: true,
                 distinctVersionId: true,
@@ -90,7 +90,7 @@ describe('QueueProcessor::getTaskSchedulerQueueKey', () => {
             assert.notStrictEqual(queueKey1, queueKey2);
         });
 
-        it(`should return different keys of ${entryClass} with the same ` + 'master key in different buckets', () => {
+        it(`should return different keys of ${entryClass} with the same master key in different buckets`, () => {
             const [queueKey1, queueKey2] = makeQueueKeyPair(entryClass, {
                 distinctBucket: true,
             });
@@ -101,26 +101,26 @@ describe('QueueProcessor::getTaskSchedulerQueueKey', () => {
 
 describe('QueueProcessor::getTaskSchedulerDedupeKey', () => {
     ['ObjectQueueEntry', 'ActionQueueEntry'].forEach(entryClass => {
-        it(`should return matching keys of ${entryClass} with same ` + 'master-key/version/md5', () => {
+        it(`should return matching keys of ${entryClass} with same master-key/version/md5`, () => {
             const [dedupeKey1, dedupeKey2] = makeDedupeKeyPair(entryClass, {});
             assert.strictEqual(dedupeKey1, dedupeKey2);
         });
 
-        it(`should return different keys of ${entryClass} with different ` + 'master key', () => {
+        it(`should return different keys of ${entryClass} with different master key`, () => {
             const [dedupeKey1, dedupeKey2] = makeDedupeKeyPair(entryClass, {
                 distinctKey: true,
             });
             assert.notStrictEqual(dedupeKey1, dedupeKey2);
         });
 
-        it(`should return different keys of ${entryClass} with different ` + 'version', () => {
+        it(`should return different keys of ${entryClass} with different version`, () => {
             const [dedupeKey1, dedupeKey2] = makeDedupeKeyPair(entryClass, {
                 distinctVersionId: true,
             });
             assert.notStrictEqual(dedupeKey1, dedupeKey2);
         });
 
-        it(`should return different keys of ${entryClass} with different ` + 'md5', () => {
+        it(`should return different keys of ${entryClass} with different md5`, () => {
             const [dedupeKey1, dedupeKey2] = makeDedupeKeyPair(entryClass, {
                 distinctContentMd5: true,
             });

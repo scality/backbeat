@@ -185,7 +185,7 @@ describe('LogConsumer rebalance tests', () => {
                             }
                             lastStored.forEach(stored => {
                                 const part = committed.find(c => c.partition === stored.partition);
-                                assert(part, 'no committed offset for ' + `partition ${stored.partition}`);
+                                assert(part, `no committed offset for partition ${stored.partition}`);
                                 assert.strictEqual(
                                     part.offset,
                                     stored.offset,
@@ -265,7 +265,7 @@ describe('LogConsumer rebalance tests', () => {
                 },
                 next => {
                     const elapsed = Date.now() - revokedAt;
-                    assert(elapsed >= 25000, `unassign fired after ${elapsed}ms, expected the 30s ` + 'drain timeout');
+                    assert(elapsed >= 25000, `unassign fired after ${elapsed}ms, expected the 30s drain timeout`);
                     // completing the batch after the forced release must be
                     // harmless (offsets skipped, batch redelivered), and it
                     // lets the disconnect's own final revoke drain instantly

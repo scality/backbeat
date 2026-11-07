@@ -8,10 +8,10 @@ describe('MetadataPolicy', () => {
     const policy = new MetadataPolicy();
 
     ['skipsMetadataFetch', 'targetVersionId', 'apply', 'skipsDelete'].forEach(method =>
-        it(`should refuse to ${method}() without an ` + 'implementation', () => {
+        it(`should refuse to ${method}() without an implementation`, () => {
             assert.throws(
                 () => policy[method](),
-                new RegExp('sub-classes of MetadataPolicy must implement the ' + `${method}\\(\\) method`),
+                new RegExp(`sub-classes of MetadataPolicy must implement the ${method}\\(\\) method`),
             );
         }),
     );
