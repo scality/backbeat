@@ -1493,10 +1493,11 @@
     fast-xml-parser "^5.5.7"
     tslib "^2.6.2"
 
-"@scality/eslint-config-scality@scality/Guidelines#8.3.3":
-  version "8.3.3"
-  resolved "https://codeload.github.com/scality/Guidelines/tar.gz/4f3f39e7def07df51264bb013e0978f02d110414"
+"@scality/eslint-config-scality@scality/Guidelines#improvement/GDL-18/prettier-eslint-config":
+  version "8.4.0"
+  resolved "https://codeload.github.com/scality/Guidelines/tar.gz/e50aebf3e0397cd603b7b5414550c21aaf6f6f45"
   dependencies:
+    eslint-config-prettier "^10.1.8"
     globals "^14.0.0"
     markdownlint "0.38.0"
 
@@ -3520,6 +3521,11 @@ eslint-config-airbnb-base@^13.1.0:
     object.assign "^4.1.0"
     object.entries "^1.1.0"
 
+eslint-config-prettier@^10.1.8:
+  version "10.1.8"
+  resolved "https://registry.yarnpkg.com/eslint-config-prettier/-/eslint-config-prettier-10.1.8.tgz#15734ce4af8c2778cc32f0b01b37b0b5cd1ecb97"
+  integrity sha512-82GZUjRS0p/jganf6q1rEO25VSoHH0hKPCTrgillPjdI/3bgBhAE1QzHrHTizjpRvy6pGAvKjDJtk2pF9NDq8w==
+
 eslint-import-resolver-node@^0.3.9:
   version "0.3.10"
   resolved "https://registry.yarnpkg.com/eslint-import-resolver-node/-/eslint-import-resolver-node-0.3.10.tgz#84ce3005abfc300588cf23bbac1aabec1fc6e8c1"
@@ -4091,6 +4097,11 @@ globals@^14.0.0:
   version "14.0.0"
   resolved "https://registry.yarnpkg.com/globals/-/globals-14.0.0.tgz#898d7413c29babcf6bafe56fcadded858ada724e"
   integrity sha512-oahGvuMGQlPw/ivIYBjVSrWAfWLBeku5tpPE2fOPLi+WHffIWbuh2tCjhyQhTBPMf5E9jDEH4FOmTYgYwbKwtQ==
+
+globals@^16.4.0:
+  version "16.5.0"
+  resolved "https://registry.yarnpkg.com/globals/-/globals-16.5.0.tgz#ccf1594a437b97653b2be13ed4d8f5c9f850cac1"
+  integrity sha512-c/c15i26VrJ4IRt5Z89DnIzCGDn9EcebibhAOjw5ibqEHsE1wLUgkPn9RDmNcUKyU87GeaL633nyJ+pplFR2ZQ==
 
 globalthis@^1.0.4:
   version "1.0.4"
