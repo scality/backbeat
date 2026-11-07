@@ -1195,8 +1195,7 @@ describe('lifecycle task functional tests', function dF() {
             },
             // expire: pagination, tagging
             {
-                message:
-                    'should verify that EXPIRED objects are sent to object kafka topic with pagination, with tags',
+                message: 'should verify that EXPIRED objects are sent to object kafka topic with pagination, with tags',
                 bucketLCRules: [
                     new LifecycleRule().addID('task-1').addExpiration('Date', PAST).addTag('key1', 'value1').build(),
                 ],

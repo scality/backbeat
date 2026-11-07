@@ -410,9 +410,7 @@ class ReplicationStatusProcessor {
                     });
                     this._consumer.on('ready', () => {
                         consumerReady = true;
-                        this.logger.info(
-                            'replication status processor is ready to consume replication status entries',
-                        );
+                        this.logger.info('replication status processor is ready to consume replication status entries');
                         this._consumer.subscribe();
                         done();
                     });

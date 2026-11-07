@@ -17,9 +17,7 @@ const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const replicationConstants = require('../../../extensions/replication/constants');
 const ReplicationAPI = require('../../../extensions/replication/ReplicationAPI');
 const TestConfigurator = require('../../utils/TestConfigurator');
-const ReplicationStatusProcessor = require(
-    '../../../extensions/replication/replicationStatusProcessor/ReplicationStatusProcessor',
-);
+const ReplicationStatusProcessor = require('../../../extensions/replication/replicationStatusProcessor/ReplicationStatusProcessor');
 
 /* eslint-disable max-len */
 

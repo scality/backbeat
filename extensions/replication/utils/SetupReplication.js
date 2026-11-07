@@ -287,9 +287,7 @@ class SetupReplication extends BackbeatTask {
             .then(res => {
                 const r = res.ReplicationConfiguration;
                 if (r.Rules[0].Status === 'Disabled') {
-                    const error = new Error(
-                        'Expected bucket replication to be Enabled. Status is still Disabled.',
-                    );
+                    const error = new Error('Expected bucket replication to be Enabled. Status is still Disabled.');
                     this._log.error('replication status sanity check error: Status Disabled', {
                         error: error.message,
                         method: 'SetupReplication._isReplicationEnabled',
@@ -299,14 +297,11 @@ class SetupReplication extends BackbeatTask {
                 return cb(null, r.Role);
             })
             .catch(err => {
-                this._log.error(
-                    'replication status sanity check error: Cannot retrieve replication configuration',
-                    {
-                        errCode: err.name,
-                        error: err.message,
-                        method: 'SetupReplication._isReplicationEnabled',
-                    },
-                );
+                this._log.error('replication status sanity check error: Cannot retrieve replication configuration', {
+                    errCode: err.name,
+                    error: err.message,
+                    method: 'SetupReplication._isReplicationEnabled',
+                });
                 cb(err);
             });
     }

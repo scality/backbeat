@@ -108,21 +108,18 @@ describe('LifecycleUpdateTransitionTask', () => {
         });
     });
 
-    it(
-        'should not transition location in metadata and should GC new location if LastModified does not match',
-        done => {
-            actionEntry.setAttribute('target.lastModified', '1970-01-01T00:00:00.001Z');
-            task.processActionEntry(actionEntry, err => {
-                assert.ifError(err);
-                const receivedMd = backbeatMetadataProxyClient.getReceivedMd();
-                assert.strictEqual(receivedMd, null);
-                const receivedGcEntry = gcProducer.getReceivedEntry();
-                assert.strictEqual(receivedGcEntry.getActionType(), 'deleteData');
-                assert.deepStrictEqual(receivedGcEntry.getAttribute('target.locations'), newLocation);
-                done();
-            });
-        },
-    );
+    it('should not transition location in metadata and should GC new location if LastModified does not match', done => {
+        actionEntry.setAttribute('target.lastModified', '1970-01-01T00:00:00.001Z');
+        task.processActionEntry(actionEntry, err => {
+            assert.ifError(err);
+            const receivedMd = backbeatMetadataProxyClient.getReceivedMd();
+            assert.strictEqual(receivedMd, null);
+            const receivedGcEntry = gcProducer.getReceivedEntry();
+            assert.strictEqual(receivedGcEntry.getActionType(), 'deleteData');
+            assert.deepStrictEqual(receivedGcEntry.getAttribute('target.locations'), newLocation);
+            done();
+        });
+    });
 
     it('should transition location in metadata if LastModified is not provided as a check', done => {
         actionEntry.setAttribute('target', {
