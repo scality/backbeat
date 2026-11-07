@@ -1154,8 +1154,7 @@ describe('ReplicateObject', () => {
             task._setupDestClients('arn:aws:iam::123456789012:role/crr-role', fakeLogger);
             const endpointObject = await task.backbeatDest.config.endpoint();
             const port = endpointObject.port || (endpointObject.protocol === 'https:' ? 443 : 80);
-            const endpoint =
-                `${endpointObject.protocol}//${endpointObject.hostname}:${port}${endpointObject.path}`;
+            const endpoint = `${endpointObject.protocol}//${endpointObject.hostname}:${port}${endpointObject.path}`;
             const credentials = await task.backbeatDest.config.credentials();
             assert.strictEqual(credentials.accessKeyId, 'accessKeyNoAssumeRole');
             assert.strictEqual(credentials.secretAccessKey, 'secretKeyNoAssumeRole');
