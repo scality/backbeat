@@ -142,7 +142,7 @@ describe('LogConsumer rebalance tests', () => {
         );
     }
 
-    it('should commit stored offsets, release partitions promptly on rebalance and keep consuming', function testPromptRelease(done) {
+    it('should commit offsets, release partitions fast on rebalance, keep consuming', function testPromptRelease(done) {
         this.timeout(60000);
         async.series(
             [
