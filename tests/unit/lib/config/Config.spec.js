@@ -20,12 +20,12 @@ describe('Config', () => {
         testConfig = JSON.parse(JSON.stringify(backbeatConfig));
     });
 
-    it('should make the probeserver config in the queuePoulator required when multiple extensions are configured', () => {
+    it('should require the probeserver config in queuePopulator when multiple extensions are configured', () => {
         delete testConfig.queuePopulator.probeServer;
         assert.throws(() => config._parseConfig(testConfig));
     });
 
-    it('should make the probeserver config in the queuePoulator optional when only notification config is specified', () => {
+    it('should make the probeserver config optional when only notification config is specified', () => {
         delete testConfig.queuePopulator.probeServer;
         testConfig.extensions = { notification: testConfig.extensions.notification };
         assert.doesNotThrow(() => config._parseConfig(testConfig));

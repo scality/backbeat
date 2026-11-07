@@ -1042,7 +1042,7 @@ describe('API routes', () => {
                 });
             });
 
-            it(`should receive a pause request on specified site from route /_/${svc.name}/pause/${firstSite}`, done => {
+            it(`should receive a pause request for a site from route /_/${svc.name}/pause/${firstSite}`, done => {
                 const options = Object.assign({}, defaultOptions, {
                     method: 'POST',
                     path: `/_/${svc.name}/pause/${firstSite}`,
@@ -1087,7 +1087,7 @@ describe('API routes', () => {
                 });
             });
 
-            it(`should get scheduled resume jobs for all sites using route /_/${svc.name}/resume/all/schedule`, done => {
+            it(`should get scheduled resume jobs for all sites using /_/${svc.name}/resume/all/schedule`, done => {
                 getRequest(`/_/${svc.name}/resume/all/schedule`, (err, res) => {
                     assert.ifError(err);
                     const expected = {
