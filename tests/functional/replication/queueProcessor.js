@@ -23,6 +23,7 @@ const ReplicationStatusProcessor = require('../../../extensions/replication/repl
 
 function waitForSourceMdPut(s3mock) {
     return new Promise(resolve => {
+        // eslint-disable-next-line no-param-reassign
         s3mock.onPutSourceMd = resolve;
     });
 }
