@@ -36,7 +36,8 @@ class WildcardPipelineFactory extends PipelineFactory {
      * @param {string[] | undefined} buckets buckets assigned to this connector
      * @returns {object} connector pipeline stage
      */
-    getPipelineStage(buckets) { // eslint-disable-line no-unused-vars
+    // eslint-disable-next-line no-unused-vars
+    getPipelineStage(buckets) {
         return {
             $match: {
                 'ns.coll': {

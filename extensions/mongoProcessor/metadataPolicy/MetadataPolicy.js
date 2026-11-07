@@ -21,7 +21,8 @@ class MetadataPolicy {
      * @param {BucketInfo} bucketInfo - bucket info object
      * @return {boolean} true if the stored metadata is not needed
      */
-    skipsMetadataFetch(entry, bucketInfo) { // eslint-disable-line no-unused-vars
+    // eslint-disable-next-line no-unused-vars
+    skipsMetadataFetch(entry, bucketInfo) {
         assert(false,
             'sub-classes of MetadataPolicy must implement ' +
             'the skipsMetadataFetch() method');
@@ -35,7 +36,8 @@ class MetadataPolicy {
      * @param {ObjectQueueEntry|DeleteOpQueueEntry} entry - queue entry object
      * @return {string|undefined} version id, or undefined for the master
      */
-    targetVersionId(entry) { // eslint-disable-line no-unused-vars
+    // eslint-disable-next-line no-unused-vars
+    targetVersionId(entry) {
         assert(false,
             'sub-classes of MetadataPolicy must implement ' +
             'the targetVersionId() method');
@@ -59,7 +61,8 @@ class MetadataPolicy {
      *   the version the document is written under, the master following it,
      *   or undefined to write the master alone
      */
-    apply(entry, objMD, location, bucketInfo) { // eslint-disable-line no-unused-vars
+    // eslint-disable-next-line no-unused-vars
+    apply(entry, objMD, location, bucketInfo) {
         assert(false,
             'sub-classes of MetadataPolicy must implement ' +
             'the apply() method');
@@ -74,7 +77,8 @@ class MetadataPolicy {
      * @param {string} location - zenko storage location name
      * @return {boolean} true if the object should be left alone
      */
-    skipsDelete(entry, objMD, location) { // eslint-disable-line no-unused-vars
+    // eslint-disable-next-line no-unused-vars
+    skipsDelete(entry, objMD, location) {
         assert(false,
             'sub-classes of MetadataPolicy must implement ' +
             'the skipsDelete() method');
