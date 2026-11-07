@@ -376,9 +376,8 @@ describe('ingestion reader tests with mock', function fD() {
         });
 
         it(
-            'should successfully ingest from new bucket: existing 0-byte ' +
-                'object, existing object with versionId, existing object ' +
-                'with utf-8 key, existing object with tags',
+            'should successfully ingest from new bucket: existing 0-byte object, existing ' +
+                'object with versionId, existing object with utf-8 key, existing object with tags',
             done => {
                 // update zookeeper status to indicate snapshot phase
                 const path = `${this.ingestionReader.bucketInitPath}/isStatusComplete`;
