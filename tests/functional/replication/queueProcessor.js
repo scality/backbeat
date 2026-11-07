@@ -1077,41 +1077,35 @@ describe('queue processor functional tests with mocking', () => {
 
         describe('source S3 errors', () => {
             [errors.AccessDenied, errors.ObjNotFound].forEach(error => {
-                it(
-                    `replication should skip on ${error.code} (${error.message}) from source S3 on getObject`,
-                    async () => {
-                        s3mock.installS3ErrorResponder('source.s3.getObject', error);
-                        await queueProcessorSF.processReplicationEntry(s3mock.getParam('kafkaEntry'));
-                        assert(!s3mock.hasPutTargetData);
-                        assert(!s3mock.hasPutTargetMd);
-                        assert.strictEqual(s3mock.partsDeleted.length, 0);
-                    },
-                );
+                it(`replication should skip on ${error.code} (${error.message}) from source S3 on getObject`, async () => {
+                    s3mock.installS3ErrorResponder('source.s3.getObject', error);
+                    await queueProcessorSF.processReplicationEntry(s3mock.getParam('kafkaEntry'));
+                    assert(!s3mock.hasPutTargetData);
+                    assert(!s3mock.hasPutTargetMd);
+                    assert.strictEqual(s3mock.partsDeleted.length, 0);
+                });
 
-                it(
-                    `copy location should skip on ${error.code} (${error.message}) from source S3 on getObject`,
-                    done => {
-                        s3mock.installS3ErrorResponder('source.s3.getObject', error);
-                        const sendAction = createCopyLocationSender(s3mock, queueProcessorSF);
-                        sendAction(response => {
-                            assert(!s3mock.hasPutTargetData);
-                            assert.strictEqual(response.getStatus(), 'error');
-                            // FIXME this is not ideal, but errors are
-                            // reported this way internally for
-                            // now. If we make use of those errors
-                            // they should be reported in a cleaner
-                            // way.
-                            let expectedErrorMsg;
-                            if (error.message === 'AccessDenied') {
-                                expectedErrorMsg = 'Access Denied';
-                            } else if (error.message === 'ObjNotFound') {
-                                expectedErrorMsg = 'This object does not exist';
-                            }
-                            assert.strictEqual(response.getError().message, expectedErrorMsg);
-                            done();
-                        });
-                    },
-                );
+                it(`copy location should skip on ${error.code} (${error.message}) from source S3 on getObject`, done => {
+                    s3mock.installS3ErrorResponder('source.s3.getObject', error);
+                    const sendAction = createCopyLocationSender(s3mock, queueProcessorSF);
+                    sendAction(response => {
+                        assert(!s3mock.hasPutTargetData);
+                        assert.strictEqual(response.getStatus(), 'error');
+                        // FIXME this is not ideal, but errors are
+                        // reported this way internally for
+                        // now. If we make use of those errors
+                        // they should be reported in a cleaner
+                        // way.
+                        let expectedErrorMsg;
+                        if (error.message === 'AccessDenied') {
+                            expectedErrorMsg = 'Access Denied';
+                        } else if (error.message === 'ObjNotFound') {
+                            expectedErrorMsg = 'This object does not exist';
+                        }
+                        assert.strictEqual(response.getError().message, expectedErrorMsg);
+                        done();
+                    });
+                });
             });
 
             it('should fail if replication is disabled in bucket replication configuration', async () => {
@@ -1158,19 +1152,16 @@ describe('queue processor functional tests with mocking', () => {
 
             ['getBucketReplication', 'getObject'].forEach(action => {
                 [errors.InternalError].forEach(error => {
-                    it(
-                        `replication should retry on ${error.code} (${error.message}) from source S3 on ${action}`,
-                        async () => {
-                            s3mock.installS3ErrorResponder(`source.s3.${action}`, error, { once: true });
+                    it(`replication should retry on ${error.code} (${error.message}) from source S3 on ${action}`, async () => {
+                        s3mock.installS3ErrorResponder(`source.s3.${action}`, error, { once: true });
 
-                            const sourceMdPut = waitForSourceMdPut(s3mock);
-                            await queueProcessorSF.processReplicationEntry(s3mock.getParam('kafkaEntry'));
-                            await sourceMdPut;
-                            assert(s3mock.hasPutTargetData);
-                            assert(s3mock.hasPutTargetMd);
-                            assert.strictEqual(s3mock.partsDeleted.length, 0);
-                        },
-                    );
+                        const sourceMdPut = waitForSourceMdPut(s3mock);
+                        await queueProcessorSF.processReplicationEntry(s3mock.getParam('kafkaEntry'));
+                        await sourceMdPut;
+                        assert(s3mock.hasPutTargetData);
+                        assert(s3mock.hasPutTargetMd);
+                        assert.strictEqual(s3mock.partsDeleted.length, 0);
+                    });
                 });
             });
 
@@ -1244,22 +1235,19 @@ describe('queue processor functional tests with mocking', () => {
 
             ['getAccountsCanonicalIds', 'assumeRoleBackbeat'].forEach(action => {
                 [errors.InternalError].forEach(error => {
-                    it(
-                        `should retry on ${error.code} (${error.message}) from target Vault on ${action}`,
-                        async () => {
-                            s3mock.installVaultErrorResponder(`target.${action}`, error, { once: true });
+                    it(`should retry on ${error.code} (${error.message}) from target Vault on ${action}`, async () => {
+                        s3mock.installVaultErrorResponder(`target.${action}`, error, { once: true });
 
-                            const sourceMdPut = waitForSourceMdPut(s3mock);
-                            await queueProcessorSF.processReplicationEntry(s3mock.getParam('kafkaEntry'));
-                            await sourceMdPut;
-                            assert(s3mock.hasPutTargetData);
-                            assert(s3mock.hasPutTargetMd);
-                            assert.strictEqual(s3mock.partsDeleted.length, 0);
-                            // should have retried on other host
-                            assert(s3mock.requestsPerHost['127.0.0.3'] > 0);
-                            assert(s3mock.requestsPerHost['127.0.0.4'] > 0);
-                        },
-                    );
+                        const sourceMdPut = waitForSourceMdPut(s3mock);
+                        await queueProcessorSF.processReplicationEntry(s3mock.getParam('kafkaEntry'));
+                        await sourceMdPut;
+                        assert(s3mock.hasPutTargetData);
+                        assert(s3mock.hasPutTargetMd);
+                        assert.strictEqual(s3mock.partsDeleted.length, 0);
+                        // should have retried on other host
+                        assert(s3mock.requestsPerHost['127.0.0.3'] > 0);
+                        assert(s3mock.requestsPerHost['127.0.0.4'] > 0);
+                    });
                 });
             });
         });
@@ -1291,21 +1279,18 @@ describe('queue processor functional tests with mocking', () => {
 
             ['putData', 'putMetadata'].forEach(action => {
                 [errors.InternalError].forEach(error => {
-                    it(
-                        `should retry on ${error.code} (${error.message}) from target S3 on ${action}`,
-                        async () => {
-                            s3mock.installS3ErrorResponder(`target.${action}`, error, { once: true });
-                            const sourceMdPut = waitForSourceMdPut(s3mock);
-                            await queueProcessorSF.processReplicationEntry(s3mock.getParam('kafkaEntry'));
-                            await sourceMdPut;
-                            assert(s3mock.hasPutTargetData);
-                            assert(s3mock.hasPutTargetMd);
-                            assert.strictEqual(s3mock.partsDeleted.length, 0);
-                            // should have retried on other host
-                            assert(s3mock.requestsPerHost['127.0.0.3'] > 0);
-                            assert(s3mock.requestsPerHost['127.0.0.4'] > 0);
-                        },
-                    );
+                    it(`should retry on ${error.code} (${error.message}) from target S3 on ${action}`, async () => {
+                        s3mock.installS3ErrorResponder(`target.${action}`, error, { once: true });
+                        const sourceMdPut = waitForSourceMdPut(s3mock);
+                        await queueProcessorSF.processReplicationEntry(s3mock.getParam('kafkaEntry'));
+                        await sourceMdPut;
+                        assert(s3mock.hasPutTargetData);
+                        assert(s3mock.hasPutTargetMd);
+                        assert.strictEqual(s3mock.partsDeleted.length, 0);
+                        // should have retried on other host
+                        assert(s3mock.requestsPerHost['127.0.0.3'] > 0);
+                        assert(s3mock.requestsPerHost['127.0.0.4'] > 0);
+                    });
                 });
             });
 

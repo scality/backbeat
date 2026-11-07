@@ -194,10 +194,7 @@ describe('API routes', () => {
         statsClient.reportNewRequest(`${site1}:${OPS_DONE}`, 450);
         statsClient.reportNewRequest(`${site1}:${OPS_FAIL}`, 150);
         statsClient.reportNewRequest(`${site1}:${BYTES_DONE}`, 1027);
-        statsClient.reportNewRequest(
-            `${site1}:${BUCKET_NAME}:${OBJECT_KEY}:${VERSION_ID}:${OBJECT_BYTES_DONE}`,
-            50,
-        );
+        statsClient.reportNewRequest(`${site1}:${BUCKET_NAME}:${OBJECT_KEY}:${VERSION_ID}:${OBJECT_BYTES_DONE}`, 50);
         statsClient.reportNewRequest(`${site1}:${BYTES_FAIL}`, 375);
 
         statsClient.reportNewRequest(`${site2}:${OPS}`, 900);
@@ -1045,29 +1042,26 @@ describe('API routes', () => {
                 });
             });
 
-            it(
-                `should receive a pause request on specified site from route /_/${svc.name}/pause/${firstSite}`,
-                done => {
-                    const options = Object.assign({}, defaultOptions, {
-                        method: 'POST',
-                        path: `/_/${svc.name}/pause/${firstSite}`,
-                    });
-                    makeRequest(options, emptyBody, err => {
-                        assert.ifError(err);
+            it(`should receive a pause request on specified site from route /_/${svc.name}/pause/${firstSite}`, done => {
+                const options = Object.assign({}, defaultOptions, {
+                    method: 'POST',
+                    path: `/_/${svc.name}/pause/${firstSite}`,
+                });
+                makeRequest(options, emptyBody, err => {
+                    assert.ifError(err);
 
-                        setTimeout(() => {
-                            assert.strictEqual(cache1.length, 1);
-                            assert.strictEqual(cache2.length, 0);
-                            assert.deepStrictEqual(cache1[0].channel, channel1);
+                    setTimeout(() => {
+                        assert.strictEqual(cache1.length, 1);
+                        assert.strictEqual(cache2.length, 0);
+                        assert.deepStrictEqual(cache1[0].channel, channel1);
 
-                            const message = JSON.parse(cache1[0].message);
-                            const expected = { action: 'pauseService' };
-                            assert.deepStrictEqual(message, expected);
-                            done();
-                        }, 1000);
-                    });
-                },
-            );
+                        const message = JSON.parse(cache1[0].message);
+                        const expected = { action: 'pauseService' };
+                        assert.deepStrictEqual(message, expected);
+                        done();
+                    }, 1000);
+                });
+            });
 
             it(`should receive a resume request on all site channels from route /_/${svc.name}/resume`, done => {
                 const options = Object.assign({}, defaultOptions, {
@@ -1093,20 +1087,17 @@ describe('API routes', () => {
                 });
             });
 
-            it(
-                `should get scheduled resume jobs for all sites using route /_/${svc.name}/resume/all/schedule`,
-                done => {
-                    getRequest(`/_/${svc.name}/resume/all/schedule`, (err, res) => {
-                        assert.ifError(err);
-                        const expected = {
-                            [firstSite]: 'none',
-                            [secondSite]: futureDate.toString(),
-                        };
-                        assert.deepStrictEqual(expected, res);
-                        done();
-                    });
-                },
-            );
+            it(`should get scheduled resume jobs for all sites using route /_/${svc.name}/resume/all/schedule`, done => {
+                getRequest(`/_/${svc.name}/resume/all/schedule`, (err, res) => {
+                    assert.ifError(err);
+                    const expected = {
+                        [firstSite]: 'none',
+                        [secondSite]: futureDate.toString(),
+                    };
+                    assert.deepStrictEqual(expected, res);
+                    done();
+                });
+            });
 
             it(
                 'should receive a scheduled resume request with specified ' +
