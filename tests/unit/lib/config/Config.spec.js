@@ -26,8 +26,7 @@ describe('Config', () => {
     });
 
     it(
-        'should make the probeserver config in the queuePoulator' +
-            'optional when only notification config is specified',
+        'should make the probeserver config in the queuePoulatoroptional when only notification config is specified',
         () => {
             delete testConfig.queuePopulator.probeServer;
             testConfig.extensions = { notification: testConfig.extensions.notification };

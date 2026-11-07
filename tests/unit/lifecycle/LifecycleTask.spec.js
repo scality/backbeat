@@ -191,8 +191,7 @@ describe('lifecycle task helper methods', () => {
         });
 
         it(
-            'should merge and sort the arrays ' +
-                'if the modified dates match and the version has the newest versionId',
+            'should merge and sort the arrays if the modified dates match and the version has the newest versionId',
             () => {
                 const versions = [
                     {

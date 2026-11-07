@@ -65,9 +65,8 @@ class MultipleBackendTask extends ReplicateObject {
         }
         if (entryRoles === undefined || entryRoles.length > 2) {
             errMessage =
-                'expecting no more than two roles in bucket ' +
-                'replication configuration when replicating to an external ' +
-                'location';
+                'expecting no more than two roles in bucket replication ' +
+                'configuration when replicating to an external location';
             log.error(errMessage, {
                 method: 'MultipleBackendTask._setupRolesOnce',
                 entry: entry.getLogInfo(),
@@ -115,9 +114,8 @@ class MultipleBackendTask extends ReplicateObject {
         const roles = data.ReplicationConfiguration.Role.split(',');
         if (roles.length > 2) {
             errMessage =
-                'expecting no more than two roles in bucket ' +
-                'replication configuration when replicating to an ' +
-                'external location';
+                'expecting no more than two roles in bucket replication ' +
+                'configuration when replicating to an external location';
             log.error(errMessage, {
                 method: 'MultipleBackendTask._setupRolesOnce',
                 entry: entry.getLogInfo(),
