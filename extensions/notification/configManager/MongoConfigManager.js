@@ -293,7 +293,7 @@ class MongoConfigManager extends BaseConfigManager {
                 notificationConfiguration,
             };
         } catch (err) {
-            this._logger.error('An error occured when getting notification ' + 'configuration of bucket', {
+            this._logger.error('An error occured when getting notification configuration of bucket', {
                 method: 'MongoConfigManager.getConfig',
                 bucket,
                 error: err.message,

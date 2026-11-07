@@ -224,7 +224,7 @@ describe('Ingestion Populator', () => {
     });
 
     describe('applyUpdates helper method', () => {
-        it('should attach configuration properties for each new ingestion ' + 'source', () => {
+        it('should attach configuration properties for each new ingestion source', () => {
             ip.getAdded().forEach(newSource => {
                 assert(newSource.name);
                 assert(newSource.bucket);
@@ -238,7 +238,7 @@ describe('Ingestion Populator', () => {
             });
         });
 
-        it('should apply default port 80 for a new ingestion source with ' + 'no port provided', () => {
+        it('should apply default port 80 for a new ingestion source with no port provided', () => {
             const source = ip.getAdded().find(newSource => newSource.name === NEW_BUCKET);
             assert.strictEqual(source.port, 80);
         });
@@ -267,7 +267,7 @@ describe('Ingestion Populator', () => {
             assert(wasRemoved);
         });
 
-        it('should update an ingestion reader when the ingestion source ' + 'information is updated', () => {
+        it('should update an ingestion reader when the ingestion source information is updated', () => {
             assert.deepStrictEqual(ip.getUpdated(), []);
 
             // hack to update a valid editable field
@@ -325,7 +325,7 @@ describe('Ingestion Populator', () => {
         });
 
         it(
-            'should not queue a log reader again when its setup fails and ' + 'its source is no longer configured',
+            'should not queue a log reader again when its setup fails and its source is no longer configured',
             done => {
                 const logReader = addLogReader('bucket1');
                 logReader.setup.yieldsAsync(errors.InternalError);
@@ -360,7 +360,7 @@ describe('Ingestion Populator', () => {
         );
 
         it(
-            'should not activate a log reader when its setup succeeds and ' + 'its source is no longer configured',
+            'should not activate a log reader when its setup succeeds and its source is no longer configured',
             done => {
                 const logReader = addLogReader('bucket1');
                 logReader.setup.yieldsAsync(null);

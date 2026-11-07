@@ -18,7 +18,7 @@ const replicationConstants = require('../../../extensions/replication/constants'
 const ReplicationAPI = require('../../../extensions/replication/ReplicationAPI');
 const TestConfigurator = require('../../utils/TestConfigurator');
 const ReplicationStatusProcessor = require(
-    '../../../extensions/replication' + '/replicationStatusProcessor/ReplicationStatusProcessor',
+    '../../../extensions/replication/replicationStatusProcessor/ReplicationStatusProcessor',
 );
 
 /* eslint-disable max-len */
@@ -953,7 +953,7 @@ describe('queue processor functional tests with mocking', () => {
             assert(s3mock.hasPutTargetMd);
         });
 
-        it('should retry with full replication if metadata-only returns ' + 'ObjNotFound', async () => {
+        it('should retry with full replication if metadata-only returns ObjNotFound', async () => {
             s3mock.setParam('nbParts', 2);
             s3mock.setParam('source.md.replicationInfo.content', ['METADATA']);
             s3mock.installBackbeatErrorResponder('target.putMetadata', errors.ObjNotFound, { once: true });
@@ -1116,7 +1116,7 @@ describe('queue processor functional tests with mocking', () => {
                 );
             });
 
-            it('should fail if replication is disabled in bucket replication ' + 'configuration', async () => {
+            it('should fail if replication is disabled in bucket replication configuration', async () => {
                 s3mock.setParam('replicationEnabled', false);
                 s3mock.setExpectedReplicationStatus('FAILED');
 
@@ -1176,7 +1176,7 @@ describe('queue processor functional tests with mocking', () => {
                 });
             });
 
-            it('copy location should retry on 500 (InternalError) ' + 'from source S3 on getObject', done => {
+            it('copy location should retry on 500 (InternalError) from source S3 on getObject', done => {
                 s3mock.installS3ErrorResponder('source.s3.getObject', errors.InternalError, { once: true });
                 const expectedLocation = [
                     {
@@ -1311,7 +1311,7 @@ describe('queue processor functional tests with mocking', () => {
                 });
             });
 
-            it('copy location should retry on 500 (InternalError) ' + 'from target location on putObject', done => {
+            it('copy location should retry on 500 (InternalError) from target location on putObject', done => {
                 // PUTs are going to zenko cloudserver (source)
                 s3mock.installS3ErrorResponder('source.s3.putObject', errors.InternalError, { once: true });
                 const expectedLocation = [

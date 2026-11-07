@@ -127,7 +127,7 @@ class MultipleBackendTask extends ReplicateObject {
         }
         if (roles[0] !== entryRoles[0]) {
             log.error(
-                'role in replication entry for source does not ' + 'match role in bucket replication configuration',
+                'role in replication entry for source does not match role in bucket replication configuration',
                 {
                     method: 'MultipleBackendTask._setupRolesOnce',
                     entry: entry.getLogInfo(),
@@ -1307,7 +1307,7 @@ class MultipleBackendTask extends ReplicateObject {
 
     async _handleReplicationOutcome(err, sourceEntry, destEntry, kafkaEntry, log) {
         if (!err) {
-            log.debug('replication succeeded for object, publishing ' + 'replication status as COMPLETED', {
+            log.debug('replication succeeded for object, publishing replication status as COMPLETED', {
                 entry: sourceEntry.getLogInfo(),
             });
             this._publishReplicationStatus(sourceEntry, 'COMPLETED', { kafkaEntry, log });
@@ -1324,7 +1324,7 @@ class MultipleBackendTask extends ReplicateObject {
                     err.InvalidAccessKeyId ||
                     err.name === 'InvalidAccessKeyId'))
         ) {
-            log.error('replication failed permanently for object, ' + 'processing skipped', {
+            log.error('replication failed permanently for object, processing skipped', {
                 failMethod: err.method,
                 entry: sourceEntry.getLogInfo(),
                 origin: err.origin,
@@ -1333,7 +1333,7 @@ class MultipleBackendTask extends ReplicateObject {
             return null;
         }
         if (err.ObjNotFound || err.name === 'ObjNotFound') {
-            log.info('replication skipped: ' + 'source object version does not exist', {
+            log.info('replication skipped: source object version does not exist', {
                 entry: sourceEntry.getLogInfo(),
             });
             return null;
@@ -1342,7 +1342,7 @@ class MultipleBackendTask extends ReplicateObject {
             log.info('replication skipped: invalid object state', { entry: sourceEntry.getLogInfo() });
             return null;
         }
-        log.debug('replication failed permanently for object, ' + 'publishing replication status as FAILED', {
+        log.debug('replication failed permanently for object, publishing replication status as FAILED', {
             failMethod: err.method,
             entry: sourceEntry.getLogInfo(),
             error: err.description,

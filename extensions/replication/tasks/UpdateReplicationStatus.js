@@ -188,7 +188,7 @@ class UpdateReplicationStatus extends BackbeatTask {
             // COMPLETED status since that means the replication
             // already happened successfully.
 
-            log.info('entry replication is already COMPLETED for this ' + 'location, skipping metadata update', {
+            log.info('entry replication is already COMPLETED for this location, skipping metadata update', {
                 entry: sourceEntry.getLogInfo(),
                 location: site,
             });

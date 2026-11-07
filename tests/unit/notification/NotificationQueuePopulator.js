@@ -89,7 +89,7 @@ describe('NotificationQueuePopulator ::', () => {
             assert.strictEqual(publishStub.getCall(0).args.at(0), 'internal-notification-topic-destination2');
         });
 
-        it('should not publish object entry in notification topic if ' + 'config validation failed', async () => {
+        it('should not publish object entry in notification topic if config validation failed', async () => {
             sinon.stub(bnConfigManager, 'getConfig').returns(config);
             const publishStub = sinon.stub(notificationQueuePopulator, 'publish');
             await notificationQueuePopulator._processObjectEntry('example-bucket', 'example-key', {
@@ -249,7 +249,7 @@ describe('NotificationQueuePopulator ::', () => {
             },
         );
 
-        it('should not publish object entry in notification topic if ' + 'notification is non standard', async () => {
+        it('should not publish object entry in notification topic if notification is non standard', async () => {
             sinon.stub(bnConfigManager, 'getConfig').returns({
                 bucket: 'example-bucket',
                 notificationConfiguration: {

@@ -66,7 +66,7 @@ describe('BackbeatTestConsumer', function backbeatTestConsumer() {
             assert.ifError(err);
         });
     });
-    it('should fail with messages expected ordered ' + 'received out of order', done => {
+    it('should fail with messages expected ordered received out of order', done => {
         const expected = messages.map(obj => ({ key: obj.key, value: obj.message }));
         const outOfOrder = [expected[1], expected[2], expected[0]];
         consumer.expectOrderedMessages(outOfOrder, TIMEOUT, err => {
@@ -77,7 +77,7 @@ describe('BackbeatTestConsumer', function backbeatTestConsumer() {
             assert.ifError(err);
         });
     });
-    it('should succeed with messages expected unordered ' + 'received out of order', done => {
+    it('should succeed with messages expected unordered received out of order', done => {
         const expected = messages.map(obj => ({ key: obj.key, value: obj.message }));
         const outOfOrder = [expected[1], expected[2], expected[0]];
         consumer.expectUnorderedMessages(outOfOrder, TIMEOUT, err => {
@@ -88,7 +88,7 @@ describe('BackbeatTestConsumer', function backbeatTestConsumer() {
             assert.ifError(err);
         });
     });
-    it('should fail with messages expected ordered if ' + 'unexpected message received', done => {
+    it('should fail with messages expected ordered if unexpected message received', done => {
         const expected = messages.map(obj => ({ key: obj.key, value: JSON.parse(obj.message) }));
         consumer.expectOrderedMessages(expected, TIMEOUT, err => {
             assert(err);
@@ -99,7 +99,7 @@ describe('BackbeatTestConsumer', function backbeatTestConsumer() {
             assert.ifError(err);
         });
     });
-    it('should fail with messages expected unordered if ' + 'unexpected message received', done => {
+    it('should fail with messages expected unordered if unexpected message received', done => {
         const expected = messages.map(obj => ({ key: obj.key, value: JSON.parse(obj.message) }));
         consumer.expectUnorderedMessages(expected, TIMEOUT, err => {
             assert(err);
@@ -110,7 +110,7 @@ describe('BackbeatTestConsumer', function backbeatTestConsumer() {
             assert.ifError(err);
         });
     });
-    it('should timeout if not all expected ordered messages ' + 'are received', done => {
+    it('should timeout if not all expected ordered messages are received', done => {
         const expected = messages.map(obj => ({ key: obj.key, value: JSON.parse(obj.message) }));
         consumer.expectOrderedMessages(expected, 1000, err => {
             assert(err);
@@ -121,7 +121,7 @@ describe('BackbeatTestConsumer', function backbeatTestConsumer() {
             assert.ifError(err);
         });
     });
-    it('should timeout if not all expected unordered messages ' + 'are received', done => {
+    it('should timeout if not all expected unordered messages are received', done => {
         const expected = messages.map(obj => ({ key: obj.key, value: JSON.parse(obj.message) }));
         consumer.expectUnorderedMessages(expected, 1000, err => {
             assert(err);

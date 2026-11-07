@@ -157,7 +157,7 @@ describe('applyWorkflowUpdates', () => {
         });
     });
 
-    it('should remove bucket from state when last workflow is ' + 'deleted', done => {
+    it('should remove bucket from state when last workflow is deleted', done => {
         const mgr = new DummyWorkflowManager(
             {
                 version: 2,

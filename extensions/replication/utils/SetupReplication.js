@@ -218,8 +218,8 @@ class SetupReplication extends BackbeatTask {
             .send(command)
             .then(res => {
                 if (res.Status === 'Disabled') {
-                    const error = new Error('Expected bucket versioning to ' + 'be Enabled. Status is still Disabled.');
-                    this._log.error('versioning sanity check error: ' + 'Status Disabled', {
+                    const error = new Error('Expected bucket versioning to be Enabled. Status is still Disabled.');
+                    this._log.error('versioning sanity check error: Status Disabled', {
                         bucket: where === 'source' ? this._sourceBucket : this._targetBucket,
                         error: error.message,
                         method: 'SetupReplication._isVersioningEnabled',
@@ -229,7 +229,7 @@ class SetupReplication extends BackbeatTask {
                 return cb();
             })
             .catch(err => {
-                this._log.error('versioning sanity check error: ' + 'Cannot retrieve versioning configuration', {
+                this._log.error('versioning sanity check error: Cannot retrieve versioning configuration', {
                     bucket: where === 'source' ? this._sourceBucket : this._targetBucket,
                     errCode: err.name,
                     error: err.message,
@@ -257,7 +257,7 @@ class SetupReplication extends BackbeatTask {
                             'was found between the ARN found in ' +
                             '`getBucketReplication` and ARN found in `getRole`.',
                     );
-                    this._log.error('role validation sanity check error: ' + 'ARN mis-match', {
+                    this._log.error('role validation sanity check error: ARN mis-match', {
                         bucket: where === 'source' ? this._sourceBucket : this._targetBucket,
                         error: error.message,
                         method: 'SetupReplication._isVersioningEnabled',
@@ -267,7 +267,7 @@ class SetupReplication extends BackbeatTask {
                 return cb(null, arnObj);
             })
             .catch(err => {
-                this._log.error('role validation sanity check error: ' + 'Cannot retrieve role configuration', {
+                this._log.error('role validation sanity check error: Cannot retrieve role configuration', {
                     bucket: where === 'source' ? this._sourceBucket : this._targetBucket,
                     errCode: err.name,
                     error: err.message,
@@ -288,9 +288,9 @@ class SetupReplication extends BackbeatTask {
                 const r = res.ReplicationConfiguration;
                 if (r.Rules[0].Status === 'Disabled') {
                     const error = new Error(
-                        'Expected bucket replication ' + 'to be Enabled. Status is still Disabled.',
+                        'Expected bucket replication to be Enabled. Status is still Disabled.',
                     );
-                    this._log.error('replication status sanity check error: ' + 'Status Disabled', {
+                    this._log.error('replication status sanity check error: Status Disabled', {
                         error: error.message,
                         method: 'SetupReplication._isReplicationEnabled',
                     });
@@ -300,7 +300,7 @@ class SetupReplication extends BackbeatTask {
             })
             .catch(err => {
                 this._log.error(
-                    'replication status sanity check error: ' + 'Cannot retrieve replication configuration',
+                    'replication status sanity check error: Cannot retrieve replication configuration',
                     {
                         errCode: err.name,
                         error: err.message,

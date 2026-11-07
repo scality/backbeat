@@ -143,7 +143,7 @@ describe('LogConsumer rebalance tests', () => {
     }
 
     it(
-        'should commit stored offsets, release partitions promptly on ' + 'rebalance and keep consuming',
+        'should commit stored offsets, release partitions promptly on rebalance and keep consuming',
         function testPromptRelease(done) {
             this.timeout(60000);
             async.series(
@@ -156,7 +156,7 @@ describe('LogConsumer rebalance tests', () => {
                         // unassign: the 15s cap proves the drain no longer
                         // gates on it
                         const unassignDeadline = setTimeout(() => {
-                            next(new Error('partitions were not released within ' + '15s of the rebalance'));
+                            next(new Error('partitions were not released within 15s of the rebalance'));
                         }, 15000);
                         consumer.once('unassigned', () => {
                             clearTimeout(unassignDeadline);
@@ -176,7 +176,7 @@ describe('LogConsumer rebalance tests', () => {
                         assert.strictEqual(
                             consumer._consumer.isConnected(),
                             true,
-                            'consumer should stay connected after releasing ' + 'partitions',
+                            'consumer should stay connected after releasing partitions',
                         );
                         consumer._consumer.committed(
                             [...lastStored.values()].map(tp => ({ topic: tp.topic, partition: tp.partition })),
@@ -191,7 +191,7 @@ describe('LogConsumer rebalance tests', () => {
                                     assert.strictEqual(
                                         part.offset,
                                         stored.offset,
-                                        'committed offset should match the last ' + 'stored offset after the rebalance',
+                                        'committed offset should match the last stored offset after the rebalance',
                                     );
                                 });
                                 return next();
@@ -231,7 +231,7 @@ describe('LogConsumer rebalance tests', () => {
         },
     );
 
-    it('should time out and disconnect when the in-flight batch never ' + 'completes', function testDrainTimeout(done) {
+    it('should time out and disconnect when the in-flight batch never completes', function testDrainTimeout(done) {
         this.timeout(150000);
         // LogConsumer pauses its polls while a batch is in flight, so
         // a broker revoke normally only reaches it through the very

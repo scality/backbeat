@@ -191,7 +191,7 @@ class QueueProcessor extends EventEmitter {
                     });
                     this._consumer.on('ready', () => {
                         this._consumer.subscribe();
-                        this.logger.info('queue processor is ready to consume ' + 'notification entries');
+                        this.logger.info('queue processor is ready to consume notification entries');
                         this.emit('ready');
                         return next();
                     });

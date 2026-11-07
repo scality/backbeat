@@ -104,7 +104,7 @@ describe('lifecycle task helper methods', () => {
     });
 
     describe('_mergeSortedVersionsAndDeleteMarkers', () => {
-        it('should merge and sort arrays based on Key names and then by ' + 'LastModified times', () => {
+        it('should merge and sort arrays based on Key names and then by LastModified times', () => {
             // Both arrays should be sorted respective to their own arrays.
             // This method should stable sort and merge both arrays
             const versions = [
@@ -400,7 +400,7 @@ describe('lifecycle task helper methods', () => {
             },
         ];
 
-        it('should apply a staleDate property on each version on a list ' + 'of versions', () => {
+        it('should apply a staleDate property on each version on a list of versions', () => {
             const dupelist = list.map(i => Object.assign({}, i));
             const bucketDetails = {};
             const res = lct._addStaleDateToVersions(bucketDetails, dupelist);

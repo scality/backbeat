@@ -157,7 +157,7 @@ const lifecycleS3Operations = ZenkoMetrics.createCounter({
 const lifecycleTriggerLatency = ZenkoMetrics.createHistogram({
     name: 's3_lifecycle_trigger_latency_seconds',
     help:
-        'Delay between the theoretical date and identification of the object as eligible for ' + 'lifecycle operation',
+        'Delay between the theoretical date and identification of the object as eligible for lifecycle operation',
     labelNames: [LIFECYCLE_LABEL_ORIGIN, LIFECYCLE_LABEL_TYPE, LIFECYCLE_LABEL_LOCATION],
     buckets: [60, 600, 3600, 2 * 3600, 4 * 3600, 8 * 3600, 16 * 3600, 24 * 3600, 48 * 3600],
 });
@@ -171,7 +171,7 @@ const lifecycleLatency = ZenkoMetrics.createHistogram({
 
 const lifecycleDuration = ZenkoMetrics.createHistogram({
     name: 's3_lifecycle_duration_seconds',
-    help: 'Duration of the lifecycle operation, calculated from the theoretical date to the end ' + 'of the operation',
+    help: 'Duration of the lifecycle operation, calculated from the theoretical date to the end of the operation',
     labelNames: [LIFECYCLE_LABEL_TYPE, LIFECYCLE_LABEL_LOCATION],
     buckets: [0.2, 1, 5, 30, 120, 600, 3600, 4 * 3600, 8 * 3600, 16 * 3600, 24 * 3600],
 });

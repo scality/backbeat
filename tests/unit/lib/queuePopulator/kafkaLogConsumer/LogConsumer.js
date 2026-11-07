@@ -341,7 +341,7 @@ describe('LogConsumer', () => {
             sinon.assert.calledOnce(drained);
         });
 
-        it('should not call offsetsStore but still emit drained when consumer ' + 'is not connected', () => {
+        it('should not call offsetsStore but still emit drained when consumer is not connected', () => {
             const offsetsStore = sinon.stub(logConsumer._consumer, 'offsetsStore').returns(null);
             sinon.stub(logConsumer._consumer, 'isConnected').returns(false);
             logConsumer._topicPartition = [{ topic: 'oplog-topic', partition: 0, offset: 5 }];

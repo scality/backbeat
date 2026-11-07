@@ -67,7 +67,7 @@ describe('garbage collector', function garbageCollector() {
         const action = ActionQueueEntry.create('foo');
         gcTask.processActionEntry(action, done);
     });
-    it('should send batch delete request with locations array with ' + 'no dataStoreVersionId', done => {
+    it('should send batch delete request with locations array with no dataStoreVersionId', done => {
         expectBatchDeleteLocations = [
             {
                 key: 'foo',
@@ -82,7 +82,7 @@ describe('garbage collector', function garbageCollector() {
             .setAttribute('source.objectKey', keyName);
         gcTask.processActionEntry(action, done);
     });
-    it('should send batch delete request with locations array with ' + 'some dataStoreVersionId', done => {
+    it('should send batch delete request with locations array with some dataStoreVersionId', done => {
         expectBatchDeleteLocations = [
             {
                 key: 'foo',

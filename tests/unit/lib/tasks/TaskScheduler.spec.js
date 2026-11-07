@@ -39,7 +39,7 @@ describe('TaskScheduler', () => {
         }
     });
 
-    it('with queue key, should skip extra updates that have an existing ' + 'dedupe key', done => {
+    it('with queue key, should skip extra updates that have an existing dedupe key', done => {
         const taskScheduler = new TaskScheduler(
             (entry, done) => {
                 setTimeout(() => {
@@ -80,7 +80,7 @@ describe('TaskScheduler', () => {
         }
     });
 
-    it('without queue key, should skip extra updates that have an existing ' + 'dedupe key', done => {
+    it('without queue key, should skip extra updates that have an existing dedupe key', done => {
         const taskScheduler = new TaskScheduler(
             (entry, done) => {
                 setTimeout(
@@ -244,7 +244,7 @@ describe('TaskScheduler', () => {
             assert.doesNotThrow(() => taskScheduler._tryDrain());
         });
 
-        it('should run the per-task callback before drain when the last ' + 'task completes', done => {
+        it('should run the per-task callback before drain when the last task completes', done => {
             const order = [];
             const taskScheduler = new TaskScheduler((ctx, cb) => process.nextTick(cb));
             taskScheduler.setDrain(() => {

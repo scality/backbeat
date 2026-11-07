@@ -42,7 +42,7 @@ describe('BackbeatRequest helper class', () => {
             assert.strictEqual(req.getContentType(), 'application/json');
         });
 
-        it('should parse crr failed routes and store internally as route ' + 'details', () => {
+        it('should parse crr failed routes and store internally as route details', () => {
             const req = new BackbeatRequest({
                 url: '/_/crr/failed?marker=testmarker',
                 method: 'GET',
@@ -90,7 +90,7 @@ describe('BackbeatRequest helper class', () => {
             assert.strictEqual(details4.role, 'myrole');
         });
 
-        it('should parse monitoring routes and store internally as route ' + 'details', () => {
+        it('should parse monitoring routes and store internally as route details', () => {
             const req = new BackbeatRequest({
                 url: '/_/monitoring/metrics',
                 method: 'POST',

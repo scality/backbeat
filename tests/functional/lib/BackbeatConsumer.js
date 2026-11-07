@@ -85,7 +85,7 @@ describe('BackbeatConsumer main tests', () => {
         );
     });
 
-    it('should be able to read messages sent to the topic and publish ' + 'topic metrics', done => {
+    it('should be able to read messages sent to the topic and publish topic metrics', done => {
         let consumeCb = null;
         let totalConsumed = 0;
         let topicOffset;
@@ -154,7 +154,7 @@ describe('BackbeatConsumer main tests', () => {
     }).timeout(30000);
 
     it(
-        'should not consume messages when paused and when resumed, consume ' + 'messages from the previous offset',
+        'should not consume messages when paused and when resumed, consume messages from the previous offset',
         done => {
             let totalConsumed = 0;
             const kafkaConsumer = consumer._consumer;
@@ -180,7 +180,7 @@ describe('BackbeatConsumer main tests', () => {
                         consumer.on('consumed', messagesConsumed => {
                             totalConsumed += messagesConsumed;
                             // should not consume when paused
-                            return next(new Error('expected consumer to be paused, messages ' + 'were still consumed'));
+                            return next(new Error('expected consumer to be paused, messages were still consumed'));
                         });
                         // wait 5 seconds to see if any messages were consumed
                         setTimeout(() => {
@@ -428,7 +428,7 @@ describe('BackbeatConsumer rebalance tests', () => {
         }, 1000);
     }).timeout(60000);
 
-    it('should exit on rebalance timeout when CRASH_ON_REBALANCE_TIMEOUT ' + 'is set', done => {
+    it('should exit on rebalance timeout when CRASH_ON_REBALANCE_TIMEOUT is set', done => {
         assert(consumer.isReady());
         assert(consumer2.isReady());
 
@@ -679,7 +679,7 @@ describe('BackbeatConsumer ledger drain on rebalance', () => {
     // case is covered by the `BackbeatConsumer rebalance during batch
     // processing` suite above.
 
-    it('takes the IDLE path when both queue and ledger are already ' + 'drained at revoke time', done => {
+    it('takes the IDLE path when both queue and ledger are already drained at revoke time', done => {
         consumer1._queueProcessor = (_msg, cb) => process.nextTick(cb);
         consumer2._queueProcessor = (_msg, cb) => process.nextTick(cb);
 
@@ -701,7 +701,7 @@ describe('BackbeatConsumer ledger drain on rebalance', () => {
                         assert.strictEqual(
                             c[0].offset,
                             baseline,
-                            'committed offset should be unchanged ' + 'when there was no work pending',
+                            'committed offset should be unchanged when there was no work pending',
                         );
                         done();
                     });
@@ -953,7 +953,7 @@ describe('BackbeatConsumer "deferred committable" tests', () => {
         async.parallel([innerDone => producer.close(innerDone), innerDone => consumer.close(innerDone)], done);
     });
 
-    it('should be able to process 1000 messages with some deferred ' + 'committable status', done => {
+    it('should be able to process 1000 messages with some deferred committable status', done => {
         const boatloadOfMessages = [];
         for (let i = 0; i < 1000; ++i) {
             boatloadOfMessages.push({
@@ -1434,7 +1434,7 @@ describe('BackbeatConsumer fromOffset tests', () => {
     });
 
     it(
-        'should consume messages produced before the group existed with ' + 'fromOffset earliest',
+        'should consume messages produced before the group existed with fromOffset earliest',
         function testEarliest(done) {
             this.timeout(120000);
             const marker = `marker-earliest-${Math.random()}`;

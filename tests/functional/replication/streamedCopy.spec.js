@@ -8,7 +8,7 @@ const { ObjectMD } = require('@scality/arsenal').models;
 
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 
-const QueueProcessor = require('../../../extensions/replication' + '/queueProcessor/QueueProcessor');
+const QueueProcessor = require('../../../extensions/replication/queueProcessor/QueueProcessor');
 const ReplicateObject = require('../../../extensions/replication/tasks/ReplicateObject');
 const MultipleBackendTask = require('../../../extensions/replication/tasks/MultipleBackendTask');
 const CopyLocationTask = require('../../../extensions/replication/tasks/CopyLocationTask');

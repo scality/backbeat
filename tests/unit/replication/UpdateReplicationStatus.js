@@ -68,7 +68,7 @@ describe('UpdateReplicationStatus', () => {
             assert.strictEqual(updatedSourceEntry.getOriginOp(), 's3:Replication:OperationCompletedReplication');
         });
 
-        it('should return null when site status is COMPLETED and existing site ' + 'status is COMPLETED', () => {
+        it('should return null when site status is COMPLETED and existing site status is COMPLETED', () => {
             const sourceEntry = getCompletedEntry();
             const refreshedEntry = getCompletedEntry();
             const updatedSourceEntry = updateReplicationStatus._getUpdatedSourceEntry(
@@ -78,7 +78,7 @@ describe('UpdateReplicationStatus', () => {
             assert.strictEqual(updatedSourceEntry, null);
         });
 
-        it('should return null when site status is FAILED and existing site ' + 'status is COMPLETED', () => {
+        it('should return null when site status is FAILED and existing site status is COMPLETED', () => {
             const sourceEntry = getCompletedEntry().toFailedEntry({ site: 'sf' }).setSite('sf');
             const refreshedEntry = getCompletedEntry();
             const updatedSourceEntry = updateReplicationStatus._getUpdatedSourceEntry(

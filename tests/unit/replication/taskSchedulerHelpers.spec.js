@@ -147,13 +147,13 @@ describe('QueueProcessor::getTaskSchedulerDedupeKey of copyLocation actions', ()
         eTag: '"d41d8cd98f00b204e9800998ecf8427e"',
     };
 
-    it('should return different keys for the same key of non-versioned ' + 'objects in different buckets', () => {
+    it('should return different keys for the same key of non-versioned objects in different buckets', () => {
         const entry1 = makeActionQueueEntry(objectParams);
         const entry2 = makeActionQueueEntry(Object.assign({}, objectParams, { bucket: 'other-bucket-name' }));
         assert.notStrictEqual(getTaskSchedulerDedupeKey(entry1), getTaskSchedulerDedupeKey(entry2));
     });
 
-    it('should return different keys for a non-versioned object ' + 'overwritten with new contents', () => {
+    it('should return different keys for a non-versioned object overwritten with new contents', () => {
         const entry1 = makeActionQueueEntry(objectParams);
         const entry2 = makeActionQueueEntry(
             Object.assign({}, objectParams, { eTag: '"93b07384d113edec49eaa6238ad5ff00"' }),
@@ -184,7 +184,7 @@ describe('QueueProcessor::getTaskSchedulerDedupeKey of copyLocation actions', ()
         );
     });
 
-    it('should return different keys for MPU objects differing only by ' + 'their part count', () => {
+    it('should return different keys for MPU objects differing only by their part count', () => {
         const entry1 = makeActionQueueEntry(
             Object.assign({}, objectParams, { eTag: '"d41d8cd98f00b204e9800998ecf8427e-2"' }),
         );

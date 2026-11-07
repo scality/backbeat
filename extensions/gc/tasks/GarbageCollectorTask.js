@@ -213,7 +213,7 @@ class GarbageCollectorTask extends BackbeatTask {
             }
             if (err) {
                 log.error(
-                    'an error occurred on deleteData method to ' + 'backbeat route',
+                    'an error occurred on deleteData method to backbeat route',
                     Object.assign(
                         {
                             method: 'LifecycleObjectTask._executeDeleteData',

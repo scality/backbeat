@@ -191,7 +191,7 @@ describe('CRR Retry feature', () => {
 
     afterEach(done => deleteKeys(redisClient, done));
 
-    it('should get correct data for GET route: /_/crr/failed when no ' + 'key has been created', done => {
+    it('should get correct data for GET route: /_/crr/failed when no key has been created', done => {
         getRequest('/_/crr/failed', (err, res) => {
             assert.ifError(err);
             assert.deepStrictEqual(res, {
@@ -202,7 +202,7 @@ describe('CRR Retry feature', () => {
         });
     });
 
-    it('should return empty array for route: /_/crr/failed when ' + 'no sitename is given', done => {
+    it('should return empty array for route: /_/crr/failed when no sitename is given', done => {
         const member = getMember(`test-bucket-1:test-key:${testVersionId}`);
         addMembers(redisClient, 'test-site', [member], err => {
             assert.ifError(err);
@@ -218,7 +218,7 @@ describe('CRR Retry feature', () => {
     });
 
     it(
-        'should get correct data for GET route: /_/crr/failed when ' + 'the key has been created and there is one key',
+        'should get correct data for GET route: /_/crr/failed when the key has been created and there is one key',
         done => {
             const member = getMember(`test-bucket-1:test-key:${testVersionId}`);
             addMembers(redisClient, 'test-site', [member], err => {
@@ -245,7 +245,7 @@ describe('CRR Retry feature', () => {
         },
     );
 
-    it('should get correct data for GET route: /_/crr/failed when ' + 'unknown marker is given', done => {
+    it('should get correct data for GET route: /_/crr/failed when unknown marker is given', done => {
         const site = 'test-site';
         const member = getMember(`test-bucket-1:test-key:${testVersionId}`);
         addMembers(redisClient, site, [member], err => {
@@ -358,7 +358,7 @@ describe('CRR Retry feature', () => {
         },
     );
 
-    it('should get correct data for GET route: /_/crr/failed when ' + 'the two site keys have been created', done => {
+    it('should get correct data for GET route: /_/crr/failed when the two site keys have been created', done => {
         const members = [
             getMember('test-bucket:test-key:test-versionId'),
             getMember('test-bucket-1:test-key-1:test-versionId-1'),
@@ -414,7 +414,7 @@ describe('CRR Retry feature', () => {
     });
 
     it(
-        'should get correct data at scale for GET route: ' + '/_/crr/failed when failures occur across hours',
+        'should get correct data at scale for GET route: /_/crr/failed when failures occur across hours',
         function f(done) {
             this.timeout(300000);
             const hours = Array.from(Array(24).keys());
@@ -476,7 +476,7 @@ describe('CRR Retry feature', () => {
     );
 
     it(
-        'should get correct data at scale for GET route: ' + '/_/crr/failed when failures occur in the same hour',
+        'should get correct data at scale for GET route: /_/crr/failed when failures occur in the same hour',
         function f(done) {
             this.timeout(30000);
             const statsClient = new StatsModel(redisClient);
@@ -530,7 +530,7 @@ describe('CRR Retry feature', () => {
     );
 
     it(
-        'should get correct data for GET route: ' + '/_/crr/failed/<bucket>/<key>/<versionId> when there is no key',
+        'should get correct data for GET route: /_/crr/failed/<bucket>/<key>/<versionId> when there is no key',
         done => {
             getRequest('/_/crr/failed/test-bucket/test-key/test-versionId', (err, res) => {
                 assert.ifError(err);
@@ -543,7 +543,7 @@ describe('CRR Retry feature', () => {
         },
     );
 
-    it('should get correct data for GET route: ' + '/_/crr/failed/<bucket>/<key>?versionId=<versionId>', done => {
+    it('should get correct data for GET route: /_/crr/failed/<bucket>/<key>?versionId=<versionId>', done => {
         const member = getMember('test-bucket:test-key/a:test-versionId');
         const member1 = getMember('test-bucket:test-key-1/a:test-versionId');
         async.series(
@@ -552,7 +552,7 @@ describe('CRR Retry feature', () => {
                 next => addMembers(redisClient, 'test-site-2', [member1], next),
                 next => addMembers(redisClient, 'test-site-1', [member], next),
                 next => {
-                    let route = '/_/crr/failed/test-bucket/test-key/a?' + 'versionId=test-versionId';
+                    let route = '/_/crr/failed/test-bucket/test-key/a?versionId=test-versionId';
                     if (useRoleAuth) {
                         route += `&role=${testRole}`;
                     }
@@ -595,7 +595,7 @@ describe('CRR Retry feature', () => {
         );
     });
 
-    it('should get correct data for POST route: ' + '/_/crr/failed when no key has been matched', done => {
+    it('should get correct data for POST route: /_/crr/failed when no key has been matched', done => {
         const requestBody = addRoleProp([
             {
                 Bucket: 'bucket',
@@ -653,7 +653,7 @@ describe('CRR Retry feature', () => {
     ).timeout(10000);
 
     it.skip(
-        'should get correct data for POST route: /_/crr/failed ' + 'when there are multiple matching keys',
+        'should get correct data for POST route: /_/crr/failed when there are multiple matching keys',
         done => {
             const member = getMember(`test-bucket:test-key:${testVersionId}`);
             async.series(

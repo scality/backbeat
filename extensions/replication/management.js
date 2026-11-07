@@ -49,7 +49,7 @@ function putVersioning(bucketName, endpoint, cb) {
         .then(() => cb())
         .catch(err => {
             if (err.name === 'NoSuchBucket') {
-                logger.info('cannot apply replication configuration: bucket ' + 'does not exist', {
+                logger.info('cannot apply replication configuration: bucket does not exist', {
                     sourceBucket: bucketName,
                 });
                 return cb();
@@ -138,7 +138,7 @@ function deleteReplication(bucketName, cb) {
                 error: err,
             });
             if (err.name === 'NoSuchBucket') {
-                logger.info('cannot delete replication configuration: bucket ' + 'does not exist', {
+                logger.info('cannot delete replication configuration: bucket does not exist', {
                     sourceBucket: bucketName,
                 });
                 return cb();

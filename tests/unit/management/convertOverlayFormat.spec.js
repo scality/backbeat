@@ -63,7 +63,7 @@ describe('convertOverlayFormat', () => {
         assert.deepStrictEqual(convConf, expectedConvConf);
     });
 
-    it('should convert a mix of legacy conf and new conf format into the ' + 'new format', () => {
+    it('should convert a mix of legacy conf and new conf format into the new format', () => {
         const legacyConf = {
             version: 42,
             locations: ['a', 'b'],

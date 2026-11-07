@@ -83,7 +83,7 @@ describe('LifecycleUpdateTransitionTask', () => {
         });
     });
 
-    it('should not transition location in metadata and should GC new ' + 'location if eTag does not match', done => {
+    it('should not transition location in metadata and should GC new location if eTag does not match', done => {
         actionEntry.setAttribute('target.eTag', '"6713e7cf89b6b16d5abf11d1fabac587"');
         task.processActionEntry(actionEntry, err => {
             assert.ifError(err);
@@ -109,7 +109,7 @@ describe('LifecycleUpdateTransitionTask', () => {
     });
 
     it(
-        'should not transition location in metadata and should GC new ' + 'location if LastModified does not match',
+        'should not transition location in metadata and should GC new location if LastModified does not match',
         done => {
             actionEntry.setAttribute('target.lastModified', '1970-01-01T00:00:00.001Z');
             task.processActionEntry(actionEntry, err => {
@@ -124,7 +124,7 @@ describe('LifecycleUpdateTransitionTask', () => {
         },
     );
 
-    it('should transition location in metadata if LastModified is not ' + 'provided as a check', done => {
+    it('should transition location in metadata if LastModified is not provided as a check', done => {
         actionEntry.setAttribute('target', {
             bucket: 'somebucket',
             key: 'somekey',
@@ -142,7 +142,7 @@ describe('LifecycleUpdateTransitionTask', () => {
         });
     });
 
-    it('should update metadata but not GC the from-location when it is a CRR ' + 'location', done => {
+    it('should update metadata but not GC the from-location when it is a CRR location', done => {
         const crrLocation = [Object.assign({}, oldLocation[0], { dataStoreName: 'location-crr-source' })];
         mdObj.setLocation(crrLocation);
         task.processActionEntry(actionEntry, err => {
@@ -165,7 +165,7 @@ describe('LifecycleUpdateTransitionTask', () => {
         });
     });
 
-    it('should still GC the new location on rollback even if the ' + 'from-location is a CRR location', done => {
+    it('should still GC the new location on rollback even if the from-location is a CRR location', done => {
         mdObj.setLocation([Object.assign({}, oldLocation[0], { dataStoreName: 'location-crr-source' })]);
         actionEntry.setAttribute('target.eTag', '"6713e7cf89b6b16d5abf11d1fabac587"');
         task.processActionEntry(actionEntry, err => {

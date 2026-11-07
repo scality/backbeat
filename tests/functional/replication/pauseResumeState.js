@@ -2,7 +2,7 @@ const assert = require('assert');
 const async = require('async');
 const schedule = require('node-schedule');
 
-const QueueProcessor = require('../../../extensions/replication' + '/queueProcessor/QueueProcessor');
+const QueueProcessor = require('../../../extensions/replication/queueProcessor/QueueProcessor');
 const TimeMachine = require('../utils/timeMachine');
 const ZKStateHelper = require('../utils/pauseResumeUtils/zkStateHelper');
 const MockAPI = require('../utils/pauseResumeUtils/mockAPI');
@@ -509,7 +509,7 @@ describe('CRR Pause/Resume status updates', function d() {
         );
     });
 
-    it('should cancel a scheduled resume when the location is manually ' + 'resumed', done => {
+    it('should cancel a scheduled resume when the location is manually resumed', done => {
         let zkScheduleState;
         let zkPauseState;
         // send fake api request
