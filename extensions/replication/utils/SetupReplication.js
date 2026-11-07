@@ -253,9 +253,8 @@ class SetupReplication extends BackbeatTask {
             .then(res => {
                 if (arn !== res.Role.Arn) {
                     const error = new Error(
-                        'Expected ARN to match. A mis-match ' +
-                            'was found between the ARN found in ' +
-                            '`getBucketReplication` and ARN found in `getRole`.',
+                        'Expected ARN to match. A mis-match was found between the ARN ' +
+                            'found in `getBucketReplication` and ARN found in `getRole`.',
                     );
                     this._log.error('role validation sanity check error: ARN mis-match', {
                         bucket: where === 'source' ? this._sourceBucket : this._targetBucket,

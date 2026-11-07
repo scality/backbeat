@@ -605,9 +605,8 @@ describe('CRR Retry feature', () => {
     });
 
     it(
-        'should get correct data for POST route: ' +
-            '/_/crr/failed when no key has been matched and ForceRetry ' +
-            'field is specified',
+        'should get correct data for POST route: /_/crr/failed when ' +
+            'no key has been matched and ForceRetry field is specified',
         done => {
             const body = JSON.stringify([
                 {

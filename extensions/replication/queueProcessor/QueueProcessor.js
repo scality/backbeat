@@ -658,9 +658,8 @@ class QueueProcessor extends EventEmitter {
             this._updateZkStateNode('scheduledResume', null, err => {
                 if (err) {
                     this.logger.error(
-                        'error occurred saving state ' +
-                            'to zookeeper for resuming a scheduled resume. Retry ' +
-                            'again in 1 minute',
+                        'error occurred saving state to zookeeper for ' +
+                            'resuming a scheduled resume. Retry again in 1 minute',
                         {
                             method: 'QueueProcessor.scheduleResume',
                             error: err,

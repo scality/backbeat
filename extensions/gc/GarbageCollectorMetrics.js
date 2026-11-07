@@ -23,9 +23,8 @@ const gcDuration = ZenkoMetrics.createHistogram({
 const gcFailed = ZenkoMetrics.createCounter({
     name: 's3_gc_failed_total',
     help:
-        'Total number of GC tasks that failed permanently after retries ' +
-        'were exhausted or on a non-retryable error. Offset is committed to ' +
-        'avoid ledger leaks; the underlying operation is not retried.',
+        'Total number of GC tasks that failed permanently after retries were exhausted or on a non-retryable ' +
+        'error. Offset is committed to avoid ledger leaks; the underlying operation is not retried.',
     labelNames: [GC_LABEL_ORIGIN, GC_LABEL_LOCATION],
 });
 

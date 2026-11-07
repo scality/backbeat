@@ -824,10 +824,9 @@ describe('API routes', () => {
                     assert.ifError(err);
                     assert.deepStrictEqual(res, {
                         description:
-                            'Number of bytes to be replicated ' +
-                            '(pending), number of bytes transferred to the ' +
-                            'destination (completed), and percentage of the ' +
-                            'object that has completed replication (progress)',
+                            'Number of bytes to be replicated (pending), number of bytes ' +
+                            'transferred to the destination (completed), and percentage ' +
+                            'of the object that has completed replication (progress)',
                         pending: 0,
                         completed: 0,
                         progress: '0%',

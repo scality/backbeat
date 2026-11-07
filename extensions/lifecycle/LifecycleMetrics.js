@@ -28,9 +28,8 @@ const SCAN_METRIC_RETENTION_MS = DEFAULT_SCAN_METRIC_RETENTION_S * 1000;
 const conductorLatestBatchStartTime = ZenkoMetrics.createGauge({
     name: 's3_lifecycle_latest_batch_start_time',
     help:
-        'Conductor scheduling heartbeat: ms-since-epoch timestamp of ' +
-        'the most recent scan start. Use to detect that the conductor is ' +
-        'still scheduling scans (LifecycleLateScan alert).',
+        'Conductor scheduling heartbeat: ms-since-epoch timestamp of the most recent scan start. ' +
+        'Use to detect that the conductor is still scheduling scans (LifecycleLateScan alert).',
     labelNames: [LIFECYCLE_LABEL_ORIGIN],
 });
 
@@ -87,19 +86,17 @@ const conductorLatestBatchBucketCount = ZenkoMetrics.createGauge({
 const bucketProcessorScanMessagesReceived = ZenkoMetrics.createCounter({
     name: 's3_lifecycle_bucket_processor_scan_messages_total',
     help:
-        'Total number of bucket-task messages picked up by this bucket ' +
-        'processor, grouped by conductor scan id. Per-scan series are ' +
-        'auto-removed by a local cleanup timer (see setScanMetricTimeout) ' +
-        'to keep label cardinality bounded.',
+        'Total number of bucket-task messages picked up by this bucket processor, ' +
+        'grouped by conductor scan id. Per-scan series are auto-removed by a local ' +
+        'cleanup timer (see setScanMetricTimeout) to keep label cardinality bounded.',
     labelNames: [LIFECYCLE_LABEL_ORIGIN, LIFECYCLE_LABEL_CONDUCTOR_SCAN_ID],
 });
 
 const bucketProcessorScanMessageAgeSeconds = ZenkoMetrics.createHistogram({
     name: 's3_lifecycle_bucket_processor_scan_message_age_seconds',
     help:
-        'Elapsed wall-clock time in seconds between conductor scan start ' +
-        'and bucket-tasks topic message pickup by this bucket processor. ' +
-        'This is a dequeue/backlog age signal, not bucket processing duration.',
+        'Elapsed wall-clock time in seconds between conductor scan start and bucket-tasks topic message pickup ' +
+        'by this bucket processor. This is a dequeue/backlog age signal, not bucket processing duration.',
     labelNames: [LIFECYCLE_LABEL_ORIGIN],
     buckets: [60, 300, 600, 1800, 3600, 7200, 14400, 28800, 43200, 86400],
 });
@@ -199,10 +196,8 @@ const lifecycleKafkaPublish = {
 const lifecycleFailed = ZenkoMetrics.createCounter({
     name: 's3_lifecycle_failed_total',
     help:
-        'Total number of lifecycle tasks that failed permanently after ' +
-        'retries were exhausted or on a non-retryable error. Offset is ' +
-        'committed to avoid ledger leaks; the underlying operation is not ' +
-        'retried.',
+        'Total number of lifecycle tasks that failed permanently after retries were exhausted or on a ' +
+        'non-retryable error. Offset is committed to avoid ledger leaks; the underlying operation is not retried.',
     labelNames: [LIFECYCLE_LABEL_ORIGIN, LIFECYCLE_LABEL_TYPE, LIFECYCLE_LABEL_LOCATION],
 });
 

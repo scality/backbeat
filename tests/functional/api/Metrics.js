@@ -66,9 +66,8 @@ describe('Metrics class', () => {
                 },
                 backlog: {
                     description:
-                        'Number of incomplete replication operations' +
-                        ' (count) and number of incomplete bytes transferred' +
-                        ' (size)',
+                        'Number of incomplete replication operations (count) ' +
+                        'and number of incomplete bytes transferred (size)',
                     results: {
                         count: 0,
                         size: 0,

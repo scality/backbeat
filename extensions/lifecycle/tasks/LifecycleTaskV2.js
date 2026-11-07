@@ -394,8 +394,7 @@ class LifecycleTaskV2 extends LifecycleTask {
                 versionId: obj.VersionId,
             });
             const errMsg =
-                'an implementation error occurred: when comparing ' +
-                'lifecycle rules on a version, stale date was missing';
+                'an implementation error occurred: when comparing lifecycle rules on a version, stale date was missing';
             return process.nextTick(() => cb(errors.InternalError.customizeDescription(errMsg)));
         }
 

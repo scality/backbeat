@@ -1151,8 +1151,7 @@ describe('lifecycle task functional tests', function dF() {
             // expire: pagination, prefix
             {
                 message:
-                    'should verify that EXPIRED objects are sent to ' +
-                    'object kafka topic with pagination, with prefix',
+                    'should verify that EXPIRED objects are sent to object kafka topic with pagination, with prefix',
                 bucketLCRules: [
                     new LifecycleRule().addID('task-1').addExpiration('Date', PAST).addPrefix('test/').build(),
                 ],
@@ -1622,9 +1621,8 @@ describe('lifecycle task functional tests', function dF() {
         [
             {
                 message:
-                    'should expire a version in a versioning enabled ' +
-                    'bucket with 0 non-current versions using basic ' +
-                    'expiration rule',
+                    'should expire a version in a versioning enabled bucket ' +
+                    'with 0 non-current versions using basic expiration rule',
                 isDeleteMarker: false,
                 hasNonCurrentVersions: false,
                 versionStatus: 'Enabled',
@@ -1634,9 +1632,8 @@ describe('lifecycle task functional tests', function dF() {
             },
             {
                 message:
-                    'should expire a version in a versioning suspended ' +
-                    'bucket with 0 non-current versions using basic ' +
-                    'expiration rule',
+                    'should expire a version in a versioning suspended bucket ' +
+                    'with 0 non-current versions using basic expiration rule',
                 isDeleteMarker: false,
                 hasNonCurrentVersions: false,
                 versionStatus: 'Suspended',
@@ -1646,9 +1643,8 @@ describe('lifecycle task functional tests', function dF() {
             },
             {
                 message:
-                    'should expire a delete marker in a versioning ' +
-                    'enabled bucket with 0 non-current versions using basic ' +
-                    'expiration rule',
+                    'should expire a delete marker in a versioning enabled bucket ' +
+                    'with 0 non-current versions using basic expiration rule',
                 isDeleteMarker: true,
                 hasNonCurrentVersions: false,
                 versionStatus: 'Enabled',
@@ -1658,9 +1654,8 @@ describe('lifecycle task functional tests', function dF() {
             },
             {
                 message:
-                    'should expire a delete marker in a versioning ' +
-                    'suspended bucket with 0 non-current versions using ' +
-                    'basic expiration rule',
+                    'should expire a delete marker in a versioning suspended ' +
+                    'bucket with 0 non-current versions using basic expiration rule',
                 isDeleteMarker: true,
                 hasNonCurrentVersions: false,
                 versionStatus: 'Suspended',
@@ -1670,9 +1665,8 @@ describe('lifecycle task functional tests', function dF() {
             },
             {
                 message:
-                    'should expire a version in a versioning enabled ' +
-                    'bucket with 1 or more non-current versions using basic ' +
-                    'expiration rule',
+                    'should expire a version in a versioning enabled bucket with ' +
+                    '1 or more non-current versions using basic expiration rule',
                 isDeleteMarker: false,
                 hasNonCurrentVersions: true,
                 versionStatus: 'Enabled',
@@ -1682,9 +1676,8 @@ describe('lifecycle task functional tests', function dF() {
             },
             {
                 message:
-                    'should expire a version in a versioning suspended ' +
-                    'bucket with 1 or more non-current versions using basic ' +
-                    'expiration rule',
+                    'should expire a version in a versioning suspended bucket with ' +
+                    '1 or more non-current versions using basic expiration rule',
                 isDeleteMarker: false,
                 hasNonCurrentVersions: true,
                 versionStatus: 'Suspended',
@@ -1694,9 +1687,8 @@ describe('lifecycle task functional tests', function dF() {
             },
             {
                 message:
-                    'should NOT expire a delete marker in a versioning ' +
-                    'enabled bucket with 1 or more non-current versions ' +
-                    'using basic expiration rule',
+                    'should NOT expire a delete marker in a versioning enabled bucket ' +
+                    'with 1 or more non-current versions using basic expiration rule',
                 isDeleteMarker: true,
                 hasNonCurrentVersions: true,
                 versionStatus: 'Enabled',
@@ -1706,9 +1698,8 @@ describe('lifecycle task functional tests', function dF() {
             },
             {
                 message:
-                    'should NOT expire a delete marker in a versioning ' +
-                    'suspended bucket with 1 or more non-current versions ' +
-                    'using basic expiration rule',
+                    'should NOT expire a delete marker in a versioning suspended bucket ' +
+                    'with 1 or more non-current versions using basic expiration rule',
                 isDeleteMarker: true,
                 hasNonCurrentVersions: true,
                 versionStatus: 'Suspended',
@@ -1799,9 +1790,8 @@ describe('lifecycle task functional tests', function dF() {
         [
             {
                 message:
-                    'should apply ExpiredObjectDeleteMarker rule on ' +
-                    'only a delete marker in a versioning enabled bucket ' +
-                    'with zero non-current versions',
+                    'should apply ExpiredObjectDeleteMarker rule on only a delete marker ' +
+                    'in a versioning enabled bucket with zero non-current versions',
                 bucketLCRules: [
                     new LifecycleRule().addID('task-1').addExpiration('ExpiredObjectDeleteMarker', true).build(),
                 ],
@@ -1984,9 +1974,8 @@ describe('lifecycle task functional tests', function dF() {
             // NewerNoncurrentVersions parameter forces some of versions to be kept
             {
                 message:
-                    'should verify that NoncurrentVersionExpiration ' +
-                    ' rule with NewerNoncurrentVersion ' +
-                    ' applies to 1 versioned object, no pagination',
+                    'should verify that NoncurrentVersionExpiration  rule with ' +
+                    'NewerNoncurrentVersion  applies to 1 versioned object, no pagination',
                 bucketLCRules: [
                     new LifecycleRule().addID('task-1').addNCVExpiration(ncd, 1).addNCVExpiration(nncv, 1).build(),
                 ],
@@ -2011,9 +2000,8 @@ describe('lifecycle task functional tests', function dF() {
             // NewerNoncurrentVersions parameter forces all the versions to be kept
             {
                 message:
-                    'should verify that NoncurrentVersionExpiration ' +
-                    ' rule with NewerNoncurrentVersion ' +
-                    ' applies does not delete versions, no pagination',
+                    'should verify that NoncurrentVersionExpiration  rule with ' +
+                    'NewerNoncurrentVersion  applies does not delete versions, no pagination',
                 bucketLCRules: [
                     new LifecycleRule().addID('task-1').addNCVExpiration(ncd, 1).addNCVExpiration(nncv, 2).build(),
                 ],
@@ -2037,9 +2025,8 @@ describe('lifecycle task functional tests', function dF() {
             // NewerNoncurrentVersions parameter forces some of versions to be kept
             {
                 message:
-                    'should verify that NoncurrentVersionExpiration ' +
-                    ' rule with NewerNoncurrentVersion ' +
-                    ' applies to correct versions with tagging and pagination',
+                    'should verify that NoncurrentVersionExpiration  rule with ' +
+                    'NewerNoncurrentVersion  applies to correct versions with tagging and pagination',
                 bucketLCRules: [
                     new LifecycleRule()
                         .addID('task-1')
@@ -2075,9 +2062,8 @@ describe('lifecycle task functional tests', function dF() {
             // NewerNoncurrentVersions parameter forces all the versions to be kept
             {
                 message:
-                    'should verify that NoncurrentVersionExpiration ' +
-                    ' rule with NewerNoncurrentVersion ' +
-                    ' applies to correct versions with tagging and pagination',
+                    'should verify that NoncurrentVersionExpiration  rule with ' +
+                    'NewerNoncurrentVersion  applies to correct versions with tagging and pagination',
                 bucketLCRules: [
                     new LifecycleRule()
                         .addID('task-1')
