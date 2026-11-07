@@ -325,7 +325,7 @@ function collectResource(v, done) {
             if (err instanceof NoSuchEntityException) {
                 return done(null, null);
             }
-            done(err);
+            return done(err);
         });
 }
 
