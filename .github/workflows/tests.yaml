@@ -81,7 +81,7 @@ jobs:
         flags: bucket-scanner
 
   lint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
     - name: Checkout
       uses: actions/checkout@v4
@@ -98,7 +98,7 @@ jobs:
 
   unit:
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     services:
       redis:
         image: redis:alpine
@@ -155,7 +155,7 @@ jobs:
   functional-tests:
     needs: build
     name: ${{ matrix.testsuite }} tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -245,7 +245,7 @@ jobs:
 
   ft-ballooning:
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     services:
       redis:
         image: redis:alpine
@@ -312,7 +312,7 @@ jobs:
 
   queue-populator:
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
