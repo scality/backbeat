@@ -1851,14 +1851,13 @@ describe('lifecycle task functional tests', function dF() {
                                 },
                                 next,
                             ),
-                        (data, next) => {
+                        (data, next) =>
                             wrapProcessBucketEntry(data.Rules, bucketEntry, s3Client, params, (err, data) => {
                                 assert.ifError(err);
 
                                 assert.equal(data.count.object, item.expected.objectCount);
                                 next();
-                            });
-                        },
+                            }),
                     ],
                     err => {
                         assert.ifError(err);
