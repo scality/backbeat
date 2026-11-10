@@ -593,10 +593,8 @@ describe('BackbeatConsumer rebalance during batch processing', () => {
                             assert.strictEqual(
                                 c[0].offset,
                                 baseline + N,
-                                'expected committed offset to advance ' +
-                                    `from ${baseline} to ${baseline + N} ` +
-                                    `after ${N} tasks processed during ` +
-                                    `rebalance, but it stayed at ${c[0].offset}`,
+                                `expected committed offset to advance from ${baseline} to ${baseline + N} ` +
+                                    `after ${N} tasks processed during rebalance, but it stayed at ${c[0].offset}`,
                             );
                             done();
                         }),
@@ -744,10 +742,8 @@ describe('BackbeatConsumer ledger drain on rebalance', () => {
                         assert.strictEqual(
                             c[0].offset,
                             baseline + 1,
-                            'expected committed offset to advance ' +
-                                `from ${baseline} to ${baseline + 1} ` +
-                                'after deferred onEntryCommittable, ' +
-                                `but it stayed at ${c[0].offset}`,
+                            `expected committed offset to advance from ${baseline} to ${baseline + 1} ` +
+                                `after deferred onEntryCommittable, but it stayed at ${c[0].offset}`,
                         );
                         done();
                     });
