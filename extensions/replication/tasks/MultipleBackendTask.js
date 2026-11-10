@@ -1250,9 +1250,8 @@ class MultipleBackendTask extends ReplicateObject {
                     });
                     if (status === 'COMPLETED' && content.includes('DATA')) {
                         const errMessage =
-                            'skipping replication: ' +
-                            'replication status is already COMPLETED ' +
-                            `on the location ${this.site}`;
+                            'skipping replication: replication status is ' +
+                            `already COMPLETED on the location ${this.site}`;
                         log.warn(errMessage, {
                             entry: refreshedEntry.getLogInfo(),
                         });

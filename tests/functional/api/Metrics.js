@@ -75,9 +75,8 @@ describe('Metrics class', () => {
                 },
                 completions: {
                     description:
-                        'Number of completed replication operations' +
-                        ' (count) and number of bytes transferred (size) in ' +
-                        `the last ${EXPIRY} seconds`,
+                        'Number of completed replication operations (count) and number ' +
+                        `of bytes transferred (size) in the last ${EXPIRY} seconds`,
                     results: {
                         count: 0,
                         size: 0,
@@ -85,9 +84,8 @@ describe('Metrics class', () => {
                 },
                 failures: {
                     description:
-                        'Number of failed replication operations ' +
-                        `(count) and bytes (size) in the last ${EXPIRY} ` +
-                        'seconds',
+                        'Number of failed replication operations (count) ' +
+                        `and bytes (size) in the last ${EXPIRY} seconds`,
                     results: {
                         count: 0,
                         size: 0,
@@ -95,9 +93,8 @@ describe('Metrics class', () => {
                 },
                 throughput: {
                     description:
-                        'Current throughput for replication' +
-                        ' operations in ops/sec (count) and bytes/sec (size) ' +
-                        `in the last ${THROUGHPUT_EXPIRY} seconds`,
+                        'Current throughput for replication operations in ops/sec (count) ' +
+                        `and bytes/sec (size) in the last ${THROUGHPUT_EXPIRY} seconds`,
                     results: {
                         count: '0.00',
                         size: '0.00',

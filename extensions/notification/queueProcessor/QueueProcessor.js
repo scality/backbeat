@@ -82,8 +82,7 @@ class QueueProcessor extends EventEmitter {
         this.destinationConfig = notifConfig.destinations.find(dest => dest.resource === destinationId);
         assert(
             this.destinationConfig,
-            `Invalid destination argument "${destinationId}".` +
-                ' Destination could not be found in destinations defined',
+            `Invalid destination argument "${destinationId}". Destination could not be found in destinations defined`,
         );
         // overwriting destination auth config
         // if it was passed by env var
