@@ -167,6 +167,7 @@ describe('CopyLocationTask', () => {
                 target: { bucket: 'bucket', key: 'key' },
                 toLocation: 'location-crr-source',
             });
+            task._setupDestination(objMd);
             return new Promise((resolve, reject) => task._initiateMPU(entry, objMd, fakeLogger,
                 err => (err ? reject(err) : resolve(task.backbeatClient.send.firstCall.args[0].input))));
         }

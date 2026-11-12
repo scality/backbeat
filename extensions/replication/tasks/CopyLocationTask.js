@@ -44,17 +44,17 @@ class CopyLocationTask extends BackbeatTask {
     }
 
     /**
-     * Storage the data is written to: this site, except for a pull replication
-     * (data on a CRR location) where it is the location the object data points to
+     * The data is written to this site, except for a pull replication (data on
+     * a CRR location) where it goes to the location the object data points to.
+     * A task handles a single action, so just retarget it.
      * @param {ObjectMD} objMD - metadata object
-     * @return {Object} StorageType and StorageClass of the destination
+     * @return {undefined}
      */
-    _getDestStorage(objMD) {
-        if (!locations[objMD.getDataStoreName()]?.isCRR) {
-            return { StorageType: this.destType, StorageClass: this.site };
+    _setupDestination(objMD) {
+        if (locations[objMD.getDataStoreName()]?.isCRR) {
+            this.site = objMD.getLocation()[0].targetLocation;
+            this.destType = locations[this.site]?.type;
         }
-        const { targetLocation } = objMD.getLocation()[0];
-        return { StorageType: locations[targetLocation]?.type, StorageClass: targetLocation };
     }
 
     constructor(qp) {
@@ -297,6 +297,7 @@ class CopyLocationTask extends BackbeatTask {
                 return next(null, objMD);
             }),
             (objMD, next) => {
+                this._setupDestination(objMD);
                 const err = this._checkObjectState(actionEntry, objMD);
                 if (err) {
                     return next(err);
@@ -490,7 +491,8 @@ class CopyLocationTask extends BackbeatTask {
             Key: key,
             CanonicalID: objMD.getOwnerId(),
             ContentMD5: objMD.getContentMd5(),
-            ...this._getDestStorage(objMD),
+            StorageType: this.destType,
+            StorageClass: this.site,
             VersionId: version,
             UserMetaData: objMD.getUserMetadata(),
             ContentType: objMD.getContentType() || undefined,
@@ -635,7 +637,8 @@ class CopyLocationTask extends BackbeatTask {
         const command = new MultipleBackendAbortMPUCommand({
             Bucket: bucket,
             Key: key,
-            ...this._getDestStorage(objMD),
+            StorageType: this.destType,
+            StorageClass: this.site,
             UploadId: uploadId,
             RequestUids: log.getSerializedUids(),
         });
@@ -667,7 +670,8 @@ class CopyLocationTask extends BackbeatTask {
         const command = new MultipleBackendCompleteMPUCommand({
             Bucket: bucket,
             Key: key,
-            ...this._getDestStorage(objMD),
+            StorageType: this.destType,
+            StorageClass: this.site,
             VersionId: version,
             UserMetaData: objMD.getUserMetadata(),
             ContentType: objMD.getContentType(),
@@ -749,7 +753,8 @@ class CopyLocationTask extends BackbeatTask {
         const command = new MultipleBackendPutMPUPartCommand({
             Bucket: bucket,
             Key: key,
-            ...this._getDestStorage(objMD),
+            StorageType: this.destType,
+            StorageClass: this.site,
             PartNumber: partNumber,
             UploadId: uploadId,
             Body: incomingMsg,
@@ -804,7 +809,8 @@ class CopyLocationTask extends BackbeatTask {
         const command = new MultipleBackendInitiateMPUCommand({
             Bucket: bucket,
             Key: key,
-            ...this._getDestStorage(objMD),
+            StorageType: this.destType,
+            StorageClass: this.site,
             VersionId: version,
             UserMetaData: objMD.getUserMetadata(),
             ContentType: objMD.getContentType() || undefined,
@@ -999,7 +1005,7 @@ class CopyLocationTask extends BackbeatTask {
                     'object contents have changed');
             }
         }
-        if (objMD.getDataStoreName() === this._getDestStorage(objMD).StorageClass) {
+        if (objMD.getDataStoreName() === this.site) {
             // The object was already transitioned to the destination location
             return errors.InvalidObjectState.customizeDescription(
                 'object already transitioned');
