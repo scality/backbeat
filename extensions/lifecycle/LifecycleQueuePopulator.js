@@ -673,7 +673,7 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
             return undefined;
         }
 
-        let bucketValue = {};
+        let bucketValue;
         if (this._isBucketEntryFromBucketd(entry)) {
             const parsedAttr = safeJsonParse(value.attributes);
             if (parsedAttr.error) {
