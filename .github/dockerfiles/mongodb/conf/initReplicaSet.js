@@ -1,4 +1,4 @@
-/* eslint-disable no-undef */
+/* global rs */
 // the member host is what clients following the replica set configuration
 // connect to: it must resolve from where they run
 rs.initiate({

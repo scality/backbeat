@@ -173,7 +173,7 @@ class LifecycleObjectProcessor extends EventEmitter {
      * @param {ActionQueueEntry} actionEntry - lifecycle action entry
      * @return {BackbeatTask|null} - backbeat task object
      */
-    // eslint-disable-next-line
+    // eslint-disable-next-line no-unused-vars
     getTask(actionEntry) {
         return null;
     }
