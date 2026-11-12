@@ -1,7 +1,7 @@
 const async = require('async');
 const { v4: uuid } = require('uuid');
 
-const { errors, jsutil, models, versioning } = require('@scality/arsenal');
+const { constants: { externalBackends }, errors, jsutil, models, versioning } = require('@scality/arsenal');
 const { ObjectMD } = models;
 const { VersionID } = versioning;
 
@@ -37,6 +37,19 @@ const locations = require('../../../conf/locationConfig.json') || {};
 
 const MPU_GCP_MAX_PARTS = 1024;
 
+/**
+ * Where the data is pulled to when the object metadata does not name a usable
+ * target. Any location will do, as long as it can hold the data.
+ *
+ * @return {String|undefined} default local location, undefined if there is none
+ */
+function getDefaultLocalLocation() {
+    return ['us-east-1', ...Object.keys(locations)].find(name => {
+        const loc = locations[name];
+        return loc && !loc.isCold && !loc.isCRR && !loc.isTransient && !externalBackends[loc.type];
+    });
+}
+
 class CopyLocationTask extends BackbeatTask {
 
     _getReplicationEndpointType() {
@@ -45,16 +58,65 @@ class CopyLocationTask extends BackbeatTask {
 
     /**
      * The data is written to this site, except for a pull replication (data on
-     * a CRR location) where it goes to the location the object data points to.
-     * A task handles a single action, so just retarget it.
+     * a CRR location) where it goes to a local location. A task handles a
+     * single action, so just retarget it.
+     * @param {ActionQueueEntry} actionEntry - the action entry
      * @param {ObjectMD} objMD - metadata object
-     * @return {undefined}
+     * @param {Werelogs} log - the logger instance
+     * @return {null|Error} error if there is no location to pull the data to
      */
-    _setupDestination(objMD) {
-        if (locations[objMD.getDataStoreName()]?.isCRR) {
-            this.site = objMD.getLocation()[0].targetLocation;
-            this.destType = locations[this.site]?.type;
+    _setupDestination(actionEntry, objMD, log) {
+        if (!locations[objMD.getDataStoreName()]?.isCRR) {
+            return null;
         }
+        const site = this._getPullReplicationTarget(actionEntry, objMD.getLocation(), log);
+        if (!site) {
+            return errors.InternalError.customizeDescription('no local location to pull data to');
+        }
+        this.site = site;
+        this.destType = locations[site].type;
+        return null;
+    }
+
+    /**
+     * Local location the object data must be copied to.
+     *
+     * The metadata may not name a usable target, typically if that location
+     * was deleted/renamed since. This is not recoverable here, but copying
+     * the data anywhere local beats leaving it on the source forever.
+     *
+     * The locations may also be missing altogether, which could be the case
+     * for empty objects where there is no actual data to copy: only metadata
+     * to update to mark the transition as complete.
+     *
+     * @param {ActionQueueEntry} actionEntry - the action entry
+     * @param {Object[]} [objLocations] - object data locations
+     * @param {Werelogs} log - the logger instance
+     * @return {String|undefined} target location, undefined if there is none
+     */
+    _getPullReplicationTarget(actionEntry, objLocations, log) {
+        const { targetLocation } = objLocations?.[0] ?? {};
+        if (locations[targetLocation]) {
+            return targetLocation;
+        }
+
+        const defaultLocalLocation = getDefaultLocalLocation();
+        if (!defaultLocalLocation) {
+            log.error('invalid target location and no local location to fall back to', {
+                method: 'CopyLocationTask._getPullReplicationTarget',
+                ...actionEntry.getLogInfo(),
+                targetLocation,
+            });
+            return undefined;
+        }
+
+        log.warn('invalid target location in object metadata', {
+            method: 'CopyLocationTask._getPullReplicationTarget',
+            ...actionEntry.getLogInfo(),
+            targetLocation,
+            fallbackLocation: defaultLocalLocation,
+        });
+        return defaultLocalLocation;
     }
 
     constructor(qp) {
@@ -297,8 +359,8 @@ class CopyLocationTask extends BackbeatTask {
                 return next(null, objMD);
             }),
             (objMD, next) => {
-                this._setupDestination(objMD);
-                const err = this._checkObjectState(actionEntry, objMD);
+                const err = this._setupDestination(actionEntry, objMD, log) ||
+                    this._checkObjectState(actionEntry, objMD);
                 if (err) {
                     return next(err);
                 }
@@ -1015,10 +1077,8 @@ class CopyLocationTask extends BackbeatTask {
 
     _publishCopyLocationStatus(err, actionEntry, kafkaEntry, log) {
         if (actionEntry.getAttribute('metrics.origin') === PULL_REPLICATION) {
-            // restore the actual direction of the copy, reversed for routing
-            const toLocation = actionEntry.getAttribute('toLocation');
-            actionEntry.setAttribute('toLocation', actionEntry.getAttribute('metrics.fromLocation'))
-                .setAttribute('metrics.fromLocation', toLocation);
+            // toLocation was the location pulled from, for routing
+            actionEntry.setAttribute('toLocation', this.site);
         }
         if (err && !actionEntry.getError()) {
             actionEntry.setError(err);
