@@ -17,7 +17,7 @@ const connectorConfig = {
     'name': 'source-connector',
     'database': 'metadata',
     'connection.uri': 'mongodb://localhost:27017/?w=majority&readPreference=primary',
-    'topic.namespace.map': '{\"*\":\"oplog\"}',
+    'topic.namespace.map': '{"*":"oplog"}',
     'connector.class': 'com.mongodb.kafka.connect.MongoSourceConnector',
     'pipeline': '[]',
     'collection': '',

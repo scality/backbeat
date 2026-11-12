@@ -16,7 +16,6 @@ export default [
         },
 
         rules: {
-            'no-useless-escape': 'off',
             'no-redeclare': 'off',
             // no-extraneous-dependencies silently skips modules it cannot resolve
             'import/no-unresolved': ['error', { commonjs: true }],
