@@ -25,7 +25,6 @@ function getRequest(path, done) {
         method: 'GET',
         path,
     };
-    // eslint-disable-next-line
     const req = http.request(params, res => {
         if (res.statusCode !== 200) {
             return done(res);
@@ -44,6 +43,7 @@ function getRequest(path, done) {
             }
             return done(null, body);
         });
+        return undefined;
     });
     req.on('error', err => done(err));
     req.end();
