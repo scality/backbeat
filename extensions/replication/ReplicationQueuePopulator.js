@@ -186,9 +186,13 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
             versionId: queueEntry.getEncodedVersionId() || 'null',
             eTag: `"${queueEntry.getContentMd5()}"`,
             lastModified: queueEntry.getLastModified(),
-            toLocation: targetLocation,
+            // Reversed on purpose: data processors pick the copies whose
+            // toLocation is their own site, and only the processor of the
+            // location pulled from can read the data. CopyLocationTask swaps
+            // them back when publishing the result.
+            toLocation: queueEntry.getDataStoreName(),
             originLabel: PULL_REPLICATION,
-            fromLocation: queueEntry.getDataStoreName(),
+            fromLocation: targetLocation,
             contentLength,
             resultsTopic: this.transitionTasksTopic,
             transitionTime: transitionTime.toISOString(),

@@ -482,7 +482,8 @@ describe('replication queue populator: pull replication', () => {
 
         const action = JSON.parse(message);
         assert.strictEqual(action.action, 'copyLocation');
-        assert.strictEqual(action.toLocation, TARGET_LOCATION);
+        // reversed: routed to the processor of the location pulled from
+        assert.strictEqual(action.toLocation, CRR_LOCATION);
         assert.strictEqual(action.resultsTopic, RESULTS_TOPIC);
         assert.strictEqual(action.contextInfo.ruleType, 'transition');
         assert.strictEqual(action.contextInfo.origin, 'pullReplication');
@@ -502,7 +503,7 @@ describe('replication queue populator: pull replication', () => {
             objectKey: 'a-test-key',
             storageClass: CRR_LOCATION,
         });
-        assert.strictEqual(action.metrics.fromLocation, CRR_LOCATION);
+        assert.strictEqual(action.metrics.fromLocation, TARGET_LOCATION);
         assert.strictEqual(action.metrics.contentLength, 128);
         assert.strictEqual(action.metrics.transitionTime,
             '2024-05-06T10:11:12.000Z');
@@ -619,7 +620,7 @@ describe('replication queue populator: pull replication', () => {
         assert.strictEqual(rqp.published.length, 1);
         assert.strictEqual(rqp.published[0].topic, ReplicationAPI.getDataMoverTopic());
         const action = JSON.parse(rqp.published[0].message);
-        assert.strictEqual(action.toLocation, LOCAL_LOCATION);
+        assert.strictEqual(action.metrics.fromLocation, LOCAL_LOCATION);
         assert.strictEqual(action.metrics.contentLength, 0);
         sinon.assert.calledOnce(warnSpy);
     });
@@ -693,7 +694,7 @@ describe('replication queue populator: pull replication', () => {
 
             assert.strictEqual(rqp.published.length, 1);
             const action = JSON.parse(rqp.published[0].message);
-            assert.strictEqual(action.toLocation, LOCAL_LOCATION);
+            assert.strictEqual(action.metrics.fromLocation, LOCAL_LOCATION);
             sinon.assert.calledOnce(warnSpy);
         });
     });

@@ -72,6 +72,19 @@ describe('CopyLocationTask', () => {
             const res = task._checkObjectState(entry, objMd);
             assert.equal(res, null);
         });
+
+        it('should not skip a pull replication of an object still on the location pulled from', () => {
+            const objMd = new ObjectMD();
+            objMd.setDataStoreName('location-crr-source');
+            objMd.setLocation([{ dataStoreName: 'location-crr-source', targetLocation: 'us-east-1' }]);
+
+            const entry = new ActionQueueEntry({
+                target: {},
+                toLocation: 'location-crr-source',
+            });
+
+            assert.strictEqual(task._checkObjectState(entry, objMd), null);
+        });
     });
 
     describe('_publishCopyLocationStatus', () => {
@@ -102,6 +115,79 @@ describe('CopyLocationTask', () => {
             const res = task._publishCopyLocationStatus(errors.InvalidObjectState, entry, null, fakeLogger);
             assert.strictEqual(res.committable, true);
             assert(task.replicationStatusProducer.notCalled);
+        });
+
+        [
+            ['regular copy', 'lifecycle', 'test-site', 'STANDARD'],
+            ['pull replication', 'pullReplication', 'us-east-1', 'location-crr-source'],
+        ].forEach(([desc, origin, expectedTo, expectedFrom]) => {
+            it(`should publish the actual direction of a ${desc}`, () => {
+                const entry = ActionQueueEntry.create('copyLocation')
+                    .setAttribute('target', { key: 'key' })
+                    .setAttribute('toLocation', origin === 'pullReplication' ? 'location-crr-source' : 'test-site')
+                    .setAttribute('metrics', {
+                        origin,
+                        fromLocation: origin === 'pullReplication' ? 'us-east-1' : 'STANDARD',
+                    })
+                    .setResultsTopic('results-topic');
+                task.replicationStatusProducer = { sendToTopic: sinon.stub() };
+
+                const res = task._publishCopyLocationStatus(null, entry, null, fakeLogger);
+
+                assert.strictEqual(res.committable, false);
+                const [topic, [{ message }]] = task.replicationStatusProducer.sendToTopic.firstCall.args;
+                assert.strictEqual(topic, 'results-topic');
+                const published = JSON.parse(message);
+                assert.strictEqual(published.toLocation, expectedTo);
+                assert.strictEqual(published.metrics.fromLocation, expectedFrom);
+            });
+        });
+    });
+
+    describe('write destination', () => {
+        let task;
+
+        beforeEach(() => {
+            task = new CopyLocationTask({
+                getStateVars: () => ({
+                    site: 'location-crr-source',
+                    mProducer: {
+                        getProducer: () => {},
+                    },
+                }),
+            });
+            task.destType = 'scality';
+            task.backbeatClient = {
+                send: sinon.stub().resolves({ uploadId: 'upload-id' }),
+            };
+        });
+
+        function initiateMPU(objMd) {
+            const entry = new ActionQueueEntry({
+                target: { bucket: 'bucket', key: 'key' },
+                toLocation: 'location-crr-source',
+            });
+            return new Promise((resolve, reject) => task._initiateMPU(entry, objMd, fakeLogger,
+                err => (err ? reject(err) : resolve(task.backbeatClient.send.firstCall.args[0].input))));
+        }
+
+        it('should write to this site for a regular copy', async () => {
+            const objMd = new ObjectMD();
+            objMd.setDataStoreName('us-east-1');
+
+            const input = await initiateMPU(objMd);
+            assert.strictEqual(input.StorageClass, 'location-crr-source');
+            assert.strictEqual(input.StorageType, 'scality');
+        });
+
+        it('should write to the target location for a pull replication', async () => {
+            const objMd = new ObjectMD();
+            objMd.setDataStoreName('location-crr-source');
+            objMd.setLocation([{ dataStoreName: 'location-crr-source', targetLocation: 'us-east-1' }]);
+
+            const input = await initiateMPU(objMd);
+            assert.strictEqual(input.StorageClass, 'us-east-1');
+            assert.strictEqual(input.StorageType, 'file');
         });
     });
 

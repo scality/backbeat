@@ -17,7 +17,11 @@ const {
     MultipleBackendAbortMPUCommand,
     addContentLengthMiddleware,
 } = require('@scality/cloudserverclient');
-const { LifecycleMetrics, getCopyLocationMetricsType } = require('../../lifecycle/LifecycleMetrics');
+const {
+    LifecycleMetrics,
+    PULL_REPLICATION,
+    getCopyLocationMetricsType,
+} = require('../../lifecycle/LifecycleMetrics');
 const ReplicationMetric = require('../ReplicationMetric');
 const ReplicationMetrics = require('../ReplicationMetrics');
 const { isRetryableMiddleware, TIMEOUT_MS } = require('../../../lib/clients/utils');
@@ -37,6 +41,20 @@ class CopyLocationTask extends BackbeatTask {
 
     _getReplicationEndpointType() {
         return this.destConfig?.replicationEndpoint?.type;
+    }
+
+    /**
+     * Storage the data is written to: this site, except for a pull replication
+     * (data on a CRR location) where it is the location the object data points to
+     * @param {ObjectMD} objMD - metadata object
+     * @return {Object} StorageType and StorageClass of the destination
+     */
+    _getDestStorage(objMD) {
+        if (!locations[objMD.getDataStoreName()]?.isCRR) {
+            return { StorageType: this.destType, StorageClass: this.site };
+        }
+        const { targetLocation } = objMD.getLocation()[0];
+        return { StorageType: locations[targetLocation]?.type, StorageClass: targetLocation };
     }
 
     constructor(qp) {
@@ -472,8 +490,7 @@ class CopyLocationTask extends BackbeatTask {
             Key: key,
             CanonicalID: objMD.getOwnerId(),
             ContentMD5: objMD.getContentMd5(),
-            StorageType: this.destType,
-            StorageClass: this.site,
+            ...this._getDestStorage(objMD),
             VersionId: version,
             UserMetaData: objMD.getUserMetadata(),
             ContentType: objMD.getContentType() || undefined,
@@ -618,8 +635,7 @@ class CopyLocationTask extends BackbeatTask {
         const command = new MultipleBackendAbortMPUCommand({
             Bucket: bucket,
             Key: key,
-            StorageType: this.destType,
-            StorageClass: this.site,
+            ...this._getDestStorage(objMD),
             UploadId: uploadId,
             RequestUids: log.getSerializedUids(),
         });
@@ -651,8 +667,7 @@ class CopyLocationTask extends BackbeatTask {
         const command = new MultipleBackendCompleteMPUCommand({
             Bucket: bucket,
             Key: key,
-            StorageType: this.destType,
-            StorageClass: this.site,
+            ...this._getDestStorage(objMD),
             VersionId: version,
             UserMetaData: objMD.getUserMetadata(),
             ContentType: objMD.getContentType(),
@@ -734,8 +749,7 @@ class CopyLocationTask extends BackbeatTask {
         const command = new MultipleBackendPutMPUPartCommand({
             Bucket: bucket,
             Key: key,
-            StorageType: this.destType,
-            StorageClass: this.site,
+            ...this._getDestStorage(objMD),
             PartNumber: partNumber,
             UploadId: uploadId,
             Body: incomingMsg,
@@ -790,8 +804,7 @@ class CopyLocationTask extends BackbeatTask {
         const command = new MultipleBackendInitiateMPUCommand({
             Bucket: bucket,
             Key: key,
-            StorageType: this.destType,
-            StorageClass: this.site,
+            ...this._getDestStorage(objMD),
             VersionId: version,
             UserMetaData: objMD.getUserMetadata(),
             ContentType: objMD.getContentType() || undefined,
@@ -986,7 +999,7 @@ class CopyLocationTask extends BackbeatTask {
                     'object contents have changed');
             }
         }
-        if (objMD.getDataStoreName() === actionEntry.getAttribute('toLocation')) {
+        if (objMD.getDataStoreName() === this._getDestStorage(objMD).StorageClass) {
             // The object was already transitioned to the destination location
             return errors.InvalidObjectState.customizeDescription(
                 'object already transitioned');
@@ -995,6 +1008,12 @@ class CopyLocationTask extends BackbeatTask {
     }
 
     _publishCopyLocationStatus(err, actionEntry, kafkaEntry, log) {
+        if (actionEntry.getAttribute('metrics.origin') === PULL_REPLICATION) {
+            // restore the actual direction of the copy, reversed for routing
+            const toLocation = actionEntry.getAttribute('toLocation');
+            actionEntry.setAttribute('toLocation', actionEntry.getAttribute('metrics.fromLocation'))
+                .setAttribute('metrics.fromLocation', toLocation);
+        }
         if (err && !actionEntry.getError()) {
             actionEntry.setError(err);
         }
