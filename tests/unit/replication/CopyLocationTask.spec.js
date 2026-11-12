@@ -57,6 +57,20 @@ describe('CopyLocationTask', () => {
             assert(res.InvalidObjectState);
         });
 
+        it('should not take a pulled object for transitioned, as it is on the location pulled from', () => {
+            const objMd = new ObjectMD();
+            objMd.setDataStoreName('test-site');
+
+            const entry = new ActionQueueEntry({
+                target: {},
+                toLocation: 'test-site',
+                pullDestination: 'us-east-1',
+                contextInfo: { origin: 'pullReplication' },
+            });
+
+            assert.strictEqual(task._checkObjectState(entry, objMd), null);
+        });
+
         it('should not return error if object is valid', () => {
             const objMd = new ObjectMD();
             objMd.setDataStoreName('STANDARD');
@@ -304,6 +318,42 @@ describe('CopyLocationTask', () => {
                 }),
             });
             assert.strictEqual(task.retryParams.maxRetries, 13);
+        });
+    });
+
+    describe('_getDestination', () => {
+        const task = new CopyLocationTask({
+            getStateVars: () => ({
+                site: 'aws-site',
+                mProducer: { getProducer: () => {} },
+                repConfig: { queueProcessor: { retry: {} } },
+                destConfig: { replicationEndpoint: { site: 'aws-site', type: 'aws_s3' } },
+            }),
+        });
+
+        it('should write a transition to this site, with its endpoint type', () => {
+            const entry = new ActionQueueEntry({
+                action: 'copyLocation',
+                toLocation: 'aws-site',
+                contextInfo: { origin: 'lifecycle' },
+            });
+            assert.deepStrictEqual(task._getDestination(entry), {
+                location: 'aws-site',
+                storageType: 'aws_s3',
+            });
+        });
+
+        it('should write a pull replication to its target location, with that location type', () => {
+            const entry = new ActionQueueEntry({
+                action: 'copyLocation',
+                toLocation: 'aws-site',
+                pullDestination: 'us-east-1',
+                contextInfo: { origin: 'pullReplication' },
+            });
+            assert.deepStrictEqual(task._getDestination(entry), {
+                location: 'us-east-1',
+                storageType: 'file',
+            });
         });
     });
 

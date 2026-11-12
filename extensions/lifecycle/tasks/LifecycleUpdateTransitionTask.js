@@ -71,7 +71,7 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
         // FIXME there should be a common method to set all location
         // fields, shared with cloudserver
         const { location } = entry.getAttribute('results');
-        const newLocationName = entry.getAttribute('toLocation');
+        const newLocationName = entry.getCopyDestination();
         objMD.setLocation(location)
             .setDataStoreName(newLocationName)
             .setAmzStorageClass(newLocationName)
@@ -215,7 +215,7 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
                 return this._putMetadata(entry, objMD, log, err => {
                     const transitionTime = entry.getAttribute('metrics.transitionTime') ||
                         objMD.getTransitionTime();
-                    const locationName = entry.getAttribute('toLocation');
+                    const locationName = entry.getCopyDestination();
                     LifecycleMetrics.onLifecycleCompleted(log, getCopyLocationMetricsType(entry),
                         locationName, Date.now() - Date.parse(transitionTime));
                     next(err);

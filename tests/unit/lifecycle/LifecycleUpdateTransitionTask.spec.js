@@ -162,6 +162,19 @@ describe('LifecycleUpdateTransitionTask', () => {
         });
     });
 
+    it('should set a pulled object on the location it is copied to', done => {
+        mdObj.setDataStoreName('location-crr-source');
+        actionEntry.setAttribute('toLocation', 'location-crr-source')
+            .setAttribute('pullDestination', 'us-east-1')
+            .addContext({ origin: 'pullReplication' });
+        task.processActionEntry(actionEntry, err => {
+            assert.ifError(err);
+            const receivedMd = backbeatMetadataProxyClient.getReceivedMd();
+            assert.strictEqual(receivedMd.dataStoreName, 'us-east-1');
+            done();
+        });
+    });
+
     it('should not GC anything for a multipart object on a CRR location', done => {
         const crrPart = Object.assign({}, oldLocation[0],
             { key: 'crrKey', dataStoreName: 'location-crr-source' });
