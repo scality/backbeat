@@ -18,7 +18,6 @@ export default [
         },
 
         rules: {
-            'no-useless-escape': 'off',
             'no-redeclare': 'off',
             'mocha/no-exclusive-tests': 'error',
             // no-extraneous-dependencies silently skips modules it cannot resolve
