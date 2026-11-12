@@ -12,11 +12,9 @@ export default [
 
         languageOptions: {
             ecmaVersion: 2020,
-            sourceType: 'script',
         },
 
         rules: {
-            'no-redeclare': 'off',
             // no-extraneous-dependencies silently skips modules it cannot resolve
             'import/no-unresolved': ['error', { commonjs: true }],
             'import/no-extraneous-dependencies': [
@@ -34,6 +32,12 @@ export default [
                     extensions: ['.js', '.ts', '.json'],
                 },
             },
+        },
+    },
+    {
+        files: ['**/*.js'],
+        languageOptions: {
+            sourceType: 'commonjs',
         },
     },
     ...tseslint.configs.recommended.map(config => ({
