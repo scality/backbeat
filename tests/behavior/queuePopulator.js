@@ -155,7 +155,7 @@ describe('queuePopulator', () => {
                 },
                 (data, next) => {
                     const { connectionString } = testConfig.zookeeper;
-                    const zkClient = new ZookeeperManager(
+                    zkClient = new ZookeeperManager(
                         connectionString,
                         {
                             autoCreateNamespace: false,
