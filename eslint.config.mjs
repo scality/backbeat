@@ -12,10 +12,6 @@ export default [
             import: importPlugin,
         },
 
-        languageOptions: {
-            ecmaVersion: 2020,
-        },
-
         rules: {
             'mocha/no-exclusive-tests': 'error',
             // no-extraneous-dependencies silently skips modules it cannot resolve
