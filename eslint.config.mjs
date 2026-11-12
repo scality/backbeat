@@ -10,10 +10,6 @@ export default [
             import: importPlugin,
         },
 
-        languageOptions: {
-            ecmaVersion: 2020,
-        },
-
         rules: {
             // no-extraneous-dependencies silently skips modules it cannot resolve
             'import/no-unresolved': ['error', { commonjs: true }],
