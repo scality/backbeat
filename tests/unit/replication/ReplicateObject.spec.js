@@ -503,24 +503,64 @@ describe('ReplicateObject', () => {
         });
     });
 
-    it('_processQueueEntryRetryFull should delete orphans on putMetadata errors', done => {
+    // When the metadata is already updated on the destination, it points to
+    // the data we just wrote, so we keep it (S3C-11676).
+    describe('orphan cleanup after a putMetadata error', () => {
         const writtenLocations = [{ key: 'data-key', dataStoreName: 'file' }];
-        const sourceEntry = QueueEntry.createFromKafkaEntry(replicationEntry);
-        const destEntry = makeDestEntry();
-        sinon.stub(task, '_publishReplicationStatus').returns();
-        sinon.stub(task, '_deleteOrphans').resolves();
-        sinon.stub(task, '_getAndPutData').resolves([writtenLocations, undefined]);
-        sinon.stub(task, '_putMetadata').rejects(
-            new MicroVersionIdAlreadyStoredException({ message: 'collision' }));
+        let sourceEntry;
+        let destEntry;
 
-        task._processQueueEntryRetryFull(sourceEntry, destEntry, {}, fakeLogger)
-            .then(() => {
-                sinon.assert.calledOnce(task._deleteOrphans);
-                sinon.assert.calledWith(task._deleteOrphans,
-                    destEntry, writtenLocations, sinon.match.any);
-                done();
-            })
-            .catch(done);
+        beforeEach(() => {
+            sourceEntry = QueueEntry.createFromKafkaEntry(replicationEntry);
+            destEntry = makeDestEntry();
+            task.metricsHandler = { rpo: () => {} };
+            task.mProducer = { publishMetrics: () => {} };
+            sinon.stub(sourceEntry, 'toReplicaEntry').returns(destEntry);
+            sinon.stub(task, '_setupRoles').resolves(['srcRole', 'dstRole']);
+            sinon.stub(task, '_setTargetAccountMd').resolves();
+            sinon.stub(task, '_publishReplicationStatus').returns();
+            sinon.stub(task, '_deleteOrphans').resolves();
+            sinon.stub(task, '_getAndPutData').resolves([writtenLocations, undefined]);
+        });
+
+        [
+            new MicroVersionIdAlreadyStoredException({ message: 'already stored' }),
+            new StaleMicroVersionIdException({ message: 'stale' }),
+        ].forEach(err => {
+            it(`_processQueueEntry should keep the data on ${err.name}`, async () => {
+                sinon.stub(task, '_putMetadata').rejects(err);
+
+                await task._processQueueEntry(sourceEntry, {});
+
+                sinon.assert.notCalled(task._deleteOrphans);
+            });
+
+            it(`_processQueueEntryRetryFull should keep the data on ${err.name}`, async () => {
+                sinon.stub(task, '_putMetadata').rejects(err);
+
+                await task._processQueueEntryRetryFull(sourceEntry, destEntry, {}, fakeLogger);
+
+                sinon.assert.notCalled(task._deleteOrphans);
+            });
+        });
+
+        it('_processQueueEntry should delete the data on other errors', async () => {
+            sinon.stub(task, '_putMetadata').rejects(new Error('internal error'));
+
+            await task._processQueueEntry(sourceEntry, {});
+
+            sinon.assert.calledOnceWithExactly(task._deleteOrphans,
+                destEntry, writtenLocations, sinon.match.any);
+        });
+
+        it('_processQueueEntryRetryFull should delete the data on other errors', async () => {
+            sinon.stub(task, '_putMetadata').rejects(new Error('internal error'));
+
+            await task._processQueueEntryRetryFull(sourceEntry, destEntry, {}, fakeLogger);
+
+            sinon.assert.calledOnceWithExactly(task._deleteOrphans,
+                destEntry, writtenLocations, sinon.match.any);
+        });
     });
 
     describe('_publishReplicationStatus', () => {
