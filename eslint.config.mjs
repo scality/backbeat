@@ -1,9 +1,10 @@
 import importPlugin from 'eslint-plugin-import';
+import { defineConfig } from 'eslint/config';
 import tseslint from 'typescript-eslint';
 import scality from '@scality/eslint-config-scality';
 import { mocha } from '@scality/eslint-config-scality/testing';
 
-export default [
+export default defineConfig(
     ...scality,
     {
         plugins: {
@@ -36,16 +37,12 @@ export default [
             sourceType: 'commonjs',
         },
     },
-    ...tseslint.configs.recommended.map(config => ({
-        ...config,
-        files: ['**/*.ts'],
-    })),
     {
-        files: ['**/*.ts'],
-
+        files: [tseslint.globs.ts],
+        extends: [tseslint.configs.recommended],
         rules: {
             '@typescript-eslint/no-require-imports': 'off',
         },
     },
     mocha(['tests/**/*.js']),
-];
+);
