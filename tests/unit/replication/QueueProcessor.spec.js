@@ -343,6 +343,60 @@ describe('Queue Processor', () => {
                 done();
             });
         });
+
+        describe('copies by origin', () => {
+            [
+                {
+                    // a pull replication is sent to the location pulled from
+                    desc: 'dispatches a pull replication from this site',
+                    origin: 'pullReplication',
+                    fromLocation: 'site-crr',
+                    toLocation: 'site-crr',
+                    dispatched: true,
+                },
+                {
+                    desc: 'skips a pull replication from another site',
+                    origin: 'pullReplication',
+                    fromLocation: 'location-crr-source',
+                    toLocation: 'location-crr-source',
+                    dispatched: false,
+                },
+                {
+                    desc: 'dispatches a transition from a local location to this site',
+                    origin: 'lifecycle',
+                    fromLocation: 'us-east-1',
+                    toLocation: 'site-crr',
+                    dispatched: true,
+                },
+                {
+                    desc: 'skips a transition from this site to another site',
+                    origin: 'lifecycle',
+                    fromLocation: 'site-crr',
+                    toLocation: 'us-east-2',
+                    dispatched: false,
+                },
+            ].forEach(({ desc, origin, fromLocation, toLocation, dispatched }) => {
+                it(desc, done => {
+                    const kafkaEntry = {
+                        value: JSON.stringify({
+                            action: 'copyLocation',
+                            fromLocation,
+                            toLocation,
+                            contextInfo: { origin },
+                            target: {
+                                bucket: 'src-bucket',
+                                key: 'obj',
+                                eTag: '"d41d8cd98f00b204e9800998ecf8427e"',
+                            },
+                        }),
+                    };
+                    qp.processDataMoverEntry(kafkaEntry, () => {
+                        assert.strictEqual(qp.dataMoverTaskScheduler.push.called, dispatched);
+                        done();
+                    });
+                });
+            });
+        });
     });
 
     describe('getStateVars', () => {

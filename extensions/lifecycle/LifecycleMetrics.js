@@ -1,5 +1,6 @@
 const { ZenkoMetrics } = require('@scality/arsenal').metrics;
 const { Logger } = require('werelogs');
+const { pullReplicationOrigin } = require('../../lib/constants');
 
 const lifecycleMetricsLogger = new Logger('Backbeat:LifecycleMetrics');
 
@@ -13,7 +14,6 @@ const LIFECYCLE_LABEL_CONDUCTOR_SCAN_ID = 'conductor_scan_id';
 const LIFECYCLE_MARKER_METRICS_LOCATION = '-delete-marker-';
 
 const TRANSITION_TYPE = 'transition';
-const PULL_REPLICATION = 'pullReplication';
 
 // Keep per-scan series long enough for scraping and debugging recent overlap,
 // but remove them from prom-client after a configurable retention interval.
@@ -456,15 +456,13 @@ class LifecycleMetrics {
  * @return {string} metrics type
  */
 function getCopyLocationMetricsType(actionEntry) {
-    return actionEntry.getAttribute('metrics.origin') === PULL_REPLICATION ?
-        PULL_REPLICATION : TRANSITION_TYPE;
+    return actionEntry.isPullReplication() ? pullReplicationOrigin : TRANSITION_TYPE;
 }
 
 module.exports = {
     DEFAULT_SCAN_METRIC_RETENTION_S,
     LifecycleMetrics,
     LIFECYCLE_MARKER_METRICS_LOCATION,
-    PULL_REPLICATION,
     getCopyLocationMetricsType,
     resetLifecycleScanMetricCleanupTimers,
 };

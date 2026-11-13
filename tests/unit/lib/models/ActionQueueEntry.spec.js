@@ -192,4 +192,31 @@ describe('ActionQueueEntry', () => {
             message: 'pigeon is lost',
         });
     });
+
+    [
+        { origin: 'pullReplication', expected: true },
+        { origin: 'lifecycle', expected: false },
+        { origin: undefined, expected: false },
+    ].forEach(({ origin, expected }) => {
+        it(`should tell if an action with origin ${origin} is a pull replication`, () => {
+            const entry = ActionQueueEntry.create('copyLocation')
+                .addContext({ origin });
+            assert.strictEqual(entry.isPullReplication(), expected);
+        });
+    });
+
+    it('should give toLocation as the copy destination of a transition', () => {
+        const entry = ActionQueueEntry.create('copyLocation')
+            .setAttribute('toLocation', 'aws-location')
+            .addContext({ origin: 'lifecycle' });
+        assert.strictEqual(entry.getCopyDestination(), 'aws-location');
+    });
+
+    it('should give pullDestination as the copy destination of a pull replication', () => {
+        const entry = ActionQueueEntry.create('copyLocation')
+            .setAttribute('toLocation', 'dr-source')
+            .setAttribute('pullDestination', 'us-east-1')
+            .addContext({ origin: 'pullReplication' });
+        assert.strictEqual(entry.getCopyDestination(), 'us-east-1');
+    });
 });

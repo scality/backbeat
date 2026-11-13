@@ -1,5 +1,5 @@
 const { Logger } = require('werelogs');
-const { PULL_REPLICATION } = require('../lifecycle/LifecycleMetrics');
+const { pullReplicationOrigin } = require('../../lib/constants');
 
 const MetricsModel = require('../../lib/models/MetricsModel');
 
@@ -63,7 +63,7 @@ class ReplicationMetric {
     publish() {
         // Metrics API/routes only support CRR
         const { origin } = this._entry.getContext();
-        if (['lifecycle', PULL_REPLICATION].includes(origin)) {
+        if (['lifecycle', pullReplicationOrigin].includes(origin)) {
             return undefined;
         }
         if (!this._producer) {

@@ -27,8 +27,10 @@ class ReplicationAPI {
      * @param {string} params.toLocation - name of target location
      * @param {string} params.originLabel - label to mark origin of
      * request (for metrics accounting)
-     * @param {string} params.fromLocation - source location name (for
-     * metrics accounting)
+     * @param {string} params.fromLocation - name of the location the data is
+     * copied from
+     * @param {string} [params.pullDestination] - for a pull replication, the
+     * location the data is copied to (toLocation is then the location pulled from)
      * @param {string} params.contentLength - content length (for
      * metrics accounting)
      * @param {string} [params.resultsTopic] - name of topic to get
@@ -56,6 +58,9 @@ class ReplicationAPI {
                 contentLength: params.contentLength,
                 transitionTime: params.transitionTime,
             });
+        if (params.pullDestination) {
+            action.setAttribute('pullDestination', params.pullDestination);
+        }
         if (params.resultsTopic) {
             action.setResultsTopic(params.resultsTopic);
         }

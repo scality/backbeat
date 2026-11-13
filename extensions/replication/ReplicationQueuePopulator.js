@@ -5,7 +5,8 @@ const QueuePopulatorExtension =
 const ObjectQueueEntry = require('../../lib/models/ObjectQueueEntry');
 const ReplicationAPI = require('./ReplicationAPI');
 const ReplicationMetrics = require('./ReplicationMetrics');
-const { LifecycleMetrics, PULL_REPLICATION } = require('../lifecycle/LifecycleMetrics');
+const { LifecycleMetrics } = require('../lifecycle/LifecycleMetrics');
+const { pullReplicationOrigin } = require('../../lib/constants');
 const config = require('../../lib/Config');
 const locationsConfig = require('../../conf/locationConfig.json') || {};
 const safeJsonParse = require('../../lib/util/safeJsonParse');
@@ -186,8 +187,11 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
             versionId: queueEntry.getEncodedVersionId() || 'null',
             eTag: `"${queueEntry.getContentMd5()}"`,
             lastModified: queueEntry.getLastModified(),
-            toLocation: targetLocation,
-            originLabel: PULL_REPLICATION,
+            // the processor of the location pulled from is the only one that
+            // can read from it: it takes the actions sent to its location
+            toLocation: queueEntry.getDataStoreName(),
+            pullDestination: targetLocation,
+            originLabel: pullReplicationOrigin,
             fromLocation: queueEntry.getDataStoreName(),
             contentLength,
             resultsTopic: this.transitionTasksTopic,
@@ -197,7 +201,7 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
         // 'transition' is what the lifecycle transition processor dispatches
         // on to pick up the copyLocation result.
         action.addContext({
-            origin: PULL_REPLICATION,
+            origin: pullReplicationOrigin,
             ruleType: 'transition',
             bucketName: bucket,
             objectKey,
@@ -210,7 +214,7 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
         });
 
         LifecycleMetrics.onLifecycleTriggered(this.log, 'queuePopulator',
-            PULL_REPLICATION, targetLocation, Date.now() - transitionTime.getTime());
+            pullReplicationOrigin, targetLocation, Date.now() - transitionTime.getTime());
 
         this.log.trace('publishing pull replication entry', { entry: queueEntry.getLogInfo() });
         this.publish(ReplicationAPI.getDataMoverTopic(),
@@ -221,7 +225,7 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
 
         // Counterpart of the bytes the data mover reports once the copy
         // completed, to measure the pull replication backlog.
-        ReplicationMetrics.onReplicationQueued(PULL_REPLICATION,
+        ReplicationMetrics.onReplicationQueued(pullReplicationOrigin,
             queueEntry.getDataStoreName(), targetLocation, contentLength);
 
         const metricLabels = {
