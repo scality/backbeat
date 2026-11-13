@@ -206,7 +206,7 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
         });
 
         LifecycleMetrics.onLifecycleTriggered(this.log, 'queuePopulator',
-            PULL_REPLICATION, targetLocation, Date.now() - transitionTime.getTime());
+            PULL_REPLICATION, sourceLocation, Date.now() - transitionTime.getTime());
 
         this.log.trace('publishing pull replication entry', { entry: queueEntry.getLogInfo() });
         this.publish(ReplicationAPI.getDataMoverTopic(),

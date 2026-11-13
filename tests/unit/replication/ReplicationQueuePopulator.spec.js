@@ -509,11 +509,11 @@ describe('replication queue populator: pull replication', () => {
             '2024-05-06T10:11:12.000Z');
     });
 
-    it('should report the transition as triggered', () => {
+    it('should report the transition as triggered on the location pulled from', () => {
         rqp._filterKeyOp(makeEntry(makeValue()));
 
         sinon.assert.calledOnceWithExactly(triggeredMetric, rqp.log,
-            'queuePopulator', 'pullReplication', TARGET_LOCATION,
+            'queuePopulator', 'pullReplication', CRR_LOCATION,
             sinon.match.number);
     });
 
