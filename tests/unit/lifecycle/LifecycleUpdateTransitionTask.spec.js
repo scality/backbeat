@@ -83,6 +83,22 @@ describe('LifecycleUpdateTransitionTask', () => {
         });
     });
 
+    it('should set the storage class to the location transitioned to', () => {
+        actionEntry.setAttribute('toLocation', 'us-east-2');
+        mdObj.setDataStoreName('us-east-1').setAmzStorageClass('STANDARD');
+        task._updateMdWithTransition(actionEntry, mdObj);
+        assert.strictEqual(mdObj.getDataStoreName(), 'us-east-2');
+        assert.strictEqual(mdObj.getAmzStorageClass(), 'us-east-2');
+    });
+
+    it('should keep the storage class of an object pulled from a CRR location', () => {
+        actionEntry.setAttribute('toLocation', 'us-east-1');
+        mdObj.setDataStoreName('location-crr-source').setAmzStorageClass('STANDARD');
+        task._updateMdWithTransition(actionEntry, mdObj);
+        assert.strictEqual(mdObj.getDataStoreName(), 'us-east-1');
+        assert.strictEqual(mdObj.getAmzStorageClass(), 'STANDARD');
+    });
+
     it('should not transition location in metadata and should GC new ' +
     'location if eTag does not match', done => {
         actionEntry.setAttribute('target.eTag',
