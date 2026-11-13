@@ -35,6 +35,11 @@
                 "groupId": "backbeat-bucket-notification-group",
                 "concurrency": 10
             },
+            "deliveryPool": {
+                "enabled": false,
+                "topic": "backbeat-bucket-notification-delivery",
+                "groupId": "backbeat-bucket-notification-delivery-group"
+            },
             "destinations": [
                 {
                     "resource": "destination1",
@@ -43,6 +48,7 @@
                     "port": 9092,
                     "topic": "destination-topic-1",
                     "internalTopic": "internal-notification-topic-destination1",
+                    "spreadFactor": 1,
                     "auth": {}
                 },
                 {
