@@ -1,11 +1,12 @@
-const { usersBucket, mpuBucketPrefix, externalBackends } = require('@scality/arsenal').constants;
+const { usersBucket, mpuBucketPrefix } = require('@scality/arsenal').constants;
 
 const QueuePopulatorExtension =
           require('../../lib/queuePopulator/QueuePopulatorExtension');
 const ObjectQueueEntry = require('../../lib/models/ObjectQueueEntry');
 const ReplicationAPI = require('./ReplicationAPI');
 const ReplicationMetrics = require('./ReplicationMetrics');
-const { LifecycleMetrics, PULL_REPLICATION } = require('../lifecycle/LifecycleMetrics');
+const { LifecycleMetrics } = require('../lifecycle/LifecycleMetrics');
+const { pullReplicationOrigin } = require('../../lib/constants');
 const config = require('../../lib/Config');
 const locationsConfig = require('../../conf/locationConfig.json') || {};
 const safeJsonParse = require('../../lib/util/safeJsonParse');
@@ -20,13 +21,6 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
         this.repConfig = params.config;
         this.metricsHandler = params.metricsHandler;
         this.transitionTasksTopic = config.extensions?.lifecycle?.transitionTasksTopic;
-
-        // Where the data is fetched to when the object metadata does not name a
-        // usable target. Any location will do, as long as it can hold the data.
-        this.defaultLocalLocation = ['us-east-1', ...Object.keys(locationsConfig)].find(name => {
-            const loc = locationsConfig[name];
-            return loc && !loc.isCold && !loc.isCRR && !loc.isTransient && !externalBackends[loc.type];
-        });
     }
 
     filter(entry) {
@@ -174,10 +168,9 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
 
         const bucket = queueEntry.getBucket();
         const objectKey = queueEntry.getObjectKey();
-        const targetLocation = this._getPullReplicationTarget(queueEntry, locations);
-        if (!targetLocation) {
-            return;
-        }
+        const sourceLocation = queueEntry.getDataStoreName();
+        // for metrics only: the copy task resolves where the data actually goes
+        const { targetLocation } = locations?.[0] ?? {};
         const transitionTime = new Date(entry.overheadFields?.commitTimestamp ?? Date.now());
         const action = ReplicationAPI.createCopyLocationAction({
             bucketName: bucket,
@@ -186,9 +179,13 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
             versionId: queueEntry.getEncodedVersionId() || 'null',
             eTag: `"${queueEntry.getContentMd5()}"`,
             lastModified: queueEntry.getLastModified(),
-            toLocation: targetLocation,
-            originLabel: PULL_REPLICATION,
-            fromLocation: queueEntry.getDataStoreName(),
+            // Data processors pick the copies whose toLocation is their own
+            // site, and only the processor of the location pulled from can
+            // read the data: CopyLocationTask resolves the actual target, and
+            // sets it when publishing the result.
+            toLocation: sourceLocation,
+            originLabel: pullReplicationOrigin,
+            fromLocation: sourceLocation,
             contentLength,
             resultsTopic: this.transitionTasksTopic,
             transitionTime: transitionTime.toISOString(),
@@ -197,7 +194,7 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
         // 'transition' is what the lifecycle transition processor dispatches
         // on to pick up the copyLocation result.
         action.addContext({
-            origin: PULL_REPLICATION,
+            origin: pullReplicationOrigin,
             ruleType: 'transition',
             bucketName: bucket,
             objectKey,
@@ -206,11 +203,11 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
         action.setAttribute('source', {
             bucket,
             objectKey,
-            storageClass: queueEntry.getDataStoreName(),
+            storageClass: sourceLocation,
         });
 
         LifecycleMetrics.onLifecycleTriggered(this.log, 'queuePopulator',
-            PULL_REPLICATION, targetLocation, Date.now() - transitionTime.getTime());
+            pullReplicationOrigin, targetLocation, Date.now() - transitionTime.getTime());
 
         this.log.trace('publishing pull replication entry', { entry: queueEntry.getLogInfo() });
         this.publish(ReplicationAPI.getDataMoverTopic(),
@@ -221,8 +218,8 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
 
         // Counterpart of the bytes the data mover reports once the copy
         // completed, to measure the pull replication backlog.
-        ReplicationMetrics.onReplicationQueued(PULL_REPLICATION,
-            queueEntry.getDataStoreName(), targetLocation, contentLength);
+        ReplicationMetrics.onReplicationQueued(pullReplicationOrigin,
+            sourceLocation, targetLocation, contentLength);
 
         const metricLabels = {
             ...entry.logReader.getMetricLabels(),
@@ -230,46 +227,6 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
         };
         this.metricsHandler.bytes(metricLabels, contentLength);
         this.metricsHandler.objects(metricLabels);
-    }
-
-    /**
-     * Local location the object data must be copied to.
-     *
-     * The metadata may not name a usable target, typically if that location
-     * was deleted/renamed since. This is not recoverable here, but copying
-     * the data anywhere local beats leaving it on the source forever.
-     *
-     * The locations may also be missing altogether, which could be the case
-     * for empty objects where there is no actual data to copy: only metadata
-     * to update to mark the transition as complete.
-     *
-     * @param {ObjectQueueEntry} queueEntry - parsed entry
-     * @param {Object[]} [locations] - object data locations
-     * @return {String|undefined} target location, undefined if there is none
-     */
-    _getPullReplicationTarget(queueEntry, locations) {
-        const { targetLocation } = locations?.[0] ?? {};
-        if (locationsConfig[targetLocation]) {
-            return targetLocation;
-        }
-
-        if (!this.defaultLocalLocation) {
-            this.log.error('invalid target location and no local location ' +
-                'to fall back to, skipping pull replication', {
-                method: 'ReplicationQueuePopulator._getPullReplicationTarget',
-                ...queueEntry.getLogInfo(),
-                targetLocation,
-            });
-            return undefined;
-        }
-
-        this.log.warn('invalid target location in object metadata', {
-            method: 'ReplicationQueuePopulator._getPullReplicationTarget',
-            ...queueEntry.getLogInfo(),
-            targetLocation,
-            fallbackLocation: this.defaultLocalLocation,
-        });
-        return this.defaultLocalLocation;
     }
 
     /**

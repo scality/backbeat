@@ -31,7 +31,7 @@ describe('LifecycleMetrics', () => {
             it(`should report ${origin} actions as ${expected}`, () => {
                 const entry = ActionQueueEntry.create('copyLocation');
                 if (origin !== undefined) {
-                    entry.setAttribute('metrics', { origin });
+                    entry.addContext({ origin });
                 }
 
                 assert.strictEqual(getCopyLocationMetricsType(entry), expected);
