@@ -30,7 +30,7 @@ describe('NotificationConfigManager', () => {
                     readPreference: 'primary',
                     replicaSetHosts: 'localhost:27017',
                     shardCollections: true,
-                    writeConcern: 'majority'
+                    writeConcern: 'majority',
                 },
                 bucketMetastore: '__metastore',
                 maxCachedConfigs: 1000,
@@ -96,7 +96,8 @@ describe('NotificationConfigManager', () => {
 
             sinon.stub(manager._configManagerBackend, 'getConfig').resolves(bucketConfig);
 
-            manager.getConfig('bucket1')
+            manager
+                .getConfig('bucket1')
                 .then(result => {
                     assert.strictEqual(result, bucketConfig);
                     done();
@@ -130,7 +131,7 @@ describe('NotificationConfigManager', () => {
                     readPreference: 'primary',
                     replicaSetHosts: 'localhost:27017',
                     shardCollections: true,
-                    writeConcern: 'majority'
+                    writeConcern: 'majority',
                 },
                 bucketMetastore: '__metastore',
                 maxCachedConfigs: 1000,
@@ -152,7 +153,7 @@ describe('NotificationConfigManager', () => {
                     readPreference: 'primary',
                     replicaSetHosts: 'localhost:27017',
                     shardCollections: true,
-                    writeConcern: 'majority'
+                    writeConcern: 'majority',
                 },
                 bucketMetastore: '__metastore',
                 maxCachedConfigs: 1000,

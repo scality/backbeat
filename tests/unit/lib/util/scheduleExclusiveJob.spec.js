@@ -17,8 +17,15 @@ describe('scheduleExclusiveJob', () => {
 
     it('should skip calls made while the task is running', async () => {
         let release;
-        const task = sinon.stub()
-            .onFirstCall().callsFake(() => new Promise(resolve => { release = resolve; }))
+        const task = sinon
+            .stub()
+            .onFirstCall()
+            .callsFake(
+                () =>
+                    new Promise(resolve => {
+                        release = resolve;
+                    }),
+            )
             .resolves();
         const run = makeExclusive(task, logger);
         const first = run();

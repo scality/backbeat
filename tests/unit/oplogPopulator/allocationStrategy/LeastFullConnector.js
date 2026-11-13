@@ -2,13 +2,10 @@ const assert = require('assert');
 const sinon = require('sinon');
 const werelogs = require('werelogs');
 
-const Connector =
-    require('../../../../extensions/oplogPopulator/modules/Connector');
-const LeastFullConnector =
-    require('../../../../extensions/oplogPopulator/allocationStrategy/LeastFullConnector');
+const Connector = require('../../../../extensions/oplogPopulator/modules/Connector');
+const LeastFullConnector = require('../../../../extensions/oplogPopulator/allocationStrategy/LeastFullConnector');
 const constants = require('../../../../extensions/oplogPopulator/constants');
-const MultipleBucketsPipelineFactory =
-    require('../../../../extensions/oplogPopulator/pipeline/MultipleBucketsPipelineFactory');
+const MultipleBucketsPipelineFactory = require('../../../../extensions/oplogPopulator/pipeline/MultipleBucketsPipelineFactory');
 
 const logger = new werelogs.Logger('LeastFullConnector');
 

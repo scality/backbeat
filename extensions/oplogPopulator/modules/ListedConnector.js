@@ -1,9 +1,5 @@
 const constants = require('../constants');
-const {
-    timestampFromConnectorOffset,
-    timestampFromConnectorStartupTime,
-    minTimestamp,
-} = require('./resumeToken');
+const { timestampFromConnectorOffset, timestampFromConnectorStartupTime, minTimestamp } = require('./resumeToken');
 
 /**
  * @class ListedConnector
@@ -53,11 +49,12 @@ class ListedConnector {
         const partitionName = this.config['offset.partition.name'];
         // offsets of previous incarnations (other partition names) are stale
         const current = offsets.filter(o => !partitionName || o.partition?.ns === partitionName);
-        const committed = minTimestamp(current
-            .map(o => timestampFromConnectorOffset(o.offset))
-            .filter(ts => ts !== null));
+        const committed = minTimestamp(
+            current.map(o => timestampFromConnectorOffset(o.offset)).filter(ts => ts !== null),
+        );
         const configured = timestampFromConnectorStartupTime(
-            this.config['startup.mode.timestamp.start.at.operation.time']);
+            this.config['startup.mode.timestamp.start.at.operation.time'],
+        );
         if (committed || configured) {
             return committed || configured;
         }
@@ -66,7 +63,7 @@ class ListedConnector {
         }
         // without any offset it never committed, so it started at most a
         // flush interval before it stopped (with some margin on top)
-        const marginSeconds = Math.ceil(2 * constants.kafkaConnectOffsetFlushIntervalMs / 1000);
+        const marginSeconds = Math.ceil((2 * constants.kafkaConnectOffsetFlushIntervalMs) / 1000);
         return { t: stopRequestedAt.t - marginSeconds, i: 0 };
     }
 }

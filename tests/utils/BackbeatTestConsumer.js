@@ -6,9 +6,7 @@ const BackbeatConsumer = require('../../lib/BackbeatConsumer');
 
 class BackbeatTestConsumer extends BackbeatConsumer {
     constructor(config) {
-        super(Object.assign({}, config,
-                            { queueProcessor: function dummy() {},
-                              bootstrap: true }));
+        super(Object.assign({}, config, { queueProcessor: function dummy() {}, bootstrap: true }));
         // hook queue processor function
         this._queueProcessor = this._processMessage.bind(this);
         this._expectVars = null;
@@ -18,41 +16,40 @@ class BackbeatTestConsumer extends BackbeatConsumer {
         function _matchMessage(expectedMsg) {
             if (expectedMsg.key !== undefined) {
                 assert.deepStrictEqual(
-                    message.key.toString(), expectedMsg.key,
-                    `unexpected message key ${message.key}, ` +
-                        `expected ${expectedMsg.key}`);
+                    message.key.toString(),
+                    expectedMsg.key,
+                    `unexpected message key ${message.key}, expected ${expectedMsg.key}`,
+                );
             }
             if (expectedMsg.value !== undefined) {
                 const isExpectedObject = typeof expectedMsg.value === 'object';
-                const parsedMsg = isExpectedObject ?
-                    JSON.parse(message.value) :
-                    message.value.toString();
-                const expectedValue = isExpectedObject ?
-                    JSON.parse(JSON.stringify(expectedMsg.value)) :
-                    expectedMsg.value;
-                if (isExpectedObject &&
-                    expectedValue.contextInfo?.reqId === 'test-request-id') {
+                const parsedMsg = isExpectedObject ? JSON.parse(message.value) : message.value.toString();
+                const expectedValue = isExpectedObject
+                    ? JSON.parse(JSON.stringify(expectedMsg.value))
+                    : expectedMsg.value;
+                if (isExpectedObject && expectedValue.contextInfo?.reqId === 'test-request-id') {
                     // RequestId is generated randomly, we can't compare it: just check that it is
                     // present
                     assert(parsedMsg.contextInfo?.reqId, 'expected contextInfo.reqId field');
                     expectedValue.contextInfo.reqId = parsedMsg.contextInfo.reqId;
                     if (expectedValue.contextInfo?.conductorScanId === 'test-scan-id') {
-                        assert(parsedMsg.contextInfo?.conductorScanId,
-                            'expected contextInfo.conductorScanId field');
-                        expectedValue.contextInfo.conductorScanId =
-                            parsedMsg.contextInfo.conductorScanId;
+                        assert(parsedMsg.contextInfo?.conductorScanId, 'expected contextInfo.conductorScanId field');
+                        expectedValue.contextInfo.conductorScanId = parsedMsg.contextInfo.conductorScanId;
                     }
                     if (expectedValue.contextInfo?.conductorScanStartTimestamp === 0) {
-                        assert(parsedMsg.contextInfo?.conductorScanStartTimestamp,
-                            'expected contextInfo.conductorScanStartTimestamp field');
+                        assert(
+                            parsedMsg.contextInfo?.conductorScanStartTimestamp,
+                            'expected contextInfo.conductorScanStartTimestamp field',
+                        );
                         expectedValue.contextInfo.conductorScanStartTimestamp =
                             parsedMsg.contextInfo.conductorScanStartTimestamp;
                     }
                 }
                 assert.deepStrictEqual(
-                    parsedMsg, expectedValue,
-                    `unexpected message value ${parsedMsg}, ` +
-                        `expected ${expectedValue}`);
+                    parsedMsg,
+                    expectedValue,
+                    `unexpected message value ${parsedMsg}, expected ${expectedValue}`,
+                );
             }
         }
 
@@ -103,9 +100,7 @@ class BackbeatTestConsumer extends BackbeatConsumer {
             const v = this._expectVars;
             if (v) {
                 try {
-                    assert.deepStrictEqual(
-                        [], v.remainingMsgList,
-                        `missing messages after ${timeout}ms timeout`);
+                    assert.deepStrictEqual([], v.remainingMsgList, `missing messages after ${timeout}ms timeout`);
                 } catch (err) {
                     cbOnce(err);
                 }

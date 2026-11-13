@@ -1,8 +1,7 @@
 const assert = require('assert');
 
 const HashedPipelineFactory = require('../../../../extensions/oplogPopulator/pipeline/HashedPipelineFactory');
-const MultipleBucketsPipelineFactory =
-    require('../../../../extensions/oplogPopulator/pipeline/MultipleBucketsPipelineFactory');
+const MultipleBucketsPipelineFactory = require('../../../../extensions/oplogPopulator/pipeline/MultipleBucketsPipelineFactory');
 
 describe('HashedPipelineFactory', () => {
     const factory = new HashedPipelineFactory(0);
@@ -13,10 +12,7 @@ describe('HashedPipelineFactory', () => {
                 'ns.coll': { $not: { $regex: '^(mpuShadowBucket|__).*' } },
                 'operationType': { $in: ['insert', 'update', 'replace'] },
                 '$expr': {
-                    $in: [
-                        { $mod: [{ $toHashedIndexKey: '$ns.coll' }, 4] },
-                        [1, -3],
-                    ],
+                    $in: [{ $mod: [{ $toHashedIndexKey: '$ns.coll' }, 4] }, [1, -3]],
                 },
             },
         });

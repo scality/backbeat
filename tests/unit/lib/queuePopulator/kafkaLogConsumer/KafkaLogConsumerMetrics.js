@@ -1,8 +1,7 @@
 const assert = require('assert');
 const sinon = require('sinon');
 const { ZenkoMetrics } = require('@scality/arsenal').metrics;
-const KafkaLogConsumerMetrics =
-    require('../../../../../lib/queuePopulator/KafkaLogConsumer/KafkaLogConsumerMetrics');
+const KafkaLogConsumerMetrics = require('../../../../../lib/queuePopulator/KafkaLogConsumer/KafkaLogConsumerMetrics');
 
 describe('KafkaLogConsumerMetrics', () => {
     const log = { error: sinon.stub() };
@@ -33,9 +32,11 @@ describe('KafkaLogConsumerMetrics', () => {
             sinon.stub(metric, 'inc').throws(new Error('boom'));
             assert.doesNotThrow(() => KafkaLogConsumerMetrics.onMissingKey(log, 'insert'));
             assert(log.error.calledOnce);
-            assert(log.error.calledWithMatch('failed to update prometheus metrics', {
-                method: 'KafkaLogConsumerMetrics.onMissingKey',
-            }));
+            assert(
+                log.error.calledWithMatch('failed to update prometheus metrics', {
+                    method: 'KafkaLogConsumerMetrics.onMissingKey',
+                }),
+            );
         });
     });
 });

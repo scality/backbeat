@@ -32,27 +32,33 @@ const rows = {
     },
     8: {
         desc: 'null delete marker (DELETE while suspended)',
-        entries: [{
-            key: 'obj',
-            value: { versionId: VID, isNull: true, isDeleteMarker: true },
-            shadowed: false,
-        }],
+        entries: [
+            {
+                key: 'obj',
+                value: { versionId: VID, isNull: true, isDeleteMarker: true },
+                shadowed: false,
+            },
+        ],
     },
     10: {
         desc: 'non-current null, null key (S3C)',
-        entries: [{
-            key: 'obj\x00',
-            value: { versionId: VID, isNull: true, isNull2: true },
-            shadowed: false,
-        }],
+        entries: [
+            {
+                key: 'obj\x00',
+                value: { versionId: VID, isNull: true, isNull2: true },
+                shadowed: false,
+            },
+        ],
     },
     11: {
         desc: 'non-current null, null versioned key',
-        entries: [{
-            key: `obj\x00${NULL_VID}`,
-            value: { versionId: NULL_VID, isNull: true },
-            shadowed: false,
-        }],
+        entries: [
+            {
+                key: `obj\x00${NULL_VID}`,
+                value: { versionId: NULL_VID, isNull: true },
+                shadowed: false,
+            },
+        ],
     },
     12: {
         desc: 'null master after a metadata update (Artesca twin)',
@@ -81,7 +87,8 @@ function listEntries(base = {}) {
             key,
             value: { ...base, ...value },
             shadowed,
-        })));
+        })),
+    );
 }
 
 module.exports = { rows, listEntries, VID, NULL_VID };

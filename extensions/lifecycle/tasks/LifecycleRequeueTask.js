@@ -10,7 +10,6 @@ const { LifecycleMetrics } = require('../LifecycleMetrics');
 /** @typedef { import('../objectProcessor/LifecycleObjectProcessor.js') } LifecycleObjectProcessor */
 
 class LifecycleRequeueTask extends BackbeatTask {
-
     /**
      * Process a lifecycle object entry
      *
@@ -34,16 +33,16 @@ class LifecycleRequeueTask extends BackbeatTask {
     _getClient(accountId) {
         const client = this.getBackbeatMetadataProxy(accountId);
         if (!client) {
-            throw errors.InternalError.customizeDescription(
-                `Unable to obtain client for account ${accountId}`,
-            );
+            throw errors.InternalError.customizeDescription(`Unable to obtain client for account ${accountId}`);
         }
 
-        const wrap = method => promisify((params, log, cb) =>
-            client[method](params, log, (err, res) => {
-                LifecycleMetrics.onS3Request(log, method, this.processName, err);
-                cb(err, res);
-            }));
+        const wrap = method =>
+            promisify((params, log, cb) =>
+                client[method](params, log, (err, res) => {
+                    LifecycleMetrics.onS3Request(log, method, this.processName, err);
+                    cb(err, res);
+                }),
+            );
         return {
             getMetadata: wrap('getMetadata'),
             putMetadata: wrap('putMetadata'),
@@ -134,28 +133,30 @@ class LifecycleRequeueTask extends BackbeatTask {
     async handleBatch(accountId, buckets, location, log) {
         const client = this._getClient(accountId);
 
-        const counts = await Promise.all(Object.entries(buckets).map(async ([bucketName, objects]) => {
-            let objsPerBucket = 0;
-            for (const object of objects) {
-                const target = { ...object, accountId, bucketName, location };
-                try {
-                    objsPerBucket += await this.requeueObjectVersion(client, target, log);
-                } catch (err) {
-                    if (err.name !== 'ObjNotFound' && err.name !== 'NoSuchBucket') {
-                        throw err;
-                    }
+        const counts = await Promise.all(
+            Object.entries(buckets).map(async ([bucketName, objects]) => {
+                let objsPerBucket = 0;
+                for (const object of objects) {
+                    const target = { ...object, accountId, bucketName, location };
+                    try {
+                        objsPerBucket += await this.requeueObjectVersion(client, target, log);
+                    } catch (err) {
+                        if (err.name !== 'ObjNotFound' && err.name !== 'NoSuchBucket') {
+                            throw err;
+                        }
 
-                    const { objectKey, objectVersion } = object;
-                    log.warn(`${err.name}, skipping`, { bucketName, objectKey, objectVersion });
+                        const { objectKey, objectVersion } = object;
+                        log.warn(`${err.name}, skipping`, { bucketName, objectKey, objectVersion });
+                    }
                 }
-            }
-            return objsPerBucket;
-        }));
+                return objsPerBucket;
+            }),
+        );
 
         return counts.reduce((acc, v) => acc + v, 0);
     }
 }
 
 module.exports = {
-    LifecycleRequeueTask
+    LifecycleRequeueTask,
 };

@@ -66,7 +66,7 @@ entries continue populating in Zenko's metadata storage.
 
 ## Definition of API
 
-* GET `/_/backbeat/api/<service>/status`
+- GET `/_/backbeat/api/<service>/status`
 
     This GET request checks if the given service is enabled or not for all
     locations configured for the service.
@@ -84,7 +84,7 @@ entries continue populating in Zenko's metadata storage.
     }
     ```
 
-* GET `/_/backbeat/api/<service>/status/<location-name>`
+- GET `/_/backbeat/api/<service>/status/<location-name>`
 
     This GET request checks if the given service is enabled or not for a
     specified location configured for the service.
@@ -101,7 +101,7 @@ entries continue populating in Zenko's metadata storage.
     }
     ```
 
-* POST `/_/backbeat/api/<service>/pause`
+- POST `/_/backbeat/api/<service>/pause`
 
     This POST request is to manually pause the given service for all locations
     configured for the service.
@@ -119,7 +119,7 @@ entries continue populating in Zenko's metadata storage.
     {}
     ```
 
-* POST `/_/backbeat/api/<service>/pause/<location-name>`
+- POST `/_/backbeat/api/<service>/pause/<location-name>`
 
     This POST request is to manually pause the given service for a specified
     location configured for the service.
@@ -137,7 +137,7 @@ entries continue populating in Zenko's metadata storage.
     {}
     ```
 
-* GET `/_/backbeat/api/<service>/resume/<location-name>`
+- GET `/_/backbeat/api/<service>/resume/<location-name>`
 
     This GET request checks if the given location has a scheduled resume job.
     If a resume job is scheduled, you will see the expected date when the
@@ -159,7 +159,7 @@ entries continue populating in Zenko's metadata storage.
     }
     ```
 
-* POST `/_/backbeat/api/<service>/resume`
+- POST `/_/backbeat/api/<service>/resume`
 
     This POST request is to manually resume the given service for all locations
     configured for the service.
@@ -177,7 +177,7 @@ entries continue populating in Zenko's metadata storage.
     {}
     ```
 
-* POST `/_/backbeat/api/<service>/resume/<location-name>`
+- POST `/_/backbeat/api/<service>/resume/<location-name>`
 
     This is a POST request to resume the given service for a specified location
     configured for the service.
@@ -195,7 +195,7 @@ entries continue populating in Zenko's metadata storage.
     {}
     ```
 
-* POST `/_/backbeat/api/<service>/resume/<location-name>/schedule`
+- POST `/_/backbeat/api/<service>/resume/<location-name>/schedule`
 
     This is a POST request to schedule resuming a specified location configured
     for the service. Specify "all" as the location name to schedule a resume
@@ -225,7 +225,7 @@ entries continue populating in Zenko's metadata storage.
     {}
     ```
 
-* DELETE `/_/backbeat/api/<service>/resume/<location-name>/schedule`
+- DELETE `/_/backbeat/api/<service>/resume/<location-name>/schedule`
 
     This is a DELETE request to remove a scheduled resume for a specified
     location configured for the service. Specify "all" as the location name to

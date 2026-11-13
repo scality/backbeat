@@ -1,6 +1,5 @@
 const assert = require('assert');
-const notifConfUtil
-    = require('../../../../extensions/notification/utils/config');
+const notifConfUtil = require('../../../../extensions/notification/utils/config');
 
 const testConfigs = [
     {
@@ -367,10 +366,12 @@ const tests = [
         expectedMatchingConfig: {
             events: ['s3:ObjectCreated:Put'],
             queueArn: 'q9',
-            filterRules: [{
-                name: 'Prefix',
-                value: '0833/epolicy/',
-            }],
+            filterRules: [
+                {
+                    name: 'Prefix',
+                    value: '0833/epolicy/',
+                },
+            ],
             id: 'config9',
         },
     },
@@ -385,10 +386,12 @@ const tests = [
         expectedMatchingConfig: {
             events: ['s3:ObjectCreated:Put'],
             queueArn: 'q9',
-            filterRules: [{
-                name: 'Prefix',
-                value: '0394/ars/',
-            }],
+            filterRules: [
+                {
+                    name: 'Prefix',
+                    value: '0394/ars/',
+                },
+            ],
             id: 'config9.1',
         },
     },
@@ -499,8 +502,7 @@ describe('Notification configuration util', () => {
     describe('ValidateEntry', () => {
         let configMap = null;
         function getBucketNotifConfig(bucket, bnConfigMap) {
-            const bnConfigs
-                = bnConfigMap.get(bucket);
+            const bnConfigs = bnConfigMap.get(bucket);
             return {
                 bucket,
                 notificationConfiguration: {
@@ -515,10 +517,8 @@ describe('Notification configuration util', () => {
 
         tests.forEach(test => {
             it(`should ${test.desc}`, () => {
-                const bnConfig
-                    = getBucketNotifConfig(test.entry.bucket, configMap);
-                const result
-                    = notifConfUtil.validateEntry(bnConfig, test.entry);
+                const bnConfig = getBucketNotifConfig(test.entry.bucket, configMap);
+                const result = notifConfUtil.validateEntry(bnConfig, test.entry);
                 assert.strictEqual(test.pass, result.isValid);
                 if (test.pass) {
                     assert.deepStrictEqual(test.expectedMatchingConfig, result.matchingConfig);
@@ -529,7 +529,7 @@ describe('Notification configuration util', () => {
         });
 
         it('should fail if the configuration is for another bucket', () => {
-            const config =  {
+            const config = {
                 bucket: 'bucket1',
                 notificationConfiguration: {
                     queueConfig: [

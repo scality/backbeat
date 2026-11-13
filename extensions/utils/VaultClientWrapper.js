@@ -32,7 +32,6 @@ class VaultClientWrapper {
             .setPort(this._clientId, this._vaultConf.port);
     }
 
-
     // directly manages temp creds lifecycle, not going through CredentialsManager,
     // as vaultclient does not use credential provider functions, and the same set
     // can be reused forever as the role is assumed in only one account

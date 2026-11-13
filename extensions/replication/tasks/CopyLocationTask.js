@@ -21,20 +21,16 @@ const { LifecycleMetrics, getCopyLocationMetricsType } = require('../../lifecycl
 const ReplicationMetric = require('../ReplicationMetric');
 const ReplicationMetrics = require('../ReplicationMetrics');
 const { isRetryableMiddleware, TIMEOUT_MS } = require('../../../lib/clients/utils');
-const { getAccountCredentials } =
-          require('../../../lib/credentials/AccountCredentials');
-const RoleCredentials =
-          require('../../../lib/credentials/RoleCredentials');
+const { getAccountCredentials } = require('../../../lib/credentials/AccountCredentials');
+const RoleCredentials = require('../../../lib/credentials/RoleCredentials');
 const ClientManager = require('../../../lib/clients/ClientManager');
 const { authTypeAssumeRole } = require('../../../lib/constants');
-const { metricsExtension, metricsTypeQueued, metricsTypeCompleted } =
-    require('../constants');
+const { metricsExtension, metricsTypeQueued, metricsTypeCompleted } = require('../constants');
 const locations = require('../../../conf/locationConfig.json') || {};
 
 const MPU_GCP_MAX_PARTS = 1024;
 
 class CopyLocationTask extends BackbeatTask {
-
     _getReplicationEndpointType() {
         return this.destConfig?.replicationEndpoint?.type;
     }
@@ -45,8 +41,7 @@ class CopyLocationTask extends BackbeatTask {
         Object.assign(this, qpState);
         this.destType = this._getReplicationEndpointType();
         if (this.destConfig && this.destType) {
-            const retryParams =
-                  this.repConfig.queueProcessor.retry[this.destType];
+            const retryParams = this.repConfig.queueProcessor.retry[this.destType];
             if (retryParams) {
                 this.retryParams = retryParams;
             }
@@ -60,8 +55,7 @@ class CopyLocationTask extends BackbeatTask {
     _validateActionCredentials(actionEntry) {
         const authConfig = this.sourceConfig.auth;
         if (authConfig.type === 'role') {
-            return actionEntry.getAttribute(
-                'auth.roleArn', { required: true }) !== undefined;
+            return actionEntry.getAttribute('auth.roleArn', { required: true }) !== undefined;
         }
         return true;
     }
@@ -74,8 +68,7 @@ class CopyLocationTask extends BackbeatTask {
         }
         const vaultclient = this.vaultclientCache.getClient('source:s3');
         const actionAuth = actionEntry.getAttribute('auth');
-        return new RoleCredentials(
-            vaultclient, 'replication', actionAuth.roleArn, log);
+        return new RoleCredentials(vaultclient, 'replication', actionAuth.roleArn, log);
     }
 
     _setupClients(actionEntry, log) {
@@ -99,10 +92,11 @@ class CopyLocationTask extends BackbeatTask {
             priority: 'high',
         });
         this.backbeatMetadataProxy = new BackbeatMetadataProxy(
-            `${transport}://${s3.host}:${s3.port}`, auth, this.sourceHTTPAgent);
-        this.backbeatMetadataProxy
-            .setSourceRole(actionEntry.getAttribute('auth.roleArn'))
-            .setSourceClient(log);
+            `${transport}://${s3.host}:${s3.port}`,
+            auth,
+            this.sourceHTTPAgent,
+        );
+        this.backbeatMetadataProxy.setSourceRole(actionEntry.getAttribute('auth.roleArn')).setSourceClient(log);
     }
 
     /**
@@ -126,16 +120,19 @@ class CopyLocationTask extends BackbeatTask {
         // clients of every account we assume that role on, and expires them
         const cacheKey = `${s3Endpoint}::${roleName}`;
         const clientManager = this.sourceClientManagers.getOrCreate(cacheKey, () => {
-            const manager = new ClientManager({
-                id: 'replication-copy-location',
-                authConfig: {
-                    type: authTypeAssumeRole,
-                    roleName,
-                    sts,
+            const manager = new ClientManager(
+                {
+                    id: 'replication-copy-location',
+                    authConfig: {
+                        type: authTypeAssumeRole,
+                        roleName,
+                        sts,
+                    },
+                    s3Config: { host, port },
+                    transport,
                 },
-                s3Config: { host, port },
-                transport,
-            }, this.logger);
+                this.logger,
+            );
             manager.initSTSConfig();
             manager.initCredentialsManager();
             return manager;
@@ -147,8 +144,7 @@ class CopyLocationTask extends BackbeatTask {
                 roleArn,
                 endpoint: s3Endpoint,
             });
-            const err = errors.AccessDenied.customizeDescription(
-                `unable to assume role ${roleArn} on source location`);
+            const err = errors.AccessDenied.customizeDescription(`unable to assume role ${roleArn} on source location`);
             err.retryable = true;
             throw err;
         }
@@ -180,8 +176,7 @@ class CopyLocationTask extends BackbeatTask {
                 site,
             });
             // retryable: a config fix should be picked up without losing the action
-            const err = errors.InternalError.customizeDescription(
-                `no endpoint to reach source location ${site}`);
+            const err = errors.InternalError.customizeDescription(`no endpoint to reach source location ${site}`);
             err.retryable = true;
             throw err;
         }
@@ -194,7 +189,8 @@ class CopyLocationTask extends BackbeatTask {
                 parts: parts?.length ?? 0,
             });
             throw errors.InternalError.customizeDescription(
-                `expected a single location part for source location ${site}`);
+                `expected a single location part for source location ${site}`,
+            );
         }
         const part = parts[0];
         if (!part.role) {
@@ -203,12 +199,12 @@ class CopyLocationTask extends BackbeatTask {
                 site,
             });
             const err = errors.AccessDenied.customizeDescription(
-                `missing role on location part for source location ${site}`);
+                `missing role on location part for source location ${site}`,
+            );
             err.retryable = true;
             throw err;
         }
-        const client = this._getAssumedRoleS3Client(
-            { transport, endpoint: servers[0], sts }, part.role, log);
+        const client = this._getAssumedRoleS3Client({ transport, endpoint: servers[0], sts }, part.role, log);
         const { bucket, key, dataStoreVersionId } = part;
         // the part carries the raw/decoded version id, the task needs the encoded form for S3 Api
         const version = dataStoreVersionId ? VersionID.encode(dataStoreVersionId) : 'null';
@@ -232,12 +228,15 @@ class CopyLocationTask extends BackbeatTask {
     async _sendGetObject(actionEntry, objMD, range, log, abortController) {
         // read from the site holding the data, where it is native and there
         // is no location to redirect to, or locally through Cloudserver
-        const { client, target: { bucket, key, version }, dataStoreName } =
-            this._getSourceLocationClient(objMD, log) ?? {
-                client: this.backbeatClient,
-                target: actionEntry.getAttribute('target'),
-                dataStoreName: objMD.getDataStoreName(),
-            };
+        const {
+            client,
+            target: { bucket, key, version },
+            dataStoreName,
+        } = this._getSourceLocationClient(objMD, log) ?? {
+            client: this.backbeatClient,
+            target: actionEntry.getAttribute('target'),
+            dataStoreName: objMD.getDataStoreName(),
+        };
         const command = new GetObjectCommand({
             Bucket: bucket,
             Key: key,
@@ -259,71 +258,80 @@ class CopyLocationTask extends BackbeatTask {
             copyToLocation: 'toLocation',
         });
         log.debug('action execution starts', actionEntry.getLogInfo());
-        return async.waterfall([
-            next => {
-                if (!this._validateActionCredentials(actionEntry)) {
-                    return next(errors.AccessDenied);
-                }
-                this._setupClients(actionEntry, log);
-                return next();
+        return async.waterfall(
+            [
+                next => {
+                    if (!this._validateActionCredentials(actionEntry)) {
+                        return next(errors.AccessDenied);
+                    }
+                    this._setupClients(actionEntry, log);
+                    return next();
+                },
+                next =>
+                    this._getSourceMD(actionEntry, log, (err, objMD) => {
+                        if (err && err.name === 'ObjNotFound') {
+                            // The object was deleted before entry is processed, we
+                            // can safely skip this entry.
+                            return next(errors.ObjNotFound);
+                        }
+                        if (err) {
+                            return next(err);
+                        }
+                        return next(null, objMD);
+                    }),
+                (objMD, next) => {
+                    const err = this._checkObjectState(actionEntry, objMD);
+                    if (err) {
+                        return next(err);
+                    }
+
+                    const transitionTime =
+                        actionEntry.getAttribute('metrics.transitionTime') || objMD.getTransitionTime();
+                    LifecycleMetrics.onLifecycleStarted(
+                        log,
+                        getCopyLocationMetricsType(actionEntry),
+                        actionEntry.getAttribute('toLocation'),
+                        startTime - Date.parse(transitionTime),
+                    );
+
+                    // Do a multipart upload when either the size is above
+                    // a threshold or the source object is itself a MPU.
+                    //
+                    // FIXME: object ETag for MPUs is an aggregate from
+                    // each part's ETag, which does not allow the current
+                    // implementation to check the data integrity when
+                    // doing ranged PUTs. Also in the current
+                    // implementation we are forced to send an ETag for a
+                    // multiple backend putObject(), which only matches if
+                    // the object is not a MPU, so we cannot use this
+                    // route for MPUs as-is without recomputing a new
+                    // checksum, which is not the case today (hence the
+                    // MPU check below).
+                    if (
+                        objMD.getContentLength() / 1000000 >= this.repConfig.queueProcessor.minMPUSizeMB ||
+                        objMD.isMultipartUpload()
+                    ) {
+                        return this._getAndPutMultipartUpload(actionEntry, objMD, log, next);
+                    }
+                    return this._getAndPutObject(actionEntry, objMD, log, next);
+                },
+            ],
+            err => {
+                const retArgs = this._publishCopyLocationStatus(err, actionEntry, kafkaEntry, log);
+
+                const { origin, fromLocation, contentLength } = actionEntry.getAttribute('metrics');
+                ReplicationMetrics.onReplicationProcessed(
+                    origin,
+                    fromLocation,
+                    this.site,
+                    contentLength,
+                    actionEntry.getStatus(),
+                    actionEntry.getElapsedMs(),
+                );
+
+                return done(null, retArgs);
             },
-            next => this._getSourceMD(actionEntry, log, (err, objMD) => {
-                if (err && (err.name === 'ObjNotFound')) {
-                    // The object was deleted before entry is processed, we
-                    // can safely skip this entry.
-                    return next(errors.ObjNotFound);
-                }
-                if (err) {
-                    return next(err);
-                }
-                return next(null, objMD);
-            }),
-            (objMD, next) => {
-                const err = this._checkObjectState(actionEntry, objMD);
-                if (err) {
-                    return next(err);
-                }
-
-                const transitionTime = actionEntry.getAttribute('metrics.transitionTime') ||
-                    objMD.getTransitionTime();
-                LifecycleMetrics.onLifecycleStarted(log, getCopyLocationMetricsType(actionEntry),
-                    actionEntry.getAttribute('toLocation'),
-                    startTime - Date.parse(transitionTime));
-
-                // Do a multipart upload when either the size is above
-                // a threshold or the source object is itself a MPU.
-                //
-                // FIXME: object ETag for MPUs is an aggregate from
-                // each part's ETag, which does not allow the current
-                // implementation to check the data integrity when
-                // doing ranged PUTs. Also in the current
-                // implementation we are forced to send an ETag for a
-                // multiple backend putObject(), which only matches if
-                // the object is not a MPU, so we cannot use this
-                // route for MPUs as-is without recomputing a new
-                // checksum, which is not the case today (hence the
-                // MPU check below).
-                if (objMD.getContentLength() / 1000000 >=
-                    this.repConfig.queueProcessor.minMPUSizeMB ||
-                    objMD.isMultipartUpload()) {
-                    return this._getAndPutMultipartUpload(actionEntry, objMD,
-                        log, next);
-                }
-                return this._getAndPutObject(actionEntry, objMD, log, next);
-            },
-        ], err => {
-            const retArgs = this._publishCopyLocationStatus(
-                err, actionEntry, kafkaEntry, log);
-
-            const { origin, fromLocation, contentLength } =
-                  actionEntry.getAttribute('metrics');
-            ReplicationMetrics.onReplicationProcessed(
-                origin, fromLocation, this.site, contentLength,
-                actionEntry.getStatus(),
-                actionEntry.getElapsedMs());
-
-            return done(null, retArgs);
-        });
+        );
     }
 
     _getSourceMD(actionEntry, log, cb) {
@@ -333,23 +341,33 @@ class CopyLocationTask extends BackbeatTask {
             objectKey: key,
             versionId: version,
         };
-        return this.backbeatMetadataProxy.getMetadata(
-        params, log, (err, blob) => {
+        return this.backbeatMetadataProxy.getMetadata(params, log, (err, blob) => {
             if (err) {
-                log.error('error getting metadata blob from S3', Object.assign({
-                    method: 'CopyLocationTask._getSourceMD',
-                    error: err,
-                }, actionEntry.getLogInfo()));
+                log.error(
+                    'error getting metadata blob from S3',
+                    Object.assign(
+                        {
+                            method: 'CopyLocationTask._getSourceMD',
+                            error: err,
+                        },
+                        actionEntry.getLogInfo(),
+                    ),
+                );
                 return cb(err);
             }
             const res = ObjectMD.createFromBlob(blob.Body);
             if (res.error) {
-                log.error('error parsing metadata blob', Object.assign({
-                    error: res.error,
-                    method: 'CopyLocationTask._getSourceMD',
-                }, actionEntry.getLogInfo()));
-                return cb(errors.InternalError.
-                    customizeDescription('error parsing metadata blob'));
+                log.error(
+                    'error parsing metadata blob',
+                    Object.assign(
+                        {
+                            error: res.error,
+                            method: 'CopyLocationTask._getSourceMD',
+                        },
+                        actionEntry.getLogInfo(),
+                    ),
+                );
+                return cb(errors.InternalError.customizeDescription('error parsing metadata blob'));
             }
             return cb(null, res.result);
         });
@@ -362,14 +380,16 @@ class CopyLocationTask extends BackbeatTask {
             .withMetricType(metricsTypeQueued)
             .withObjectSize(objMD.getContentLength())
             .publish();
-        this.retry({
-            actionDesc: 'stream object data',
-            logFields: { entry: actionEntry.getLogInfo() },
-            actionFunc: done => this._getAndPutObjectOnce(
-                actionEntry, objMD, objectLogger, done),
-            shouldRetryFunc: err => err.retryable,
-            log: objectLogger,
-        }, cb);
+        this.retry(
+            {
+                actionDesc: 'stream object data',
+                logFields: { entry: actionEntry.getLogInfo() },
+                actionFunc: done => this._getAndPutObjectOnce(actionEntry, objMD, objectLogger, done),
+                shouldRetryFunc: err => err.retryable,
+                log: objectLogger,
+            },
+            cb,
+        );
     }
 
     _getAndPutObjectOnce(actionEntry, objMD, log, done) {
@@ -378,8 +398,7 @@ class CopyLocationTask extends BackbeatTask {
         const size = objMD.getContentLength();
         if (size === 0) {
             log.debug('putting data', actionEntry.getLogInfo());
-            return this._sendMultipleBackendPutObject(
-                actionEntry, objMD, size, undefined, log, doneOnce);
+            return this._sendMultipleBackendPutObject(actionEntry, objMD, size, undefined, log, doneOnce);
         }
 
         let sourceStreamAborted = false;
@@ -394,21 +413,32 @@ class CopyLocationTask extends BackbeatTask {
                         sourceStreamAborted = true;
                         abortController.abort();
                         if (err.$metadata?.httpStatusCode === 404) {
-                            log.error('the source object was not found', Object.assign({
-                                method: 'CopyLocationTask._getAndPutObjectOnce',
-                                peer: this.sourceConfig.s3,
-                                error: err.message,
-                                httpStatus: err.$metadata?.httpStatusCode,
-                            }, actionEntry.getLogInfo()));
+                            log.error(
+                                'the source object was not found',
+                                Object.assign(
+                                    {
+                                        method: 'CopyLocationTask._getAndPutObjectOnce',
+                                        peer: this.sourceConfig.s3,
+                                        error: err.message,
+                                        httpStatus: err.$metadata?.httpStatusCode,
+                                    },
+                                    actionEntry.getLogInfo(),
+                                ),
+                            );
                             return doneOnce(errors.ObjNotFound);
                         }
                         if (!abortedByPut) {
-                            log.error('an error occurred when streaming data from S3',
-                                Object.assign({
-                                    method: 'CopyLocationTask._getAndPutObjectOnce',
-                                    peer: this.sourceConfig.s3,
-                                    error: err.message,
-                                }, actionEntry.getLogInfo()));
+                            log.error(
+                                'an error occurred when streaming data from S3',
+                                Object.assign(
+                                    {
+                                        method: 'CopyLocationTask._getAndPutObjectOnce',
+                                        peer: this.sourceConfig.s3,
+                                        error: err.message,
+                                    },
+                                    actionEntry.getLogInfo(),
+                                ),
+                            );
                         }
                         return doneOnce(err);
                     }
@@ -429,27 +459,37 @@ class CopyLocationTask extends BackbeatTask {
                 };
 
                 log.debug('putting data', actionEntry.getLogInfo());
-                return this._sendMultipleBackendPutObject(
-                    actionEntry, objMD, size, incomingMsg, log, putDone);
+                return this._sendMultipleBackendPutObject(actionEntry, objMD, size, incomingMsg, log, putDone);
             })
             .catch(err => {
                 if (err.$metadata?.httpStatusCode === 404) {
-                    log.error('the source object was not found', Object.assign({
-                        method: 'CopyLocationTask._getAndPutObjectOnce',
-                        peer: this.sourceConfig.s3,
-                        error: err.message,
-                        httpStatus: err.$metadata?.httpStatusCode,
-                    }, actionEntry.getLogInfo()));
+                    log.error(
+                        'the source object was not found',
+                        Object.assign(
+                            {
+                                method: 'CopyLocationTask._getAndPutObjectOnce',
+                                peer: this.sourceConfig.s3,
+                                error: err.message,
+                                httpStatus: err.$metadata?.httpStatusCode,
+                            },
+                            actionEntry.getLogInfo(),
+                        ),
+                    );
                     return doneOnce(err);
                 }
-                log.error('an error occurred on getObject from S3',
-                          Object.assign({
-                              method: 'CopyLocationTask._getAndPutObjectOnce',
-                              peer: this.sourceConfig.s3,
-                              error: err.message,
-                              errorName: err.name,
-                              httpStatus: err.$metadata?.httpStatusCode,
-                          }, actionEntry.getLogInfo()));
+                log.error(
+                    'an error occurred on getObject from S3',
+                    Object.assign(
+                        {
+                            method: 'CopyLocationTask._getAndPutObjectOnce',
+                            peer: this.sourceConfig.s3,
+                            error: err.message,
+                            errorName: err.name,
+                            httpStatus: err.$metadata?.httpStatusCode,
+                        },
+                        actionEntry.getLogInfo(),
+                    ),
+                );
                 return doneOnce(err);
             });
     }
@@ -464,8 +504,7 @@ class CopyLocationTask extends BackbeatTask {
      * @param {Function} cb - The callback to call
      * @return {undefined}
      */
-    _sendMultipleBackendPutObject(actionEntry, objMD, size,
-        incomingMsg, log, cb) {
+    _sendMultipleBackendPutObject(actionEntry, objMD, size, incomingMsg, log, cb) {
         const { bucket, key, version } = actionEntry.getAttribute('target');
         const command = new MultipleBackendPutObjectCommand({
             Bucket: bucket,
@@ -478,8 +517,7 @@ class CopyLocationTask extends BackbeatTask {
             UserMetaData: objMD.getUserMetadata(),
             ContentType: objMD.getContentType() || undefined,
             CacheControl: objMD.getCacheControl() || undefined,
-            ContentDisposition:
-                objMD.getContentDisposition() || undefined,
+            ContentDisposition: objMD.getContentDisposition() || undefined,
             ContentEncoding: objMD.getContentEncoding() || undefined,
             Tags: JSON.stringify(objMD.getTags()),
             Body: incomingMsg,
@@ -487,7 +525,8 @@ class CopyLocationTask extends BackbeatTask {
         });
         addContentLengthMiddleware(command, size);
 
-        return this.backbeatClient.send(command)
+        return this.backbeatClient
+            .send(command)
             .then(data => {
                 actionEntry.setSuccess({
                     location: data.location,
@@ -500,12 +539,17 @@ class CopyLocationTask extends BackbeatTask {
                 return cb(null, data);
             })
             .catch(err => {
-                log.error('an error occurred on putObject to S3',
-                Object.assign({
-                    method: 'CopyLocationTask._sendMultipleBackendPutObject',
-                    error: err.message,
-                    httpStatus: err.$metadata?.httpStatusCode,
-                }, actionEntry.getLogInfo()));
+                log.error(
+                    'an error occurred on putObject to S3',
+                    Object.assign(
+                        {
+                            method: 'CopyLocationTask._sendMultipleBackendPutObject',
+                            error: err.message,
+                            httpStatus: err.$metadata?.httpStatusCode,
+                        },
+                        actionEntry.getLogInfo(),
+                    ),
+                );
                 return cb(err);
             });
     }
@@ -521,16 +565,18 @@ class CopyLocationTask extends BackbeatTask {
      * @param {Function} cb - The callback to call
      * @return {undefined}
      */
-    _getRangeAndPutMPUPart(actionEntry, objMD, range, partNumber, uploadId,
-        log, cb) {
-        this.retry({
-            actionDesc: 'stream part data',
-            logFields: { entry: actionEntry.getLogInfo() },
-            actionFunc: done => this._getRangeAndPutMPUPartOnce(
-                actionEntry, objMD, range, partNumber, uploadId, log, done),
-            shouldRetryFunc: err => err.retryable,
-            log,
-        }, cb);
+    _getRangeAndPutMPUPart(actionEntry, objMD, range, partNumber, uploadId, log, cb) {
+        this.retry(
+            {
+                actionDesc: 'stream part data',
+                logFields: { entry: actionEntry.getLogInfo() },
+                actionFunc: done =>
+                    this._getRangeAndPutMPUPartOnce(actionEntry, objMD, range, partNumber, uploadId, log, done),
+                shouldRetryFunc: err => err.retryable,
+                log,
+            },
+            cb,
+        );
     }
 
     /**
@@ -546,34 +592,54 @@ class CopyLocationTask extends BackbeatTask {
      * @param {Function} done - The callback to call
      * @return {undefined}
      */
-    _getRangeAndPutMPUPartOnce(actionEntry, objMD, range, partNumber,
-        uploadId, log, done) {
-        log.debug('getting object range', Object.assign({
-            range,
-        }, actionEntry.getLogInfo()));
+    _getRangeAndPutMPUPartOnce(actionEntry, objMD, range, partNumber, uploadId, log, done) {
+        log.debug(
+            'getting object range',
+            Object.assign(
+                {
+                    range,
+                },
+                actionEntry.getLogInfo(),
+            ),
+        );
         // A 0-byte object has no range, otherwise range is inclusive.
         const size = range ? range.end - range.start + 1 : 0;
         if (size === 0) {
-            return this._putMPUPart(actionEntry, objMD, undefined, 0,
-                uploadId, partNumber, log, undefined, done);
+            return this._putMPUPart(actionEntry, objMD, undefined, 0, uploadId, partNumber, log, undefined, done);
         }
 
         const abortController = new AbortController();
 
         return this._sendGetObject(actionEntry, objMD, range, log, abortController)
-            .then(response => this._putMPUPart(actionEntry, objMD, response.Body, size,
-                    uploadId, partNumber, log, abortController, done))
+            .then(response =>
+                this._putMPUPart(
+                    actionEntry,
+                    objMD,
+                    response.Body,
+                    size,
+                    uploadId,
+                    partNumber,
+                    log,
+                    abortController,
+                    done,
+                ),
+            )
             .catch(err => {
                 if (err.$metadata?.httpStatusCode === 404) {
                     return done(err);
                 }
-                log.error('an error occurred on getObject from S3',
-                Object.assign({
-                    method: 'CopyLocationTask._getRangeAndPutMPUPartOnce',
-                    error: err.message,
-                    errorName: err.name,
-                    httpStatus: err.$metadata?.httpStatusCode,
-                }, actionEntry.getLogInfo()));
+                log.error(
+                    'an error occurred on getObject from S3',
+                    Object.assign(
+                        {
+                            method: 'CopyLocationTask._getRangeAndPutMPUPartOnce',
+                            error: err.message,
+                            errorName: err.name,
+                            httpStatus: err.$metadata?.httpStatusCode,
+                        },
+                        actionEntry.getLogInfo(),
+                    ),
+                );
                 return done(err);
             });
     }
@@ -588,14 +654,16 @@ class CopyLocationTask extends BackbeatTask {
      * @return {undefined}
      */
     _multipleBackendAbortMPU(actionEntry, objMD, uploadId, log, cb) {
-        this.retry({
-            actionDesc: 'abort multipart upload',
-            logFields: { entry: actionEntry.getLogInfo() },
-            actionFunc: done => this._multipleBackendAbortMPUOnce(
-                actionEntry, objMD, uploadId, log, done),
-            shouldRetryFunc: err => err.retryable,
-            log,
-        }, cb);
+        this.retry(
+            {
+                actionDesc: 'abort multipart upload',
+                logFields: { entry: actionEntry.getLogInfo() },
+                actionFunc: done => this._multipleBackendAbortMPUOnce(actionEntry, objMD, uploadId, log, done),
+                shouldRetryFunc: err => err.retryable,
+                log,
+            },
+            cb,
+        );
     }
 
     /**
@@ -611,9 +679,15 @@ class CopyLocationTask extends BackbeatTask {
      * @return {undefined}
      */
     _multipleBackendAbortMPUOnce(actionEntry, objMD, uploadId, log, cb) {
-        log.debug('aborting multipart upload', Object.assign({
-            uploadId,
-        }, actionEntry.getLogInfo()));
+        log.debug(
+            'aborting multipart upload',
+            Object.assign(
+                {
+                    uploadId,
+                },
+                actionEntry.getLogInfo(),
+            ),
+        );
         const { bucket, key } = actionEntry.getAttribute('target');
         const command = new MultipleBackendAbortMPUCommand({
             Bucket: bucket,
@@ -623,29 +697,34 @@ class CopyLocationTask extends BackbeatTask {
             UploadId: uploadId,
             RequestUids: log.getSerializedUids(),
         });
-        
-        return this.backbeatClient.send(command)
+
+        return this.backbeatClient
+            .send(command)
             .then(() => cb())
             .catch(err => {
-                log.error('an error occurred aborting multipart upload', {
-                    method: 'CopyLocationTask._multipleBackendAbortMPUOnce',
-                    error: err.message,
-                    httpStatus: err.$metadata?.httpStatusCode,
-                }, actionEntry.getLogInfo());
+                log.error(
+                    'an error occurred aborting multipart upload',
+                    {
+                        method: 'CopyLocationTask._multipleBackendAbortMPUOnce',
+                        error: err.message,
+                        httpStatus: err.$metadata?.httpStatusCode,
+                    },
+                    actionEntry.getLogInfo(),
+                );
                 return cb(err);
             });
     }
 
-   /**
-    * Perform a multipart upload.
+    /**
+     * Perform a multipart upload.
      * @param {ActionQueueEntry} actionEntry - the action entry
      * @param {ObjectMD} objMD - metadata object
-    * @param {String} uploadId - The upload ID of the initiated MPU
-    * @param {Stream} data - The incoming message of the get request
-    * @param {Werelogs} log - The logger instance
-    * @param {Function} doneOnce - The callback to call
-    * @return {undefined}
-    */
+     * @param {String} uploadId - The upload ID of the initiated MPU
+     * @param {Stream} data - The incoming message of the get request
+     * @param {Werelogs} log - The logger instance
+     * @param {Function} doneOnce - The callback to call
+     * @return {undefined}
+     */
     _completeMPU(actionEntry, objMD, uploadId, data, log, doneOnce) {
         const { bucket, key, version } = actionEntry.getAttribute('target');
         const command = new MultipleBackendCompleteMPUCommand({
@@ -657,17 +736,16 @@ class CopyLocationTask extends BackbeatTask {
             UserMetaData: objMD.getUserMetadata(),
             ContentType: objMD.getContentType(),
             CacheControl: objMD.getCacheControl() || undefined,
-            ContentDisposition: objMD.getContentDisposition() ||
-                undefined,
-            ContentEncoding: objMD.getContentEncoding() ||
-                undefined,
+            ContentDisposition: objMD.getContentDisposition() || undefined,
+            ContentEncoding: objMD.getContentEncoding() || undefined,
             UploadId: uploadId,
             Tags: JSON.stringify(objMD.getTags()),
             Body: JSON.stringify(data),
             RequestUids: log.getSerializedUids(),
         });
-        
-        return this.backbeatClient.send(command)
+
+        return this.backbeatClient
+            .send(command)
             .then(data => {
                 actionEntry.setSuccess({
                     location: data.location,
@@ -675,17 +753,21 @@ class CopyLocationTask extends BackbeatTask {
                 return doneOnce();
             })
             .catch(err => {
-                log.error('an error occurred on completing MPU to S3',
-                Object.assign({
-                    method: 'CopyLocationTask._completeMPU',
-                    error: err.message,
-                    httpStatus: err.$metadata?.httpStatusCode,
-                }, actionEntry.getLogInfo()));
+                log.error(
+                    'an error occurred on completing MPU to S3',
+                    Object.assign(
+                        {
+                            method: 'CopyLocationTask._completeMPU',
+                            error: err.message,
+                            httpStatus: err.$metadata?.httpStatusCode,
+                        },
+                        actionEntry.getLogInfo(),
+                    ),
+                );
                 // Attempt to abort the MPU, but pass the error from
                 // multipleBackendCompleteMPU because that operation's result
                 // should determine the replication's success or failure.
-                return this._multipleBackendAbortMPU(
-                    actionEntry, objMD, uploadId, log, () => doneOnce(err));
+                return this._multipleBackendAbortMPU(actionEntry, objMD, uploadId, log, () => doneOnce(err));
             });
     }
 
@@ -702,8 +784,7 @@ class CopyLocationTask extends BackbeatTask {
      * @param {Function} cb - The callback to call
      * @return {undefined}
      */
-    _putMPUPart(actionEntry, objMD, incomingMsg, size, uploadId, partNumber,
-                log, abortController, cb) {
+    _putMPUPart(actionEntry, objMD, incomingMsg, size, uploadId, partNumber, log, abortController, cb) {
         const doneOnce = jsutil.once(cb);
         let sourceStreamAborted = false;
         let abortedByPut = false;
@@ -717,11 +798,16 @@ class CopyLocationTask extends BackbeatTask {
                         return doneOnce(errors.ObjNotFound);
                     }
                     if (!abortedByPut) {
-                        log.error('an error occurred when streaming MPU part data from S3',
-                        Object.assign({
-                            method: 'CopyLocationTask._putMPUPart',
-                            error: err.message,
-                        }, actionEntry.getLogInfo()));
+                        log.error(
+                            'an error occurred when streaming MPU part data from S3',
+                            Object.assign(
+                                {
+                                    method: 'CopyLocationTask._putMPUPart',
+                                    error: err.message,
+                                },
+                                actionEntry.getLogInfo(),
+                            ),
+                        );
                     }
                     return doneOnce(err);
                 }
@@ -743,7 +829,8 @@ class CopyLocationTask extends BackbeatTask {
         });
         addContentLengthMiddleware(command, size);
 
-        return this.backbeatClient.send(command)
+        return this.backbeatClient
+            .send(command)
             .then(data => {
                 this._replicationMetric
                     .withEntry(actionEntry)
@@ -759,25 +846,32 @@ class CopyLocationTask extends BackbeatTask {
                     abortController.abort();
                     incomingMsg.destroy();
                 }
-                log.error('an error occurred on putting MPU part to S3',
-                Object.assign({
-                    method: 'CopyLocationTask._putMPUPart',
-                    error: err.message,
-                    httpStatus: err.$metadata?.httpStatusCode,
-                }, actionEntry.getLogInfo()));
+                log.error(
+                    'an error occurred on putting MPU part to S3',
+                    Object.assign(
+                        {
+                            method: 'CopyLocationTask._putMPUPart',
+                            error: err.message,
+                            httpStatus: err.$metadata?.httpStatusCode,
+                        },
+                        actionEntry.getLogInfo(),
+                    ),
+                );
                 return doneOnce(err);
             });
     }
 
     _getAndPutMultipartUpload(actionEntry, objMD, log, cb) {
-        this.retry({
-            actionDesc: 'stream MPU data',
-            logFields: { entry: actionEntry.getLogInfo() },
-            actionFunc: done => this._getAndPutMultipartUploadOnce(
-                actionEntry, objMD, log, done),
-            shouldRetryFunc: err => err.retryable,
-            log,
-        }, cb);
+        this.retry(
+            {
+                actionDesc: 'stream MPU data',
+                logFields: { entry: actionEntry.getLogInfo() },
+                actionFunc: done => this._getAndPutMultipartUploadOnce(actionEntry, objMD, log, done),
+                shouldRetryFunc: err => err.retryable,
+                log,
+            },
+            cb,
+        );
     }
 
     _initiateMPU(actionEntry, objMD, log, cb) {
@@ -796,22 +890,27 @@ class CopyLocationTask extends BackbeatTask {
             UserMetaData: objMD.getUserMetadata(),
             ContentType: objMD.getContentType() || undefined,
             CacheControl: objMD.getCacheControl() || undefined,
-            ContentDisposition:
-                objMD.getContentDisposition() || undefined,
+            ContentDisposition: objMD.getContentDisposition() || undefined,
             ContentEncoding: objMD.getContentEncoding() || undefined,
             Tags: JSON.stringify(objMD.getTags()),
             RequestUids: log.getSerializedUids(),
         });
 
-        return this.backbeatClient.send(command)
+        return this.backbeatClient
+            .send(command)
             .then(data => cb(null, data.uploadId))
             .catch(err => {
-                log.error('an error occurred on initating MPU to S3',
-                Object.assign({
-                    method: 'CopyLocationTask._initiateMPU',
-                    error: err.message,
-                    httpStatus: err.$metadata?.httpStatusCode,
-                }, actionEntry.getLogInfo()));
+                log.error(
+                    'an error occurred on initating MPU to S3',
+                    Object.assign(
+                        {
+                            method: 'CopyLocationTask._initiateMPU',
+                            error: err.message,
+                            httpStatus: err.$metadata?.httpStatusCode,
+                        },
+                        actionEntry.getLogInfo(),
+                    ),
+                );
                 return cb(err);
             });
     }
@@ -826,8 +925,7 @@ class CopyLocationTask extends BackbeatTask {
     _getGCPRangeSize(contentLen) {
         let rangeSize = this._getRangeSize(contentLen);
         if (contentLen / rangeSize > MPU_GCP_MAX_PARTS) {
-            const pow =
-                Math.pow(2, Math.ceil(Math.log(contentLen) / Math.log(2)));
+            const pow = Math.pow(2, Math.ceil(Math.log(contentLen) / Math.log(2)));
             rangeSize = Math.ceil(pow / MPU_GCP_MAX_PARTS);
         }
         return rangeSize;
@@ -843,7 +941,7 @@ class CopyLocationTask extends BackbeatTask {
      * @return {Number} The range size to use
      */
     _getRangeSize(contentLen) {
-        let rangeSize = (1024 * 1024) * 16; // Default 16MB part size.
+        let rangeSize = 1024 * 1024 * 16; // Default 16MB part size.
         if (contentLen <= rangeSize) {
             return contentLen;
         }
@@ -851,7 +949,7 @@ class CopyLocationTask extends BackbeatTask {
         while (contentLen / rangeSize > 1000) {
             // When given a very large object we want to allow use of up to 10K
             // parts, so we limit the part size to 512MB here.
-            if (rangeSize >= (1024 * 1024) * 512) {
+            if (rangeSize >= 1024 * 1024 * 512) {
                 break;
             }
             rangeSize *= 2;
@@ -879,8 +977,7 @@ class CopyLocationTask extends BackbeatTask {
             // part so the range in the subsequent GET request is undefined.
             return [null];
         }
-        const size = isGCP ?
-            this._getGCPRangeSize(contentLen) : this._getRangeSize(contentLen);
+        const size = isGCP ? this._getGCPRangeSize(contentLen) : this._getRangeSize(contentLen);
         const ranges = [];
         let start = 0;
         let end = 0;
@@ -909,9 +1006,11 @@ class CopyLocationTask extends BackbeatTask {
         const isAzure = this._getReplicationEndpointType() === 'azure';
         const ranges = this._getRanges(objMD.getContentLength(), isGCP);
         const mpuConcLimit = this.repConfig.queueProcessor.mpuPartsConcurrency;
-        return async.timesLimit(ranges.length, mpuConcLimit, (n, next) =>
-            this._getRangeAndPutMPUPart(actionEntry, objMD, ranges[n],
-                n + 1, uploadId, log, (err, data) => {
+        return async.timesLimit(
+            ranges.length,
+            mpuConcLimit,
+            (n, next) =>
+                this._getRangeAndPutMPUPart(actionEntry, objMD, ranges[n], n + 1, uploadId, log, (err, data) => {
                     if (err) {
                         return next(err);
                     }
@@ -927,20 +1026,24 @@ class CopyLocationTask extends BackbeatTask {
                 }),
             (err, data) => {
                 if (err) {
-                    log.error('an error occurred on putting MPU part to S3',
-                    Object.assign({
-                        method: 'CopyLocationTask._completeRangedMPU',
-                        error: err.message,
-                    }, actionEntry.getLogInfo()));
+                    log.error(
+                        'an error occurred on putting MPU part to S3',
+                        Object.assign(
+                            {
+                                method: 'CopyLocationTask._completeRangedMPU',
+                                error: err.message,
+                            },
+                            actionEntry.getLogInfo(),
+                        ),
+                    );
                     // Attempt to abort the MPU, but pass an error from
                     // multipleBackendPutMPUPart because that operation's result
                     // should determine the replication's success or failure.
-                    return this._multipleBackendAbortMPU(
-                        actionEntry, objMD, uploadId, log, () => cb(err));
+                    return this._multipleBackendAbortMPU(actionEntry, objMD, uploadId, log, () => cb(err));
                 }
-                return this._completeMPU(actionEntry, objMD, uploadId, data,
-                    log, cb);
-            });
+                return this._completeMPU(actionEntry, objMD, uploadId, data, log, cb);
+            },
+        );
     }
 
     /**
@@ -961,8 +1064,7 @@ class CopyLocationTask extends BackbeatTask {
                 .withMetricType(metricsTypeQueued)
                 .withObjectSize(objMD.getContentLength())
                 .publish();
-            return this._completeRangedMPU(actionEntry, objMD,
-                uploadId, log, cb);
+            return this._completeRangedMPU(actionEntry, objMD, uploadId, log, cb);
         });
     }
 
@@ -982,14 +1084,12 @@ class CopyLocationTask extends BackbeatTask {
             if (objMD.getContentMd5() !== strippedETag) {
                 // The object was overwritten with new contents since
                 // the action was initiated
-                return errors.InvalidObjectState.customizeDescription(
-                    'object contents have changed');
+                return errors.InvalidObjectState.customizeDescription('object contents have changed');
             }
         }
         if (objMD.getDataStoreName() === actionEntry.getAttribute('toLocation')) {
             // The object was already transitioned to the destination location
-            return errors.InvalidObjectState.customizeDescription(
-                'object already transitioned');
+            return errors.InvalidObjectState.customizeDescription('object already transitioned');
         }
         return null;
     }
@@ -1014,14 +1114,20 @@ class CopyLocationTask extends BackbeatTask {
         });
         this.replicationStatusProducer.sendToTopic(
             actionEntry.getResultsTopic(),
-            [{ message: actionEntry.toKafkaMessage() }], deliveryErr => {
+            [{ message: actionEntry.toKafkaMessage() }],
+            deliveryErr => {
                 if (deliveryErr) {
-                    log.error('error in entry delivery to results topic',
-                    Object.assign({
-                        method: 'CopyLocationTask._publishCopyLocationStatus',
-                        topic: actionEntry.getResultsTopic(),
-                        error: deliveryErr.message,
-                    }, actionEntry.getLogInfo()));
+                    log.error(
+                        'error in entry delivery to results topic',
+                        Object.assign(
+                            {
+                                method: 'CopyLocationTask._publishCopyLocationStatus',
+                                topic: actionEntry.getResultsTopic(),
+                                error: deliveryErr.message,
+                            },
+                            actionEntry.getLogInfo(),
+                        ),
+                    );
                 }
                 // Commit whether there was an error or not delivering
                 // the message to allow progress of the consumer, as
@@ -1029,7 +1135,8 @@ class CopyLocationTask extends BackbeatTask {
                 if (this.dataMoverConsumer) {
                     this.dataMoverConsumer.onEntryCommittable(kafkaEntry);
                 }
-            });
+            },
+        );
         return { committable: false };
     }
 }

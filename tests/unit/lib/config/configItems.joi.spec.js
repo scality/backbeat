@@ -70,8 +70,10 @@ describe('config items schemas', () => {
         // the other alone
         it('should default each level of the global config', () => {
             assert.deepStrictEqual(joi.attempt({}, logJoi), { logLevel: 'info', dumpLevel: 'error' });
-            assert.deepStrictEqual(joi.attempt({ logLevel: 'debug' }, logJoi),
-                                   { logLevel: 'debug', dumpLevel: 'error' });
+            assert.deepStrictEqual(joi.attempt({ logLevel: 'debug' }, logJoi), {
+                logLevel: 'debug',
+                dumpLevel: 'error',
+            });
         });
 
         // an extension inherits the levels it does not configure from the
@@ -81,25 +83,31 @@ describe('config items schemas', () => {
             const validate = log => joi.attempt(log, logJoiOptional, { context });
 
             assert.deepStrictEqual(validate({}), { logLevel: 'info', dumpLevel: 'trace' });
-            assert.deepStrictEqual(validate({ logLevel: 'debug' }),
-                                   { logLevel: 'debug', dumpLevel: 'trace' });
+            assert.deepStrictEqual(validate({ logLevel: 'debug' }), { logLevel: 'debug', dumpLevel: 'trace' });
         });
 
         it('should name the level LOG_LEVEL rather than LOG_LOG_LEVEL', () => {
-            assert.deepStrictEqual([...envVarMappings(joi.object({ log: logJoi })).keys()],
-                                   ['LOG_LEVEL', 'LOG_DUMP_LEVEL']);
+            assert.deepStrictEqual(
+                [...envVarMappings(joi.object({ log: logJoi })).keys()],
+                ['LOG_LEVEL', 'LOG_DUMP_LEVEL'],
+            );
         });
     });
 
     describe('mongo', () => {
         // the historic names of the fields, which their path does not derive
         it('should name the replica set fields as the entrypoint did', () => {
-            const names = [...envVarMappings(joi.object({
-                queuePopulator: joi.object({ mongo: mongoJoi.meta({ envVarAlias: 'MONGODB' }) }),
-            })).keys()];
+            const names = [
+                ...envVarMappings(
+                    joi.object({
+                        queuePopulator: joi.object({ mongo: mongoJoi.meta({ envVarAlias: 'MONGODB' }) }),
+                    }),
+                ).keys(),
+            ];
 
-            ['MONGODB_HOSTS', 'MONGODB_RS', 'MONGODB_AUTH_USERNAME', 'MONGODB_DATABASE']
-                .forEach(name => assert.ok(names.includes(name), `${name} in ${names.join(', ')}`));
+            ['MONGODB_HOSTS', 'MONGODB_RS', 'MONGODB_AUTH_USERNAME', 'MONGODB_DATABASE'].forEach(name =>
+                assert.ok(names.includes(name), `${name} in ${names.join(', ')}`),
+            );
         });
 
         it('should default the replica set hosts and the database', () => {
@@ -111,8 +119,10 @@ describe('config items schemas', () => {
         });
 
         it('should forbid the replica set of a sharded collection', () => {
-            assert.throws(() => joi.attempt({ shardCollections: true, replicaSet: 'rs0' }, mongoJoi),
-                          /"replicaSet" is not allowed/);
+            assert.throws(
+                () => joi.attempt({ shardCollections: true, replicaSet: 'rs0' }, mongoJoi),
+                /"replicaSet" is not allowed/,
+            );
         });
     });
 });

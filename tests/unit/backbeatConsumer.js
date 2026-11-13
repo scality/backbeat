@@ -41,11 +41,10 @@ describe('backbeatConsumer', () => {
             groupId: 'unittest-group',
             topic: 'my-test-topic',
         });
-        assert.strictEqual(consumer.consumerConfig['enable.auto.offset.store'],
-            false);
+        assert.strictEqual(consumer.consumerConfig['enable.auto.offset.store'], false);
         assert.strictEqual(consumer.consumerConfig['enable.auto.commit'], true);
     });
-    
+
     describe('pause/resume topic partitions on circuit breaker', () => {
         let consumer;
 
@@ -96,11 +95,13 @@ describe('backbeatConsumer', () => {
                 consumer._consumer.assignments = () => assignments;
 
                 consumer._pauseAssignments();
-                assert(consumer._consumer.pause.calledWithMatch([
-                    { topic: 'my-test-topic', partition: 0 },
-                    { topic: 'my-test-topic', partition: 1 },
-                    { topic: 'my-test-topic', partition: 2 },
-                ]));
+                assert(
+                    consumer._consumer.pause.calledWithMatch([
+                        { topic: 'my-test-topic', partition: 0 },
+                        { topic: 'my-test-topic', partition: 1 },
+                        { topic: 'my-test-topic', partition: 2 },
+                    ]),
+                );
             });
         });
 
@@ -130,11 +131,13 @@ describe('backbeatConsumer', () => {
                 ];
 
                 consumer._resumePausedPartitions();
-                assert(consumer._consumer.resume.calledWithMatch([
-                    { topic: 'my-test-topic', partition: 0 },
-                    { topic: 'my-test-topic', partition: 1 },
-                    { topic: 'my-test-topic', partition: 2 },
-                ]));
+                assert(
+                    consumer._consumer.resume.calledWithMatch([
+                        { topic: 'my-test-topic', partition: 0 },
+                        { topic: 'my-test-topic', partition: 1 },
+                        { topic: 'my-test-topic', partition: 2 },
+                    ]),
+                );
             });
         });
 
@@ -191,9 +194,7 @@ describe('backbeatConsumer', () => {
                 consume: sinon.stub(),
             };
             consumer._processingQueue = {
-                running: sinon.stub()
-                    .returns(0)
-                    .onFirstCall().returns(1),
+                running: sinon.stub().returns(0).onFirstCall().returns(1),
                 length: () => 0,
             };
             // consume() is called here but hangs as we never return
@@ -212,9 +213,7 @@ describe('backbeatConsumer', () => {
                 consume: sinon.stub().yields(null, [{}, {}]),
             };
             consumer._processingQueue = {
-                running: sinon.stub()
-                    .returns(0)
-                    .onFirstCall().returns(1),
+                running: sinon.stub().returns(0).onFirstCall().returns(1),
                 length: () => 0,
             };
             const tryConsumeSpy = sinon.spy(consumer, '_tryConsume');
@@ -233,9 +232,7 @@ describe('backbeatConsumer', () => {
                 consume: sinon.stub().yields(null, [{}, {}]),
             };
             consumer._processingQueue = {
-                running: sinon.stub()
-                    .returns(0)
-                    .onFirstCall().returns(1),
+                running: sinon.stub().returns(0).onFirstCall().returns(1),
                 length: () => 0,
             };
             const tryConsumeSpy = sinon.spy(consumer, '_tryConsume');
@@ -339,8 +336,8 @@ describe('backbeatConsumer', () => {
             {
                 // should take into account pending requests
                 state: {
-                    maxQueued : 10,
-                    concurrency : 10,
+                    maxQueued: 10,
+                    concurrency: 10,
                     processingQueue: {
                         length: () => 0,
                         running: () => 0,
@@ -348,11 +345,12 @@ describe('backbeatConsumer', () => {
                     nConsumePendingRequests: 5,
                 },
                 expectedSlots: 5,
-            },{
+            },
+            {
                 // should not exceed max running tasks
                 state: {
-                    maxQueued : 10,
-                    concurrency : 10,
+                    maxQueued: 10,
+                    concurrency: 10,
                     processingQueue: {
                         length: () => 0,
                         running: () => 9,
@@ -360,11 +358,12 @@ describe('backbeatConsumer', () => {
                     nConsumePendingRequests: 0,
                 },
                 expectedSlots: 1,
-            },{
+            },
+            {
                 // should not exceed max queued
                 state: {
-                    maxQueued : 10,
-                    concurrency : 10,
+                    maxQueued: 10,
+                    concurrency: 10,
                     processingQueue: {
                         length: () => 9,
                         running: () => 1,
@@ -372,11 +371,12 @@ describe('backbeatConsumer', () => {
                     nConsumePendingRequests: 0,
                 },
                 expectedSlots: 1,
-            },{
+            },
+            {
                 // should return 0 when exceeding max queued tasks
                 state: {
-                    maxQueued : 10,
-                    concurrency : 10,
+                    maxQueued: 10,
+                    concurrency: 10,
                     processingQueue: {
                         length: () => 12,
                         running: () => 1,
@@ -384,11 +384,12 @@ describe('backbeatConsumer', () => {
                     nConsumePendingRequests: 0,
                 },
                 expectedSlots: 0,
-            },{
+            },
+            {
                 // should return 0 when exceeding max running tasks
                 state: {
-                    maxQueued : 10,
-                    concurrency : 10,
+                    maxQueued: 10,
+                    concurrency: 10,
                     processingQueue: {
                         length: () => 3,
                         running: () => 13,
@@ -424,53 +425,56 @@ describe('backbeatConsumer', () => {
             });
             const config = consumer.consumerConfig;
             assert.strictEqual(config['security.protocol'], 'ssl');
-            assert.strictEqual(config['ssl.ca.location'],
-                '/kafka-certs/ca/ca.crt');
+            assert.strictEqual(config['ssl.ca.location'], '/kafka-certs/ca/ca.crt');
         });
 
         it('should reject critical built-in params via Joi', () => {
             assert.throws(
-                () => new BackbeatConsumerMock({
-                    kafka: {
-                        ...kafka,
-                        consumerParams: { 'group.id': 'hijacked-group' },
-                    },
-                    groupId: 'unittest-group',
-                    topic: 'my-test-topic',
-                }),
+                () =>
+                    new BackbeatConsumerMock({
+                        kafka: {
+                            ...kafka,
+                            consumerParams: { 'group.id': 'hijacked-group' },
+                        },
+                        groupId: 'unittest-group',
+                        topic: 'my-test-topic',
+                    }),
                 /group\.id/,
             );
             assert.throws(
-                () => new BackbeatConsumerMock({
-                    kafka: {
-                        ...kafka,
-                        consumerParams: { 'max.poll.interval.ms': 1000 },
-                    },
-                    groupId: 'unittest-group',
-                    topic: 'my-test-topic',
-                }),
+                () =>
+                    new BackbeatConsumerMock({
+                        kafka: {
+                            ...kafka,
+                            consumerParams: { 'max.poll.interval.ms': 1000 },
+                        },
+                        groupId: 'unittest-group',
+                        topic: 'my-test-topic',
+                    }),
                 /max\.poll\.interval\.ms/,
             );
             assert.throws(
-                () => new BackbeatConsumerMock({
-                    kafka: {
-                        ...kafka,
-                        consumerParams: { 'auto.offset.reset': 'latest' },
-                    },
-                    groupId: 'unittest-group',
-                    topic: 'my-test-topic',
-                }),
+                () =>
+                    new BackbeatConsumerMock({
+                        kafka: {
+                            ...kafka,
+                            consumerParams: { 'auto.offset.reset': 'latest' },
+                        },
+                        groupId: 'unittest-group',
+                        topic: 'my-test-topic',
+                    }),
                 /auto\.offset\.reset/,
             );
             assert.throws(
-                () => new BackbeatConsumerMock({
-                    kafka: {
-                        ...kafka,
-                        consumerParams: { 'enable.auto.commit': false },
-                    },
-                    groupId: 'unittest-group',
-                    topic: 'my-test-topic',
-                }),
+                () =>
+                    new BackbeatConsumerMock({
+                        kafka: {
+                            ...kafka,
+                            consumerParams: { 'enable.auto.commit': false },
+                        },
+                        groupId: 'unittest-group',
+                        topic: 'my-test-topic',
+                    }),
                 /enable\.auto\.commit/,
             );
         });
@@ -490,8 +494,7 @@ describe('backbeatConsumer', () => {
                 err = e;
             }
             assert(err, 'expected BackbeatConsumer to throw on invalid consumerParams key');
-            assert.match(err.message,
-                /No such configuration property: "not\.a\.valid\.librdkafka\.option"/);
+            assert.match(err.message, /No such configuration property: "not\.a\.valid\.librdkafka\.option"/);
         });
 
         it('should throw on out-of-range librdkafka consumerParams values', () => {
@@ -509,8 +512,7 @@ describe('backbeatConsumer', () => {
                 err = e;
             }
             assert(err, 'expected BackbeatConsumer to throw on out-of-range value');
-            assert.match(err.message,
-                /Configuration property "fetch\.min\.bytes" value -1 is outside allowed range/);
+            assert.match(err.message, /Configuration property "fetch\.min\.bytes" value -1 is outside allowed range/);
         });
 
         it('should default to empty consumerParams when not provided', () => {

@@ -2,8 +2,7 @@ const crypto = require('crypto');
 const { defaultConnectorName } = require('../constants');
 
 const nameHashLength = 8;
-const nameSuffixRegex = new RegExp(
-    `^(\\d+)-(\\d+)-([0-9a-f]{${nameHashLength}})$`);
+const nameSuffixRegex = new RegExp(`^(\\d+)-(\\d+)-([0-9a-f]{${nameHashLength}})$`);
 
 /**
  * Short hash of a connector pipeline

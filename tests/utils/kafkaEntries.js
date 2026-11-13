@@ -8,22 +8,22 @@ const replicationEntry = {
 
 const bucketProcessorEntry = {
     key: null,
-    value: '{"action":"processObjects","contextInfo":{"reqId":"5d37f38aef4b81d3b306"},"target":{"bucket":"bucket","owner":"48ff9529e073aeb075a00f6ba571638698f39cfa2778ebf0ac098da7030b11c5","accountId":"979878005795"},"details":{}}'
+    value: '{"action":"processObjects","contextInfo":{"reqId":"5d37f38aef4b81d3b306"},"target":{"bucket":"bucket","owner":"48ff9529e073aeb075a00f6ba571638698f39cfa2778ebf0ac098da7030b11c5","accountId":"979878005795"},"details":{}}',
 };
 
 const bucketProcessorV1Entry = {
     key: null,
-    value: '{"action":"processObjects","contextInfo":{"reqId":"5d37f38aef4b81d3b307"},"target":{"bucket":"v1-bucket","owner":"48ff9529e073aeb075a00f6ba571638698f39cfa2778ebf0ac098da7030b11c5","accountId":"979878005795","taskVersion":"v1"},"details":{}}'
+    value: '{"action":"processObjects","contextInfo":{"reqId":"5d37f38aef4b81d3b307"},"target":{"bucket":"v1-bucket","owner":"48ff9529e073aeb075a00f6ba571638698f39cfa2778ebf0ac098da7030b11c5","accountId":"979878005795","taskVersion":"v1"},"details":{}}',
 };
 
 const bucketProcessorV2Entry = {
     key: null,
-    value: '{"action":"processObjects","contextInfo":{"reqId":"5d37f38aef4b81d3b308"},"target":{"bucket":"v2-bucket","owner":"48ff9529e073aeb075a00f6ba571638698f39cfa2778ebf0ac098da7030b11c5","accountId":"979878005795","taskVersion":"v2"},"details":{}}'
+    value: '{"action":"processObjects","contextInfo":{"reqId":"5d37f38aef4b81d3b308"},"target":{"bucket":"v2-bucket","owner":"48ff9529e073aeb075a00f6ba571638698f39cfa2778ebf0ac098da7030b11c5","accountId":"979878005795","taskVersion":"v2"},"details":{}}',
 };
 
 module.exports = {
     replicationEntry,
     bucketProcessorEntry,
     bucketProcessorV1Entry,
-    bucketProcessorV2Entry
+    bucketProcessorV2Entry,
 };

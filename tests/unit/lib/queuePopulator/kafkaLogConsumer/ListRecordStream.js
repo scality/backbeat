@@ -2,10 +2,8 @@ const assert = require('assert');
 const sinon = require('sinon');
 const werelogs = require('werelogs');
 const logger = new werelogs.Logger('ListRecordStream');
-const ListRecordStream =
-    require('../../../../../lib/queuePopulator/KafkaLogConsumer/ListRecordStream');
-const KafkaLogConsumerMetrics =
-    require('../../../../../lib/queuePopulator/KafkaLogConsumer/KafkaLogConsumerMetrics');
+const ListRecordStream = require('../../../../../lib/queuePopulator/KafkaLogConsumer/ListRecordStream');
+const KafkaLogConsumerMetrics = require('../../../../../lib/queuePopulator/KafkaLogConsumer/KafkaLogConsumerMetrics');
 
 const changeStreamDocument = {
     ns: {
@@ -24,9 +22,9 @@ const changeStreamDocument = {
     },
     fullDocument: {
         value: {
-            field: 'value'
-        }
-    }
+            field: 'value',
+        },
+    },
 };
 const changeStreamDocumentUpdate = {
     ns: {
@@ -42,7 +40,8 @@ const changeStreamDocumentUpdate = {
             t: 1701270357,
             i: 1,
         },
-    },    updateDescription: {
+    },
+    updateDescription: {
         updatedFields: {
             value: {
                 field: 'value',
@@ -73,44 +72,45 @@ describe('ListRecordStream', () => {
             {
                 opType: 'insert',
                 md: {},
-                expected: 'put'
+                expected: 'put',
             },
             {
                 opType: 'update',
                 md: {
                     deleted: false,
                 },
-                expected: 'put'
+                expected: 'put',
             },
             {
                 opType: 'update',
                 md: {
                     deleted: true,
                 },
-                expected: 'delete'
+                expected: 'delete',
             },
             {
                 opType: 'replace',
                 md: {},
-                expected: 'put'
+                expected: 'put',
             },
             {
                 opType: 'delete',
                 md: undefined,
-                expected: 'delete'
+                expected: 'delete',
             },
             {
                 opType: 'unsupported',
                 md: undefined,
-                expected: undefined
-            }].forEach(params => {
-                const { opType, md, expected } = params;
-                it(`Should return correct operation type (${opType})`, done => {
-                    const type = listRecordStream._getType(opType, md);
-                    assert.strictEqual(type, expected);
-                    return done();
-                });
+                expected: undefined,
+            },
+        ].forEach(params => {
+            const { opType, md, expected } = params;
+            it(`Should return correct operation type (${opType})`, done => {
+                const type = listRecordStream._getType(opType, md);
+                assert.strictEqual(type, expected);
+                return done();
             });
+        });
     });
 
     describe('_transform', () => {
@@ -121,14 +121,16 @@ describe('ListRecordStream', () => {
                 assert.deepEqual(data, {
                     timestamp: new Date(kafkaMessage.timestamp),
                     db: 'example-bucket',
-                    entries: [{
-                        key: 'example-key',
-                        type: 'put',
-                        value: JSON.stringify({
-                            field: 'value'
-                        }),
-                        timestamp: '2023-11-29T15:05:57.000Z',
-                    }],
+                    entries: [
+                        {
+                            key: 'example-key',
+                            type: 'put',
+                            value: JSON.stringify({
+                                field: 'value',
+                            }),
+                            timestamp: '2023-11-29T15:05:57.000Z',
+                        },
+                    ],
                 });
                 return done();
             });
@@ -149,14 +151,16 @@ describe('ListRecordStream', () => {
                 assert.deepEqual(data, {
                     timestamp: new Date(kafkaMessage.timestamp),
                     db: 'example-bucket',
-                    entries: [{
-                        key: 'example-key',
-                        type: 'put',
-                        value: JSON.stringify({
-                            field: 'value'
-                        }),
-                        timestamp: '2023-11-29T15:05:57.000Z',
-                    }],
+                    entries: [
+                        {
+                            key: 'example-key',
+                            type: 'put',
+                            value: JSON.stringify({
+                                field: 'value',
+                            }),
+                            timestamp: '2023-11-29T15:05:57.000Z',
+                        },
+                    ],
                 });
                 return done();
             });
@@ -203,14 +207,16 @@ describe('ListRecordStream', () => {
                 assert.deepEqual(data, {
                     timestamp: new Date(kafkaMessage.timestamp),
                     db: 'example-bucket',
-                    entries: [{
-                        key: 'example-key',
-                        type: 'put',
-                        value: JSON.stringify({
-                            field: 'value'
-                        }),
-                        timestamp: '2023-11-29T15:05:57.000Z',
-                    }],
+                    entries: [
+                        {
+                            key: 'example-key',
+                            type: 'put',
+                            value: JSON.stringify({
+                                field: 'value',
+                            }),
+                            timestamp: '2023-11-29T15:05:57.000Z',
+                        },
+                    ],
                 });
                 return done();
             });

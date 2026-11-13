@@ -3,10 +3,7 @@
 const async = require('async');
 const { errors, versioning } = require('@scality/arsenal');
 const { ObjectMD } = require('@scality/arsenal').models;
-const {
-    LifecycleDateTime,
-    LifecycleUtils,
-} = require('@scality/arsenal').s3middleware.lifecycleHelpers;
+const { LifecycleDateTime, LifecycleUtils } = require('@scality/arsenal').s3middleware.lifecycleHelpers;
 const { CompareResult, MinHeap } = require('@scality/arsenal').algorithms.Heap;
 const {
     ListObjectsCommand,
@@ -40,25 +37,32 @@ function isExpectedSkip(error) {
     return error.metadata?.get(EXPECTED_SKIP) === true;
 }
 
-const errorTransitionInProgress = expectedSkip(errors.InternalError.
-    customizeDescription('transition is currently in progress'));
-const errorTransitionColdObject = expectedSkip(errors.InternalError.
-    customizeDescription('transitioning a cold object is forbidden'));
-const errorTransitionDeclaredColdObject = expectedSkip(errors.InternalError.
-    customizeDescription('transitioning an object declared as cold is forbidden'));
-const errorTransitionObjectOnSource = expectedSkip(errors.InternalError.
-    customizeDescription('transitioning an object still on the source location is forbidden'));
-const errorObjectTemporarilyRestored = expectedSkip(errors.InternalError.
-    customizeDescription('object temporarily restored'));
-const errorReplicationInProgress = expectedSkip(errors.InternalError.
-    customizeDescription('replication of the object is currently in progress'));
+const errorTransitionInProgress = expectedSkip(
+    errors.InternalError.customizeDescription('transition is currently in progress'),
+);
+const errorTransitionColdObject = expectedSkip(
+    errors.InternalError.customizeDescription('transitioning a cold object is forbidden'),
+);
+const errorTransitionDeclaredColdObject = expectedSkip(
+    errors.InternalError.customizeDescription('transitioning an object declared as cold is forbidden'),
+);
+const errorTransitionObjectOnSource = expectedSkip(
+    errors.InternalError.customizeDescription('transitioning an object still on the source location is forbidden'),
+);
+const errorObjectTemporarilyRestored = expectedSkip(
+    errors.InternalError.customizeDescription('object temporarily restored'),
+);
+const errorReplicationInProgress = expectedSkip(
+    errors.InternalError.customizeDescription('replication of the object is currently in progress'),
+);
 // Not an expected skip: the object will not transition until replication is retried
-const errorReplicationFailed = errors.InternalError.
-    customizeDescription('replication of the object has failed');
-const errorLocationPaused = expectedSkip(errors.InternalError.
-    customizeDescription('lifecycle events to location have been paused'));
-const errorCircuitBreakerTripped = expectedSkip(errors.Throttling.
-    customizeDescription('circuit breaker tripped, skipping action'));
+const errorReplicationFailed = errors.InternalError.customizeDescription('replication of the object has failed');
+const errorLocationPaused = expectedSkip(
+    errors.InternalError.customizeDescription('lifecycle events to location have been paused'),
+);
+const errorCircuitBreakerTripped = expectedSkip(
+    errors.Throttling.customizeDescription('circuit breaker tripped, skipping action'),
+);
 
 // Default max AWS limit is 1000 for both list objects and list object versions
 const MAX_KEYS = process.env.CI === 'true' ? 3 : 1000;
@@ -80,16 +84,19 @@ const MAX_RETRIES = 4;
 const MAX_RETRIES_TOTAL = CONCURRENCY_DEFAULT * MAX_RETRIES * 10;
 
 function attachArchiveInfoHeader(command) {
-    command.middlewareStack.add(next => async args => {
-        if (args.request && args.request.headers) {
-            // eslint-disable-next-line no-param-reassign
-            args.request.headers['x-amz-scal-archive-info'] = 'true';
-        }
-        return next(args);
-    }, {
-        step: 'build',
-        name: 'attachArchiveInfoHeader',
-    });
+    command.middlewareStack.add(
+        next => async args => {
+            if (args.request && args.request.headers) {
+                // eslint-disable-next-line no-param-reassign
+                args.request.headers['x-amz-scal-archive-info'] = 'true';
+            }
+            return next(args);
+        },
+        {
+            step: 'build',
+            name: 'attachArchiveInfoHeader',
+        },
+    );
 }
 
 /**
@@ -141,10 +148,7 @@ class LifecycleTask extends BackbeatTask {
     }
 
     setSupportedRules(supportedRules) {
-        this._lifecycleUtils = new LifecycleUtils(
-            supportedRules,
-            this._lifecycleDateTime
-        );
+        this._lifecycleUtils = new LifecycleUtils(supportedRules, this._lifecycleDateTime);
         this._supportedRules = supportedRules;
     }
 
@@ -222,14 +226,17 @@ class LifecycleTask extends BackbeatTask {
         // location (implemented during cold-storage epic), handle them separately
         this.kafkaBacklogMetrics.snapshotTopicOffsets(
             this.producer.getKafkaProducer(),
-            ReplicationAPI.getDataMoverTopic(), 'lifecycle', err => {
+            ReplicationAPI.getDataMoverTopic(),
+            'lifecycle',
+            err => {
                 if (err) {
                     log.error('error during snapshot of topic offsets', {
                         topic: ReplicationAPI.getDataMoverTopic(),
                         error: err.message,
                     });
                 }
-            });
+            },
+        );
     }
 
     /**
@@ -241,23 +248,22 @@ class LifecycleTask extends BackbeatTask {
     _sendObjectAction(entry, cb) {
         const location = entry.getAttribute('details.dataStoreName');
 
-        const shouldBreak = this.circuitBreakers.tripped(
-            'expiration',
-            location,
-            this.objectTasksTopic,
-        );
+        const shouldBreak = this.circuitBreakers.tripped('expiration', location, this.objectTasksTopic);
         if (shouldBreak) {
             process.nextTick(() => cb(errorCircuitBreakerTripped));
             return;
         }
 
-        LifecycleMetrics.onLifecycleTriggered(this.log, 'bucket',
+        LifecycleMetrics.onLifecycleTriggered(
+            this.log,
+            'bucket',
             entry.getActionType() === 'deleteMPU' ? 'expiration:mpu' : 'expiration',
             location,
-            Date.now() - entry.getAttribute('transitionTime'));
+            Date.now() - entry.getAttribute('transitionTime'),
+        );
 
         const entries = [stampTraceHeaders({ message: entry.toKafkaMessage() })];
-        this.producer.sendToTopic(this.objectTasksTopic, entries,  err => {
+        this.producer.sendToTopic(this.objectTasksTopic, entries, err => {
             LifecycleMetrics.onKafkaPublish(null, 'ObjectTopic', 'bucket', err, 1);
             return cb(err);
         });
@@ -283,46 +289,49 @@ class LifecycleTask extends BackbeatTask {
 
         const command = new ListObjectsCommand(params);
         attachReqUids(command, log.getSerializedUids());
-        async.waterfall([
-            next => this.s3target.send(command)
-                .then(data => {
-                    LifecycleMetrics.onS3Request(log, 'listObjects', 'bucket', null);
-                    return next(null, data);
-                })
-                .catch(err => {
-                    LifecycleMetrics.onS3Request(log, 'listObjects', 'bucket', err);
-                    log.error('error listing bucket objects', {
-                        method: 'LifecycleTask._getObjectList',
-                        error: err,
-                        bucket: params.Bucket,
-                    });
-                    return next(err);
-                }),
-            (data, next) => {
-                const contents = data.Contents || [];
-                if (data.IsTruncated && nbRetries === 0) {
-                    // re-queue to Kafka topic bucketTasksTopic
-                    // with bucket name and `data.marker` only once.
-                    let marker = data.NextMarker;
-                    if (!marker && contents.length > 0) {
-                        marker = contents[contents.length - 1].Key;
-                    }
+        async.waterfall(
+            [
+                next =>
+                    this.s3target
+                        .send(command)
+                        .then(data => {
+                            LifecycleMetrics.onS3Request(log, 'listObjects', 'bucket', null);
+                            return next(null, data);
+                        })
+                        .catch(err => {
+                            LifecycleMetrics.onS3Request(log, 'listObjects', 'bucket', err);
+                            log.error('error listing bucket objects', {
+                                method: 'LifecycleTask._getObjectList',
+                                error: err,
+                                bucket: params.Bucket,
+                            });
+                            return next(err);
+                        }),
+                (data, next) => {
+                    const contents = data.Contents || [];
+                    if (data.IsTruncated && nbRetries === 0) {
+                        // re-queue to Kafka topic bucketTasksTopic
+                        // with bucket name and `data.marker` only once.
+                        let marker = data.NextMarker;
+                        if (!marker && contents.length > 0) {
+                            marker = contents[contents.length - 1].Key;
+                        }
 
-                    const entry = this._makeContinuationEntry(bucketData, log, { marker });
-                    this._sendBucketEntry(entry, err => {
-                        if (!err) {
-                            log.debug(
-                                'sent kafka entry for bucket consumption', {
+                        const entry = this._makeContinuationEntry(bucketData, log, { marker });
+                        this._sendBucketEntry(entry, err => {
+                            if (!err) {
+                                log.debug('sent kafka entry for bucket consumption', {
                                     method: 'LifecycleTask._getObjectList',
                                 });
-                        }
-                    });
-                }
+                            }
+                        });
+                    }
 
-                this._compareRulesToList(bucketData, bucketLCRules,
-                    contents, log, 'Disabled', next);
-            },
-        ], done);
+                    this._compareRulesToList(bucketData, bucketLCRules, contents, log, 'Disabled', next);
+                },
+            ],
+            done,
+        );
     }
 
     /**
@@ -440,8 +449,7 @@ class LifecycleTask extends BackbeatTask {
     _getObjectVersions(bucketData, bucketLCRules, versioningStatus, nbRetries, log, done) {
         const paramDetails = {};
 
-        if (bucketData.details.versionIdMarker &&
-        bucketData.details.keyMarker) {
+        if (bucketData.details.versionIdMarker && bucketData.details.keyMarker) {
             paramDetails.KeyMarker = bucketData.details.keyMarker;
             paramDetails.VersionIdMarker = bucketData.details.versionIdMarker;
         }
@@ -453,14 +461,15 @@ class LifecycleTask extends BackbeatTask {
             }
             // all versions including delete markers
             const { error, sortedList: allVersions } = this._mergeSortedVersionsAndDeleteMarkers(
-                data.Versions || [], data.DeleteMarkers || [], log,
+                data.Versions || [],
+                data.DeleteMarkers || [],
+                log,
             );
             if (error) {
                 return done(error);
             }
             // for all versions and delete markers, add stale date property
-            const allVersionsWithStaleDate = this._addStaleDateToVersions(
-                bucketData.details, allVersions);
+            const allVersionsWithStaleDate = this._addStaleDateToVersions(bucketData.details, allVersions);
 
             // create Set of unique keys not matching the next marker to
             // indicate the object level entries to be cleared at the end
@@ -485,8 +494,7 @@ class LifecycleTask extends BackbeatTask {
                 });
                 this._sendBucketEntry(entry, err => {
                     if (!err) {
-                        log.debug('sent kafka entry for bucket ' +
-                        'consumption', {
+                        log.debug('sent kafka entry for bucket consumption', {
                             method: 'LifecycleTask._getObjectVersions',
                         });
                     }
@@ -503,8 +511,12 @@ class LifecycleTask extends BackbeatTask {
             // bucket rules, match with `staleDate` to
             // NoncurrentVersionExpiration Days and send expiration if
             // rules all apply
-            return this._compareRulesToList(bucketData, bucketLCRules,
-                allVersionsWithStaleDate, log, versioningStatus,
+            return this._compareRulesToList(
+                bucketData,
+                bucketLCRules,
+                allVersionsWithStaleDate,
+                log,
+                versioningStatus,
                 err => {
                     if (err) {
                         return done(err);
@@ -516,14 +528,12 @@ class LifecycleTask extends BackbeatTask {
                         this._ncvHeapBucketClear(bucketData.target.bucket);
                     } else {
                         // clear object level entries that have been processed
-                        this._ncvHeapObjectsClear(
-                            bucketData.target.bucket,
-                            uniqueObjectKeysNotNextMarker
-                        );
+                        this._ncvHeapObjectsClear(bucketData.target.bucket, uniqueObjectKeysNotNextMarker);
                     }
 
                     return done();
-                });
+                },
+            );
         });
     }
 
@@ -540,50 +550,53 @@ class LifecycleTask extends BackbeatTask {
     _getMPUs(bucketData, bucketLCRules, params, nbRetries, log, done) {
         const command = new ListMultipartUploadsCommand(params);
         attachReqUids(command, log.getSerializedUids());
-        async.waterfall([
-            next => this.s3target.send(command)
-                .then(data => {
-                    LifecycleMetrics.onS3Request(log, 'listMultipartUploads', 'bucket', null);
-                    return next(null, data);
-                })
-                .catch(err => {
-                    LifecycleMetrics.onS3Request(log, 'listMultipartUploads', 'bucket', err);
-                    log.error('error checking buckets MPUs', {
-                        method: 'LifecycleTask._getMPUs',
-                        error: err,
-                        bucket: params.Bucket,
-                    });
-                    return next(err);
-                }),
-            (data, next) => {
-                if (data.IsTruncated && nbRetries === 0) {
-                    // re-queue to kafka with `NextUploadIdMarker` &
-                    // `NextKeyMarker` only once.
-                    const entry = this._makeContinuationEntry(bucketData, log, {
-                        keyMarker: data.NextKeyMarker,
-                        uploadIdMarker: data.NextUploadIdMarker,
-                    });
-                    return this._sendBucketEntry(entry, err => {
-                        if (!err) {
-                            log.debug(
-                                'sent kafka entry for bucket consumption', {
+        async.waterfall(
+            [
+                next =>
+                    this.s3target
+                        .send(command)
+                        .then(data => {
+                            LifecycleMetrics.onS3Request(log, 'listMultipartUploads', 'bucket', null);
+                            return next(null, data);
+                        })
+                        .catch(err => {
+                            LifecycleMetrics.onS3Request(log, 'listMultipartUploads', 'bucket', err);
+                            log.error('error checking buckets MPUs', {
+                                method: 'LifecycleTask._getMPUs',
+                                error: err,
+                                bucket: params.Bucket,
+                            });
+                            return next(err);
+                        }),
+                (data, next) => {
+                    if (data.IsTruncated && nbRetries === 0) {
+                        // re-queue to kafka with `NextUploadIdMarker` &
+                        // `NextKeyMarker` only once.
+                        const entry = this._makeContinuationEntry(bucketData, log, {
+                            keyMarker: data.NextKeyMarker,
+                            uploadIdMarker: data.NextUploadIdMarker,
+                        });
+                        return this._sendBucketEntry(entry, err => {
+                            if (!err) {
+                                log.debug('sent kafka entry for bucket consumption', {
                                     method: 'LifecycleTask._getMPUs',
                                 });
-                        }
-                        return next(null, data);
-                    });
+                            }
+                            return next(null, data);
+                        });
+                    }
+                    return process.nextTick(() => next(null, data));
+                },
+            ],
+            (err, data) => {
+                if (err) {
+                    return done(err);
                 }
-                return process.nextTick(() => next(null, data));
-            },
-        ], (err, data) => {
-            if (err) {
-                return done(err);
-            }
 
-            this._compareMPUUploads(bucketData, bucketLCRules,
-                data.Uploads || [], log);
-            return done();
-        });
+                this._compareMPUUploads(bucketData, bucketLCRules, data.Uploads || [], log);
+                return done();
+            },
+        );
     }
 
     /** _decodeVID - decode the version id
@@ -637,8 +650,7 @@ class LifecycleTask extends BackbeatTask {
                 sortedList.push(versions[vIdx++]);
             } else if (versions[vIdx].Key !== deleteMarkers[dmIdx].Key) {
                 // 1. by Key name, alphabetical order sorted by ascii values
-                const isVKeyNewer = (versions[vIdx].Key <
-                    deleteMarkers[dmIdx].Key);
+                const isVKeyNewer = versions[vIdx].Key < deleteMarkers[dmIdx].Key;
                 if (isVKeyNewer) {
                     sortedList.push(versions[vIdx++]);
                 } else {
@@ -658,8 +670,8 @@ class LifecycleTask extends BackbeatTask {
                     sortedList.push(deleteMarkers[dmIdx++]);
                 } else {
                     // If the version and the delete marker have the same last modified date
-                    const nullVersion = (versions[vIdx].VersionId === 'null'
-                    || deleteMarkers[dmIdx].VersionId === 'null');
+                    const nullVersion =
+                        versions[vIdx].VersionId === 'null' || deleteMarkers[dmIdx].VersionId === 'null';
                     // and either of them is a null version, we cannot decode the version ID,
                     // so we push the version object onto the sorted list first.
                     if (nullVersion) {
@@ -672,14 +684,18 @@ class LifecycleTask extends BackbeatTask {
                         // and the position of the request in that millisecond.
                         // This means that two version IDs with the same last modified date can be sorted,
                         // because the position of the request is also included in the version ID.
-                        const { error: decodeVidError, decodedVersionId } =
-                            this._decodeVID(versions[vIdx].VersionId, log);
+                        const { error: decodeVidError, decodedVersionId } = this._decodeVID(
+                            versions[vIdx].VersionId,
+                            log,
+                        );
                         if (decodeVidError) {
                             return { error: decodeVidError, sortedList: null };
                         }
 
-                        const { error: decodedDMError, decodedVersionId: decodedDMId } =
-                            this._decodeVID(deleteMarkers[dmIdx].VersionId, log);
+                        const { error: decodedDMError, decodedVersionId: decodedDMId } = this._decodeVID(
+                            deleteMarkers[dmIdx].VersionId,
+                            log,
+                        );
                         if (decodedDMError) {
                             return { error: decodedDMError, sortedList: null };
                         }
@@ -719,8 +735,7 @@ class LifecycleTask extends BackbeatTask {
                 dupe.staleDate = undefined;
             } else if (i === 0) {
                 // first item in list. bucket details may apply
-                dupe.staleDate = (bucketDetails.keyMarker === dupe.Key) ?
-                    bucketDetails.prevDate : undefined;
+                dupe.staleDate = bucketDetails.keyMarker === dupe.Key ? bucketDetails.prevDate : undefined;
             } else {
                 dupe.staleDate = list[i - 1].LastModified;
             }
@@ -755,7 +770,8 @@ class LifecycleTask extends BackbeatTask {
 
         const command = new ListObjectVersionsCommand(params);
         attachReqUids(command, log.getSerializedUids());
-        this.s3target.send(command)
+        this.s3target
+            .send(command)
             .then(data => {
                 LifecycleMetrics.onS3Request(log, 'listObjectVersions', 'bucket', null);
                 return cb(null, data);
@@ -783,9 +799,7 @@ class LifecycleTask extends BackbeatTask {
                 return false;
             }
 
-            const tags = rule.Filter.And
-                ? rule.Filter.And.Tags
-                : (rule.Filter.Tag && [rule.Filter.Tag]);
+            const tags = rule.Filter.And ? rule.Filter.And.Tags : rule.Filter.Tag && [rule.Filter.Tag];
             return tags && tags.length > 0;
         });
     }
@@ -808,7 +822,8 @@ class LifecycleTask extends BackbeatTask {
 
         const command = new GetObjectTaggingCommand(tagParams);
         attachReqUids(command, log.getSerializedUids());
-        return this.s3target.send(command)
+        return this.s3target
+            .send(command)
             .then(tags => {
                 LifecycleMetrics.onS3Request(log, 'getObjectTagging', 'bucket', null);
                 return cb(null, tags);
@@ -892,8 +907,7 @@ class LifecycleTask extends BackbeatTask {
             // since in-progress MPUs are beeing handled separetly prior to this checks.
         }
 
-        if (rule.Transitions && rule.Transitions.length > 0
-            && this._supportedRules.includes('Transition')) {
+        if (rule.Transitions && rule.Transitions.length > 0 && this._supportedRules.includes('Transition')) {
             return rule.Transitions.some(t => {
                 if (t.Days !== undefined && daysSinceInitiated >= t.Days) {
                     return true;
@@ -920,12 +934,9 @@ class LifecycleTask extends BackbeatTask {
      */
     _isEntityEligible(rules, entity, versioningStatus) {
         const currentDate = this._lifecycleDateTime.getCurrentDate();
-        const daysSinceInitiated = this._lifecycleDateTime.findDaysSince(
-            new Date(entity.LastModified)
-        );
+        const daysSinceInitiated = this._lifecycleDateTime.findDaysSince(new Date(entity.LastModified));
         const { staleDate } = entity;
-        const daysSinceStaled = staleDate ?
-            this._lifecycleDateTime.findDaysSince(new Date(staleDate)) : null;
+        const daysSinceStaled = staleDate ? this._lifecycleDateTime.findDaysSince(new Date(staleDate)) : null;
 
         // Always eligible if object is a current version delete marker because
         // it requires extra s3 call (list versions).
@@ -949,18 +960,23 @@ class LifecycleTask extends BackbeatTask {
                     return true;
                 }
 
-                if (rule.NoncurrentVersionExpiration
-                    && this._supportedRules.includes('NoncurrentVersionExpiration')) {
-                    if (rule.NoncurrentVersionExpiration.NoncurrentDays !== undefined &&
-                    daysSinceStaled >= rule.NoncurrentVersionExpiration.NoncurrentDays) {
+                if (rule.NoncurrentVersionExpiration && this._supportedRules.includes('NoncurrentVersionExpiration')) {
+                    if (
+                        rule.NoncurrentVersionExpiration.NoncurrentDays !== undefined &&
+                        daysSinceStaled >= rule.NoncurrentVersionExpiration.NoncurrentDays
+                    ) {
                         return true;
                     }
                 }
 
-                if (rule.NoncurrentVersionTransitions && rule.NoncurrentVersionTransitions.length > 0
-                    && this._supportedRules.includes('NoncurrentVersionTransition')) {
-                    return rule.NoncurrentVersionTransitions.some(t =>
-                        (t.NoncurrentDays !== undefined && daysSinceInitiated >= t.NoncurrentDays));
+                if (
+                    rule.NoncurrentVersionTransitions &&
+                    rule.NoncurrentVersionTransitions.length > 0 &&
+                    this._supportedRules.includes('NoncurrentVersionTransition')
+                ) {
+                    return rule.NoncurrentVersionTransitions.some(
+                        t => t.NoncurrentDays !== undefined && daysSinceInitiated >= t.NoncurrentDays,
+                    );
                 }
 
                 return false;
@@ -969,7 +985,6 @@ class LifecycleTask extends BackbeatTask {
             return this._isRuleApplying(rule, daysSinceInitiated, currentDate);
         });
     }
-
 
     /**
      * Get rules and compare with each object or version
@@ -981,52 +996,68 @@ class LifecycleTask extends BackbeatTask {
      * @param {function} done - callback(error, data)
      * @return {undefined}
      */
-    _compareRulesToList(bucketData, lcRules, contents, log, versioningStatus,
-        done) {
+    _compareRulesToList(bucketData, lcRules, contents, log, versioningStatus, done) {
         if (!contents.length) {
             return done();
         }
-        return async.eachLimit(contents, CONCURRENCY_DEFAULT, (obj, cb) => {
-            const eligible =
-                this._isEntityEligible(lcRules, obj, versioningStatus);
-            if (!eligible) {
-                log.debug('entity is not eligible for lifecycle', {
-                    bucket: bucketData.target.bucket,
-                    key: obj.Key,
-                    versionId: obj.VersionId,
-                    isLatest: obj.IsLatest,
-                    lastModified: obj.LastModified,
-                    staleDate: obj.staleDate,
-                    versioningStatus,
-                });
-                return process.nextTick(cb);
-            }
+        return async.eachLimit(
+            contents,
+            CONCURRENCY_DEFAULT,
+            (obj, cb) => {
+                const eligible = this._isEntityEligible(lcRules, obj, versioningStatus);
+                if (!eligible) {
+                    log.debug('entity is not eligible for lifecycle', {
+                        bucket: bucketData.target.bucket,
+                        key: obj.Key,
+                        versionId: obj.VersionId,
+                        isLatest: obj.IsLatest,
+                        lastModified: obj.LastModified,
+                        staleDate: obj.staleDate,
+                        versioningStatus,
+                    });
+                    return process.nextTick(cb);
+                }
 
-            // We don't want to retry the _whole_ list if only a single entry fails,
-            // so we possibly retry each individual entry here, and ignore errors.
-            // Ignoring error is not too bad, the entry will be picked up again on
-            // next lifecycle run
-            return this._retryEntry({
-                logFields: {
-                    key: obj.Key,
-                    versionId: obj.VersionId,
-                    staleDate: obj.staleDate,
-                    versioningStatus,
-                },
-                log,
-                actionFunc: done => async.waterfall([
-                    next => this._getRules(bucketData, lcRules, obj, log, next),
-                    (applicableRules, next) => {
-                        if (versioningStatus === 'Enabled' || versioningStatus === 'Suspended') {
-                            return this._compareVersion(bucketData, obj, contents,
-                                applicableRules, versioningStatus, log, next);
-                        }
-                        return this._compareObject(bucketData, obj, applicableRules, log,
-                            next);
+                // We don't want to retry the _whole_ list if only a single entry fails,
+                // so we possibly retry each individual entry here, and ignore errors.
+                // Ignoring error is not too bad, the entry will be picked up again on
+                // next lifecycle run
+                return this._retryEntry(
+                    {
+                        logFields: {
+                            key: obj.Key,
+                            versionId: obj.VersionId,
+                            staleDate: obj.staleDate,
+                            versioningStatus,
+                        },
+                        log,
+                        actionFunc: done =>
+                            async.waterfall(
+                                [
+                                    next => this._getRules(bucketData, lcRules, obj, log, next),
+                                    (applicableRules, next) => {
+                                        if (versioningStatus === 'Enabled' || versioningStatus === 'Suspended') {
+                                            return this._compareVersion(
+                                                bucketData,
+                                                obj,
+                                                contents,
+                                                applicableRules,
+                                                versioningStatus,
+                                                log,
+                                                next,
+                                            );
+                                        }
+                                        return this._compareObject(bucketData, obj, applicableRules, log, next);
+                                    },
+                                ],
+                                done,
+                            ),
                     },
-                ], done),
-            }, cb);
-        }, done);
+                    cb,
+                );
+            },
+            done,
+        );
     }
 
     /**
@@ -1042,22 +1073,25 @@ class LifecycleTask extends BackbeatTask {
      */
     _retryEntry(params, cb) {
         const { actionFunc, log, logFields } = params;
-        this.retry({
-            actionDesc: 'compare rules lifecycle entry',
-            logFields,
-            log,
-            actionFunc,
-            maxRetries: MAX_RETRIES, // override maximum number of retries
-            shouldRetryFunc: err => err.retryable && this._totalRetries < MAX_RETRIES_TOTAL,
-            onRetryFunc: () => this._totalRetries++,
-        }, () => {
-            // To maintain consistency with the flow logic of LifecycleTask, no
-            // errors will be returned from the callback.
-            // This ensures that any failures during the looping process through
-            // the keys (as seen in _compareRulesToList()) will not cause a
-            // break in the loop.
-            cb();
-        });
+        this.retry(
+            {
+                actionDesc: 'compare rules lifecycle entry',
+                logFields,
+                log,
+                actionFunc,
+                maxRetries: MAX_RETRIES, // override maximum number of retries
+                shouldRetryFunc: err => err.retryable && this._totalRetries < MAX_RETRIES_TOTAL,
+                onRetryFunc: () => this._totalRetries++,
+            },
+            () => {
+                // To maintain consistency with the flow logic of LifecycleTask, no
+                // errors will be returned from the callback.
+                // This ensures that any failures during the looping process through
+                // the keys (as seen in _compareRulesToList()) will not cause a
+                // break in the loop.
+                cb();
+            },
+        );
     }
 
     /**
@@ -1087,13 +1121,10 @@ class LifecycleTask extends BackbeatTask {
      *   (i.e. transition) should not apply.
      */
     _checkAndApplyExpirationRule(bucketData, obj, rules, log) {
-        const daysSinceInitiated = this._lifecycleDateTime.findDaysSince(
-            new Date(obj.LastModified)
-        );
+        const daysSinceInitiated = this._lifecycleDateTime.findDaysSince(new Date(obj.LastModified));
         const currentDate = this._lifecycleDateTime.getCurrentDate();
 
-        if (rules.Expiration.Date &&
-            rules.Expiration.Date < currentDate) {
+        if (rules.Expiration.Date && rules.Expiration.Date < currentDate) {
             // expiration date passed for this object
             const entry = ActionQueueEntry.create('deleteObject')
                 .addContext(this._getActionContext(bucketData, log, 'expiration'))
@@ -1103,22 +1134,26 @@ class LifecycleTask extends BackbeatTask {
                 .setAttribute('target.key', obj.Key)
                 .setAttribute('details.lastModified', obj.LastModified)
                 .setAttribute('details.dataStoreName', obj.StorageClass || '')
-                .setAttribute('transitionTime',
-                    this._lifecycleDateTime.getTransitionTimestamp(
-                        rules.Expiration, obj.LastModified)
+                .setAttribute(
+                    'transitionTime',
+                    this._lifecycleDateTime.getTransitionTimestamp(rules.Expiration, obj.LastModified),
                 );
             this._sendObjectAction(entry, err => {
                 if (!err) {
-                    log.debug('sent object entry for consumption',
-                    Object.assign({
-                        method: 'LifecycleTask._checkAndApplyExpirationRule',
-                    }, entry.getLogInfo()));
+                    log.debug(
+                        'sent object entry for consumption',
+                        Object.assign(
+                            {
+                                method: 'LifecycleTask._checkAndApplyExpirationRule',
+                            },
+                            entry.getLogInfo(),
+                        ),
+                    );
                 }
             });
             return true;
         }
-        if (rules.Expiration.Days !== undefined &&
-            daysSinceInitiated >= rules.Expiration.Days) {
+        if (rules.Expiration.Days !== undefined && daysSinceInitiated >= rules.Expiration.Days) {
             const entry = ActionQueueEntry.create('deleteObject')
                 .addContext(this._getActionContext(bucketData, log, 'expiration'))
                 .setAttribute('target.owner', bucketData.target.owner)
@@ -1127,16 +1162,21 @@ class LifecycleTask extends BackbeatTask {
                 .setAttribute('target.key', obj.Key)
                 .setAttribute('details.lastModified', obj.LastModified)
                 .setAttribute('details.dataStoreName', obj.StorageClass || '')
-                .setAttribute('transitionTime',
-                    this._lifecycleDateTime.getTransitionTimestamp(
-                        rules.Expiration, obj.LastModified)
+                .setAttribute(
+                    'transitionTime',
+                    this._lifecycleDateTime.getTransitionTimestamp(rules.Expiration, obj.LastModified),
                 );
             this._sendObjectAction(entry, err => {
                 if (!err) {
-                    log.debug('sent object entry for consumption',
-                    Object.assign({
-                        method: 'LifecycleTask._checkAndApplyExpirationRule',
-                    }, entry.getLogInfo()));
+                    log.debug(
+                        'sent object entry for consumption',
+                        Object.assign(
+                            {
+                                method: 'LifecycleTask._checkAndApplyExpirationRule',
+                            },
+                            entry.getLogInfo(),
+                        ),
+                    );
                 }
             });
             return true;
@@ -1182,7 +1222,8 @@ class LifecycleTask extends BackbeatTask {
     }
 
     _canUnconditionallyGarbageCollect(objectMD) {
-        const sourceEndpoint = config.getBootstrapList()
+        const sourceEndpoint = config
+            .getBootstrapList()
             .find(endpoint => endpoint.site === objectMD.getDataStoreName());
         // Is it a local data source?
         if (!sourceEndpoint) {
@@ -1225,13 +1266,12 @@ class LifecycleTask extends BackbeatTask {
             return cb(null, entry);
         }
         const locations = objectMD.getLocation();
-        return this._headLocation(params, locations, log,
-            (err, lastModified) => {
-                if (err) {
-                    return cb(err);
-                }
-                entry.setAttribute('source.lastModified', lastModified);
-                return cb(null, entry);
+        return this._headLocation(params, locations, log, (err, lastModified) => {
+            if (err) {
+                return cb(err);
+            }
+            entry.setAttribute('source.lastModified', lastModified);
+            return cb(null, entry);
         });
     }
 
@@ -1253,144 +1293,147 @@ class LifecycleTask extends BackbeatTask {
      * @return {undefined}
      */
     _applyTransitionRule(params, log, cb) {
-        async.waterfall([
-            next => {
-                // No transition if lifecycle events to location were paused
-                if (this.pausedLocations.has(params.site)) {
-                    return next(errorLocationPaused);
-                }
-                const topic = ReplicationAPI.getDataMoverTopicPerLocation(params.site);
-                const shouldBreak = this.circuitBreakers.tripped(
-                    'transition',
-                    params.site,
-                    topic,
-                );
-                if (shouldBreak) {
-                    return next(errorCircuitBreakerTripped);
-                }
-                return next();
-            },
-            next =>
-                this._getObjectMD(params, log, (err, objectMD) => {
-                    LifecycleMetrics.onS3Request(log, 'getMetadata', 'bucket', err);
-                    return next(err, objectMD);
-                }),
-            (objectMD, next) => {
-                // No transition when replication is ongoing or failed
-                const replicationStatus = objectMD.getReplicationStatus();
-                if (['PENDING', 'PROCESSING'].includes(replicationStatus)) {
-                    return next(errorReplicationInProgress);
-                }
-                if (replicationStatus === 'FAILED') {
-                    return next(errorReplicationFailed);
-                }
-                const dataStoreName = objectMD.getDataStoreName();
-                const locationConfig = (dataStoreName && locationsConfig[dataStoreName]) || {};
-                // We do not transition cold objects
-                if (locationConfig.isCold) {
-                    return next(errorTransitionColdObject);
-                }
-                // Skip direct-to-cold objects, whose transition is triggered by the queue
-                // populator and require the transition in progress flag to be set
-                if (locationsConfig[objectMD.getAmzStorageClass()]?.isCold) {
-                    return next(errorTransitionDeclaredColdObject);
-                }
-                // Data still on the source location: data has not been pulled yet, so cannot
-                // transition at this point.
-                if (locationConfig.isCRR) {
-                    return next(errorTransitionObjectOnSource);
-                }
-                // If transition is in progress, do not re-publish entry
-                // to data-mover or cold-archive topic.
-                if (objectMD.getTransitionInProgress()) {
-                    return next(errorTransitionInProgress);
-                }
+        async.waterfall(
+            [
+                next => {
+                    // No transition if lifecycle events to location were paused
+                    if (this.pausedLocations.has(params.site)) {
+                        return next(errorLocationPaused);
+                    }
+                    const topic = ReplicationAPI.getDataMoverTopicPerLocation(params.site);
+                    const shouldBreak = this.circuitBreakers.tripped('transition', params.site, topic);
+                    if (shouldBreak) {
+                        return next(errorCircuitBreakerTripped);
+                    }
+                    return next();
+                },
+                next =>
+                    this._getObjectMD(params, log, (err, objectMD) => {
+                        LifecycleMetrics.onS3Request(log, 'getMetadata', 'bucket', err);
+                        return next(err, objectMD);
+                    }),
+                (objectMD, next) => {
+                    // No transition when replication is ongoing or failed
+                    const replicationStatus = objectMD.getReplicationStatus();
+                    if (['PENDING', 'PROCESSING'].includes(replicationStatus)) {
+                        return next(errorReplicationInProgress);
+                    }
+                    if (replicationStatus === 'FAILED') {
+                        return next(errorReplicationFailed);
+                    }
+                    const dataStoreName = objectMD.getDataStoreName();
+                    const locationConfig = (dataStoreName && locationsConfig[dataStoreName]) || {};
+                    // We do not transition cold objects
+                    if (locationConfig.isCold) {
+                        return next(errorTransitionColdObject);
+                    }
+                    // Skip direct-to-cold objects, whose transition is triggered by the queue
+                    // populator and require the transition in progress flag to be set
+                    if (locationsConfig[objectMD.getAmzStorageClass()]?.isCold) {
+                        return next(errorTransitionDeclaredColdObject);
+                    }
+                    // Data still on the source location: data has not been pulled yet, so cannot
+                    // transition at this point.
+                    if (locationConfig.isCRR) {
+                        return next(errorTransitionObjectOnSource);
+                    }
+                    // If transition is in progress, do not re-publish entry
+                    // to data-mover or cold-archive topic.
+                    if (objectMD.getTransitionInProgress()) {
+                        return next(errorTransitionInProgress);
+                    }
 
-                // If object is temporarily restored, don't try
-                // to transition it again.
-                const archive = objectMD.getArchive();
-                if (archive && archive.restoreCompletedAt) {
-                    return next(errorObjectTemporarilyRestored);
-                }
+                    // If object is temporarily restored, don't try
+                    // to transition it again.
+                    const archive = objectMD.getArchive();
+                    if (archive && archive.restoreCompletedAt) {
+                        return next(errorObjectTemporarilyRestored);
+                    }
 
-                return this._getTransitionActionEntry(params, objectMD, log, (err, entry) =>
-                    next(err, entry, objectMD));
-            },
-            (entry, objectMD, next) => {
-                const locationName = params.site;
-                const isCold = locationsConfig[locationName]?.isCold;
-                LifecycleMetrics.onLifecycleTriggered(this.log, 'bucket',
-                    isCold ? 'archive' : 'transition',
-                    locationName, Date.now() - params.transitionTime);
-                return ReplicationAPI.sendDataMoverAction(this.producer, entry, log,
-                    err => next(err));
-            },
-            next =>
-                // Refresh metadata to minimize risk of race condition on ObjectMD update
-                // c.f. https://scality.atlassian.net/browse/ARSN-341
-                this._getObjectMD(params, log, (err, objectMD) => {
-                    LifecycleMetrics.onS3Request(log, 'getMetadata', 'bucket', err);
-                    return next(err, objectMD);
-                }),
-            (objectMD, next) => {
-                const dataStoreName = objectMD.getDataStoreName();
-                if (params.site === dataStoreName) {
-                    // If the object is in "target" location, it means the transition has already
-                    // completed, which may happen since we push the message to kafka before
-                    // updating metadata: we must thus simply skip the metadata update, which would
-                    // end up leaving the transition-in-progress flag forever.
-                    log.info('object already transitioned', {
+                    return this._getTransitionActionEntry(params, objectMD, log, (err, entry) =>
+                        next(err, entry, objectMD),
+                    );
+                },
+                (entry, objectMD, next) => {
+                    const locationName = params.site;
+                    const isCold = locationsConfig[locationName]?.isCold;
+                    LifecycleMetrics.onLifecycleTriggered(
+                        this.log,
+                        'bucket',
+                        isCold ? 'archive' : 'transition',
+                        locationName,
+                        Date.now() - params.transitionTime,
+                    );
+                    return ReplicationAPI.sendDataMoverAction(this.producer, entry, log, err => next(err));
+                },
+                next =>
+                    // Refresh metadata to minimize risk of race condition on ObjectMD update
+                    // c.f. https://scality.atlassian.net/browse/ARSN-341
+                    this._getObjectMD(params, log, (err, objectMD) => {
+                        LifecycleMetrics.onS3Request(log, 'getMetadata', 'bucket', err);
+                        return next(err, objectMD);
+                    }),
+                (objectMD, next) => {
+                    const dataStoreName = objectMD.getDataStoreName();
+                    if (params.site === dataStoreName) {
+                        // If the object is in "target" location, it means the transition has already
+                        // completed, which may happen since we push the message to kafka before
+                        // updating metadata: we must thus simply skip the metadata update, which would
+                        // end up leaving the transition-in-progress flag forever.
+                        log.info('object already transitioned', {
+                            bucket: params.bucket,
+                            objectKey: params.objectKey,
+                            versionId: params.versionId,
+                            dataStoreName,
+                        });
+                        return next();
+                    }
+
+                    // Update object metadata with "x-amz-scal-transition-in-progress"
+                    // to avoid transitioning object a second time from a new batch.
+                    objectMD.setTransitionInProgress(true, params.transitionTime);
+                    objectMD.setOriginOp('s3:LifecycleTransition:Start');
+                    const putParams = {
                         bucket: params.bucket,
                         objectKey: params.objectKey,
                         versionId: params.versionId,
-                        dataStoreName,
+                        mdBlob: objectMD.getSerialized(),
+                    };
+                    return this._putObjectMD(putParams, log, err => {
+                        LifecycleMetrics.onS3Request(log, 'putMetadata', 'bucket', err);
+                        return next(err);
                     });
-                    return next();
-                }
-
-                // Update object metadata with "x-amz-scal-transition-in-progress"
-                // to avoid transitioning object a second time from a new batch.
-                objectMD.setTransitionInProgress(true, params.transitionTime);
-                objectMD.setOriginOp('s3:LifecycleTransition:Start');
-                const putParams = {
+                },
+            ],
+            err => {
+                const logFields = {
+                    method: 'LifecycleTask._applyTransitionRule',
+                    owner: params.owner,
                     bucket: params.bucket,
-                    objectKey: params.objectKey,
-                    versionId: params.versionId,
-                    mdBlob: objectMD.getSerialized(),
+                    key: params.objectKey,
+                    site: params.site,
                 };
-                return this._putObjectMD(putParams, log, err => {
-                    LifecycleMetrics.onS3Request(log, 'putMetadata', 'bucket', err);
-                    return next(err);
-                });
-            }
-        ], err => {
-            const logFields = {
-                method: 'LifecycleTask._applyTransitionRule',
-                owner: params.owner,
-                bucket: params.bucket,
-                key: params.objectKey,
-                site: params.site,
-            };
-            if (!err) {
-                log.debug('transition rule applied', logFields);
-            } else if (isExpectedSkip(err)) {
-                log.debug('transition rule skipped', {
-                    ...logFields,
-                    reason: err.description,
-                });
-            } else {
-                log.error('could not apply transition rule', {
-                    ...logFields,
-                    error: err.description || err.message,
-                });
-            }
-            if (cb) {
-                // NOTE: The purpose of introducing asynchronous logic here is to improve
-                // the flow control of LifecycleTaskV2.
-                cb(err);
-            }
-            return;
-        });
+                if (!err) {
+                    log.debug('transition rule applied', logFields);
+                } else if (isExpectedSkip(err)) {
+                    log.debug('transition rule skipped', {
+                        ...logFields,
+                        reason: err.description,
+                    });
+                } else {
+                    log.error('could not apply transition rule', {
+                        ...logFields,
+                        error: err.description || err.message,
+                    });
+                }
+                if (cb) {
+                    // NOTE: The purpose of introducing asynchronous logic here is to improve
+                    // the flow control of LifecycleTaskV2.
+                    cb(err);
+                }
+                return;
+            },
+        );
     }
 
     /**
@@ -1409,24 +1452,29 @@ class LifecycleTask extends BackbeatTask {
         const daysSinceInitiated = this._lifecycleDateTime.findDaysSince(new Date(staleDate));
         const ncvt = 'NoncurrentVersionTransition';
         const ncd = 'NoncurrentDays';
-        const doesNCVTransitionRuleApply = (rules[ncvt] &&
-            rules[ncvt][ncd] !== undefined &&
-            daysSinceInitiated >= rules[ncvt][ncd]);
+        const doesNCVTransitionRuleApply =
+            rules[ncvt] && rules[ncvt][ncd] !== undefined && daysSinceInitiated >= rules[ncvt][ncd];
 
         if (doesNCVTransitionRuleApply) {
-            this._applyTransitionRule({
-                owner: bucketData.target.owner,
-                accountId: bucketData.target.accountId,
-                bucket: bucketData.target.bucket,
-                objectKey: version.Key,
-                versionId: version.VersionId,
-                eTag: version.ETag,
-                lastModified: version.LastModified,
-                site: rules[ncvt].StorageClass,
-                transitionTime: this._lifecycleDateTime.getTransitionTimestamp(
-                    { Days: rules[ncvt][ncd] }, staleDate),
-                bucketData,
-            }, log, cb);
+            this._applyTransitionRule(
+                {
+                    owner: bucketData.target.owner,
+                    accountId: bucketData.target.accountId,
+                    bucket: bucketData.target.bucket,
+                    objectKey: version.Key,
+                    versionId: version.VersionId,
+                    eTag: version.ETag,
+                    lastModified: version.LastModified,
+                    site: rules[ncvt].StorageClass,
+                    transitionTime: this._lifecycleDateTime.getTransitionTimestamp(
+                        { Days: rules[ncvt][ncd] },
+                        staleDate,
+                    ),
+                    bucketData,
+                },
+                log,
+                cb,
+            );
             return;
         }
 
@@ -1452,76 +1500,79 @@ class LifecycleTask extends BackbeatTask {
      * @param {function} done - callback(error)
      * @return {undefined}
      */
-    _checkAndApplyEODMRule(bucketData, deleteMarker, listOfVersions, rules, log,
-    done) {
+    _checkAndApplyEODMRule(bucketData, deleteMarker, listOfVersions, rules, log, done) {
         // If the delete marker is the last item in the list of versions, there
         // may be other matching keys in the next listing. Will need to list
         // with prefix for this case.
         const lastVersion = listOfVersions[listOfVersions.length - 1];
 
-        async.waterfall([
-            next => {
-                if (lastVersion.Key === deleteMarker.Key &&
-                lastVersion.VersionId === deleteMarker.VersionId) {
-                    const param = { Prefix: deleteMarker.Key };
-                    return this._listVersions(bucketData, param, log,
-                    (err, data) => {
-                        if (err) {
-                            // error already logged at source
-                            return next(err);
-                        }
-                        const allVersions = [...(data.Versions || []),
-                            ...(data.DeleteMarkers || [])];
-                        return next(null, allVersions);
-                    });
-                }
-                return next(null, listOfVersions);
-            },
-            (versions, next) => {
-                const matchingNoncurrentKeys = versions.filter(v => (
-                    v.Key === deleteMarker.Key && !v.IsLatest));
-                const daysSinceInitiated = this._lifecycleDateTime.findDaysSince(
-                    new Date(deleteMarker.LastModified)
-                );
+        async.waterfall(
+            [
+                next => {
+                    if (lastVersion.Key === deleteMarker.Key && lastVersion.VersionId === deleteMarker.VersionId) {
+                        const param = { Prefix: deleteMarker.Key };
+                        return this._listVersions(bucketData, param, log, (err, data) => {
+                            if (err) {
+                                // error already logged at source
+                                return next(err);
+                            }
+                            const allVersions = [...(data.Versions || []), ...(data.DeleteMarkers || [])];
+                            return next(null, allVersions);
+                        });
+                    }
+                    return next(null, listOfVersions);
+                },
+                (versions, next) => {
+                    const matchingNoncurrentKeys = versions.filter(v => v.Key === deleteMarker.Key && !v.IsLatest);
+                    const daysSinceInitiated = this._lifecycleDateTime.findDaysSince(
+                        new Date(deleteMarker.LastModified),
+                    );
 
-                // Backbeat performs automatic ExpiredObjectDeleteMarker cleanup
-                // for compatibility with Amazon S3,
-                // - either when the delete markers meet the age criteria
-                // - or when the ExpiredObjectDeleteMarker tag is set to true.
-                const applicableExpRule = rules.Expiration && (
-                    (rules.Expiration.Days !== undefined && daysSinceInitiated >= rules.Expiration.Days)
-                    || (rules.Expiration.Date !== undefined && rules.Expiration.Date < Date.now())
-                    || rules.Expiration.ExpiredObjectDeleteMarker
-                );
+                    // Backbeat performs automatic ExpiredObjectDeleteMarker cleanup
+                    // for compatibility with Amazon S3,
+                    // - either when the delete markers meet the age criteria
+                    // - or when the ExpiredObjectDeleteMarker tag is set to true.
+                    const applicableExpRule =
+                        rules.Expiration &&
+                        ((rules.Expiration.Days !== undefined && daysSinceInitiated >= rules.Expiration.Days) ||
+                            (rules.Expiration.Date !== undefined && rules.Expiration.Date < Date.now()) ||
+                            rules.Expiration.ExpiredObjectDeleteMarker);
 
-                // if there are no other versions with the same Key as this DM and
-                // if a valid Expiration rule exists, apply and permanently delete this DM
-                if (matchingNoncurrentKeys.length === 0 && applicableExpRule) {
-                    const entry = ActionQueueEntry.create('deleteObject')
-                        .addContext(this._getActionContext(bucketData, log, 'expiration'))
-                        .setAttribute('target.owner', bucketData.target.owner)
-                        .setAttribute('target.bucket', bucketData.target.bucket)
-                        .setAttribute('target.key', deleteMarker.Key)
-                        .setAttribute('target.accountId', bucketData.target.accountId)
-                        .setAttribute('target.version', deleteMarker.VersionId)
-                        .setAttribute('details.dataStoreName', LIFECYCLE_MARKER_METRICS_LOCATION)
-                        // EODM applies only once all other versions have been deleted, so transition
-                        // time is not `lastModified`, but the time when the "last" version was
-                        // removed. We still need to pass a transitionTime for metrics though, so
-                        // just use the current time to avoid alert for slow/stale lifecycle.
-                        .setAttribute('transitionTime', Date.now());
-                    this._sendObjectAction(entry, err => {
-                        if (!err) {
-                            log.debug('sent object entry for consumption',
-                            Object.assign({
-                                method: 'LifecycleTask._checkAndApplyEODMRule',
-                            }, entry.getLogInfo()));
-                        }
-                    });
-                }
-                next();
-            },
-        ], done);
+                    // if there are no other versions with the same Key as this DM and
+                    // if a valid Expiration rule exists, apply and permanently delete this DM
+                    if (matchingNoncurrentKeys.length === 0 && applicableExpRule) {
+                        const entry = ActionQueueEntry.create('deleteObject')
+                            .addContext(this._getActionContext(bucketData, log, 'expiration'))
+                            .setAttribute('target.owner', bucketData.target.owner)
+                            .setAttribute('target.bucket', bucketData.target.bucket)
+                            .setAttribute('target.key', deleteMarker.Key)
+                            .setAttribute('target.accountId', bucketData.target.accountId)
+                            .setAttribute('target.version', deleteMarker.VersionId)
+                            .setAttribute('details.dataStoreName', LIFECYCLE_MARKER_METRICS_LOCATION)
+                            // EODM applies only once all other versions have been deleted, so transition
+                            // time is not `lastModified`, but the time when the "last" version was
+                            // removed. We still need to pass a transitionTime for metrics though, so
+                            // just use the current time to avoid alert for slow/stale lifecycle.
+                            .setAttribute('transitionTime', Date.now());
+                        this._sendObjectAction(entry, err => {
+                            if (!err) {
+                                log.debug(
+                                    'sent object entry for consumption',
+                                    Object.assign(
+                                        {
+                                            method: 'LifecycleTask._checkAndApplyEODMRule',
+                                        },
+                                        entry.getLogInfo(),
+                                    ),
+                                );
+                            }
+                        });
+                    }
+                    next();
+                },
+            ],
+            done,
+        );
     }
 
     /**
@@ -1542,9 +1593,8 @@ class LifecycleTask extends BackbeatTask {
         const ncve = 'NoncurrentVersionExpiration';
         const ncd = 'NoncurrentDays';
         const nncv = 'NewerNoncurrentVersions';
-        const doesNCVExpirationRuleApply = (rules[ncve] &&
-            rules[ncve][ncd] !== undefined &&
-            daysSinceInitiated >= rules[ncve][ncd]);
+        const doesNCVExpirationRuleApply =
+            rules[ncve] && rules[ncve][ncd] !== undefined && daysSinceInitiated >= rules[ncve][ncd];
         if (doesNCVExpirationRuleApply) {
             let verToExpire = version;
 
@@ -1560,8 +1610,9 @@ class LifecycleTask extends BackbeatTask {
                 }
             }
 
-            const storageClass = this._isDeleteMarker(verToExpire) ?
-                LIFECYCLE_MARKER_METRICS_LOCATION : verToExpire.StorageClass;
+            const storageClass = this._isDeleteMarker(verToExpire)
+                ? LIFECYCLE_MARKER_METRICS_LOCATION
+                : verToExpire.StorageClass;
             const entry = ActionQueueEntry.create('deleteObject')
                 .addContext(this._getActionContext(bucketData, log, 'expiration'))
                 .setAttribute('target.owner', bucketData.target.owner)
@@ -1570,16 +1621,21 @@ class LifecycleTask extends BackbeatTask {
                 .setAttribute('target.key', verToExpire.Key)
                 .setAttribute('target.version', verToExpire.VersionId)
                 .setAttribute('details.dataStoreName', storageClass || '')
-                .setAttribute('transitionTime',
-                    this._lifecycleDateTime.getTransitionTimestamp(
-                        { Days: rules[ncve][ncd] }, staleDate)
+                .setAttribute(
+                    'transitionTime',
+                    this._lifecycleDateTime.getTransitionTimestamp({ Days: rules[ncve][ncd] }, staleDate),
                 );
             this._sendObjectAction(entry, err => {
                 if (!err) {
-                    log.debug('sent object entry for consumption',
-                    Object.assign({
-                        method: 'LifecycleTask._checkAndApplyNCVExpirationRule',
-                    }, entry.getLogInfo()));
+                    log.debug(
+                        'sent object entry for consumption',
+                        Object.assign(
+                            {
+                                method: 'LifecycleTask._checkAndApplyNCVExpirationRule',
+                            },
+                            entry.getLogInfo(),
+                        ),
+                    );
                 }
             });
             return true;
@@ -1593,15 +1649,14 @@ class LifecycleTask extends BackbeatTask {
             objectKey: params.objectKey,
             locations,
         };
-        this.backbeatMetadataProxy.headLocation(
-            headLocationParams, log, (err, data) => {
-                LifecycleMetrics.onS3Request(log, 'headLocation', 'bucket', err);
-                if (err) {
-                    log.error('error getting head response from CloudServer');
-                    return cb(err);
-                }
-                return cb(null, data.lastModified);
-            });
+        this.backbeatMetadataProxy.headLocation(headLocationParams, log, (err, data) => {
+            LifecycleMetrics.onS3Request(log, 'headLocation', 'bucket', err);
+            if (err) {
+                log.error('error getting head response from CloudServer');
+                return cb(err);
+            }
+            return cb(null, data.lastModified);
+        });
     }
 
     /**
@@ -1626,40 +1681,45 @@ class LifecycleTask extends BackbeatTask {
         const command = new HeadObjectCommand(params);
         attachArchiveInfoHeader(command);
         attachReqUids(command, log.getSerializedUids());
-        return this.s3target.send(command)
+        return this.s3target
+            .send(command)
             .then(data => {
                 LifecycleMetrics.onS3Request(log, 'headObject', 'bucket', null);
-                const object = Object.assign({}, obj,
-                    {
-                        LastModified: data.LastModified,
-                        // With the archive-info header, CloudServer always
-                        // returns the real storage class (never STANDARD):
-                        // the preserved cold class for cold/restored objects,
-                        // the data-store name otherwise.
-                        StorageClass: data.StorageClass,
-                    });
+                const object = Object.assign({}, obj, {
+                    LastModified: data.LastModified,
+                    // With the archive-info header, CloudServer always
+                    // returns the real storage class (never STANDARD):
+                    // the preserved cold class for cold/restored objects,
+                    // the data-store name otherwise.
+                    StorageClass: data.StorageClass,
+                });
 
                 // There is an order of importance in cases of conflicts
                 // Expiration and NoncurrentVersionExpiration should be priority
                 // AbortIncompleteMultipartUpload should run regardless since
                 // it's in its own category
-                if (rules.Expiration &&
-                    this._checkAndApplyExpirationRule(bucketData, object, rules, log)) {
+                if (rules.Expiration && this._checkAndApplyExpirationRule(bucketData, object, rules, log)) {
                     return done();
                 }
                 if (rules.Transition) {
-                    return this._applyTransitionRule({
-                        owner: bucketData.target.owner,
-                        accountId: bucketData.target.accountId,
-                        bucket: bucketData.target.bucket,
-                        objectKey: obj.Key,
-                        eTag: obj.ETag,
-                        lastModified: obj.LastModified,
-                        site: rules.Transition.StorageClass,
-                        transitionTime: this._lifecycleDateTime.getTransitionTimestamp(
-                            rules.Transition, object.LastModified),
-                        bucketData,
-                    }, log, done);
+                    return this._applyTransitionRule(
+                        {
+                            owner: bucketData.target.owner,
+                            accountId: bucketData.target.accountId,
+                            bucket: bucketData.target.bucket,
+                            objectKey: obj.Key,
+                            eTag: obj.ETag,
+                            lastModified: obj.LastModified,
+                            site: rules.Transition.StorageClass,
+                            transitionTime: this._lifecycleDateTime.getTransitionTimestamp(
+                                rules.Transition,
+                                object.LastModified,
+                            ),
+                            bucketData,
+                        },
+                        log,
+                        done,
+                    );
                 }
                 return done();
             })
@@ -1686,12 +1746,18 @@ class LifecycleTask extends BackbeatTask {
      * @param {function} done - callback(error, data)
      * @return {undefined}
      */
-    _compareVersion(bucketData, version, listOfVersions, rules,
-    versioningStatus, log, done) {
+    _compareVersion(bucketData, version, listOfVersions, rules, versioningStatus, log, done) {
         // if version is latest, only expiration action applies
         if (version.IsLatest) {
-            return this._compareIsLatestVersion(bucketData, version,
-                listOfVersions, rules, versioningStatus, log, done);
+            return this._compareIsLatestVersion(
+                bucketData,
+                version,
+                listOfVersions,
+                rules,
+                versioningStatus,
+                log,
+                done,
+            );
         }
 
         if (!version.staleDate) {
@@ -1701,13 +1767,15 @@ class LifecycleTask extends BackbeatTask {
                 bucket: bucketData.target.bucket,
                 versionId: version.VersionId,
             });
-            const errMsg = 'an implementation error occurred: when comparing ' +
-                'lifecycle rules on a version, stale date was missing';
+            const errMsg =
+                'an implementation error occurred: when comparing lifecycle rules on a version, stale date was missing';
             return done(errors.InternalError.customizeDescription(errMsg));
         }
 
-        if (rules.NoncurrentVersionExpiration &&
-            this._checkAndApplyNCVExpirationRule(bucketData, version, rules, log)) {
+        if (
+            rules.NoncurrentVersionExpiration &&
+            this._checkAndApplyNCVExpirationRule(bucketData, version, rules, log)
+        ) {
             return done();
         }
 
@@ -1735,35 +1803,38 @@ class LifecycleTask extends BackbeatTask {
      * @param {function} done - callback(error)
      * @return {undefined}
      */
-    _compareIsLatestVersion(bucketData, version, listOfVersions, rules,
-    versioningStatus, log, done) {
+    _compareIsLatestVersion(bucketData, version, listOfVersions, rules, versioningStatus, log, done) {
         const isDeleteMarker = this._isDeleteMarker(version);
 
         if (isDeleteMarker) {
             // check EODM
-            return this._checkAndApplyEODMRule(bucketData, version,
-                listOfVersions, rules, log, done);
+            return this._checkAndApplyEODMRule(bucketData, version, listOfVersions, rules, log, done);
         }
         // if Expiration rule exists, apply it here to a Version
-        if (rules.Expiration &&
-            this._checkAndApplyExpirationRule(bucketData, version, rules, log)) {
+        if (rules.Expiration && this._checkAndApplyExpirationRule(bucketData, version, rules, log)) {
             return done();
         }
         if (rules.Transition) {
-            return this._applyTransitionRule({
-                owner: bucketData.target.owner,
-                accountId: bucketData.target.accountId,
-                bucket: bucketData.target.bucket,
-                objectKey: version.Key,
-                versionId: version.VersionId,
-                eTag: version.ETag,
-                lastModified: version.LastModified,
-                site: rules.Transition.StorageClass,
-                encodedVersionId: undefined,
-                transitionTime: this._lifecycleDateTime.getTransitionTimestamp(
-                    rules.Transition, version.LastModified),
-                bucketData,
-            }, log, done);
+            return this._applyTransitionRule(
+                {
+                    owner: bucketData.target.owner,
+                    accountId: bucketData.target.accountId,
+                    bucket: bucketData.target.bucket,
+                    objectKey: version.Key,
+                    versionId: version.VersionId,
+                    eTag: version.ETag,
+                    lastModified: version.LastModified,
+                    site: rules.Transition.StorageClass,
+                    encodedVersionId: undefined,
+                    transitionTime: this._lifecycleDateTime.getTransitionTimestamp(
+                        rules.Transition,
+                        version.LastModified,
+                    ),
+                    bucketData,
+                },
+                log,
+                done,
+            );
         }
 
         log.debug('no action taken on IsLatest version', {
@@ -1792,15 +1863,14 @@ class LifecycleTask extends BackbeatTask {
             const filteredRules = this._lifecycleUtils.filterRules(bucketLCRules, upload, noTags);
             const aRules = this._lifecycleUtils.getApplicableRules(filteredRules, {});
 
-            const daysSinceInitiated = this._lifecycleDateTime.findDaysSince(
-                new Date(upload.Initiated)
-            );
+            const daysSinceInitiated = this._lifecycleDateTime.findDaysSince(new Date(upload.Initiated));
             const abortRule = aRules.AbortIncompleteMultipartUpload;
 
             // NOTE: DaysAfterInitiation can be 0 in tests
-            const doesAbortRuleApply = (abortRule &&
+            const doesAbortRuleApply =
+                abortRule &&
                 abortRule.DaysAfterInitiation !== undefined &&
-                daysSinceInitiated >= abortRule.DaysAfterInitiation);
+                daysSinceInitiated >= abortRule.DaysAfterInitiation;
             if (doesAbortRuleApply) {
                 log.debug('send mpu upload for aborting', {
                     bucket: bucketData.target.bucket,
@@ -1815,16 +1885,24 @@ class LifecycleTask extends BackbeatTask {
                     .setAttribute('target.key', upload.Key)
                     .setAttribute('details.UploadId', upload.UploadId)
                     .setAttribute('details.dataStoreName', upload.StorageClass || '')
-                    .setAttribute('transitionTime',
+                    .setAttribute(
+                        'transitionTime',
                         this._lifecycleDateTime.getTransitionTimestamp(
-                            { Days: abortRule.DaysAfterInitiation }, upload.Initiated)
+                            { Days: abortRule.DaysAfterInitiation },
+                            upload.Initiated,
+                        ),
                     );
                 this._sendObjectAction(entry, err => {
                     if (!err) {
-                        log.debug('sent object entry for consumption',
-                            Object.assign({
-                                method: 'LifecycleTask._compareMPUUploads',
-                            }, entry.getLogInfo()));
+                        log.debug(
+                            'sent object entry for consumption',
+                            Object.assign(
+                                {
+                                    method: 'LifecycleTask._compareMPUUploads',
+                                },
+                                entry.getLogInfo(),
+                            ),
+                        );
                     }
                 });
             }
@@ -1874,8 +1952,7 @@ class LifecycleTask extends BackbeatTask {
      * @param {function} done - callback(error)
      * @return {undefined}
      */
-    processBucketEntry(bucketLCRules, bucketData, s3target,
-    backbeatMetadataProxy, nbRetries, done) {
+    processBucketEntry(bucketLCRules, bucketData, s3target, backbeatMetadataProxy, nbRetries, done) {
         const log = this.log.newRequestLogger();
         log.addDefaultFields(this._getScanContext(bucketData));
         this.s3target = s3target;
@@ -1886,11 +1963,12 @@ class LifecycleTask extends BackbeatTask {
         if (!this.s3target) {
             return process.nextTick(done);
         }
-        if (typeof bucketData !== 'object' ||
+        if (
+            typeof bucketData !== 'object' ||
             typeof bucketData.target !== 'object' ||
-            typeof bucketData.details !== 'object') {
-            log.error('wrong format for bucket entry',
-                      { entry: bucketData });
+            typeof bucketData.details !== 'object'
+        ) {
+            log.error('wrong format for bucket entry', { entry: bucketData });
             return process.nextTick(done);
         }
 
@@ -1907,90 +1985,87 @@ class LifecycleTask extends BackbeatTask {
 
         // Initially, processing a Bucket entry should check mpu AND
         // (versioned OR non-versioned) objects
-        return async.series([
-            cb => {
-                // if any of these markers exists on the Bucket entry, the entry
-                // is handling a specific request that is not an MPU request
-                if (bucketData.details.versionIdMarker ||
-                bucketData.details.marker) {
-                    return cb();
-                }
-                const mpuParams = {
-                    Bucket: bucketData.target.bucket,
-                    MaxUploads: MAX_KEYS,
-                    KeyMarker: bucketData.details.uploadIdMarker &&
-                        bucketData.details.keyMarker,
-                    UploadIdMarker: bucketData.details.keyMarker &&
-                        bucketData.details.uploadIdMarker,
-                };
-                return this._getMPUs(bucketData, bucketLCRules,
-                    mpuParams, nbRetries, log, cb);
-            },
-            cb => {
-                // if this marker exists on the Bucket entry, the entry is
-                // handling an MPU request
-                if (bucketData.details.uploadIdMarker) {
-                    return cb();
-                }
+        return async.series(
+            [
+                cb => {
+                    // if any of these markers exists on the Bucket entry, the entry
+                    // is handling a specific request that is not an MPU request
+                    if (bucketData.details.versionIdMarker || bucketData.details.marker) {
+                        return cb();
+                    }
+                    const mpuParams = {
+                        Bucket: bucketData.target.bucket,
+                        MaxUploads: MAX_KEYS,
+                        KeyMarker: bucketData.details.uploadIdMarker && bucketData.details.keyMarker,
+                        UploadIdMarker: bucketData.details.keyMarker && bucketData.details.uploadIdMarker,
+                    };
+                    return this._getMPUs(bucketData, bucketLCRules, mpuParams, nbRetries, log, cb);
+                },
+                cb => {
+                    // if this marker exists on the Bucket entry, the entry is
+                    // handling an MPU request
+                    if (bucketData.details.uploadIdMarker) {
+                        return cb();
+                    }
 
-                return async.waterfall([
-                    next => {
-                        const command = new GetBucketVersioningCommand({
-                            Bucket: bucketData.target.bucket,
-                        });
-                        attachReqUids(command, log.getSerializedUids());
-                        this.s3target.send(command)
-                            .then(data => {
-                                LifecycleMetrics.onS3Request(
-                                    log,
-                                    'getBucketVersioning',
-                                    'bucket',
-                                    null
-                                );
-                                return next(null, data.Status);
-                            })
-                            .catch(err => {
-                                LifecycleMetrics.onS3Request(
-                                    log,
-                                    'getBucketVersioning',
-                                    'bucket',
-                                    err
-                                );
-                                log.error('error checking bucket versioning', {
-                                    method: 'LifecycleTask.processBucketEntry',
-                                    error: err,
+                    return async.waterfall(
+                        [
+                            next => {
+                                const command = new GetBucketVersioningCommand({
+                                    Bucket: bucketData.target.bucket,
                                 });
-                                return next(err);
-                            });
-                    },
-                    (versioningStatus, next) => {
-                        if (versioningStatus === 'Enabled'
-                        || versioningStatus === 'Suspended') {
-                            return this._getObjectVersions(bucketData,
-                                bucketLCRules, versioningStatus, nbRetries, log, next);
-                        }
+                                attachReqUids(command, log.getSerializedUids());
+                                this.s3target
+                                    .send(command)
+                                    .then(data => {
+                                        LifecycleMetrics.onS3Request(log, 'getBucketVersioning', 'bucket', null);
+                                        return next(null, data.Status);
+                                    })
+                                    .catch(err => {
+                                        LifecycleMetrics.onS3Request(log, 'getBucketVersioning', 'bucket', err);
+                                        log.error('error checking bucket versioning', {
+                                            method: 'LifecycleTask.processBucketEntry',
+                                            error: err,
+                                        });
+                                        return next(err);
+                                    });
+                            },
+                            (versioningStatus, next) => {
+                                if (versioningStatus === 'Enabled' || versioningStatus === 'Suspended') {
+                                    return this._getObjectVersions(
+                                        bucketData,
+                                        bucketLCRules,
+                                        versioningStatus,
+                                        nbRetries,
+                                        log,
+                                        next,
+                                    );
+                                }
 
-                        return this._getObjectList(bucketData, bucketLCRules, nbRetries,
-                            log, next);
-                    },
-                ], cb);
+                                return this._getObjectList(bucketData, bucketLCRules, nbRetries, log, next);
+                            },
+                        ],
+                        cb,
+                    );
+                },
+            ],
+            err => {
+                log.info('finished processing task for bucket lifecycle', {
+                    method: 'LifecycleTask.processBucketEntry',
+                    bucket: bucketData.target.bucket,
+                    owner: bucketData.target.owner,
+                    contextInfo: bucketData.contextInfo,
+                    details: bucketData.details,
+                });
+                // An optimization is possible by only publishing when
+                // finishing a complete bucket listing, let it aside for
+                // simplicity as it is just updating a few zookeeper nodes
+                if (rulesSupportTransition(this._supportedRules)) {
+                    this._snapshotDataMoverTopicOffsets(log);
+                }
+                return done(err);
             },
-        ], err => {
-            log.info('finished processing task for bucket lifecycle', {
-                method: 'LifecycleTask.processBucketEntry',
-                bucket: bucketData.target.bucket,
-                owner: bucketData.target.owner,
-                contextInfo: bucketData.contextInfo,
-                details: bucketData.details,
-            });
-            // An optimization is possible by only publishing when
-            // finishing a complete bucket listing, let it aside for
-            // simplicity as it is just updating a few zookeeper nodes
-            if (rulesSupportTransition(this._supportedRules)) {
-                this._snapshotDataMoverTopicOffsets(log);
-            }
-            return done(err);
-        });
+        );
     }
 }
 

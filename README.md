@@ -42,11 +42,11 @@ updates in a FIFO order.
 
 This guide assumes the following:
 
-* Using MacOS
-* `brew` is installed (get it [here](https://brew.sh/))
-* `node` is installed (version 6.9.5)
-* `yarn` is installed (version 3.10.10)
-* `aws` is installed (version 1.11.1)
+- Using MacOS
+- `brew` is installed (get it [here](https://brew.sh/))
+- `node` is installed (version 6.9.5)
+- `yarn` is installed (version 3.10.10)
+- `aws` is installed (version 1.11.1)
 
 ### Kafka and Zookeeper
 
@@ -175,13 +175,13 @@ Replace existing `./locationConfig.json` with:
 ```json
 {
     "us-east-1": {
-      "details": {
-        "supportsVersioning": true
-      },
-      "isTransient": false,
-      "legacyAwsBehavior": false,
-      "objectId": "0b1d9226-a694-11eb-bc21-baec55d199cd",
-      "type": "file"
+        "details": {
+            "supportsVersioning": true
+        },
+        "isTransient": false,
+        "legacyAwsBehavior": false,
+        "objectId": "0b1d9226-a694-11eb-bc21-baec55d199cd",
+        "type": "file"
     },
     "aws-location": {
         "type": "aws_s3",
@@ -241,16 +241,17 @@ Update `conf/authdata.json` with bart informations and keys.
 
 ```json
 {
-    "accounts": [{
-        "name": "bart",
-        "arn": "aws:iam::331457510670:/bart",
-        "canonicalID": "2083781e15384e30f48c651a948ec2dc1e1801c4af24c2750a166823e28ca570",
-        "displayName": "bart",
-        "keys": {
-            "access": "20TNCD06HOCSLQSABFZP",
-            "secret": "1P43SL0ekJjXnQvliV0KgMibZ=N2lKZO4dpnWzbF"
+    "accounts": [
+        {
+            "name": "bart",
+            "arn": "aws:iam::331457510670:/bart",
+            "canonicalID": "2083781e15384e30f48c651a948ec2dc1e1801c4af24c2750a166823e28ca570",
+            "displayName": "bart",
+            "keys": {
+                "access": "20TNCD06HOCSLQSABFZP",
+                "secret": "1P43SL0ekJjXnQvliV0KgMibZ=N2lKZO4dpnWzbF"
+            }
         }
-    }
     ]
 }
 ```

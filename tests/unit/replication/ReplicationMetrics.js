@@ -1,10 +1,8 @@
 const assert = require('assert');
 
 const { ZenkoMetrics } = require('@scality/arsenal').metrics;
-const ReplicationMetrics =
-      require('../../../extensions/replication/ReplicationMetrics');
-const { promMetricNames } =
-      require('../../../extensions/replication/constants');
+const ReplicationMetrics = require('../../../extensions/replication/ReplicationMetrics');
+const { promMetricNames } = require('../../../extensions/replication/constants');
 
 describe('ReplicationMetrics', () => {
     let totalMetric;
@@ -13,17 +11,13 @@ describe('ReplicationMetrics', () => {
     let elapsedMetric;
 
     beforeEach(() => {
-        totalMetric = ZenkoMetrics.getMetric(
-            promMetricNames.replicationQueuedTotal);
+        totalMetric = ZenkoMetrics.getMetric(promMetricNames.replicationQueuedTotal);
 
-        queuedBytesMetric = ZenkoMetrics.getMetric(
-            promMetricNames.replicationQueuedBytes);
+        queuedBytesMetric = ZenkoMetrics.getMetric(promMetricNames.replicationQueuedBytes);
 
-        processedBytesMetric = ZenkoMetrics.getMetric(
-            promMetricNames.replicationProcessedBytes);
+        processedBytesMetric = ZenkoMetrics.getMetric(promMetricNames.replicationProcessedBytes);
 
-        elapsedMetric = ZenkoMetrics.getMetric(
-                promMetricNames.replicationElapsedSeconds);
+        elapsedMetric = ZenkoMetrics.getMetric(promMetricNames.replicationElapsedSeconds);
 
         // reset counter not to be altered by other tests
         totalMetric.reset();
@@ -41,10 +35,8 @@ describe('ReplicationMetrics', () => {
     });
 
     [123456, '123456'].forEach(contentLength => {
-        it('should maintain replication queuing metrics with ' +
-        `content-length as ${typeof contentLength}`, async () => {
-            ReplicationMetrics.onReplicationQueued(
-                'testOrigin', 'fromLoc', 'toLoc', contentLength, 2);
+        it(`should maintain replication queuing metrics with content-length as ${typeof contentLength}`, async () => {
+            ReplicationMetrics.onReplicationQueued('testOrigin', 'fromLoc', 'toLoc', contentLength, 2);
 
             const totalValues = (await totalMetric.get()).values;
             // only one metric value exists because we published with one
@@ -79,21 +71,14 @@ describe('ReplicationMetrics', () => {
     });
 
     [12345678, '12345678'].forEach(contentLength => {
-        it('should maintain replication processed metrics with ' +
-        `content-length as ${typeof contentLength}`, async () => {
+        it(`should maintain replication processed metrics with content-length as ${typeof contentLength}`, async () => {
             // Push a few "processed" metrics
             // object of 123456 bytes processed successfully in 300ms
-            ReplicationMetrics.onReplicationProcessed(
-                'testOrigin', 'fromLoc', 'toLoc', 123456,
-                'success', 300);
+            ReplicationMetrics.onReplicationProcessed('testOrigin', 'fromLoc', 'toLoc', 123456, 'success', 300);
             // object of 12345678 bytes processed successfully in 2s
-            ReplicationMetrics.onReplicationProcessed(
-                'testOrigin', 'fromLoc', 'toLoc', contentLength,
-                'success', 2000);
+            ReplicationMetrics.onReplicationProcessed('testOrigin', 'fromLoc', 'toLoc', contentLength, 'success', 2000);
             // object of 12345678 bytes processed with error in 5s
-            ReplicationMetrics.onReplicationProcessed(
-                'testOrigin', 'fromLoc', 'toLoc', contentLength,
-                'error', 5000);
+            ReplicationMetrics.onReplicationProcessed('testOrigin', 'fromLoc', 'toLoc', contentLength, 'error', 5000);
 
             // Check that the byte count is accurate
             const bytesValues = (await processedBytesMetric.get()).values;
@@ -101,10 +86,8 @@ describe('ReplicationMetrics', () => {
             // only one metric value exists because we published with one
             // distinct label set
             assert.strictEqual(bytesValues.length, 2);
-            const successBytes = bytesValues.find(
-                value => value.labels.status === 'success');
-            const errorBytes = bytesValues.find(
-                value => value.labels.status === 'error');
+            const successBytes = bytesValues.find(value => value.labels.status === 'success');
+            const errorBytes = bytesValues.find(value => value.labels.status === 'error');
             assert.strictEqual(successBytes.value, 12469134);
             assert.deepStrictEqual(successBytes.labels, {
                 origin: 'testOrigin',
@@ -138,9 +121,11 @@ describe('ReplicationMetrics', () => {
             // criteria is below 2 seconds for this size range is 0 (as no
             // metric was pushed with timing less than 2 seconds)
             const leBelowTwoSeconds10M = elapsedValues.filter(
-                value => (value.labels.status === 'success' &&
-                          value.labels.contentLengthRange === '10MB..30MB' &&
-                          value.labels.le < 2));
+                value =>
+                    value.labels.status === 'success' &&
+                    value.labels.contentLengthRange === '10MB..30MB' &&
+                    value.labels.le < 2,
+            );
             assert(leBelowTwoSeconds10M.length > 0);
             assert(leBelowTwoSeconds10M.every(value => value.value === 0));
 
@@ -148,9 +133,11 @@ describe('ReplicationMetrics', () => {
             // criteria is above 2 seconds for this size range is 1 (as we
             // pushed a metric in this size range with 2 seconds elapsed)
             const leAboveTwoSeconds10M = elapsedValues.filter(
-                value => (value.labels.status === 'success' &&
-                          value.labels.contentLengthRange === '10MB..30MB' &&
-                          value.labels.le > 2));
+                value =>
+                    value.labels.status === 'success' &&
+                    value.labels.contentLengthRange === '10MB..30MB' &&
+                    value.labels.le > 2,
+            );
             assert(leAboveTwoSeconds10M.length > 0);
             assert(leAboveTwoSeconds10M.every(value => value.value === 1));
         });

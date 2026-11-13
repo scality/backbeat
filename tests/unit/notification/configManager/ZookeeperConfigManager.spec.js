@@ -5,10 +5,8 @@ const ZookeeperMock = require('zookeeper-mock');
 const ZookeeperManager = require('../../../../lib/clients/ZookeeperManager');
 const sinon = require('sinon');
 
-const ZookeeperConfigManager
-    = require('../../../../extensions/notification/configManager/ZookeeperConfigManager');
-const constants
-    = require('../../../../extensions/notification/constants');
+const ZookeeperConfigManager = require('../../../../extensions/notification/configManager/ZookeeperConfigManager');
+const constants = require('../../../../extensions/notification/constants');
 
 const logger = new werelogs.Logger('ZookeeperConfigManager:test');
 const { zkConfigParentNode } = constants;
@@ -34,16 +32,18 @@ function getTestConfigValue(bucket) {
 }
 
 function populateTestConfigs(zkClient, numberOfConfigs, cb) {
-    async.timesLimit(numberOfConfigs, concurrency, (n, done) => {
-        const bucket = `${bucketPrefix}${n + 1}`;
-        const val = getTestConfigValue(bucket);
-        const strVal = JSON.stringify(val);
-        const node = `/${zkConfigParentNode}/${bucket}`;
-        async.series([
-            next => zkClient.mkdirp(node, next),
-            next => zkClient.setData(node, strVal, next),
-        ], done);
-    }, cb);
+    async.timesLimit(
+        numberOfConfigs,
+        concurrency,
+        (n, done) => {
+            const bucket = `${bucketPrefix}${n + 1}`;
+            const val = getTestConfigValue(bucket);
+            const strVal = JSON.stringify(val);
+            const node = `/${zkConfigParentNode}/${bucket}`;
+            async.series([next => zkClient.mkdirp(node, next), next => zkClient.setData(node, strVal, next)], done);
+        },
+        cb,
+    );
 }
 
 function listBuckets(zkClient, cb) {
@@ -58,10 +58,15 @@ function deleteTestConfigs(zkClient, cb) {
             assert.ifError(error);
             cb(error);
         } else {
-            async.eachLimit(children, concurrency, (child, next) => {
-                const childNode = `${node}/${child}`;
-                zkClient.remove(childNode, next);
-            }, cb);
+            async.eachLimit(
+                children,
+                concurrency,
+                (child, next) => {
+                    const childNode = `${node}/${child}`;
+                    zkClient.remove(childNode, next);
+                },
+                cb,
+            );
         }
     });
 }
@@ -114,22 +119,21 @@ describe('ZookeeperConfigManager', () => {
         it('constructor and setup checks', done => {
             assert.throws(() => new ZookeeperConfigManager());
             assert.throws(() => new ZookeeperConfigManager({}));
-            assert.throws(() => new ZookeeperConfigManager({
-                zkClient: null,
-                logger: null,
-            }));
+            assert.throws(
+                () =>
+                    new ZookeeperConfigManager({
+                        zkClient: null,
+                        logger: null,
+                    }),
+            );
             const manager = new ZookeeperConfigManager(params);
             assert(manager instanceof ZookeeperConfigManager);
-            async.series([
-                next => managerInit(manager, next),
-                next => checkParentConfigZkNode(manager, next),
-            ], done);
+            async.series([next => managerInit(manager, next), next => checkParentConfigZkNode(manager, next)], done);
         });
 
         it('should return error if checkConfigParentNode fails', done => {
             const manager = new ZookeeperConfigManager(params);
-            sinon.stub(manager, '_checkConfigurationParentNode')
-                .callsFake(checkConfigParentNodeStub);
+            sinon.stub(manager, '_checkConfigurationParentNode').callsFake(checkConfigParentNodeStub);
             manager.setup(err => {
                 assert(err);
                 return done();
@@ -184,8 +188,7 @@ describe('ZookeeperConfigManager', () => {
                 assert(result);
                 setTimeout(() => {
                     const updatedConfig = manager.getConfig(bucket);
-                    assert.strictEqual(updatedConfig.bucket,
-                        `${bucket}-updated`);
+                    assert.strictEqual(updatedConfig.bucket, `${bucket}-updated`);
                     checkCount(zkClient, manager, done);
                 }, timeoutMs);
             });
@@ -207,12 +210,15 @@ describe('ZookeeperConfigManager', () => {
 
         it('config count should be zero when all configs are removed', done => {
             const manager = new ZookeeperConfigManager(params);
-            async.series([
-                next => managerInit(manager, next),
-                next => deleteTestConfigs(zkClient, next),
-                next => setTimeout(next, timeoutMs),
-                next => checkCount(zkClient, manager, next),
-            ], done);
+            async.series(
+                [
+                    next => managerInit(manager, next),
+                    next => deleteTestConfigs(zkClient, next),
+                    next => setTimeout(next, timeoutMs),
+                    next => checkCount(zkClient, manager, next),
+                ],
+                done,
+            );
         });
     });
 
@@ -227,20 +233,23 @@ describe('ZookeeperConfigManager', () => {
             const bucket = 'freshBucket';
             const config = getTestConfigValue(bucket);
             const node = `/${zkConfigParentNode}/${bucket}`;
-            async.series([
-                next => managerInit(manager, next),
-                next => manager._setBucketNotifConfig(
-                    bucket, JSON.stringify(config), err => {
-                        assert.ifError(err);
-                        return next();
-                    }),
-                next => zkClient.getData(node, undefined, (err, data) => {
-                    assert.ifError(err);
-                    assert.strictEqual(
-                        JSON.parse(data.toString()).bucket, bucket);
-                    return next();
-                }),
-            ], done);
+            async.series(
+                [
+                    next => managerInit(manager, next),
+                    next =>
+                        manager._setBucketNotifConfig(bucket, JSON.stringify(config), err => {
+                            assert.ifError(err);
+                            return next();
+                        }),
+                    next =>
+                        zkClient.getData(node, undefined, (err, data) => {
+                            assert.ifError(err);
+                            assert.strictEqual(JSON.parse(data.toString()).bucket, bucket);
+                            return next();
+                        }),
+                ],
+                done,
+            );
         });
 
         it('should retry the config write on a transient failure', done => {
@@ -260,8 +269,7 @@ describe('ZookeeperConfigManager', () => {
                     assert.strictEqual(stub.callCount, 3);
                     zkClient.getData(node, undefined, (err, data) => {
                         assert.ifError(err);
-                        assert.strictEqual(
-                            JSON.parse(data.toString()).bucket, bucket);
+                        assert.strictEqual(JSON.parse(data.toString()).bucket, bucket);
                         return done();
                     });
                 }, 2000);
@@ -270,7 +278,7 @@ describe('ZookeeperConfigManager', () => {
     });
 
     describe('setup', () => {
-        it('should setup zookeeper client when it\'s not provided', done => {
+        it("should setup zookeeper client when it's not provided", done => {
             const manager = new ZookeeperConfigManager({
                 zkPath: '/notification',
                 zkConfig: {
@@ -296,7 +304,7 @@ describe('ZookeeperConfigManager', () => {
             });
         });
 
-        it('should not create zookeeper client when it\'s provided', done => {
+        it("should not create zookeeper client when it's provided", done => {
             const manager = new ZookeeperConfigManager(params);
             sinon.stub(manager, '_checkConfigurationParentNode').yields(null, null);
             sinon.stub(manager, '_listBucketsWithConfig').yields(null, null);

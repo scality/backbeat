@@ -22,10 +22,7 @@ const { http: HttpAgent, https: HttpsAgent } = require('httpagent');
 // StatsClient constant default for site metrics
 const INTERVAL = 300; // 5 minutes;
 const constants = require('../../../lib/constants');
-const {
-    wrapCounterInc,
-    wrapHistogramObserve,
-} = require('../../../lib/util/metrics');
+const { wrapCounterInc, wrapHistogramObserve } = require('../../../lib/util/metrics');
 
 /**
  * Labels used for Prometheus metrics
@@ -108,7 +105,7 @@ const loadMetricHandlers = jsutil.once(repConfig => {
     const replayCompletedObjects = ZenkoMetrics.createCounter({
         name: 's3_replication_replay_objects_completed_total',
         help: 'Total number of objects completed from replay queues',
-        labelNames: ['origin', 'location',  'replayCount', 'replicationStatus'],
+        labelNames: ['origin', 'location', 'replayCount', 'replicationStatus'],
     });
 
     const replayCompletedBytes = ZenkoMetrics.createCounter({
@@ -124,8 +121,9 @@ const loadMetricHandlers = jsutil.once(repConfig => {
         buckets: repConfig.objectSizeMetrics,
     });
 
-    const maxReplayCount = !repConfig.replayTopics ? 0 : repConfig.replayTopics.reduce(
-        (prev, topic) => prev + topic.retries, 0);
+    const maxReplayCount = !repConfig.replayTopics
+        ? 0
+        : repConfig.replayTopics.reduce((prev, topic) => prev + topic.retries, 0);
     const replayCount = ZenkoMetrics.createHistogram({
         name: 's3_replication_replay_count',
         help: 'Total number of replays to complete replication',
@@ -138,10 +136,8 @@ const loadMetricHandlers = jsutil.once(repConfig => {
     };
     return {
         status: wrapCounterInc(replicationStatusMetric, defaultLabels),
-        statusDuration: wrapHistogramObserve(replicationStatusDurationSeconds,
-            defaultLabels),
-        replicationLatency: wrapHistogramObserve(replicationLatency,
-            defaultLabels),
+        statusDuration: wrapHistogramObserve(replicationStatusDurationSeconds, defaultLabels),
+        replicationLatency: wrapHistogramObserve(replicationLatency, defaultLabels),
         replayAttempts: wrapCounterInc(replayAttempts, defaultLabels),
         replaySuccess: wrapCounterInc(replaySuccess, defaultLabels),
         replayQueuedObjects: wrapCounterInc(replayQueuedObjects, defaultLabels),
@@ -150,7 +146,7 @@ const loadMetricHandlers = jsutil.once(repConfig => {
         replayCompletedObjects: wrapCounterInc(replayCompletedObjects, defaultLabels),
         replayCompletedBytes: wrapCounterInc(replayCompletedBytes, defaultLabels),
         replayCompletedFileSizes: wrapHistogramObserve(replayCompletedFileSizes, defaultLabels),
-        replayCount: wrapHistogramObserve(replayCount, defaultLabels)
+        replayCount: wrapHistogramObserve(replayCount, defaultLabels),
     };
 });
 
@@ -162,7 +158,6 @@ const loadMetricHandlers = jsutil.once(repConfig => {
  * source objects.
  */
 class ReplicationStatusProcessor {
-
     /**
      * @constructor
      * @param {Object} kafkaConfig - kafka configuration object
@@ -206,8 +201,7 @@ class ReplicationStatusProcessor {
      * @param {String} mConfig.topic - metrics config kafka topic
      * @param {Object} gcConfig - config for garbage collector
      */
-    constructor(kafkaConfig, sourceConfig, repConfig,
-                internalHttpsConfig, mConfig, gcConfig) {
+    constructor(kafkaConfig, sourceConfig, repConfig, internalHttpsConfig, mConfig, gcConfig) {
         this.kafkaConfig = kafkaConfig;
         this.sourceConfig = sourceConfig;
         this.repConfig = repConfig;
@@ -218,8 +212,7 @@ class ReplicationStatusProcessor {
         this._gcProducer = null;
         this._mProducer = null;
 
-        this.logger =
-            new Logger('Backbeat:Replication:ReplicationStatusProcessor');
+        this.logger = new Logger('Backbeat:Replication:ReplicationStatusProcessor');
 
         // global variables
         if (sourceConfig.transport === 'https') {
@@ -237,12 +230,12 @@ class ReplicationStatusProcessor {
         this.metricHandlers = loadMetricHandlers(repConfig);
 
         const { monitorReplicationFailureExpiryTimeS } = this.repConfig;
-        this._statsClient = new StatsModel(undefined, INTERVAL,
-            (monitorReplicationFailureExpiryTimeS + INTERVAL));
+        this._statsClient = new StatsModel(undefined, INTERVAL, monitorReplicationFailureExpiryTimeS + INTERVAL);
         // Serialize updates to the same master key
         this.taskScheduler = new TaskScheduler(
             (ctx, done) => ctx.task.processQueueEntry(ctx.entry, done),
-            ctx => ctx.entry.getCanonicalKey());
+            ctx => ctx.entry.getCanonicalKey(),
+        );
 
         this._ReplayProducers = [];
 
@@ -285,9 +278,7 @@ class ReplicationStatusProcessor {
         if (!replayTopics || replayTopics.length === 0) {
             return [];
         }
-        return replayTopics
-            .map(t => t.topicName)
-            .filter((item, pos, self) => self.indexOf(item) === pos);
+        return replayTopics.map(t => t.topicName).filter((item, pos, self) => self.indexOf(item) === pos);
     }
 
     _setupVaultclientCache() {
@@ -295,23 +286,21 @@ class ReplicationStatusProcessor {
 
         if (this.sourceConfig.auth.type === 'role') {
             const { host, port } = this.sourceConfig.auth.vault;
-            this.vaultclientCache
-                .setHost('source:s3', host)
-                .setPort('source:s3', port);
+            this.vaultclientCache.setHost('source:s3', host).setPort('source:s3', port);
             if (this.sourceConfig.transport === 'https') {
                 // provision HTTPS credentials for local Vault S3 route
                 this.vaultclientCache.setHttps(
-                    'source:s3', this.internalHttpsConfig.key,
+                    'source:s3',
+                    this.internalHttpsConfig.key,
                     this.internalHttpsConfig.cert,
-                    this.internalHttpsConfig.ca);
+                    this.internalHttpsConfig.ca,
+                );
             }
         }
     }
 
     _producerLiveness(p, componentName, responses) {
-        if (p === undefined || p === null ||
-            p._producer === undefined ||
-            p._producer === null) {
+        if (p === undefined || p === null || p._producer === undefined || p._producer === null) {
             responses.push({
                 component: componentName,
                 status: constants.statusUndefined,
@@ -380,53 +369,55 @@ class ReplicationStatusProcessor {
      * @return {undefined}
      */
     start(options, cb) {
-        async.parallel([
-            done => {
-                this._failedCRRProducer = new FailedCRRProducer(this.kafkaConfig);
-                this._replayTopicNames.forEach(t => {
-                    this._ReplayProducers[t] = new ReplayProducer(this.kafkaConfig, t);
-                });
-                this._failedCRRProducer.setupProducer(err => {
-                    if (err) {
-                        return done(err);
+        async.parallel(
+            [
+                done => {
+                    this._failedCRRProducer = new FailedCRRProducer(this.kafkaConfig);
+                    this._replayTopicNames.forEach(t => {
+                        this._ReplayProducers[t] = new ReplayProducer(this.kafkaConfig, t);
+                    });
+                    this._failedCRRProducer.setupProducer(err => {
+                        if (err) {
+                            return done(err);
+                        }
+                        return async.each(
+                            this._replayTopicNames,
+                            (topicName, next) => this._ReplayProducers[topicName].setupProducer(next),
+                            done,
+                        );
+                    });
+                },
+                done => {
+                    if (this.gcConfig) {
+                        this._gcProducer = new GarbageCollectorProducer();
+                        this._gcProducer.setupProducer(done);
+                    } else {
+                        done();
                     }
-                    return async.each(this._replayTopicNames, (topicName, next) =>
-                        this._ReplayProducers[topicName].setupProducer(next),
-                    done);
-                });
-            },
-            done => {
-                if (this.gcConfig) {
-                    this._gcProducer = new GarbageCollectorProducer();
-                    this._gcProducer.setupProducer(done);
-                } else {
-                    done();
-                }
-            },
-            done => {
-                this._mProducer = new MetricsProducer(this.kafkaConfig,
-                    this.mConfig);
-                this._mProducer.setupProducer(done);
-            },
-            done => {
-                let consumerReady = false;
-                this._consumer = new BackbeatConsumer(
-                    this._getConsumerOptions(options));
-                this._consumer.on('error', () => {
-                    if (!consumerReady) {
-                        this.logger.fatal('error starting a backbeat consumer');
-                        process.exit(1);
-                    }
-                });
-                this._consumer.on('ready', () => {
-                    consumerReady = true;
-                    this.logger.info('replication status processor is ready ' +
-                                     'to consume replication status entries');
-                    this._consumer.subscribe();
-                    done();
-                });
-            },
-        ], cb);
+                },
+                done => {
+                    this._mProducer = new MetricsProducer(this.kafkaConfig, this.mConfig);
+                    this._mProducer.setupProducer(done);
+                },
+                done => {
+                    let consumerReady = false;
+                    this._consumer = new BackbeatConsumer(this._getConsumerOptions(options));
+                    this._consumer.on('error', () => {
+                        if (!consumerReady) {
+                            this.logger.fatal('error starting a backbeat consumer');
+                            process.exit(1);
+                        }
+                    });
+                    this._consumer.on('ready', () => {
+                        consumerReady = true;
+                        this.logger.info('replication status processor is ready to consume replication status entries');
+                        this._consumer.subscribe();
+                        done();
+                    });
+                },
+            ],
+            cb,
+        );
     }
 
     /**
@@ -436,32 +427,35 @@ class ReplicationStatusProcessor {
      * @return {undefined}
      */
     stop(done) {
-        async.series([
-            next => {
-                if (this._consumer) {
-                    this.logger.debug('closing kafka consumer', {
+        async.series(
+            [
+                next => {
+                    if (this._consumer) {
+                        this.logger.debug('closing kafka consumer', {
+                            method: 'ReplicationStatusProcessor.stop',
+                        });
+                        return this._consumer.close(next);
+                    }
+                    this.logger.debug('no kafka consumer to close', {
                         method: 'ReplicationStatusProcessor.stop',
                     });
-                    return this._consumer.close(next);
-                }
-                this.logger.debug('no kafka consumer to close', {
-                    method: 'ReplicationStatusProcessor.stop',
-                });
-                return next();
-            },
-            next => {
-                if (this._mProducer) {
-                    this.logger.debug('closing metrics producer', {
+                    return next();
+                },
+                next => {
+                    if (this._mProducer) {
+                        this.logger.debug('closing metrics producer', {
+                            method: 'ReplicationStatusProcessor.stop',
+                        });
+                        return this._mProducer.close(next);
+                    }
+                    this.logger.debug('no metrics producer to close', {
                         method: 'ReplicationStatusProcessor.stop',
                     });
-                    return this._mProducer.close(next);
-                }
-                this.logger.debug('no metrics producer to close', {
-                    method: 'ReplicationStatusProcessor.stop',
-                });
-                return next();
-            }
-        ], done);
+                    return next();
+                },
+            ],
+            done,
+        );
     }
 
     /**
@@ -478,8 +472,7 @@ class ReplicationStatusProcessor {
     processKafkaEntry(kafkaEntry, done) {
         const sourceEntry = QueueEntry.createFromKafkaEntry(kafkaEntry);
         if (sourceEntry.error) {
-            this.logger.error('error processing source entry',
-                { error: sourceEntry.error });
+            this.logger.error('error processing source entry', { error: sourceEntry.error });
             return process.nextTick(() => done(errors.InternalError));
         }
         let task;
@@ -487,17 +480,16 @@ class ReplicationStatusProcessor {
             task = new UpdateReplicationStatus(this, this.metricHandlers);
         }
         if (task) {
-            return this.taskScheduler.push({ task, entry: sourceEntry },
-                done);
+            return this.taskScheduler.push({ task, entry: sourceEntry }, done);
         }
-        this.logger.warn('skipping unknown source entry',
-            { entry: sourceEntry.getLogInfo() });
+        this.logger.warn('skipping unknown source entry', { entry: sourceEntry.getLogInfo() });
         return process.nextTick(done);
     }
 
     isReady() {
-        return this._consumer && this._consumer.isReady() &&
-            this._failedCRRProducer && this._failedCRRProducer.isReady();
+        return (
+            this._consumer && this._consumer.isReady() && this._failedCRRProducer && this._failedCRRProducer.isReady()
+        );
     }
 
     /**
@@ -528,25 +520,29 @@ class ReplicationStatusProcessor {
             verboseLiveness.consumer = constants.statusReady;
         }
 
-        verboseLiveness.failedCRRProducer =
-            this._producerLiveness(this._failedCRRProducer, 'Failed CRR Producer', responses);
+        verboseLiveness.failedCRRProducer = this._producerLiveness(
+            this._failedCRRProducer,
+            'Failed CRR Producer',
+            responses,
+        );
 
         this._replayTopicNames.forEach(topicName => {
             const componentName = `Replay CRR Producer to ${topicName}`;
-            verboseLiveness[`replayCRRProducer-${topicName}`] =
-                this._producerLiveness(this._ReplayProducers[topicName], componentName, responses);
+            verboseLiveness[`replayCRRProducer-${topicName}`] = this._producerLiveness(
+                this._ReplayProducers[topicName],
+                componentName,
+                responses,
+            );
         });
 
         log.debug('verbose liveness', verboseLiveness);
 
         if (responses.length > 0) {
             const message = JSON.stringify(responses);
-            log.debug('service unavailable',
-                {
-                    httpCode: 500,
-                    error: message,
-                }
-            );
+            log.debug('service unavailable', {
+                httpCode: 500,
+                error: message,
+            });
             res.writeHead(500);
             res.end(message);
             return undefined;

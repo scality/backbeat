@@ -1,5 +1,7 @@
 const { RulesReducer } = require('./RulesReducer');
-const { lifecycleListing: { NON_CURRENT_TYPE, CURRENT_TYPE, ORPHAN_DM_TYPE } } = require('../../../lib/constants');
+const {
+    lifecycleListing: { NON_CURRENT_TYPE, CURRENT_TYPE, ORPHAN_DM_TYPE },
+} = require('../../../lib/constants');
 
 const { s3middleware } = require('@scality/arsenal');
 const { scaleMsPerDay } = s3middleware.objectUtils;
@@ -52,11 +54,11 @@ function _makeListParams(listType, currentDate, listing, options) {
  */
 function _mergeParams(currentDate, { currents = [], nonCurrents = [], orphans = [] }, options) {
     return [
-      ...currents.map(listing => _makeListParams(CURRENT_TYPE, currentDate, listing, options)),
-      ...nonCurrents.map(listing => _makeListParams(NON_CURRENT_TYPE, currentDate, listing, options)),
-      ...orphans.map(listing => _makeListParams(ORPHAN_DM_TYPE, currentDate, listing, options)),
+        ...currents.map(listing => _makeListParams(CURRENT_TYPE, currentDate, listing, options)),
+        ...nonCurrents.map(listing => _makeListParams(NON_CURRENT_TYPE, currentDate, listing, options)),
+        ...orphans.map(listing => _makeListParams(ORPHAN_DM_TYPE, currentDate, listing, options)),
     ];
-  }
+}
 
 /**
  * _getParamsFromListings: retrieves the lifecycle listing informations from listings gathered
@@ -220,11 +222,12 @@ function formatSupportedLifecycleRules(lcConfig) {
  * @returns {bool} true if ruleName is an expiration rule
  */
 function isExpirationRule(ruleName) {
-    return ruleName === 'Expiration' ||
+    return (
+        ruleName === 'Expiration' ||
         ruleName === 'NoncurrentVersionExpiration' ||
-        ruleName === 'AbortIncompleteMultipartUpload';
+        ruleName === 'AbortIncompleteMultipartUpload'
+    );
 }
-
 
 function rulesSupportTransition(lcRules) {
     return lcRules.some(rule => TRANSITION_RULES.includes(rule));

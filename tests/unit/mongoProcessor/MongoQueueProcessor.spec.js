@@ -1,10 +1,8 @@
 const assert = require('assert');
 const sinon = require('sinon');
 
-const MongoQueueProcessor =
-    require('../../../extensions/mongoProcessor/MongoQueueProcessor');
-const ObjectQueueEntry =
-    require('../../../lib/models/ObjectQueueEntry');
+const MongoQueueProcessor = require('../../../extensions/mongoProcessor/MongoQueueProcessor');
+const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 const MetricsProducer = require('../../../lib/MetricsProducer');
 const Config = require('../../../lib/Config');
@@ -47,17 +45,26 @@ describe('MongoQueueProcessor._updateReplicationInfo', () => {
         const bucketInfo = _makeBucketInfo({
             role: 'arn:aws:iam::111:role/src,arn:aws:iam::000:role/repRule',
             destination: 'arn:aws:s3:::legacy-bucket',
-            rules: [{
-                id: 'r-a', prefix: '', enabled: true, priority: 1,
-                storageClass: 'crr-a',
-                destination: 'arn:aws:s3:::bucket-a',
-                account: '222',
-            }, {
-                id: 'r-b', prefix: '', enabled: true, priority: 2,
-                storageClass: 'crr-b',
-                destination: 'arn:aws:s3:::bucket-b',
-                account: '333',
-            }],
+            rules: [
+                {
+                    id: 'r-a',
+                    prefix: '',
+                    enabled: true,
+                    priority: 1,
+                    storageClass: 'crr-a',
+                    destination: 'arn:aws:s3:::bucket-a',
+                    account: '222',
+                },
+                {
+                    id: 'r-b',
+                    prefix: '',
+                    enabled: true,
+                    priority: 2,
+                    storageClass: 'crr-b',
+                    destination: 'arn:aws:s3:::bucket-b',
+                    account: '333',
+                },
+            ],
         });
 
         proc._updateReplicationInfo(entry, bucketInfo, ['DATA', 'METADATA']);
@@ -66,18 +73,12 @@ describe('MongoQueueProcessor._updateReplicationInfo', () => {
         assert.strictEqual(info.status, 'PENDING');
         assert.strictEqual(info.role, 'arn:aws:iam::111:role/src');
         assert.strictEqual(info.destination, undefined);
-        const backendsBySite = Object.fromEntries(
-            info.backends.map(b => [b.site, b]));
-        assert.deepStrictEqual(
-            info.backends.map(b => b.site).sort(), ['crr-a', 'crr-b']);
-        assert.strictEqual(backendsBySite['crr-a'].destination,
-            'arn:aws:s3:::bucket-a');
-        assert.strictEqual(backendsBySite['crr-a'].role,
-            'arn:aws:iam::222:role/repRule');
-        assert.strictEqual(backendsBySite['crr-b'].destination,
-            'arn:aws:s3:::bucket-b');
-        assert.strictEqual(backendsBySite['crr-b'].role,
-            'arn:aws:iam::333:role/repRule');
+        const backendsBySite = Object.fromEntries(info.backends.map(b => [b.site, b]));
+        assert.deepStrictEqual(info.backends.map(b => b.site).sort(), ['crr-a', 'crr-b']);
+        assert.strictEqual(backendsBySite['crr-a'].destination, 'arn:aws:s3:::bucket-a');
+        assert.strictEqual(backendsBySite['crr-a'].role, 'arn:aws:iam::222:role/repRule');
+        assert.strictEqual(backendsBySite['crr-b'].destination, 'arn:aws:s3:::bucket-b');
+        assert.strictEqual(backendsBySite['crr-b'].role, 'arn:aws:iam::333:role/repRule');
     });
 
     it('derives per-rule role via account substitution when absent', () => {
@@ -85,12 +86,16 @@ describe('MongoQueueProcessor._updateReplicationInfo', () => {
         const entry = _makeEntry();
         const bucketInfo = _makeBucketInfo({
             role: 'arn:aws:iam::111:role/src,arn:aws:iam::000:role/repRule',
-            rules: [{
-                id: 'r-a', prefix: '', enabled: true,
-                storageClass: 'crr-a',
-                destination: 'arn:aws:s3:::bucket-a',
-                account: '222',
-            }],
+            rules: [
+                {
+                    id: 'r-a',
+                    prefix: '',
+                    enabled: true,
+                    storageClass: 'crr-a',
+                    destination: 'arn:aws:s3:::bucket-a',
+                    account: '222',
+                },
+            ],
         });
 
         proc._updateReplicationInfo(entry, bucketInfo, ['DATA']);
@@ -104,17 +109,26 @@ describe('MongoQueueProcessor._updateReplicationInfo', () => {
         const entry = _makeEntry();
         const bucketInfo = _makeBucketInfo({
             role: 'arn:aws:iam::111:role/src,arn:aws:iam::000:role/x',
-            rules: [{
-                id: 'low', prefix: '', enabled: true, priority: 1,
-                storageClass: 'crr-a',
-                destination: 'arn:aws:s3:::bucket-a',
-                account: '222',
-            }, {
-                id: 'high', prefix: 'docs', enabled: true, priority: 10,
-                storageClass: 'crr-a',
-                destination: 'arn:aws:s3:::bucket-a',
-                account: '222',
-            }],
+            rules: [
+                {
+                    id: 'low',
+                    prefix: '',
+                    enabled: true,
+                    priority: 1,
+                    storageClass: 'crr-a',
+                    destination: 'arn:aws:s3:::bucket-a',
+                    account: '222',
+                },
+                {
+                    id: 'high',
+                    prefix: 'docs',
+                    enabled: true,
+                    priority: 10,
+                    storageClass: 'crr-a',
+                    destination: 'arn:aws:s3:::bucket-a',
+                    account: '222',
+                },
+            ],
         });
 
         proc._updateReplicationInfo(entry, bucketInfo, ['DATA']);
@@ -129,12 +143,16 @@ describe('MongoQueueProcessor._updateReplicationInfo', () => {
         const entry = _makeEntry();
         const bucketInfo = _makeBucketInfo({
             role: 'arn:aws:iam::111:role/src',
-            rules: [{
-                id: 'r-a', prefix: '', enabled: true,
-                storageClass: 'cloud-a',
-                destination: 'arn:aws:s3:::ignored',
-                account: '222',
-            }],
+            rules: [
+                {
+                    id: 'r-a',
+                    prefix: '',
+                    enabled: true,
+                    storageClass: 'cloud-a',
+                    destination: 'arn:aws:s3:::ignored',
+                    account: '222',
+                },
+            ],
         });
 
         proc._updateReplicationInfo(entry, bucketInfo, ['DATA']);
@@ -154,10 +172,14 @@ describe('MongoQueueProcessor._updateReplicationInfo', () => {
         const bucketInfo = _makeBucketInfo({
             role: 'arn:aws:iam::111:role/src,arn:aws:iam::222:role/dst',
             destination: 'arn:aws:s3:::legacy-bucket',
-            rules: [{
-                id: 'r1', prefix: '', enabled: true,
-                storageClass: 'crr-a,crr-b',
-            }],
+            rules: [
+                {
+                    id: 'r1',
+                    prefix: '',
+                    enabled: true,
+                    storageClass: 'crr-a,crr-b',
+                },
+            ],
         });
 
         proc._updateReplicationInfo(entry, bucketInfo, ['DATA']);
@@ -185,12 +207,16 @@ describe('MongoQueueProcessor._updateReplicationInfo', () => {
         const entry = _makeEntry('other/path');
         const bucketInfo = _makeBucketInfo({
             role: 'arn:aws:iam::111:role/src',
-            rules: [{
-                id: 'r-a', prefix: 'docs', enabled: true,
-                storageClass: 'crr-a',
-                destination: 'arn:aws:s3:::bucket-a',
-                account: '222',
-            }],
+            rules: [
+                {
+                    id: 'r-a',
+                    prefix: 'docs',
+                    enabled: true,
+                    storageClass: 'crr-a',
+                    destination: 'arn:aws:s3:::bucket-a',
+                    account: '222',
+                },
+            ],
         });
 
         proc._updateReplicationInfo(entry, bucketInfo, ['DATA']);
@@ -206,20 +232,22 @@ describe('MongoQueueProcessor._updateReplicationInfo', () => {
         const entry = _makeEntry();
         const bucketInfo = _makeBucketInfo({
             role: 'arn:aws:iam::111:role/src,arn:aws:iam::000:role/repRule',
-            rules: [{
-                id: 'r-crr',
-                prefix: '',
-                enabled: true,
-                storageClass: 'crr-a',
-                destination: 'arn:aws:s3:::bucket-a',
-                account: '222',
-            },
-            {
-                id: 'r-cloud',
-                prefix: '',
-                enabled: true,
-                storageClass: 'cloud-b',
-            }],
+            rules: [
+                {
+                    id: 'r-crr',
+                    prefix: '',
+                    enabled: true,
+                    storageClass: 'crr-a',
+                    destination: 'arn:aws:s3:::bucket-a',
+                    account: '222',
+                },
+                {
+                    id: 'r-cloud',
+                    prefix: '',
+                    enabled: true,
+                    storageClass: 'cloud-b',
+                },
+            ],
         });
 
         proc._updateReplicationInfo(entry, bucketInfo, ['DATA', 'METADATA']);
@@ -280,8 +308,7 @@ describe('MongoQueueProcessor.start', () => {
         });
 
         setImmediate(() => {
-            assert.deepStrictEqual(proc._consumer._consumerParams,
-                { 'security.protocol': 'ssl' });
+            assert.deepStrictEqual(proc._consumer._consumerParams, { 'security.protocol': 'ssl' });
             done();
         });
     });
@@ -293,11 +320,7 @@ describe('MongoQueueProcessor metrics', () => {
     });
 
     function makeProcessor(mConfig) {
-        return new MongoQueueProcessor(
-            { hosts: 'localhost:9092' },
-            { topic: 'backbeat-ingestion' },
-            {},
-            mConfig);
+        return new MongoQueueProcessor({ hosts: 'localhost:9092' }, { topic: 'backbeat-ingestion' }, {}, mConfig);
     }
 
     it('reports periodically when a metrics topic is configured', done => {
@@ -325,8 +348,7 @@ describe('MongoQueueProcessor metrics', () => {
 
     it('does not report when the producer fails to set up', done => {
         const setupError = new Error('kafka is unreachable');
-        sinon.stub(MetricsProducer.prototype, 'setupProducer')
-            .yields(setupError);
+        sinon.stub(MetricsProducer.prototype, 'setupProducer').yields(setupError);
         const clock = sinon.useFakeTimers({ toFake: ['setInterval'] });
         const proc = makeProcessor({ topic: 'backbeat-metrics' });
 

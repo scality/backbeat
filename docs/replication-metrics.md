@@ -25,14 +25,14 @@ Below is a sample configuration using the default queue populator configuration 
 ```yaml
 # prom.yml
 global:
-  scrape_interval:     15s
-  evaluation_interval: 15s
+    scrape_interval: 15s
+    evaluation_interval: 15s
 
 scrape_configs:
-  - job_name: queue_populator
-    metrics_path: /metrics
-    static_configs:
-      - targets: ['localhost:4042']
+    - job_name: queue_populator
+      metrics_path: /metrics
+      static_configs:
+          - targets: ['localhost:4042']
 ```
 
 Start Prometheus by providing this file as the config file parameter.

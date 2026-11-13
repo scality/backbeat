@@ -9,7 +9,9 @@ const {
 } = require('../../lib/config/configItems.joi');
 const { extensionConfigValidator } = require('../../lib/config/extensionConfigValidator');
 
-const { backbeatConsumer: { MAX_QUEUED_DEFAULT } } = require('../../lib/constants');
+const {
+    backbeatConsumer: { MAX_QUEUED_DEFAULT },
+} = require('../../lib/constants');
 const { ValidLifecycleRules: supportedLifecycleRules } = require('@scality/arsenal').models;
 
 const joiSchema = joi.object({
@@ -23,18 +25,17 @@ const joiSchema = joi.object({
     autoCreateIndexes: joi.boolean().default(false),
     conductor: {
         auth: inheritedAuthJoi,
-        bucketSource: joi.string().
-            valid('bucketd', 'zookeeper', 'mongodb').default('zookeeper'),
-        bucketd: hostPortJoi.
-            when('bucketSource', { is: 'bucketd', then: joi.required() }),
-        mongodb: mongoJoi.
-            when('bucketSource', { is: 'mongodb', then: joi.required() }),
+        bucketSource: joi.string().valid('bucketd', 'zookeeper', 'mongodb').default('zookeeper'),
+        bucketd: hostPortJoi.when('bucketSource', { is: 'bucketd', then: joi.required() }),
+        mongodb: mongoJoi.when('bucketSource', { is: 'mongodb', then: joi.required() }),
         cronRule: joi.string().required().meta({ env: 'CRONRULE' }),
         concurrency: joi.number().greater(0).default(10),
         concurrentIndexesBuildLimit: joi.number().greater(0).default(10),
-        backlogControl: joi.object({
-            enabled: joi.boolean().default(true),
-        }).default({ enabled: true }),
+        backlogControl: joi
+            .object({
+                enabled: joi.boolean().default(true),
+            })
+            .default({ enabled: true }),
         filter: joi.object({
             deny: joi.object({
                 buckets: joi.array().items(joi.string()),
@@ -79,9 +80,10 @@ const joiSchema = joi.object({
     coldStorageRestoreAdjustTopicPrefix: joi.string().default('cold-restore-adjust-req-'),
     coldStorageGCTopicPrefix: joi.string().default('cold-gc-req-'),
     coldStorageStatusTopicPrefix: joi.string().default('cold-status-'),
-    supportedLifecycleRules: joi.array().items(
-        joi.string().valid(...supportedLifecycleRules)
-    ).default(supportedLifecycleRules),
+    supportedLifecycleRules: joi
+        .array()
+        .items(joi.string().valid(...supportedLifecycleRules))
+        .default(supportedLifecycleRules),
 });
 
 module.exports = extensionConfigValidator('lifecycle', joiSchema);

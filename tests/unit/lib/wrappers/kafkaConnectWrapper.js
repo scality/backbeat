@@ -7,8 +7,7 @@ const events = require('events');
 
 const logger = new werelogs.Logger('connect-wrapper-logger');
 
-const KafkaConnectWrapper =
-    require('../../../../lib/wrappers/KafkaConnectWrapper');
+const KafkaConnectWrapper = require('../../../../lib/wrappers/KafkaConnectWrapper');
 
 function httpError(statusCode) {
     const err = errors.InternalError.customizeDescription(`status ${statusCode}`);
@@ -34,15 +33,24 @@ describe('KafkaConnectWrapper', () => {
     describe('constructor', () => {
         it('should fail when params invalid', done => {
             assert.throws(() => new KafkaConnectWrapper({}));
-            assert.throws(() => new KafkaConnectWrapper({
-                kafkaConnectHost: 'localhost'
-            }));
-            assert.throws(() => new KafkaConnectWrapper({
-                kafkaConnectPort: 8083
-            }));
-            assert.throws(() => new KafkaConnectWrapper({
-                logger,
-            }));
+            assert.throws(
+                () =>
+                    new KafkaConnectWrapper({
+                        kafkaConnectHost: 'localhost',
+                    }),
+            );
+            assert.throws(
+                () =>
+                    new KafkaConnectWrapper({
+                        kafkaConnectPort: 8083,
+                    }),
+            );
+            assert.throws(
+                () =>
+                    new KafkaConnectWrapper({
+                        logger,
+                    }),
+            );
             const tempWrapper = new KafkaConnectWrapper({
                 kafkaConnectHost: 'localhost',
                 kafkaConnectPort: 8083,
@@ -55,23 +63,24 @@ describe('KafkaConnectWrapper', () => {
 
     describe('getConnectors', () => {
         it('should return connectors', async () => {
-            const makeRequestStub = sinon.stub(wrapper, 'makeRequest').resolves(
-                ['mongo-source-1', 'mongo-source-2']);
-            await wrapper.getConnectors()
-            .then(connectors => {
-                assert.deepEqual(connectors, ['mongo-source-1', 'mongo-source-2']);
-                assert(makeRequestStub.calledOnceWith({
-                    method: 'GET',
-                    path: '/connectors',
-                }));
-            })
-            .catch(err => assert.ifError(err));
+            const makeRequestStub = sinon.stub(wrapper, 'makeRequest').resolves(['mongo-source-1', 'mongo-source-2']);
+            await wrapper
+                .getConnectors()
+                .then(connectors => {
+                    assert.deepEqual(connectors, ['mongo-source-1', 'mongo-source-2']);
+                    assert(
+                        makeRequestStub.calledOnceWith({
+                            method: 'GET',
+                            path: '/connectors',
+                        }),
+                    );
+                })
+                .catch(err => assert.ifError(err));
         });
 
         it('should throw error when request fails', async () => {
             sinon.stub(wrapper, 'makeRequest').rejects(errors.InternalError);
-            await wrapper.getConnectors()
-            .catch(err => assert.deepEqual(err, errors.InternalError));
+            await wrapper.getConnectors().catch(err => assert.deepEqual(err, errors.InternalError));
         });
     });
 
@@ -82,75 +91,87 @@ describe('KafkaConnectWrapper', () => {
                 'database': 'metadata',
                 'topic.namespace.map': '{"*": "oplog"}',
             });
-            await wrapper.getConnectorConfig('mongo-source-1')
-            .then(connectorConfig => {
-                assert.deepEqual(connectorConfig, {
-                    'connector.class': 'com.mongodb.kafka.connect.MongoSourceConnector',
-                    'database': 'metadata',
-                    'topic.namespace.map': '{"*": "oplog"}',
-                });
-                assert(makeRequestStub.calledOnceWith({
-                    method: 'GET',
-                    path: '/connectors/mongo-source-1/config',
-                }));
-            })
-            .catch(err => assert.ifError(err));
+            await wrapper
+                .getConnectorConfig('mongo-source-1')
+                .then(connectorConfig => {
+                    assert.deepEqual(connectorConfig, {
+                        'connector.class': 'com.mongodb.kafka.connect.MongoSourceConnector',
+                        'database': 'metadata',
+                        'topic.namespace.map': '{"*": "oplog"}',
+                    });
+                    assert(
+                        makeRequestStub.calledOnceWith({
+                            method: 'GET',
+                            path: '/connectors/mongo-source-1/config',
+                        }),
+                    );
+                })
+                .catch(err => assert.ifError(err));
         });
 
         it('should throw error when request fails', async () => {
             sinon.stub(wrapper, 'makeRequest').rejects(errors.InternalError);
-            await wrapper.getConnectorConfig('mongo-source-1')
-            .catch(err => assert.deepEqual(err, errors.InternalError));
+            await wrapper
+                .getConnectorConfig('mongo-source-1')
+                .catch(err => assert.deepEqual(err, errors.InternalError));
         });
     });
 
     describe('updateConnectorConfig', () => {
         it('should update connector config', async () => {
-            const getConnectorStub = sinon.stub(wrapper, 'getConnectors').resolves(
-                ['mongo-source-1']);
+            const getConnectorStub = sinon.stub(wrapper, 'getConnectors').resolves(['mongo-source-1']);
             const makeRequestStub = sinon.stub(wrapper, 'makeRequest').resolves({
-                example: 'config'
+                example: 'config',
             });
-            await wrapper.updateConnectorConfig('mongo-source-1', { key: 'value' })
-            .then(newConf => {
-                assert.deepEqual(newConf, {
-                    example: 'config'
-                });
-                assert(getConnectorStub.calledOnce);
-                assert(makeRequestStub.calledOnceWithExactly({
-                    method: 'PUT',
-                    path: '/connectors/mongo-source-1/config',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    }
-                }, '{"key":"value"}'));
-            })
-            .catch(err => assert.ifError(err));
+            await wrapper
+                .updateConnectorConfig('mongo-source-1', { key: 'value' })
+                .then(newConf => {
+                    assert.deepEqual(newConf, {
+                        example: 'config',
+                    });
+                    assert(getConnectorStub.calledOnce);
+                    assert(
+                        makeRequestStub.calledOnceWithExactly(
+                            {
+                                method: 'PUT',
+                                path: '/connectors/mongo-source-1/config',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                },
+                            },
+                            '{"key":"value"}',
+                        ),
+                    );
+                })
+                .catch(err => assert.ifError(err));
         });
 
         it('should not update connector config when connector invalid', async () => {
             const makeRequestStub = sinon.stub(wrapper, 'makeRequest').resolves(true);
             const getConnectorStub = sinon.stub(wrapper, 'getConnectors').resolves([]);
-            await wrapper.updateConnectorConfig('mongo-source-1', {})
-            .then(newConf => {
-                assert.strictEqual(newConf, undefined);
-                assert(makeRequestStub.notCalled);
-                assert(getConnectorStub.calledOnce);
-            })
-            .catch(err => assert.strictEqual(err.name, errors.InternalError.name));
+            await wrapper
+                .updateConnectorConfig('mongo-source-1', {})
+                .then(newConf => {
+                    assert.strictEqual(newConf, undefined);
+                    assert(makeRequestStub.notCalled);
+                    assert(getConnectorStub.calledOnce);
+                })
+                .catch(err => assert.strictEqual(err.name, errors.InternalError.name));
         });
 
         it('should throw error when getConnectors fails', async () => {
             sinon.stub(wrapper, 'getConnectors').rejects(errors.InternalError);
-            await wrapper.updateConnectorConfig('mongo-source-1', {})
-            .catch(err => assert.deepEqual(err, errors.InternalError));
+            await wrapper
+                .updateConnectorConfig('mongo-source-1', {})
+                .catch(err => assert.deepEqual(err, errors.InternalError));
         });
 
         it('should throw error when put fails', async () => {
             sinon.stub(wrapper, 'makeRequest').rejects(errors.InternalError);
             sinon.stub(wrapper, 'getConnectors').resolves(['mongo-source-1']);
-            await wrapper.updateConnectorConfig('mongo-source-1', {})
-            .catch(err => assert.deepEqual(err, errors.InternalError));
+            await wrapper
+                .updateConnectorConfig('mongo-source-1', {})
+                .catch(err => assert.deepEqual(err, errors.InternalError));
         });
     });
 
@@ -163,22 +184,25 @@ describe('KafkaConnectWrapper', () => {
                 'pipeline': '[]',
             });
             const updateConnectorConfigStub = sinon.stub(wrapper, 'updateConnectorConfig').resolves({
-                example: 'config'
+                example: 'config',
             });
-            await wrapper.updateConnectorPipeline('mongo-source-1', JSON.stringify([{ $match: { $in: ['bucket1'] } }]))
-            .then(newConf => {
-                assert.deepEqual(newConf, {
-                    example: 'config'
-                });
-                assert(getConnectorConfigStub.calledOnce);
-                assert(updateConnectorConfigStub.calledOnceWith('mongo-source-1', {
-                    'connector.class': 'com.mongodb.kafka.connect.MongoSourceConnector',
-                    'database': 'metadata',
-                    'topic.namespace.map': '{"*": "oplog"}',
-                    'pipeline': '[{"$match":{"$in":["bucket1"]}}]',
-                }));
-            })
-            .catch(err => assert.ifError(err));
+            await wrapper
+                .updateConnectorPipeline('mongo-source-1', JSON.stringify([{ $match: { $in: ['bucket1'] } }]))
+                .then(newConf => {
+                    assert.deepEqual(newConf, {
+                        example: 'config',
+                    });
+                    assert(getConnectorConfigStub.calledOnce);
+                    assert(
+                        updateConnectorConfigStub.calledOnceWith('mongo-source-1', {
+                            'connector.class': 'com.mongodb.kafka.connect.MongoSourceConnector',
+                            'database': 'metadata',
+                            'topic.namespace.map': '{"*": "oplog"}',
+                            'pipeline': '[{"$match":{"$in":["bucket1"]}}]',
+                        }),
+                    );
+                })
+                .catch(err => assert.ifError(err));
         });
 
         it('should not update connector pipeline', async () => {
@@ -189,23 +213,25 @@ describe('KafkaConnectWrapper', () => {
                 'pipeline': '[]',
             });
             const updateConnectorConfigStub = sinon.stub(wrapper, 'updateConnectorConfig').resolves({
-                example: 'config'
+                example: 'config',
             });
-            await wrapper.updateConnectorPipeline('mongo-source-2', [{ $match: { $in: ['bucket1'] } }])
-            .then(newConf => {
-                assert.deepEqual(newConf, {
-                    example: 'config'
-                });
-                assert(getConnectorConfigStub.calledOnce);
-                assert(updateConnectorConfigStub.calledOnce);
-            })
-            .catch(err => assert.ifError(err));
+            await wrapper
+                .updateConnectorPipeline('mongo-source-2', [{ $match: { $in: ['bucket1'] } }])
+                .then(newConf => {
+                    assert.deepEqual(newConf, {
+                        example: 'config',
+                    });
+                    assert(getConnectorConfigStub.calledOnce);
+                    assert(updateConnectorConfigStub.calledOnce);
+                })
+                .catch(err => assert.ifError(err));
         });
 
         it('should throw error when getConnectorConfig', async () => {
             sinon.stub(wrapper, 'getConnectorConfig').rejects(errors.InternalError);
-            await wrapper.updateConnectorPipeline('mongo-source-1', {})
-            .catch(err => assert.deepEqual(err, errors.InternalError));
+            await wrapper
+                .updateConnectorPipeline('mongo-source-1', {})
+                .catch(err => assert.deepEqual(err, errors.InternalError));
         });
 
         it('should throw error when updateConnectorConfig', async () => {
@@ -216,42 +242,48 @@ describe('KafkaConnectWrapper', () => {
                 'pipeline': '[]',
             });
             sinon.stub(wrapper, 'updateConnectorConfig').rejects(errors.InternalError);
-            await wrapper.updateConnectorPipeline('mongo-source-1', {})
-            .catch(err => assert.deepEqual(err, errors.InternalError));
+            await wrapper
+                .updateConnectorPipeline('mongo-source-1', {})
+                .catch(err => assert.deepEqual(err, errors.InternalError));
         });
     });
 
     describe('createConnector', () => {
         it('should create a connector', async () => {
             const makeRequestStub = sinon.stub(wrapper, 'makeRequest').resolves({
-                example: 'data'
+                example: 'data',
             });
             const config = {
                 name: 'mongo-source',
                 config: {
                     key: 'value',
-                }
+                },
             };
-            await wrapper.createConnector(config)
-            .then(connectorData => {
-                assert.deepEqual(connectorData, {
-                    example: 'data'
-                });
-                assert(makeRequestStub.calledOnceWithExactly({
-                    method: 'POST',
-                    path: '/connectors',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                }, JSON.stringify(config)));
-            })
-            .catch(err => assert.ifError(err));
+            await wrapper
+                .createConnector(config)
+                .then(connectorData => {
+                    assert.deepEqual(connectorData, {
+                        example: 'data',
+                    });
+                    assert(
+                        makeRequestStub.calledOnceWithExactly(
+                            {
+                                method: 'POST',
+                                path: '/connectors',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                },
+                            },
+                            JSON.stringify(config),
+                        ),
+                    );
+                })
+                .catch(err => assert.ifError(err));
         });
 
         it('should throw error when request fails', async () => {
             sinon.stub(wrapper, 'makeRequest').rejects(errors.InternalError);
-            await wrapper.createConnector({})
-            .catch(err => assert.deepEqual(err, errors.InternalError));
+            await wrapper.createConnector({}).catch(err => assert.deepEqual(err, errors.InternalError));
         });
     });
 
@@ -261,8 +293,14 @@ describe('KafkaConnectWrapper', () => {
         const config = { name: 'mongo-source', config: { key: 'value' } };
 
         function assertRecorded(success, body) {
-            assert(metricsHandler.onConnectorReconfiguration.calledOnceWithExactly(
-                { name: 'mongo-source' }, success, sinon.match.number, Buffer.byteLength(JSON.stringify(body))));
+            assert(
+                metricsHandler.onConnectorReconfiguration.calledOnceWithExactly(
+                    { name: 'mongo-source' },
+                    success,
+                    sinon.match.number,
+                    Buffer.byteLength(JSON.stringify(body)),
+                ),
+            );
         }
 
         beforeEach(() => {
@@ -297,10 +335,13 @@ describe('KafkaConnectWrapper', () => {
         [
             ['the connector is not found', w => sinon.stub(w, 'getConnectors').resolves([])],
             ['the connectors cannot be listed', w => sinon.stub(w, 'getConnectors').rejects(httpError(500))],
-            ['the configuration is refused', w => {
-                sinon.stub(w, 'getConnectors').resolves(['mongo-source']);
-                sinon.stub(w, 'makeRequest').rejects(httpError(400));
-            }],
+            [
+                'the configuration is refused',
+                w => {
+                    sinon.stub(w, 'getConnectors').resolves(['mongo-source']);
+                    sinon.stub(w, 'makeRequest').rejects(httpError(400));
+                },
+            ],
         ].forEach(([desc, setup]) => {
             it(`should record a failed configuration update when ${desc}`, async () => {
                 setup(recordingWrapper);
@@ -313,8 +354,14 @@ describe('KafkaConnectWrapper', () => {
             sinon.stub(recordingWrapper, 'makeRequest').resolves({});
             const unicode = { name: 'mongo-source', config: { key: 'é' } };
             await recordingWrapper.createConnector(unicode);
-            assert(metricsHandler.onConnectorReconfiguration.calledOnceWithExactly(
-                { name: 'mongo-source' }, true, sinon.match.number, JSON.stringify(unicode).length + 1));
+            assert(
+                metricsHandler.onConnectorReconfiguration.calledOnceWithExactly(
+                    { name: 'mongo-source' },
+                    true,
+                    sinon.match.number,
+                    JSON.stringify(unicode).length + 1,
+                ),
+            );
         });
 
         it('should not record connector deletions', async () => {
@@ -335,24 +382,26 @@ describe('KafkaConnectWrapper', () => {
                 name: 'mongo-source',
                 config: {},
             });
-            await wrapper.getConnector('mongo-source')
-            .then(connectorData => {
-                assert(makeRequestStub.calledOnceWith({
-                    method: 'GET',
-                    path: '/connectors/mongo-source',
-                }));
-                assert.deepEqual(connectorData, {
-                    name: 'mongo-source',
-                    config: {},
-                });
-            })
-            .catch(err => assert.ifError(err));
+            await wrapper
+                .getConnector('mongo-source')
+                .then(connectorData => {
+                    assert(
+                        makeRequestStub.calledOnceWith({
+                            method: 'GET',
+                            path: '/connectors/mongo-source',
+                        }),
+                    );
+                    assert.deepEqual(connectorData, {
+                        name: 'mongo-source',
+                        config: {},
+                    });
+                })
+                .catch(err => assert.ifError(err));
         });
 
         it('should throw error when request fails', async () => {
             sinon.stub(wrapper, 'makeRequest').rejects(errors.InternalError);
-            await wrapper.getConnector('mongo-source')
-            .catch(err => assert.deepEqual(err, errors.InternalError));
+            await wrapper.getConnector('mongo-source').catch(err => assert.deepEqual(err, errors.InternalError));
         });
     });
 
@@ -364,44 +413,50 @@ describe('KafkaConnectWrapper', () => {
                 tasks: {},
                 type: 'source',
             });
-            await wrapper.getConnectorStatus('mongo-source')
-            .then(connectorStatus => {
-                assert(makeRequestStub.calledOnceWith({
-                    method: 'GET',
-                    path: '/connectors/mongo-source/status',
-                }));
-                assert.deepEqual(connectorStatus, {
-                    name: 'mongo-source',
-                    connector: {},
-                    tasks: {},
-                    type: 'source',
-                });
-            })
-            .catch(err => assert.ifError(err));
+            await wrapper
+                .getConnectorStatus('mongo-source')
+                .then(connectorStatus => {
+                    assert(
+                        makeRequestStub.calledOnceWith({
+                            method: 'GET',
+                            path: '/connectors/mongo-source/status',
+                        }),
+                    );
+                    assert.deepEqual(connectorStatus, {
+                        name: 'mongo-source',
+                        connector: {},
+                        tasks: {},
+                        type: 'source',
+                    });
+                })
+                .catch(err => assert.ifError(err));
         });
 
         it('should throw error when request fails', async () => {
             sinon.stub(wrapper, 'makeRequest').rejects(errors.InternalError);
-            await wrapper.getConnectorStatus('mongo-source')
-            .catch(err => assert.deepEqual(err, errors.InternalError));
+            await wrapper.getConnectorStatus('mongo-source').catch(err => assert.deepEqual(err, errors.InternalError));
         });
     });
 
     describe('deleteConnector', () => {
         it('should delete a connector', async () => {
             const makeRequestStub = sinon.stub(wrapper, 'makeRequest').resolves();
-            await wrapper.deleteConnector('mongo-source')
-            .then(() =>  assert(makeRequestStub.calledOnceWith({
-                method: 'DELETE',
-                path: '/connectors/mongo-source',
-            })))
-            .catch(err => assert.ifError(err));
+            await wrapper
+                .deleteConnector('mongo-source')
+                .then(() =>
+                    assert(
+                        makeRequestStub.calledOnceWith({
+                            method: 'DELETE',
+                            path: '/connectors/mongo-source',
+                        }),
+                    ),
+                )
+                .catch(err => assert.ifError(err));
         });
 
         it('should throw error when request fails', async () => {
             sinon.stub(wrapper, 'makeRequest').rejects(errors.InternalError);
-            await wrapper.deleteConnector('mongo-source')
-            .catch(err => assert.deepEqual(err, errors.InternalError));
+            await wrapper.deleteConnector('mongo-source').catch(err => assert.deepEqual(err, errors.InternalError));
         });
 
         it('should not log a missing connector as an error', async () => {
@@ -416,18 +471,22 @@ describe('KafkaConnectWrapper', () => {
     describe('restartConnector', () => {
         it('should restart a connector', async () => {
             const makeRequestStub = sinon.stub(wrapper, 'makeRequest').resolves();
-            await wrapper.restartConnector('mongo-source', true, true)
-            .then(() =>  assert(makeRequestStub.calledOnceWith({
-                method: 'POST',
-                path: '/connectors/mongo-source/restart?includeTasks=true&onlyFailed=true',
-            })))
-            .catch(err => assert.ifError(err));
+            await wrapper
+                .restartConnector('mongo-source', true, true)
+                .then(() =>
+                    assert(
+                        makeRequestStub.calledOnceWith({
+                            method: 'POST',
+                            path: '/connectors/mongo-source/restart?includeTasks=true&onlyFailed=true',
+                        }),
+                    ),
+                )
+                .catch(err => assert.ifError(err));
         });
 
         it('should throw error when request fails', async () => {
             sinon.stub(wrapper, 'makeRequest').rejects(errors.InternalError);
-            await wrapper.restartConnector('mongo-source')
-            .catch(err => assert.deepEqual(err, errors.InternalError));
+            await wrapper.restartConnector('mongo-source').catch(err => assert.deepEqual(err, errors.InternalError));
         });
     });
 
@@ -445,8 +504,7 @@ describe('KafkaConnectWrapper', () => {
             endStub = sinon.stub();
             request.write = writetStub;
             request.end = endStub;
-            requestStub = sinon.stub(http, 'request').callsArgWith(1, response)
-                .returns(request);
+            requestStub = sinon.stub(http, 'request').callsArgWith(1, response).returns(request);
         });
 
         it('should make request and return body', async () => {
@@ -458,18 +516,20 @@ describe('KafkaConnectWrapper', () => {
             response.emit('data', bodyBuffer);
             response.emit('end');
             await promiseResponse
-            .then(resolvedResponse => {
-                assert.deepEqual(resolvedResponse, []);
-                assert(requestStub.calledOnceWith({
-                    host: 'localhost',
-                    port: 8083,
-                    method: 'GET',
-                    path: '/connectors',
-                }));
-                assert(writetStub.notCalled);
-                assert(endStub.calledOnce);
-            })
-            .catch(err => assert.ifError(err));
+                .then(resolvedResponse => {
+                    assert.deepEqual(resolvedResponse, []);
+                    assert(
+                        requestStub.calledOnceWith({
+                            host: 'localhost',
+                            port: 8083,
+                            method: 'GET',
+                            path: '/connectors',
+                        }),
+                    );
+                    assert(writetStub.notCalled);
+                    assert(endStub.calledOnce);
+                })
+                .catch(err => assert.ifError(err));
         });
 
         it('should fail if request fails', async () => {
@@ -479,31 +539,36 @@ describe('KafkaConnectWrapper', () => {
             });
             request.emit('error', errors.InternalError);
             await promiseResponse
-            .then(resolvedResponse => assert.strict(resolvedResponse, undefined))
-            .catch(err => assert.deepEqual(err, errors.InternalError));
+                .then(resolvedResponse => assert.strict(resolvedResponse, undefined))
+                .catch(err => assert.deepEqual(err, errors.InternalError));
         });
 
         it('should write data into post request', async () => {
-            const promiseResponse = wrapper.makeRequest({
-                method: 'POST',
-                path: '/connectors',
-            }, '{"name":"connector-name","config":{}}');
+            const promiseResponse = wrapper.makeRequest(
+                {
+                    method: 'POST',
+                    path: '/connectors',
+                },
+                '{"name":"connector-name","config":{}}',
+            );
             const bodyBuffer = Buffer.from(JSON.stringify([]));
             response.emit('data', bodyBuffer);
             response.emit('end');
             await promiseResponse
-            .then(resolvedResponse => {
-                assert.deepEqual(resolvedResponse, []);
-                assert(requestStub.calledOnceWith({
-                    host: 'localhost',
-                    port: 8083,
-                    method: 'POST',
-                    path: '/connectors',
-                }));
-                assert(writetStub.calledOnceWithExactly('{"name":"connector-name","config":{}}'));
-                assert(endStub.calledOnce);
-            })
-            .catch(err => assert.ifError(err));
+                .then(resolvedResponse => {
+                    assert.deepEqual(resolvedResponse, []);
+                    assert(
+                        requestStub.calledOnceWith({
+                            host: 'localhost',
+                            port: 8083,
+                            method: 'POST',
+                            path: '/connectors',
+                        }),
+                    );
+                    assert(writetStub.calledOnceWithExactly('{"name":"connector-name","config":{}}'));
+                    assert(endStub.calledOnce);
+                })
+                .catch(err => assert.ifError(err));
         });
 
         it('should group and parse data chunks', async () => {
@@ -513,26 +578,27 @@ describe('KafkaConnectWrapper', () => {
             });
             const bodyBuffer = Buffer.from(JSON.stringify({ key: 'value' }));
             const chunk1 = bodyBuffer.slice(0, Math.floor(bodyBuffer.length / 2));
-            const chunk2 = bodyBuffer.slice(Math.floor(bodyBuffer.length / 2),
-                bodyBuffer.length);
+            const chunk2 = bodyBuffer.slice(Math.floor(bodyBuffer.length / 2), bodyBuffer.length);
             response.emit('data', chunk1);
             response.emit('data', chunk2);
             response.emit('end');
             await promiseResponse
-            .then(resolvedResponse => {
-                assert.deepEqual(resolvedResponse, { key: 'value' });
-                assert(requestStub.calledOnceWith({
-                    host: 'localhost',
-                    port: 8083,
-                    method: 'GET',
-                    path: '/connectors',
-                }));
-                assert(endStub.calledOnce);
-            })
-            .catch(err => assert.ifError(err));
+                .then(resolvedResponse => {
+                    assert.deepEqual(resolvedResponse, { key: 'value' });
+                    assert(
+                        requestStub.calledOnceWith({
+                            host: 'localhost',
+                            port: 8083,
+                            method: 'GET',
+                            path: '/connectors',
+                        }),
+                    );
+                    assert(endStub.calledOnce);
+                })
+                .catch(err => assert.ifError(err));
         });
 
-        it('should fail if it can\'t parse response body', async () => {
+        it("should fail if it can't parse response body", async () => {
             const promiseResponse = wrapper.makeRequest({
                 method: 'GET',
                 path: '/connectors',
@@ -541,17 +607,19 @@ describe('KafkaConnectWrapper', () => {
             response.emit('data', bodyBuffer);
             response.emit('end');
             await promiseResponse
-            .then(resolvedResponse => {
-                assert.deepEqual(resolvedResponse, undefined);
-                assert(requestStub.calledOnceWith({
-                    host: 'localhost',
-                    port: 8083,
-                    method: 'GET',
-                    path: '/connectors',
-                }));
-                assert(endStub.calledOnce);
-            })
-            .catch(err => assert.deepEqual(err, errors.InternalError));
+                .then(resolvedResponse => {
+                    assert.deepEqual(resolvedResponse, undefined);
+                    assert(
+                        requestStub.calledOnceWith({
+                            host: 'localhost',
+                            port: 8083,
+                            method: 'GET',
+                            path: '/connectors',
+                        }),
+                    );
+                    assert(endStub.calledOnce);
+                })
+                .catch(err => assert.deepEqual(err, errors.InternalError));
         });
 
         it('should fail if response has bad status code', async () => {
@@ -579,8 +647,10 @@ describe('KafkaConnectWrapper', () => {
             });
             response.emit('data', Buffer.from('<html>Service Unavailable</html>'));
             response.emit('end');
-            await assert.rejects(promiseResponse, err => err.statusCode === 503 &&
-                err.description === 'Error occured when making request, status 503');
+            await assert.rejects(
+                promiseResponse,
+                err => err.statusCode === 503 && err.description === 'Error occured when making request, status 503',
+            );
         });
 
         it('should not log a missing resource as an error', async () => {
@@ -614,10 +684,12 @@ describe('KafkaConnectWrapper', () => {
             const connectors = { 'mongo-source': { info: {}, status: {} } };
             const makeRequestStub = sinon.stub(wrapper, 'makeRequest').resolves(connectors);
             assert.deepStrictEqual(await wrapper.getConnectorsWithStatus(), connectors);
-            assert(makeRequestStub.calledOnceWith({
-                method: 'GET',
-                path: '/connectors?expand=info&expand=status',
-            }));
+            assert(
+                makeRequestStub.calledOnceWith({
+                    method: 'GET',
+                    path: '/connectors?expand=info&expand=status',
+                }),
+            );
         });
 
         it('should throw error when request fails', async () => {
@@ -630,10 +702,12 @@ describe('KafkaConnectWrapper', () => {
         it('should stop a connector', async () => {
             const makeRequestStub = sinon.stub(wrapper, 'makeRequest').resolves({});
             await wrapper.stopConnector('mongo-source');
-            assert(makeRequestStub.calledOnceWith({
-                method: 'PUT',
-                path: '/connectors/mongo-source/stop',
-            }));
+            assert(
+                makeRequestStub.calledOnceWith({
+                    method: 'PUT',
+                    path: '/connectors/mongo-source/stop',
+                }),
+            );
         });
 
         it('should throw error when request fails', async () => {
@@ -655,10 +729,12 @@ describe('KafkaConnectWrapper', () => {
             const offsets = [{ partition: { ns: 'p' }, offset: { _id: '{}' } }];
             const makeRequestStub = sinon.stub(wrapper, 'makeRequest').resolves({ offsets });
             assert.deepStrictEqual(await wrapper.getConnectorOffsets('mongo-source'), offsets);
-            assert(makeRequestStub.calledOnceWith({
-                method: 'GET',
-                path: '/connectors/mongo-source/offsets',
-            }));
+            assert(
+                makeRequestStub.calledOnceWith({
+                    method: 'GET',
+                    path: '/connectors/mongo-source/offsets',
+                }),
+            );
         });
 
         it('should return no offsets when none were committed', async () => {

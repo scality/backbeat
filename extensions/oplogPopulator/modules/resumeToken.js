@@ -76,8 +76,7 @@ function compareTimestamps(a, b) {
  * @returns {Object|null} earliest timestamp, or null if the list is empty
  */
 function minTimestamp(timestamps) {
-    return timestamps.reduce(
-        (min, ts) => (min === null || compareTimestamps(ts, min) < 0 ? ts : min), null);
+    return timestamps.reduce((min, ts) => (min === null || compareTimestamps(ts, min) < 0 ? ts : min), null);
 }
 
 module.exports = {

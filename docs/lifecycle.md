@@ -31,16 +31,16 @@ set directly on AWS.
 
 ### Expiration
 
-* Automatic deletion of older versions of versioned objects to reclaim
+- Automatic deletion of older versions of versioned objects to reclaim
   storage space
 
-* Automatic deletion of current versions of objects after a certain
+- Automatic deletion of current versions of objects after a certain
   time has passed to reclaim storage space eventually, or to keep
   archived data for some time for regulatory purpose
 
 ### Transition Policies
 
-* Transition objects from a fast, relatively expensive location to a
+- Transition objects from a fast, relatively expensive location to a
   slower but cheaper location for old or infrequently-accessed data
 
 ## Technical Details
@@ -53,8 +53,8 @@ other.
 
 ### Workflow Overview
 
-Here's an example workflow that expires version *v1* of object *obj*
-from bucket *foobucket*:
+Here's an example workflow that expires version _v1_ of object _obj_
+from bucket _foobucket_:
 
 ```
  __________________
@@ -108,36 +108,36 @@ from bucket *foobucket*:
 
 #### Lifecycle Components
 
-* Queue populator (extended as explained below)
-* Conductor
-* Bucket Processor
-* Object Processor
-* Data Mover (part of data processor service)
-* Garbage Collector
+- Queue populator (extended as explained below)
+- Conductor
+- Bucket Processor
+- Object Processor
+- Data Mover (part of data processor service)
+- Garbage Collector
 
 #### Kafka topics specific to lifecycle
 
-* backbeat-lifecycle-bucket-tasks
-* backbeat-lifecycle-object-tasks
+- backbeat-lifecycle-bucket-tasks
+- backbeat-lifecycle-object-tasks
 
 #### Kafka topics used for lifecycle transitions
 
-* backbeat-data-mover (Data Mover service)
-* backbeat-gc (GC service)
+- backbeat-data-mover (Data Mover service)
+- backbeat-gc (GC service)
 
 #### Zookeeper paths
 
-* /[chroot_path]/lifecycle/data/buckets/${ownerId}:${bucketUID}:${bucketName}
-* /[chroot_path]/backbeat/run/kafka-backlog-metrics/${topic}/${partition}/topic
-* /[chroot_path]/backbeat/run/kafka-backlog-metrics/${topic}/${partition}/consumers/${groupId}
+- /[chroot_path]/lifecycle/data/buckets/${ownerId}:${bucketUID}:${bucketName}
+- /[chroot_path]/backbeat/run/kafka-backlog-metrics/${topic}/${partition}/topic
+- /[chroot_path]/backbeat/run/kafka-backlog-metrics/${topic}/${partition}/consumers/${groupId}
 
 ### CloudServer
 
 The S3 API provides three calls to manage lifecycle properties per bucket:
 
-* PUT Bucket Lifecycle
-* GET Bucket Lifecycle
-* DELETE Bucket Lifecycle
+- PUT Bucket Lifecycle
+- GET Bucket Lifecycle
+- DELETE Bucket Lifecycle
 
 See AWS specs for details on the protocol format.
 
@@ -159,13 +159,13 @@ The list of buckets is stored in Zookeeper nodes with the path:
 [/chroot_path]/lifecycle/data/buckets/${ownerId}:${bucketUID}:${bucketName}
 ```
 
-* **ownerId** is the canonical ID of the bucket owner
+- **ownerId** is the canonical ID of the bucket owner
 
-* **bucketUID** is the globally unique ID assigned to a bucket at
-    creation time (avoids conflicts with buckets re-created with the
-    same name)
+- **bucketUID** is the globally unique ID assigned to a bucket at
+  creation time (avoids conflicts with buckets re-created with the
+  same name)
 
-* **bucketName** is the bucket name
+- **bucketName** is the bucket name
 
 The node value is not meaningful, so it's set to `null` (the JSON
 `null` value stored as a binary string).
@@ -173,16 +173,16 @@ The node value is not meaningful, so it's set to `null` (the JSON
 More details on actions taken when specific entries are processed from
 the metadata log:
 
-* when processing a log entry that is an update of bucket attributes,
+- when processing a log entry that is an update of bucket attributes,
   look at whether any lifecycle action is enabled for that bucket:
 
-  * if any action is enabled, create the Zookeeper node (ignore if
-    already exists)
+    - if any action is enabled, create the Zookeeper node (ignore if
+      already exists)
 
-  * if no action is enabled, delete the Zookeeper node (ignore if not
-    found)
+    - if no action is enabled, delete the Zookeeper node (ignore if not
+      found)
 
-* when processing a log entry that is a deletion of a bucket, delete
+- when processing a log entry that is a deletion of a bucket, delete
   the Zookeeper node (ignore if not found).
 
 The resulting Zookeeper list should contain a current view of all
@@ -197,21 +197,21 @@ Zookeeper nodes.
 
 The conductor role is to periodically do the following (cron-style task):
 
-* check whether there is a pending backlog of tasks still to be
+- check whether there is a pending backlog of tasks still to be
   processed from Kafka, by looking at nodes under
   `/[chroot_path]/backbeat/run/kafka-backlog-metrics`
-  * if for any topic partition for both bucket and object tasks topic
-    there is an existing backlog (i.e. topic latest offset (in `topic`
-    node) is strictly greater than committed consumer group offset), log
-    and skip this round
-* get the list of buckets with potential lifecycle actions enabled
+    - if for any topic partition for both bucket and object tasks topic
+      there is an existing backlog (i.e. topic latest offset (in `topic`
+      node) is strictly greater than committed consumer group offset), log
+      and skip this round
+- get the list of buckets with potential lifecycle actions enabled
   from Zookeeper (getChildren in Zookeeper API)
-* for each of them, do the following:
-  * publish a message to the Kafka topic
-    *backbeat-lifecycle-bucket-tasks* (see [bucket tasks](#bucket-tasks)
-    message format)
+- for each of them, do the following:
+    - publish a message to the Kafka topic
+      _backbeat-lifecycle-bucket-tasks_ (see [bucket tasks](#bucket-tasks)
+      message format)
 
-The conductor only generates messages to *start* a new listing. Later
+The conductor only generates messages to _start_ a new listing. Later
 on, if the listing is truncated, new messages are generated by the
 Bucket Processor to create new tasks to continue the listing. This
 way, processing of large buckets can be efficiently parallelized
@@ -231,40 +231,40 @@ publish to Kafka queues the actual lifecycle actions to execute on
 objects (i.e. expiration or transition actions).
 
 More specifically, the LBP is part of a Kafka consumer group that
-processes items from the *backbeat-lifecycle-bucket-tasks* topic. For
+processes items from the _backbeat-lifecycle-bucket-tasks_ topic. For
 each of them, it does the following:
 
-* Get the lifecycle configuration from S3 connector of the target
+- Get the lifecycle configuration from S3 connector of the target
   bucket (GET /foobucket?lifecycle)
-  * If no lifecycle configuration is associated to the bucket, skip
-    the rest of bucket processing
+    - If no lifecycle configuration is associated to the bucket, skip
+      the rest of bucket processing
 
-* List the object versions in the bucket, starting from the
-  *keyMarker*/*versionIdMarker* specified in the Kafka entry, or from
+- List the object versions in the bucket, starting from the
+  _keyMarker_/_versionIdMarker_ specified in the Kafka entry, or from
   the beginning if not set. The limit of entries is 1000 (list
   objects hard limit), but a lower limit may be set if needed.
 
-  * If the listing is not complete, publish a new entry to the
-    *backbeat-lifecycle-bucket-tasks* topic, similar to the one
-    currently processed but with the *keyMarker* and
-    *versionIdMarker* fields set from what's returned by the current
-    finished listing. Then another LBP instance will keep going with
-    the listing and processing of this bucket.
+    - If the listing is not complete, publish a new entry to the
+      _backbeat-lifecycle-bucket-tasks_ topic, similar to the one
+      currently processed but with the _keyMarker_ and
+      _versionIdMarker_ fields set from what's returned by the current
+      finished listing. Then another LBP instance will keep going with
+      the listing and processing of this bucket.
 
-  * For each object listed, match it against the lifecycle rules
-    logic. For each lifecycle rule matching, publish to the relevant
-    topic(s) the action(s) to take:
+    - For each object listed, match it against the lifecycle rules
+      logic. For each lifecycle rule matching, publish to the relevant
+      topic(s) the action(s) to take:
 
-    - for expiration rules, publish to the
-      *backbeat-lifecycle-object-tasks* Kafka topic an entry that tells
-      the LOP to delete the object or the noncurrent version (see
-      [object tasks](#object-tasks) message format).
+        - for expiration rules, publish to the
+          _backbeat-lifecycle-object-tasks_ Kafka topic an entry that tells
+          the LOP to delete the object or the noncurrent version (see
+          [object tasks](#object-tasks) message format).
 
-    - for transition rules, publish to the *backbeat-data-mover* topic
-      an action entry containing all information needed to copy the
-      object data to the new desired location. The message also
-      contains the name of the topic *backbeat-lifecycle-object-tasks*
-      where to receive the status of the copy request.
+        - for transition rules, publish to the _backbeat-data-mover_ topic
+          an action entry containing all information needed to copy the
+          object data to the new desired location. The message also
+          contains the name of the topic _backbeat-lifecycle-object-tasks_
+          where to receive the status of the copy request.
 
 Periodically (every minute in the current default settings) the
 internal consumer of the bucket tasks topic publishes its current
@@ -297,28 +297,28 @@ LOP's responsibility is to execute the individual lifecycle actions
 per object that has been matched against lifecycle rules.
 
 It's part of a Kafka consumer group that processes items from the
-*backbeat-lifecycle-object-tasks* topic. For each of them, it does the
+_backbeat-lifecycle-object-tasks_ topic. For each of them, it does the
 following:
 
-* Check the "action" field, and execute the corresponding action:
+- Check the "action" field, and execute the corresponding action:
 
-  * for "deleteObject" action:
+    - for "deleteObject" action:
 
-    * do a HEAD object with a "If-Unmodified-Since" condition on the
-      last-modified date stored in the "details" of the Kafka entry
+        - do a HEAD object with a "If-Unmodified-Since" condition on the
+          last-modified date stored in the "details" of the Kafka entry
 
-    * if the request succeeds, do a DELETE request on the object
+        - if the request succeeds, do a DELETE request on the object
 
-    * NOTE: this has an intrisic race condition, we'll be working on
-      implementing the If-Unmodified-Since directly on the DELETE
-      operation to get rid of this race.
+        - NOTE: this has an intrisic race condition, we'll be working on
+          implementing the If-Unmodified-Since directly on the DELETE
+          operation to get rid of this race.
 
-  * for a status message of a successful copy from the data mover as a
-    "copyLocation" action:
+    - for a status message of a successful copy from the data mover as a
+      "copyLocation" action:
 
-    * update object metadata to reflect the new location of the object
+        - update object metadata to reflect the new location of the object
 
-    * send a message to the garbage collector to delete the original data
+        - send a message to the garbage collector to delete the original data
 
 Periodically (every minute in the current default settings) the
 internal Kafka consumer of the object tasks topic publishes its
@@ -329,10 +329,10 @@ the conductor know the size of the backlog.
 ### Data Mover (DM)
 
 The DM processes entries to transition (copy) from one location to
-another one. It parses action messages from the *backbeat-data-mover*
+another one. It parses action messages from the _backbeat-data-mover_
 topic, and when the destination location matches the DM configured
 location, it executes the copy, and when done, sends a status message
-to the *backbeat-lifecycle-object-tasks* topic to trigger a metadata
+to the _backbeat-lifecycle-object-tasks_ topic to trigger a metadata
 update with the new location. This behavior is configured inside the
 action message itself, so that the data mover is not bound to
 lifecycle in particular but can publish a status to any topic that the
@@ -340,24 +340,24 @@ requesting service consumes from.
 
 Note that the data mover is implemented inside the data processor
 processes, with a set of consumers specialized to process each
-location, in addition to the consumers for the *backbeat-replication*
+location, in addition to the consumers for the _backbeat-replication_
 topic.
 
 ### Garbage Collector (GC)
 
-The GC reads action messages from the *backbeat-gc* topic, and
+The GC reads action messages from the _backbeat-gc_ topic, and
 executes the corresponding action:
 
-* for "deleteData" action:
+- for "deleteData" action:
 
-  * send a batch delete request to Cloudserver with the provided
-    list of locations to delete
+    - send a batch delete request to Cloudserver with the provided
+      list of locations to delete
 
 ### Message formats
 
 #### Bucket tasks
 
-A message in *backbeat-lifecycle-bucket-tasks* topic represents a
+A message in _backbeat-lifecycle-bucket-tasks_ topic represents a
 listing task for one bucket, it has the following format:
 
 ```
@@ -377,13 +377,13 @@ listing task for one bucket, it has the following format:
 }
 ```
 
-* **prefix** may be set to limit the listing to a prefix
-* **keyMarker** and **versionIdMarker** are set when resuming a
-   listing from where it ended in a previous listing task.
+- **prefix** may be set to limit the listing to a prefix
+- **keyMarker** and **versionIdMarker** are set when resuming a
+  listing from where it ended in a previous listing task.
 
 #### Object tasks
 
-The message format for the *backbeat-lifecycle-object-tasks* Kafka
+The message format for the _backbeat-lifecycle-object-tasks_ Kafka
 topic is the following:
 
 ```
@@ -402,8 +402,8 @@ topic is the following:
 }
 ```
 
-* **action**: type of lifecycle action, e.g. "deleteObject"
-* **details**: additional info related to the action
+- **action**: type of lifecycle action, e.g. "deleteObject"
+- **details**: additional info related to the action
 
 ## Manual Testing
 
@@ -416,5 +416,5 @@ effectively immedidate.
 
 ## Links
 
-* AWS Lifecycle Reference:
+- AWS Lifecycle Reference:
   https://docs.aws.amazon.com/AmazonS3/latest/dev/object-lifecycle-mgmt.html

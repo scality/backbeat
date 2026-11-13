@@ -1,7 +1,6 @@
 const { errors } = require('@scality/arsenal');
 
 class AllocationStrategy {
-
     /**
      * @constructor
      * @param {Object} params params
@@ -18,7 +17,8 @@ class AllocationStrategy {
      * @param {String} bucket bucket name
      * @returns {Connector | null} connector
      */
-    getConnector(connectors, bucket) { // eslint-disable-line no-unused-vars
+    // eslint-disable-next-line no-unused-vars
+    getConnector(connectors, bucket) {
         throw errors.NotImplemented;
     }
 
@@ -37,7 +37,6 @@ class AllocationStrategy {
     get maximumBucketsPerConnector() {
         throw errors.NotImplemented;
     }
-
 }
 
 module.exports = AllocationStrategy;

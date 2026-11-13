@@ -4,15 +4,10 @@ const werelogs = require('werelogs');
 
 const { ObjectMD } = require('@scality/arsenal').models;
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
-const LifecycleUpdateExpirationTask = require(
-    '../../../extensions/lifecycle/tasks/LifecycleUpdateExpirationTask');
+const LifecycleUpdateExpirationTask = require('../../../extensions/lifecycle/tasks/LifecycleUpdateExpirationTask');
 const { LifecycleMetrics } = require('../../../extensions/lifecycle/LifecycleMetrics');
 
-const {
-    GarbageCollectorProducerMock,
-    BackbeatMetadataProxyMock,
-    ProcessorMock,
-} = require('../mocks');
+const { GarbageCollectorProducerMock, BackbeatMetadataProxyMock, ProcessorMock } = require('../mocks');
 
 describe('LifecycleUpdateExpirationTask', () => {
     let backbeatMetadataProxyClient;
@@ -22,15 +17,17 @@ describe('LifecycleUpdateExpirationTask', () => {
     let oldLocation;
     let task;
     beforeEach(() => {
-        oldLocation = [{
-            key: '3-A8EFF8D86D82EAE12FD2A17188A3E64B9D3E0000-60D',
-            size: 10,
-            start: 0,
-            dataStoreName: 'us-east-1',
-            dataStoreType: 'scality',
-            dataStoreETag: 'oldETag',
-            dataStoreVersionId: '1:5c800459000ee371f7a7983b565b4fa4',
-        }];
+        oldLocation = [
+            {
+                key: '3-A8EFF8D86D82EAE12FD2A17188A3E64B9D3E0000-60D',
+                size: 10,
+                start: 0,
+                dataStoreName: 'us-east-1',
+                dataStoreType: 'scality',
+                dataStoreETag: 'oldETag',
+                dataStoreVersionId: '1:5c800459000ee371f7a7983b565b4fa4',
+            },
+        ];
 
         backbeatMetadataProxyClient = new BackbeatMetadataProxyMock();
         gcProducer = new GarbageCollectorProducerMock();
@@ -42,7 +39,8 @@ describe('LifecycleUpdateExpirationTask', () => {
             gcProducer,
             null,
             null,
-            new werelogs.Logger('test:LifecycleUpdateExpirationTask'));
+            new werelogs.Logger('test:LifecycleUpdateExpirationTask'),
+        );
         actionEntry = ActionQueueEntry.create('gc')
             .setAttribute('target', {
                 owner: 'eab6642741045d0ae7cb3333962ad56f847ce0d9bb73de98eb4959428fc28108',
@@ -73,7 +71,8 @@ describe('LifecycleUpdateExpirationTask', () => {
         const restoreCompletedAt = new Date();
         const expireDate = new Date();
         const mdObj = new ObjectMD();
-        mdObj.setKey('somekey')
+        mdObj
+            .setKey('somekey')
             .setLocation(oldLocation)
             .setContentMd5('1ccc7006b902a4d30ec26e9ddcf759d8')
             .setLastModified('1970-01-01T00:00:00.000Z')
@@ -94,8 +93,8 @@ describe('LifecycleUpdateExpirationTask', () => {
             assert.deepStrictEqual(receivedMd.archive, {
                 archiveInfo: {
                     archiveId: '7206409b-7a26-484f-8452-494a0f0ba708',
-                    archiveVersion: 5577006791947779
-                  }
+                    archiveVersion: 5577006791947779,
+                },
             });
             assert.strictEqual(receivedMd['x-amz-storage-class'], 'location-dmf-v1');
             assert.strictEqual(receivedMd.dataStoreName, 'location-dmf-v1');
@@ -113,7 +112,8 @@ describe('LifecycleUpdateExpirationTask', () => {
         const restoreCompletedAt = new Date();
         const expireDate = new Date();
         const mdObj = new ObjectMD();
-        mdObj.setKey('somekey')
+        mdObj
+            .setKey('somekey')
             .setLocation(oldLocation)
             .setContentMd5('1ccc7006b902a4d30ec26e9ddcf759d8')
             .setLastModified('1970-01-01T00:00:00.000Z')
@@ -144,7 +144,8 @@ describe('LifecycleUpdateExpirationTask', () => {
         const expireDate = new Date();
         const mdObj = new ObjectMD();
         actionEntry.setAttribute('bypassExpirationCheck', true);
-        mdObj.setKey('somekey')
+        mdObj
+            .setKey('somekey')
             .setLocation(oldLocation)
             .setContentMd5('1ccc7006b902a4d30ec26e9ddcf759d8')
             .setLastModified('1970-01-01T00:00:00.000Z')
@@ -165,8 +166,8 @@ describe('LifecycleUpdateExpirationTask', () => {
             assert.deepStrictEqual(receivedMd.archive, {
                 archiveInfo: {
                     archiveId: '7206409b-7a26-484f-8452-494a0f0ba708',
-                    archiveVersion: 5577006791947779
-                }
+                    archiveVersion: 5577006791947779,
+                },
             });
             assert.strictEqual(receivedMd['x-amz-storage-class'], 'location-dmf-v1');
             assert.strictEqual(receivedMd.dataStoreName, 'location-dmf-v1');

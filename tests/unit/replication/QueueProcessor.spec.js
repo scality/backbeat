@@ -4,21 +4,17 @@ const Redis = require('ioredis');
 const sinon = require('sinon');
 const constants = require('../../../lib/constants');
 
-const QueueProcessor =
-    require('../../../extensions/replication/queueProcessor/QueueProcessor');
+const QueueProcessor = require('../../../extensions/replication/queueProcessor/QueueProcessor');
 
 function getQueueProcessorConfig() {
     return [
         'backbeat-func-test-dummy-topic',
-        { connectionString: '127.0.0.1:2181/backbeat',
-          autoCreateNamespace: false },
+        { connectionString: '127.0.0.1:2181/backbeat', autoCreateNamespace: false },
         null,
         { hosts: 'localhost:9092' },
-        { auth: { type: 'role',
-            vault: { host: 'localhost:9093',
-                port: 7777 } },
-            s3: { host: 'localhost:9094',
-                port: 7777 },
+        {
+            auth: { type: 'role', vault: { host: 'localhost:9093', port: 7777 } },
+            s3: { host: 'localhost:9094', port: 7777 },
             transport: 'http',
         },
         {
@@ -29,16 +25,17 @@ function getQueueProcessorConfig() {
                 servers: ['site-crr:8000'],
             },
         },
-        { topic: 'backbeat-func-test-dummy-topic',
-          replicationStatusTopic: 'backbeat-func-test-repstatus',
-          queueProcessor: {
-              retry: {
-                  scality: { timeoutS: 5 },
-                  azure: { timeoutS: 5 },
-              },
-              groupId: 'backbeat-func-test-group-id',
-              mpuPartsConcurrency: 10,
-          },
+        {
+            topic: 'backbeat-func-test-dummy-topic',
+            replicationStatusTopic: 'backbeat-func-test-repstatus',
+            queueProcessor: {
+                retry: {
+                    scality: { timeoutS: 5 },
+                    azure: { timeoutS: 5 },
+                },
+                groupId: 'backbeat-func-test-group-id',
+                mpuPartsConcurrency: 10,
+            },
         },
         null,
         { topic: 'metrics-test-topic' },
@@ -88,20 +85,18 @@ describe('Queue Processor', () => {
 
         it('with undefined components', () => {
             const response = qp.handleLiveness(mockLog);
-            assert.deepStrictEqual(
-                response,
-                [
-                    {
-                        component: 'Replication Status Producer',
-                        status: constants.statusUndefined,
-                        site: 'site-crr',
-                    }, {
-                        component: 'Consumer',
-                        status: constants.statusUndefined,
-                        site: 'site-crr',
-                    },
-                ]
-            );
+            assert.deepStrictEqual(response, [
+                {
+                    component: 'Replication Status Producer',
+                    status: constants.statusUndefined,
+                    site: 'site-crr',
+                },
+                {
+                    component: 'Consumer',
+                    status: constants.statusUndefined,
+                    site: 'site-crr',
+                },
+            ]);
             // only need to test this once as it matches the response anyway
             sinon.assert.calledOnceWithExactly(
                 mockLog.debug,
@@ -109,7 +104,7 @@ describe('Queue Processor', () => {
                 {
                     replicationStatusProducer: constants.statusUndefined,
                     consumer: constants.statusUndefined,
-                }
+                },
             );
         });
 
@@ -126,20 +121,18 @@ describe('Queue Processor', () => {
             qp.replicationStatusProducer = mockProducer;
             qp._consumer = mockConsumer;
             const response = qp.handleLiveness(mockLog);
-            assert.deepStrictEqual(
-                response,
-                [
-                    {
-                        component: 'Replication Status Producer',
-                        status: constants.statusNotReady,
-                        site: 'site-crr',
-                    }, {
-                        component: 'Consumer',
-                        status: constants.statusNotReady,
-                        site: 'site-crr',
-                    },
-                ]
-            );
+            assert.deepStrictEqual(response, [
+                {
+                    component: 'Replication Status Producer',
+                    status: constants.statusNotReady,
+                    site: 'site-crr',
+                },
+                {
+                    component: 'Consumer',
+                    status: constants.statusNotReady,
+                    site: 'site-crr',
+                },
+            ]);
         });
     });
 
@@ -207,11 +200,11 @@ describe('Queue Processor', () => {
             await qp.processReplicationEntry(kafkaEntry);
             sinon.assert.calledTwice(qp.taskScheduler.push);
 
-            const destinations = qp.taskScheduler.push.getCalls().map(c => c.args[0].entry.getDestination()).sort();
-            assert.deepStrictEqual(destinations, [
-                'arn:aws:s3:::bucket-a',
-                'arn:aws:s3:::bucket-b',
-            ]);
+            const destinations = qp.taskScheduler.push
+                .getCalls()
+                .map(c => c.args[0].entry.getDestination())
+                .sort();
+            assert.deepStrictEqual(destinations, ['arn:aws:s3:::bucket-a', 'arn:aws:s3:::bucket-b']);
         });
 
         it('skips when no PENDING backend matches this.site', async () => {
@@ -255,7 +248,8 @@ describe('Queue Processor', () => {
             const kafkaEntry = { value: 'not-valid-json{' };
             await assert.rejects(
                 () => qp.processReplicationEntry(kafkaEntry),
-                err => err.is.InternalError === true);
+                err => err.is.InternalError === true,
+            );
             sinon.assert.notCalled(qp.taskScheduler.push);
         });
 
@@ -324,8 +318,7 @@ describe('Queue Processor', () => {
             };
         });
 
-        it('dispatches copyLocation actions to the data mover scheduler',
-        done => {
+        it('dispatches copyLocation actions to the data mover scheduler', done => {
             const kafkaEntry = {
                 value: JSON.stringify({
                     action: 'copyLocation',
@@ -355,7 +348,7 @@ describe('Queue Processor', () => {
     });
 
     describe('constructor', () => {
-        it('should use s3c site\'s host as a destination host', () => {
+        it("should use s3c site's host as a destination host", () => {
             const config = getQueueProcessorConfig();
             config[5].replicationEndpoint = {
                 site: 'site-crr',
@@ -402,8 +395,7 @@ describe('Queue Processor', () => {
             qp = new QueueProcessor(...config);
 
             assert(qp._redis instanceof Redis);
-            assert(subscribeStub.calledOnceWith(
-                'backbeat-func-test-dummy-topic-site-crr'));
+            assert(subscribeStub.calledOnceWith('backbeat-func-test-dummy-topic-site-crr'));
         });
     });
 
@@ -423,10 +415,12 @@ describe('Queue Processor', () => {
         it('should close the cached source and destination client managers', done => {
             const closeSource = sinon.stub();
             const closeDest = sinon.stub();
-            qp.sourceClientManagers.getOrCreate('http://site:8000::read-role',
-                () => Object.assign(new EventEmitter(), { close: closeSource }));
-            qp.destClientManagers.getOrCreate('site:8000::write-role',
-                () => Object.assign(new EventEmitter(), { close: closeDest }));
+            qp.sourceClientManagers.getOrCreate('http://site:8000::read-role', () =>
+                Object.assign(new EventEmitter(), { close: closeSource }),
+            );
+            qp.destClientManagers.getOrCreate('site:8000::write-role', () =>
+                Object.assign(new EventEmitter(), { close: closeDest }),
+            );
 
             qp.stop(() => {
                 assert(closeSource.calledOnce);
@@ -440,9 +434,15 @@ describe('Queue Processor', () => {
         it('should close the client managers once the consumers are closed', done => {
             const consumerClosed = sinon.stub();
             const close = sinon.stub();
-            qp._consumer = { close: cb => { consumerClosed(); cb(); } };
-            qp.destClientManagers.getOrCreate('site:8000::write-role',
-                () => Object.assign(new EventEmitter(), { close }));
+            qp._consumer = {
+                close: cb => {
+                    consumerClosed();
+                    cb();
+                },
+            };
+            qp.destClientManagers.getOrCreate('site:8000::write-role', () =>
+                Object.assign(new EventEmitter(), { close }),
+            );
 
             qp.stop(() => {
                 assert(close.calledOnce);
@@ -455,10 +455,12 @@ describe('Queue Processor', () => {
             // the tasks hold a reference to those same caches
             const sourceCache = qp.sourceClientManagers;
             const destCache = qp.destClientManagers;
-            sourceCache.getOrCreate('http://site:8000::read-role',
-                () => Object.assign(new EventEmitter(), { close: () => {} }));
-            destCache.getOrCreate('site:8000::write-role',
-                () => Object.assign(new EventEmitter(), { close: () => {} }));
+            sourceCache.getOrCreate('http://site:8000::read-role', () =>
+                Object.assign(new EventEmitter(), { close: () => {} }),
+            );
+            destCache.getOrCreate('site:8000::write-role', () =>
+                Object.assign(new EventEmitter(), { close: () => {} }),
+            );
 
             qp.stop(() => {
                 assert.strictEqual(qp.sourceClientManagers, sourceCache);

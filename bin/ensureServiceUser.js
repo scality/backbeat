@@ -10,10 +10,21 @@ const { program } = require('commander');
 const werelogs = require('werelogs');
 const version = require('../package.json').version;
 const async = require('async');
-const { IAMClient, GetUserCommand, CreateUserCommand, ListPoliciesCommand, CreatePolicyCommand,
-        ListAttachedUserPoliciesCommand, AttachUserPolicyCommand, GetRoleCommand, CreateRoleCommand,
-        ListAttachedRolePoliciesCommand, AttachRolePolicyCommand, ListAccessKeysCommand, CreateAccessKeyCommand,
-        NoSuchEntityException,
+const {
+    IAMClient,
+    GetUserCommand,
+    CreateUserCommand,
+    ListPoliciesCommand,
+    CreatePolicyCommand,
+    ListAttachedUserPoliciesCommand,
+    AttachUserPolicyCommand,
+    GetRoleCommand,
+    CreateRoleCommand,
+    ListAttachedRolePoliciesCommand,
+    AttachRolePolicyCommand,
+    ListAccessKeysCommand,
+    CreateAccessKeyCommand,
+    NoSuchEntityException,
 } = require('@aws-sdk/client-iam');
 const { STSClient, GetCallerIdentityCommand } = require('@aws-sdk/client-sts');
 
@@ -26,7 +37,7 @@ function generateUserAssumeRolePolicyDocument(roleName, targetAccount) {
             Effect: 'Allow',
             Action: 'sts:AssumeRole',
             Resource: `arn:aws:iam::${targetAccount}:role${systemPrefix}${roleName}`,
-        }
+        },
     };
 }
 
@@ -34,16 +45,16 @@ function generateRoleTrustPolicyDocument(userArn) {
     return {
         Version: '2012-10-17',
         Statement: [
-          {
-            Effect: 'Allow',
-            Principal: {
-              AWS: userArn,
+            {
+                Effect: 'Allow',
+                Principal: {
+                    AWS: userArn,
+                },
+                Action: 'sts:AssumeRole',
+                Condition: {},
             },
-            Action: 'sts:AssumeRole',
-            Condition: {}
-          }
-        ]
-     };
+        ],
+    };
 }
 
 function createIAMClient(opts) {
@@ -94,16 +105,23 @@ class BaseHandler {
             this.log.debug('creating', { v, type: this.fqResourceType });
             return this.create(values)
                 .then(res =>
-                    done(null, Object.assign(values, {
-                        [this.fqResourceType]: res,
-                    })))
+                    done(
+                        null,
+                        Object.assign(values, {
+                            [this.fqResourceType]: res,
+                        }),
+                    ),
+                )
                 .catch(done);
         }
 
         this.log.debug('conflicts check', { v, type: this.fqResourceType });
         if (this.conflicts(v)) {
-            return done(errors.EntityAlreadyExists.customizeDescription(
-                `${this.fqResourceType} ${this.serviceName} already exists and conflicts with the expected value.`));
+            return done(
+                errors.EntityAlreadyExists.customizeDescription(
+                    `${this.fqResourceType} ${this.serviceName} already exists and conflicts with the expected value.`,
+                ),
+            );
         }
 
         this.log.debug('nothing to do', { v, type: this.fqResourceType });
@@ -155,7 +173,7 @@ class PolicyHandler extends BaseHandler {
 
     async create() {
         let accountId;
-        
+
         if (!this.options.constrainToThisAccount) {
             accountId = '*';
         } else {
@@ -171,15 +189,14 @@ class PolicyHandler extends BaseHandler {
             }
         }
 
-        const policyDocument = this.options.policy || 
-            generateUserAssumeRolePolicyDocument(this.serviceName, accountId);
-        
+        const policyDocument = this.options.policy || generateUserAssumeRolePolicyDocument(this.serviceName, accountId);
+
         const command = new CreatePolicyCommand({
             PolicyName: this.resourceName,
             PolicyDocument: JSON.stringify(policyDocument),
             Path: systemPrefix,
         });
-        
+
         const res = await this.iamClient.send(command);
         return res.Policy;
     }
@@ -210,7 +227,7 @@ class RoleHandler extends BaseHandler {
             Path: systemPrefix,
             AssumeRolePolicyDocument: JSON.stringify(trustPolicy),
         });
-        
+
         const res = await this.iamClient.send(command);
         return res.Role;
     }
@@ -308,15 +325,18 @@ function collectResource(v, done) {
             if (err instanceof NoSuchEntityException) {
                 return done(null, null);
             }
-            done(err);
+            return done(err);
         });
 }
 
 function collectResourcesFromHandlers(handlers, cb) {
-    const tasks = handlers.reduce((acc, v) => ({
-        [v.fqResourceType]: done => collectResource(v, done),
-        ...acc,
-    }), {});
+    const tasks = handlers.reduce(
+        (acc, v) => ({
+            [v.fqResourceType]: done => collectResource(v, done),
+            ...acc,
+        }),
+        {},
+    );
     async.parallel(tasks, cb);
 }
 
@@ -364,11 +384,14 @@ function apply(iamClient, stsClient, serviceName, policyFile, log, cb) {
         handlers = buildServiceUserForCrossAccountAssumeRoleHandlers(serviceName, iamClient, log);
     }
 
-    async.waterfall([
-        done => collectResourcesFromHandlers(handlers, done),
-        ...handlers.map(h => h.applyWaterfall.bind(h)),
-        (values, done) => done(null, values.accessKey),
-    ], cb);
+    async.waterfall(
+        [
+            done => collectResourcesFromHandlers(handlers, done),
+            ...handlers.map(h => h.applyWaterfall.bind(h)),
+            (values, done) => done(null, values.accessKey),
+        ],
+        cb,
+    );
 }
 
 function wrapAction(actionFunc, serviceName, _, cmd) {
@@ -410,9 +433,12 @@ program
 
 program
     .command('apply <service-name>')
-    .option('-p, --policy <policy-file.json>', 'Create a policy using the provided document' +
-        ' and attach it to a role that the service user is allowed to assume, instead' +
-        ' of only allowing the user to assume one (seeded) role named <service-name> in all accounts.')
+    .option(
+        '-p, --policy <policy-file.json>',
+        'Create a policy using the provided document' +
+            ' and attach it to a role that the service user is allowed to assume, instead' +
+            ' of only allowing the user to assume one (seeded) role named <service-name> in all accounts.',
+    )
     .action(wrapAction.bind(null, apply));
 
 const validCommands = program.commands.map(n => n._name);

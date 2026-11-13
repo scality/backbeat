@@ -9,10 +9,8 @@ const logger = new werelogs.Logger('connect-wrapper-logger');
 
 const locations = require('../../../conf/locationConfig.json');
 
-const OplogPopulator =
-    require('../../../extensions/oplogPopulator/OplogPopulator');
-const ChangeStream =
-    require('../../../lib/wrappers/ChangeStream');
+const OplogPopulator = require('../../../extensions/oplogPopulator/OplogPopulator');
+const ChangeStream = require('../../../lib/wrappers/ChangeStream');
 const ConnectorsManager = require('../../../extensions/oplogPopulator/modules/ConnectorsManager');
 const RetainBucketsDecorator = require('../../../extensions/oplogPopulator/allocationStrategy/RetainBucketsDecorator');
 const LeastFullConnector = require('../../../extensions/oplogPopulator/allocationStrategy/LeastFullConnector');
@@ -33,16 +31,15 @@ const oplogPopulatorConfig = {
 };
 
 const mongoConfig = {
-    replicaSetHosts:
-    'localhost:27017,localhost:27018,localhost:27019',
+    replicaSetHosts: 'localhost:27017,localhost:27018,localhost:27019',
     writeConcern: 'majority',
     replicaSet: 'rs0',
     readPreference: 'primary',
     database: 'metadata',
     authCredentials: {
         username: 'user',
-        password: 'password'
-    }
+        password: 'password',
+    },
 };
 
 const activeExtensions = ['ingestion', 'replication', 'notification', 'lifecycle'];
@@ -68,42 +65,72 @@ describe('OplogPopulator', () => {
     describe('constructor', () => {
         it('should fail when params invalid', () => {
             assert.throws(() => new OplogPopulator({}));
-            assert.throws(() => new OplogPopulator({
-                config: oplogPopulatorConfig,
-            }));
-            assert.throws(() => new OplogPopulator({
-                mongoConfig,
-            }));
-            assert.throws(() => new OplogPopulator({
-                activeExtensions,
-            }));
-            assert.throws(() => new OplogPopulator({
-                logger,
-            }));
-            assert.throws(() => new OplogPopulator({
-                config: oplogPopulatorConfig,
-                mongoConfig,
-            }));
-            assert.throws(() => new OplogPopulator({
-                config: oplogPopulatorConfig,
-                activeExtensions,
-            }));
-            assert.throws(() => new OplogPopulator({
-                config: oplogPopulatorConfig,
-                logger,
-            }));
-            assert.throws(() => new OplogPopulator({
-                mongoConfig: oplogPopulatorConfig,
-                activeExtensions,
-            }));
-            assert.throws(() => new OplogPopulator({
-                mongoConfig: oplogPopulatorConfig,
-                logger,
-            }));
-            assert.throws(() => new OplogPopulator({
-                activeExtensions,
-                logger,
-            }));
+            assert.throws(
+                () =>
+                    new OplogPopulator({
+                        config: oplogPopulatorConfig,
+                    }),
+            );
+            assert.throws(
+                () =>
+                    new OplogPopulator({
+                        mongoConfig,
+                    }),
+            );
+            assert.throws(
+                () =>
+                    new OplogPopulator({
+                        activeExtensions,
+                    }),
+            );
+            assert.throws(
+                () =>
+                    new OplogPopulator({
+                        logger,
+                    }),
+            );
+            assert.throws(
+                () =>
+                    new OplogPopulator({
+                        config: oplogPopulatorConfig,
+                        mongoConfig,
+                    }),
+            );
+            assert.throws(
+                () =>
+                    new OplogPopulator({
+                        config: oplogPopulatorConfig,
+                        activeExtensions,
+                    }),
+            );
+            assert.throws(
+                () =>
+                    new OplogPopulator({
+                        config: oplogPopulatorConfig,
+                        logger,
+                    }),
+            );
+            assert.throws(
+                () =>
+                    new OplogPopulator({
+                        mongoConfig: oplogPopulatorConfig,
+                        activeExtensions,
+                    }),
+            );
+            assert.throws(
+                () =>
+                    new OplogPopulator({
+                        mongoConfig: oplogPopulatorConfig,
+                        logger,
+                    }),
+            );
+            assert.throws(
+                () =>
+                    new OplogPopulator({
+                        activeExtensions,
+                        logger,
+                    }),
+            );
             const op = new OplogPopulator({
                 config: oplogPopulatorConfig,
                 mongoConfig,
@@ -115,7 +142,8 @@ describe('OplogPopulator', () => {
         });
 
         it('should set mongo connection info', () => {
-            const mongoUrl = 'mongodb://user:password@localhost:27017,' +
+            const mongoUrl =
+                'mongodb://user:password@localhost:27017,' +
                 'localhost:27018,localhost:27019/?w=majority&readPreference=primary&replicaSet=rs0';
             assert.strictEqual(oplogPopulator._mongoUrl, mongoUrl);
             assert.strictEqual(oplogPopulator._replicaSet, 'rs0');
@@ -173,10 +201,12 @@ describe('OplogPopulator', () => {
             await assert.rejects(oplogPopulator.setup(), error);
 
             assert(loadOplogHelperClassesStub.calledOnce);
-            assert(loggerErrorStub.calledWith('An error occured when setting up the OplogPopulator', {
-                method: 'OplogPopulator.setup',
-                error: 'InternalError',
-            }));
+            assert(
+                loggerErrorStub.calledWith('An error occured when setting up the OplogPopulator', {
+                    method: 'OplogPopulator.setup',
+                    error: 'InternalError',
+                }),
+            );
         });
 
         it('should setup oplog populator', async () => {
@@ -219,8 +249,10 @@ describe('OplogPopulator', () => {
             assert(getBackbeatEnabledBucketsStub.calledOnce);
             assert(setMetastoreChangeStreamStub.calledOnce);
             assert(initializeConnectorsManagerStub.calledOnce);
-            const onConnectorUpdatedOrDestroyedStub =
-            sinon.stub(oplogPopulator._allocationStrategy, 'onConnectorUpdatedOrDestroyed');
+            const onConnectorUpdatedOrDestroyedStub = sinon.stub(
+                oplogPopulator._allocationStrategy,
+                'onConnectorUpdatedOrDestroyed',
+            );
             oplogPopulator._connectorsManager.emit(constants.connectorUpdatedEvent);
             assert(onConnectorUpdatedOrDestroyedStub.calledOnce);
         });
@@ -292,76 +324,83 @@ describe('OplogPopulator', () => {
             sinon.stub(MongoClient.prototype, 'connect').resolves({
                 db: dbStub,
             });
-            await oplogPopulator._setupMongoClient()
+            await oplogPopulator
+                ._setupMongoClient()
                 .then(() => {
                     assert(dbStub.calledOnceWith('metadata', { ignoreUndefined: true }));
                     assert(collectionStub.calledOnceWith('__metastore'));
-                    assert(mongoCommandStub.calledOnceWith({
-                        buildInfo: 1,
-                    }));
+                    assert(
+                        mongoCommandStub.calledOnceWith({
+                            buildInfo: 1,
+                        }),
+                    );
                     assert.equal(oplogPopulator._mongoVersion, '4.3.17');
-                }).catch(err => assert.ifError(err));
+                })
+                .catch(err => assert.ifError(err));
         });
 
         it('should fail when mongo connection fails', async () => {
-            const mongoConnectStub = sinon.stub(MongoClient, 'connect')
-                .rejects(errors.InternalError);
-            await oplogPopulator._setupMongoClient()
-            .then(() => {
-                const mongoUrl = 'mongodb://user:password@localhost:27017,' +
-                    'localhost:27018,localhost:27019/?w=majority&readPreference=primary';
-                assert(mongoConnectStub.calledOnceWith(
-                    mongoUrl,
-                    {
-                        replicaSet: 'rs0',
-                        useNewUrlParser: true
-                    }
-                ));
-            }).catch(err => assert.deepEqual(err, errors.InternalError));
+            const mongoConnectStub = sinon.stub(MongoClient, 'connect').rejects(errors.InternalError);
+            await oplogPopulator
+                ._setupMongoClient()
+                .then(() => {
+                    const mongoUrl =
+                        'mongodb://user:password@localhost:27017,' +
+                        'localhost:27018,localhost:27019/?w=majority&readPreference=primary';
+                    assert(
+                        mongoConnectStub.calledOnceWith(mongoUrl, {
+                            replicaSet: 'rs0',
+                            useNewUrlParser: true,
+                        }),
+                    );
+                })
+                .catch(err => assert.deepEqual(err, errors.InternalError));
         });
 
-        it('should fail if it can\'t get metadata db', async () => {
+        it("should fail if it can't get metadata db", async () => {
             const dbStub = sinon.stub().returns({
                 collection: sinon.stub().throws(errors.InternalError),
             });
-            const mongoConnectStub = sinon.stub(MongoClient, 'connect')
-                .resolves({ db: dbStub });
-            await oplogPopulator._setupMongoClient()
-            .then(() => {
-                const mongoUrl = 'mongodb://user:password@localhost:27017,' +
-                    'localhost:27018,localhost:27019/?w=majority&readPreference=primary';
-                assert(mongoConnectStub.calledOnceWith(
-                    mongoUrl,
-                    {
-                        replicaSet: 'rs0',
-                        useNewUrlParser: true
-                    }
-                ));
-                assert(dbStub.calledOnceWith('metadata', { ignoreUndefined: true }));
-            }).catch(err => assert.deepEqual(err, errors.InternalError));
+            const mongoConnectStub = sinon.stub(MongoClient, 'connect').resolves({ db: dbStub });
+            await oplogPopulator
+                ._setupMongoClient()
+                .then(() => {
+                    const mongoUrl =
+                        'mongodb://user:password@localhost:27017,' +
+                        'localhost:27018,localhost:27019/?w=majority&readPreference=primary';
+                    assert(
+                        mongoConnectStub.calledOnceWith(mongoUrl, {
+                            replicaSet: 'rs0',
+                            useNewUrlParser: true,
+                        }),
+                    );
+                    assert(dbStub.calledOnceWith('metadata', { ignoreUndefined: true }));
+                })
+                .catch(err => assert.deepEqual(err, errors.InternalError));
         });
 
-        it('should fail if it can\'t get metastore collection', async () => {
+        it("should fail if it can't get metastore collection", async () => {
             const collectionStub = sinon.stub().throws(errors.InternalError);
             const dbStub = sinon.stub().returns({
                 collection: collectionStub,
             });
-            const mongoConnectStub = sinon.stub(MongoClient, 'connect')
-                .resolves({ db: dbStub });
-            await oplogPopulator._setupMongoClient()
-            .then(() => {
-                const mongoUrl = 'mongodb://user:password@localhost:27017,' +
-                    'localhost:27018,localhost:27019/?w=majority&readPreference=primary';
-                assert(mongoConnectStub.calledOnceWith(
-                    mongoUrl,
-                    {
-                        replicaSet: 'rs0',
-                        useNewUrlParser: true
-                    }
-                ));
-                assert(dbStub.calledOnceWith('metadata', { ignoreUndefined: true }));
-                assert(collectionStub.calledOnceWith('__metastore'));
-            }).catch(err => assert.deepEqual(err, errors.InternalError));
+            const mongoConnectStub = sinon.stub(MongoClient, 'connect').resolves({ db: dbStub });
+            await oplogPopulator
+                ._setupMongoClient()
+                .then(() => {
+                    const mongoUrl =
+                        'mongodb://user:password@localhost:27017,' +
+                        'localhost:27018,localhost:27019/?w=majority&readPreference=primary';
+                    assert(
+                        mongoConnectStub.calledOnceWith(mongoUrl, {
+                            replicaSet: 'rs0',
+                            useNewUrlParser: true,
+                        }),
+                    );
+                    assert(dbStub.calledOnceWith('metadata', { ignoreUndefined: true }));
+                    assert(collectionStub.calledOnceWith('__metastore'));
+                })
+                .catch(err => assert.deepEqual(err, errors.InternalError));
         });
     });
 
@@ -394,10 +433,11 @@ describe('OplogPopulator', () => {
                                     },
                                 },
                             },
-                        }, {
+                        },
+                        {
                             $or: [
                                 {
-                                    ruleStatus: 'Enabled'
+                                    ruleStatus: 'Enabled',
                                 },
                                 {
                                     actions: {
@@ -405,8 +445,8 @@ describe('OplogPopulator', () => {
                                             transition: {
                                                 $elemMatch: {
                                                     storageClass: {
-                                                        $in: coldLocations
-                                                    }
+                                                        $in: coldLocations,
+                                                    },
                                                 },
                                             },
                                         },
@@ -418,12 +458,12 @@ describe('OplogPopulator', () => {
                                             nonCurrentVersionTransition: {
                                                 $elemMatch: {
                                                     storageClass: {
-                                                        $in: coldLocations
-                                                    }
+                                                        $in: coldLocations,
+                                                    },
                                                 },
                                             },
                                         },
-                                    }
+                                    },
                                 },
                             ],
                         },
@@ -434,30 +474,20 @@ describe('OplogPopulator', () => {
         [
             {
                 extensions: ['notification'],
-                filter: [
-                    notificationFilter,
-                ],
+                filter: [notificationFilter],
             },
             {
                 extensions: ['replication'],
-                filter: [
-                    replicationFilter
-                ],
+                filter: [replicationFilter],
             },
             {
                 extensions: ['lifecycle'],
-                filter: [
-                    lifecycleFilter,
-                ],
+                filter: [lifecycleFilter],
             },
             {
                 extensions: ['notification', 'replication', 'lifecycle'],
-                filter: [
-                    notificationFilter,
-                    replicationFilter,
-                    lifecycleFilter,
-                ],
-            }
+                filter: [notificationFilter, replicationFilter, lifecycleFilter],
+            },
         ].forEach(scenario => {
             const { extensions, filter } = scenario;
             it(`should correctly set filter (${extensions})`, async () => {
@@ -466,7 +496,7 @@ describe('OplogPopulator', () => {
                         map: () => ({
                             toArray: () => ['example-bucket-1'],
                         }),
-                    })
+                    }),
                 });
                 const tmpOplogPopulator = new OplogPopulator({
                     config: oplogPopulatorConfig,
@@ -477,14 +507,17 @@ describe('OplogPopulator', () => {
                 });
                 tmpOplogPopulator._metastore = { find: findStub };
                 tmpOplogPopulator._loadOplogHelperClasses();
-                await tmpOplogPopulator._getBackbeatEnabledBuckets()
-                .then(buckets => {
-                    assert(findStub.calledOnceWith({
-                        $or: filter,
-                    }));
-                    assert.deepEqual(buckets, ['example-bucket-1']);
-                })
-                .catch(err => assert.ifError(err));
+                await tmpOplogPopulator
+                    ._getBackbeatEnabledBuckets()
+                    .then(buckets => {
+                        assert(
+                            findStub.calledOnceWith({
+                                $or: filter,
+                            }),
+                        );
+                        assert.deepEqual(buckets, ['example-bucket-1']);
+                    })
+                    .catch(err => assert.ifError(err));
             });
         });
 
@@ -494,28 +527,30 @@ describe('OplogPopulator', () => {
                     map: () => ({
                         toArray: sinon.stub().throws(errors.InternalError),
                     }),
-                })
+                }),
             });
             oplogPopulator._metastore = { find: findStub };
-            await oplogPopulator._getBackbeatEnabledBuckets()
-            .then(buckets => {
-                assert.strict(buckets, undefined);
-            })
-            .catch(err => assert.deepEqual(err, errors.InternalError));
+            await oplogPopulator
+                ._getBackbeatEnabledBuckets()
+                .then(buckets => {
+                    assert.strict(buckets, undefined);
+                })
+                .catch(err => assert.deepEqual(err, errors.InternalError));
         });
 
         it('should return fail when map operation fails', async () => {
             const findStub = sinon.stub().returns({
                 project: () => ({
                     map: () => sinon.stub().throws(errors.InternalError),
-                })
+                }),
             });
             oplogPopulator._metastore = { find: findStub };
-            await oplogPopulator._getBackbeatEnabledBuckets()
-            .then(buckets => {
-                assert.strict(buckets, undefined);
-            })
-            .catch(err => assert.deepEqual(err, errors.InternalError));
+            await oplogPopulator
+                ._getBackbeatEnabledBuckets()
+                .then(buckets => {
+                    assert.strict(buckets, undefined);
+                })
+                .catch(err => assert.deepEqual(err, errors.InternalError));
         });
 
         it('should return fail when project operation fails', async () => {
@@ -523,21 +558,23 @@ describe('OplogPopulator', () => {
                 project: () => sinon.stub().throws(errors.InternalError),
             });
             oplogPopulator._metastore = { find: findStub };
-            await oplogPopulator._getBackbeatEnabledBuckets()
-            .then(buckets => {
-                assert.strict(buckets, undefined);
-            })
-            .catch(err => assert.deepEqual(err, errors.InternalError));
+            await oplogPopulator
+                ._getBackbeatEnabledBuckets()
+                .then(buckets => {
+                    assert.strict(buckets, undefined);
+                })
+                .catch(err => assert.deepEqual(err, errors.InternalError));
         });
 
         it('should return fail when find operation fails', async () => {
             const findStub = sinon.stub().throws(errors.InternalError);
             oplogPopulator._metastore = { find: findStub };
-            await oplogPopulator._getBackbeatEnabledBuckets()
-            .then(buckets => {
-                assert.strict(buckets, undefined);
-            })
-            .catch(err => assert.deepEqual(err, errors.InternalError));
+            await oplogPopulator
+                ._getBackbeatEnabledBuckets()
+                .then(buckets => {
+                    assert.strict(buckets, undefined);
+                })
+                .catch(err => assert.deepEqual(err, errors.InternalError));
         });
     });
 
@@ -550,12 +587,10 @@ describe('OplogPopulator', () => {
                     notificationConfiguration: {
                         queueConfig: [
                             {
-                                events: [
-                                    's3:ObjectCreated:*',
-                                ],
+                                events: ['s3:ObjectCreated:*'],
                                 queueArn: 'arn:scality:bucketnotif:::dest1',
-                            }
-                        ]
+                            },
+                        ],
                     },
                     lifecycleConfiguration: {
                         rules: [
@@ -572,16 +607,16 @@ describe('OplogPopulator', () => {
                                         ],
                                     },
                                 ],
-                            }
-                        ]
+                            },
+                        ],
                     },
                     replicationConfiguration: {
                         rules: [
                             {
                                 enabled: true,
                             },
-                        ]
-                    }
+                        ],
+                    },
                 },
                 result: true,
             },
@@ -592,12 +627,10 @@ describe('OplogPopulator', () => {
                     notificationConfiguration: {
                         queueConfig: [
                             {
-                                events: [
-                                    's3:ObjectCreated:*',
-                                ],
+                                events: ['s3:ObjectCreated:*'],
                                 queueArn: 'arn:scality:bucketnotif:::dest1',
-                            }
-                        ]
+                            },
+                        ],
                     },
                     replicationConfiguration: null,
                     lifecycleConfiguration: null,
@@ -631,7 +664,7 @@ describe('OplogPopulator', () => {
                             {
                                 enabled: true,
                             },
-                        ]
+                        ],
                     },
                 },
                 result: true,
@@ -648,7 +681,7 @@ describe('OplogPopulator', () => {
                             {
                                 enabled: false,
                             },
-                        ]
+                        ],
                     },
                 },
                 result: false,
@@ -661,7 +694,7 @@ describe('OplogPopulator', () => {
                     lifecycleConfiguration: null,
                     ingestion: null,
                     replicationConfiguration: {
-                        rules: []
+                        rules: [],
                     },
                 },
                 result: false,
@@ -702,8 +735,8 @@ describe('OplogPopulator', () => {
                                         ],
                                     },
                                 ],
-                            }
-                        ]
+                            },
+                        ],
                     },
                 },
                 result: true,
@@ -716,7 +749,7 @@ describe('OplogPopulator', () => {
                     replicationConfiguration: null,
                     ingestion: null,
                     lifecycleConfiguration: {
-                        rules: []
+                        rules: [],
                     },
                 },
                 result: false,
@@ -744,7 +777,7 @@ describe('OplogPopulator', () => {
                                     },
                                 ],
                             },
-                        ]
+                        ],
                     },
                 },
                 result: false,
@@ -786,8 +819,8 @@ describe('OplogPopulator', () => {
                     'fullDocument.value': 1,
                     'clusterTime': {
                         $dateToString: {
-                            date: '$clusterTime'
-                        }
+                            date: '$clusterTime',
+                        },
                     },
                 },
             },
@@ -918,8 +951,7 @@ describe('OplogPopulator', () => {
                     listenToBucket: startListening,
                     has: () => true,
                 };
-                sinon.stub(oplogPopulator, '_isBucketBackbeatEnabled')
-                    .returns(false);
+                sinon.stub(oplogPopulator, '_isBucketBackbeatEnabled').returns(false);
                 const changeDocument = {
                     operationType: opType,
                     documentKey: {
@@ -940,8 +972,7 @@ describe('OplogPopulator', () => {
                     listenToBucket: startListening,
                     has: () => false,
                 };
-                sinon.stub(oplogPopulator, '_isBucketBackbeatEnabled')
-                    .returns(true);
+                sinon.stub(oplogPopulator, '_isBucketBackbeatEnabled').returns(true);
                 const changeDocument = {
                     operationType: opType,
                     documentKey: {
@@ -962,8 +993,7 @@ describe('OplogPopulator', () => {
                     listenToBucket: startListening,
                     has: () => false,
                 };
-                sinon.stub(oplogPopulator, '_isBucketBackbeatEnabled')
-                    .returns(false);
+                sinon.stub(oplogPopulator, '_isBucketBackbeatEnabled').returns(false);
                 const changeDocument = {
                     operationType: opType,
                     documentKey: {

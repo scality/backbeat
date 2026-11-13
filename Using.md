@@ -7,11 +7,11 @@ and target environment.
 
 It assumes:
 
-* A source environment at `http://node1`
-* A target environment at `http://node6`
-* An AWS profile `backbeat-source` in the 'us-east-1' region
-* An AWS profile `backbeat-target` in the 'us-east-1' region
-* That we want to set up a bucket `source-bucket` to replicate to another bucket
+- A source environment at `http://node1`
+- A target environment at `http://node6`
+- An AWS profile `backbeat-source` in the 'us-east-1' region
+- An AWS profile `backbeat-target` in the 'us-east-1' region
+- That we want to set up a bucket `source-bucket` to replicate to another bucket
   `target-bucket`
 
 ### Create Roles

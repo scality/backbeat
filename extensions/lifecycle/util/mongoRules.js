@@ -9,13 +9,10 @@ function isMassExpirationRule(rule) {
     if (!rule || rule.ruleStatus !== 'Enabled') {
         return false;
     }
-    if (rule.filter && (rule.filter.rulePrefix
-            || (rule.filter.tags && rule.filter.tags.length > 0))) {
+    if (rule.filter && (rule.filter.rulePrefix || (rule.filter.tags && rule.filter.tags.length > 0))) {
         return false;
     }
-    return (rule.actions || []).some(action => action
-        && action.actionName === 'Expiration'
-        && action.days === 0);
+    return (rule.actions || []).some(action => action && action.actionName === 'Expiration' && action.days === 0);
 }
 
 function hasMassExpirationRule(rules) {

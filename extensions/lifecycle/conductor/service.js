@@ -5,11 +5,8 @@ tracing.init();
 const async = require('async');
 const werelogs = require('werelogs');
 const { errors } = require('@scality/arsenal');
-const {
-    DEFAULT_LIVE_ROUTE,
-    DEFAULT_METRICS_ROUTE,
-    DEFAULT_READY_ROUTE,
-} = require('@scality/arsenal').network.probe.ProbeServer;
+const { DEFAULT_LIVE_ROUTE, DEFAULT_METRICS_ROUTE, DEFAULT_READY_ROUTE } =
+    require('@scality/arsenal').network.probe.ProbeServer;
 const { sendSuccess, sendError } = require('@scality/arsenal').network.probe.Utils;
 const { ZenkoMetrics } = require('@scality/arsenal').metrics;
 
@@ -22,7 +19,6 @@ const kafkaConfig = config.kafka;
 const lcConfig = config.extensions.lifecycle;
 const repConfig = config.extensions.replication;
 const s3Config = config.s3;
-
 
 const lcConductor = new LifecycleConductor(zkConfig, kafkaConfig, lcConfig, repConfig, s3Config);
 
@@ -63,30 +59,34 @@ async function handleMetrics(res, log) {
     res.end(metrics);
 }
 
-async.waterfall([
-    done => startProbeServer(lcConfig.conductor.probeServer, (err, probeServer) => {
+async.waterfall(
+    [
+        done =>
+            startProbeServer(lcConfig.conductor.probeServer, (err, probeServer) => {
+                if (err) {
+                    logger.error('error starting probe server', { error: err });
+                    return done(err);
+                }
+                if (probeServer !== undefined) {
+                    // following the same pattern as other extensions, where liveness
+                    // and readiness are handled by the same handler
+                    probeServer.addHandler([DEFAULT_LIVE_ROUTE, DEFAULT_READY_ROUTE], handleLiveness);
+                    // retaining the old route and adding support to new route, until
+                    // metrics handling is consolidated
+                    probeServer.addHandler(['/_/monitoring/metrics', DEFAULT_METRICS_ROUTE], handleMetrics);
+                }
+                return done();
+            }),
+        done => lcConductor.start(done),
+    ],
+    err => {
         if (err) {
-            logger.error('error starting probe server', { error: err });
-            return done(err);
+            logger.error('error during lifecycle conductor initialization', { error: err.message });
+            process.exit(1);
         }
-        if (probeServer !== undefined) {
-            // following the same pattern as other extensions, where liveness
-            // and readiness are handled by the same handler
-            probeServer.addHandler([DEFAULT_LIVE_ROUTE, DEFAULT_READY_ROUTE], handleLiveness);
-            // retaining the old route and adding support to new route, until
-            // metrics handling is consolidated
-            probeServer.addHandler(['/_/monitoring/metrics', DEFAULT_METRICS_ROUTE], handleMetrics);
-        }
-        return done();
-    }),
-    done => lcConductor.start(done),
-], err => {
-    if (err) {
-        logger.error('error during lifecycle conductor initialization', { error: err.message });
-        process.exit(1);
-    }
-    logger.info('lifecycle conductor process is running');
-});
+        logger.info('lifecycle conductor process is running');
+    },
+);
 
 process.on('SIGTERM', () => {
     logger.info('received SIGTERM, exiting');

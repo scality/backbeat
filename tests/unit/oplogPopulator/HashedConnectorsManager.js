@@ -8,8 +8,10 @@ const HashedConnectorsManager = require('../../../extensions/oplogPopulator/modu
 const OplogPopulatorMetrics = require('../../../extensions/oplogPopulator/OplogPopulatorMetrics');
 const ConnectorNameGenerator = require('../../../extensions/oplogPopulator/modules/ConnectorNameGenerator');
 const ListedConnector = require('../../../extensions/oplogPopulator/modules/ListedConnector');
-const { connectorStartupTime, timestampFromConnectorStartupTime } =
-    require('../../../extensions/oplogPopulator/modules/resumeToken');
+const {
+    connectorStartupTime,
+    timestampFromConnectorStartupTime,
+} = require('../../../extensions/oplogPopulator/modules/resumeToken');
 
 /**
  * Builds a change stream resume token, serialized as mongo-kafka commits it
@@ -50,8 +52,10 @@ class FakeKafkaConnect {
             config: { 'offset.partition.name': partition, ...config },
             state,
             taskState,
-            offsets: offsetTime === null ? [] :
-                [{ partition: { ns: partition }, offset: { _id: resumeTokenAt(offsetTime) } }],
+            offsets:
+                offsetTime === null
+                    ? []
+                    : [{ partition: { ns: partition }, offset: { _id: resumeTokenAt(offsetTime) } }],
         };
     }
 
@@ -73,10 +77,15 @@ class FakeKafkaConnect {
     }
 
     async getConnectorsWithStatus() {
-        return Object.fromEntries(Object.entries(this.connectors).map(([name, c]) => [name, {
-            info: { name, config: { ...c.config } },
-            status: this._status(c),
-        }]));
+        return Object.fromEntries(
+            Object.entries(this.connectors).map(([name, c]) => [
+                name,
+                {
+                    info: { name, config: { ...c.config } },
+                    status: this._status(c),
+                },
+            ]),
+        );
     }
 
     async getConnectorStatus(name) {
@@ -162,10 +171,12 @@ describe('HashedConnectorsManager', () => {
     }
 
     function addConnectors(nbConnectors, opts = {}) {
-        newManager(nbConnectors)._connectorSpecs.forEach(d => kafkaConnect.add(d.name, {
-            ...opts,
-            config: { ...d.config, ...opts.config },
-        }));
+        newManager(nbConnectors)._connectorSpecs.forEach(d =>
+            kafkaConnect.add(d.name, {
+                ...opts,
+                config: { ...d.config, ...opts.config },
+            }),
+        );
     }
 
     function connectorNames(nbConnectors, locationStrippingBytesThreshold = 0) {
@@ -318,13 +329,17 @@ describe('HashedConnectorsManager', () => {
         await reconcile(newManager(1));
         assert.deepStrictEqual(kafkaConnect.callsOf('create'), []);
         assert.deepStrictEqual(kafkaConnect.callsOf('delete'), []);
-        const [, { connectors }] = warn.getCalls()
+        const [, { connectors }] = warn
+            .getCalls()
             .find(({ args: [msg] }) => msg.startsWith('outdated connectors')).args;
         const byName = (x, y) => x.connector.localeCompare(y.connector);
-        assert.deepStrictEqual(connectors.sort(byName), [
-            { connector: notStopping, reason: 'connector tasks still running' },
-            { connector: noOffsets, reason: 'kafka connect offsets API unavailable' },
-        ].sort(byName));
+        assert.deepStrictEqual(
+            connectors.sort(byName),
+            [
+                { connector: notStopping, reason: 'connector tasks still running' },
+                { connector: noOffsets, reason: 'kafka connect offsets API unavailable' },
+            ].sort(byName),
+        );
     });
 
     it('should stop leftover connectors, then delete them once every hashed connector exists', async () => {
@@ -332,8 +347,12 @@ describe('HashedConnectorsManager', () => {
         kafkaConnect.add(leftover, { state: 'STOPPED', offsetTime: 900 });
         addConnectors(2);
         await reconcile(newManager(2));
-        assert.deepStrictEqual(kafkaConnect.calls,
-            [['offsets', leftover], ['stop', leftover], ['offsets', leftover], ['delete', leftover]]);
+        assert.deepStrictEqual(kafkaConnect.calls, [
+            ['offsets', leftover],
+            ['stop', leftover],
+            ['offsets', leftover],
+            ['delete', leftover],
+        ]);
         assert.strictEqual(getClusterTime.callCount, 1);
         assert.strictEqual(Date.now(), 0);
     });
@@ -394,8 +413,11 @@ describe('HashedConnectorsManager', () => {
     it('should leave alone connectors listed without their configuration', async () => {
         addConnectors(1, { config: { 'connection.uri': 'mongodb://old-host:27017' } });
         const list = kafkaConnect.getConnectorsWithStatus.bind(kafkaConnect);
-        sinon.stub(kafkaConnect, 'getConnectorsWithStatus').callsFake(async () =>
-            Object.fromEntries(Object.entries(await list()).map(([name, { status }]) => [name, { status }])));
+        sinon
+            .stub(kafkaConnect, 'getConnectorsWithStatus')
+            .callsFake(async () =>
+                Object.fromEntries(Object.entries(await list()).map(([name, { status }]) => [name, { status }])),
+            );
         await reconcile(newManager(1));
         assert.deepStrictEqual(kafkaConnect.calls, []);
         assert.deepStrictEqual(counted(), { running: 0, paused: 0, failed: 0, outdated: 0 });
@@ -495,9 +517,12 @@ describe('HashedConnectorsManager', () => {
         const name = `${prefix}source-connector-3f1c7a52-9b1e-4c1d-8f2e-6a7b8c9d0e1f`;
         kafkaConnect.add(name, { offsetTime: 900 });
         const before = [{ partition: { ns: `partition-${name}` }, offset: { _id: resumeTokenAt(800) } }];
-        sinon.stub(kafkaConnect, 'getConnectorOffsets')
-            .onFirstCall().resolves(before)
-            .onSecondCall().rejects(httpError(404));
+        sinon
+            .stub(kafkaConnect, 'getConnectorOffsets')
+            .onFirstCall()
+            .resolves(before)
+            .onSecondCall()
+            .rejects(httpError(404));
         await reconcile(newManager(1));
         assert.deepStrictEqual(startOf(connectorNames(1)[0]), { t: 800, i: 0 });
         assert.deepStrictEqual(kafkaConnect.callsOf('delete'), [name]);
@@ -507,8 +532,10 @@ describe('HashedConnectorsManager', () => {
         const name = `${prefix}source-connector-3f1c7a52-9b1e-4c1d-8f2e-6a7b8c9d0e1f`;
         kafkaConnect.add(name, { offsetTime: 900 });
         const manager = newManager(1);
-        sinon.stub(kafkaConnect, 'getConnectorOffsets')
-            .onSecondCall().rejects(errors.InternalError)
+        sinon
+            .stub(kafkaConnect, 'getConnectorOffsets')
+            .onSecondCall()
+            .rejects(errors.InternalError)
             .callsFake(async n => kafkaConnect.connectors[n].offsets);
         await assert.rejects(reconcile(manager));
         assert.strictEqual(kafkaConnect.connectors[name].state, 'STOPPED');
@@ -550,7 +577,10 @@ describe('HashedConnectorsManager', () => {
                 addOutdated();
                 await reconcile(newManager(2));
                 const expected = connectorNames(2).map(startOf);
-                assert.deepStrictEqual(expected, [{ t: 900, i: 0 }, { t: 900, i: 0 }]);
+                assert.deepStrictEqual(expected, [
+                    { t: 900, i: 0 },
+                    { t: 900, i: 0 },
+                ]);
 
                 kafkaConnect = new FakeKafkaConnect();
                 addOutdated();
@@ -641,8 +671,8 @@ describe('HashedConnectorsManager', () => {
         const running = { connector: { state: 'RUNNING' }, tasks: [{ id: 0, state: 'RUNNING' }] };
         const named = (nbConnectors, index, pipeline = '[]') =>
             nameGenerator.hashedName({ nbConnectors, index, pipeline });
-        const listed = names => Object.fromEntries(names.map(name =>
-            [name, { info: { config: {} }, status: running }]));
+        const listed = names =>
+            Object.fromEntries(names.map(name => [name, { info: { config: {} }, status: running }]));
 
         describe('_classify', () => {
             it('should report every desired connector as missing on a fresh install', () => {
@@ -664,14 +694,21 @@ describe('HashedConnectorsManager', () => {
                     'other-connector',
                 ]);
                 const plan = manager._classify(connectors);
-                assert.deepStrictEqual(plan.current.map(c => c.connector.name), [spec0.name]);
+                assert.deepStrictEqual(
+                    plan.current.map(c => c.connector.name),
+                    [spec0.name],
+                );
                 assert(plan.current[0].connector instanceof ListedConnector);
                 assert.strictEqual(plan.current[0].spec, spec0);
-                assert.deepStrictEqual(plan.outdated.map(o => o.connector.name),
-                    [perBucket, named(4, 1), named(2, 1, '[edited]')]);
+                assert.deepStrictEqual(
+                    plan.outdated.map(o => o.connector.name),
+                    [perBucket, named(4, 1), named(2, 1, '[edited]')],
+                );
                 assert(plan.outdated.every(o => o.connector instanceof ListedConnector));
-                assert.deepStrictEqual(plan.outdated.map(o => o.parsedName && o.parsedName.nbConnectors),
-                    [null, 4, 2]);
+                assert.deepStrictEqual(
+                    plan.outdated.map(o => o.parsedName && o.parsedName.nbConnectors),
+                    [null, 4, 2],
+                );
                 assert.deepStrictEqual(plan.missing, [spec1]);
             });
         });
@@ -696,8 +733,10 @@ describe('HashedConnectorsManager', () => {
                     'startup.mode.timestamp.start.at.operation.time': '{}',
                     'offset.topic.name': 'manual',
                 };
-                assert.deepStrictEqual(newManager(1)._configDrift(live, spec),
-                    ['connection.uri', 'topic.namespace.map']);
+                assert.deepStrictEqual(newManager(1)._configDrift(live, spec), [
+                    'connection.uri',
+                    'topic.namespace.map',
+                ]);
             });
         });
 
@@ -714,19 +753,28 @@ describe('HashedConnectorsManager', () => {
             it('should start each connector from the one it replaces', () => {
                 const manager = newManager(2);
                 const outdated = [hashedAt(2, 0, 10), hashedAt(2, 1, 20)];
-                assert.deepStrictEqual([0, 1].map(index => manager._startTime(index, outdated)), [at(10), at(20)]);
+                assert.deepStrictEqual(
+                    [0, 1].map(index => manager._startTime(index, outdated)),
+                    [at(10), at(20)],
+                );
             });
 
             it('should start every connector from the earliest time when the number of connectors changes', () => {
                 const manager = newManager(2);
                 const outdated = [hashedAt(4, 0, 30), hashedAt(4, 3, 15)];
-                assert.deepStrictEqual([0, 1].map(index => manager._startTime(index, outdated)), [at(15), at(15)]);
+                assert.deepStrictEqual(
+                    [0, 1].map(index => manager._startTime(index, outdated)),
+                    [at(15), at(15)],
+                );
             });
 
             it('should account for per-bucket connectors in every hashed connector', () => {
                 const manager = newManager(2);
                 const outdated = [hashedAt(2, 0, 10), hashedAt(2, 1, 20), outdatedConnector(null, 15)];
-                assert.deepStrictEqual([0, 1].map(index => manager._startTime(index, outdated)), [at(10), at(15)]);
+                assert.deepStrictEqual(
+                    [0, 1].map(index => manager._startTime(index, outdated)),
+                    [at(10), at(15)],
+                );
             });
 
             it('should leave out connectors whose oplog time is unknown', () => {

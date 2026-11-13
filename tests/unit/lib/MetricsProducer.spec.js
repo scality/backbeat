@@ -29,11 +29,10 @@ describe('MetricsProducer', () => {
         it('should publish nothing', done => {
             mProducer.setupProducer(err => {
                 assert.ifError(err);
-                return mProducer.publishMetrics(
-                    extMetrics, 'completed', 'crr', err => {
-                        assert.ifError(err);
-                        return done();
-                    });
+                return mProducer.publishMetrics(extMetrics, 'completed', 'crr', err => {
+                    assert.ifError(err);
+                    return done();
+                });
             });
         });
 
@@ -57,8 +56,7 @@ describe('MetricsProducer', () => {
             mProducer.publishMetrics(extMetrics, 'completed', 'crr', err => {
                 assert.ifError(err);
                 sinon.assert.calledOnce(mProducer._producer.send);
-                const [[{ message }]] =
-                    mProducer._producer.send.firstCall.args;
+                const [[{ message }]] = mProducer._producer.send.firstCall.args;
                 const published = JSON.parse(message);
                 assert.strictEqual(published.site, 'us-east-1');
                 assert.strictEqual(published.ops, 1);

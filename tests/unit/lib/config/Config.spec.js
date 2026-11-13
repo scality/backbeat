@@ -20,14 +20,12 @@ describe('Config', () => {
         testConfig = JSON.parse(JSON.stringify(backbeatConfig));
     });
 
-    it('should make the probeserver config in the queuePoulator' +
-        'required when multiple extensions are configured', () => {
+    it('should require the probeserver config in queuePopulator when multiple extensions are configured', () => {
         delete testConfig.queuePopulator.probeServer;
         assert.throws(() => config._parseConfig(testConfig));
     });
 
-    it('should make the probeserver config in the queuePoulator' +
-        'optional when only notification config is specified', () => {
+    it('should make the probeserver config optional when only notification config is specified', () => {
         delete testConfig.queuePopulator.probeServer;
         testConfig.extensions = { notification: testConfig.extensions.notification };
         assert.doesNotThrow(() => config._parseConfig(testConfig));
@@ -92,11 +90,9 @@ describe('Config', () => {
 
         it('should win over an env var setting several fields at once', () => {
             process.env.MONGODB_HOSTS = 'from-env:27017';
-            process.env[CONFIG_OVERRIDES] =
-                '{"queuePopulator":{"mongo":{"replicaSetHosts":"from-override:27017"}}}';
+            process.env[CONFIG_OVERRIDES] = '{"queuePopulator":{"mongo":{"replicaSetHosts":"from-override:27017"}}}';
             config._parseConfig(testConfig);
-            assert.strictEqual(config.queuePopulator.mongo.replicaSetHosts,
-                               'from-override:27017');
+            assert.strictEqual(config.queuePopulator.mongo.replicaSetHosts, 'from-override:27017');
         });
 
         it('should override a value of the config file', () => {
@@ -108,8 +104,7 @@ describe('Config', () => {
         it('should leave the fields it does not mention alone', () => {
             process.env[CONFIG_OVERRIDES] = '{"kafka":{"hosts":"patched:9092"}}';
             config._parseConfig(testConfig);
-            assert.strictEqual(config.kafka.maxRequestSize,
-                               backbeatConfig.kafka.maxRequestSize);
+            assert.strictEqual(config.kafka.maxRequestSize, backbeatConfig.kafka.maxRequestSize);
             assert.strictEqual(config.server.port, backbeatConfig.server.port);
         });
 
@@ -118,25 +113,23 @@ describe('Config', () => {
             config._parseConfig(testConfig);
             assert.strictEqual(config.extensions.gc.topic, 'patched-gc');
             // the rest of the extension config is untouched
-            assert.strictEqual(config.extensions.gc.consumer.concurrency,
-                               backbeatConfig.extensions.gc.consumer.concurrency);
+            assert.strictEqual(
+                config.extensions.gc.consumer.concurrency,
+                backbeatConfig.extensions.gc.consumer.concurrency,
+            );
         });
 
         it('should set a field the config file does not define', () => {
-            process.env[CONFIG_OVERRIDES] =
-                '{"kafka":{"producerParams":{"linger.ms":10,"socket.timeout.ms":5000}}}';
+            process.env[CONFIG_OVERRIDES] = '{"kafka":{"producerParams":{"linger.ms":10,"socket.timeout.ms":5000}}}';
             config._parseConfig(testConfig);
-            assert.deepStrictEqual(config.kafka.producerParams,
-                                   { 'linger.ms': 10, 'socket.timeout.ms': 5000 });
+            assert.deepStrictEqual(config.kafka.producerParams, { 'linger.ms': 10, 'socket.timeout.ms': 5000 });
         });
 
         it('should replace an array rather than merge it', () => {
-            process.env[CONFIG_OVERRIDES] =
-                '{"server":{"healthChecks":{"allowFrom":["10.0.0.0/8"]}}}';
+            process.env[CONFIG_OVERRIDES] = '{"server":{"healthChecks":{"allowFrom":["10.0.0.0/8"]}}}';
             config._parseConfig(testConfig);
             // _parseConfig appends the default health checks to the configured ones
-            assert.deepStrictEqual(config.server.healthChecks.allowFrom,
-                                   ['10.0.0.0/8', '127.0.0.1/8', '::1']);
+            assert.deepStrictEqual(config.server.healthChecks.allowFrom, ['10.0.0.0/8', '127.0.0.1/8', '::1']);
         });
 
         it('should restore the schema default when a field is deleted', () => {
@@ -172,8 +165,7 @@ describe('Config', () => {
 
         it('should reject an invalid overrides document', () => {
             process.env[CONFIG_OVERRIDES] = '{oops';
-            assert.throws(() => config._parseConfig(testConfig),
-                          /invalid JSON value for BACKBEAT_CONFIG_OVERRIDES/);
+            assert.throws(() => config._parseConfig(testConfig), /invalid JSON value for BACKBEAT_CONFIG_OVERRIDES/);
         });
 
         it('should apply the overrides when loading the configuration file', () => {
@@ -215,7 +207,6 @@ describe('Site name', () => {
         assert.deepStrictEqual(newConfig.bootstrapList, expectedBootstrapList);
     });
 });
-
 
 describe('Config', () => {
     describe('getReplicationSiteDestConfig', () => {
@@ -263,7 +254,6 @@ describe('Config', () => {
             });
         });
 
-
         describe('getReplicationSiteDestConfig', () => {
             it('should return replication site destination config', () => {
                 process.env.BACKBEAT_CONFIG_FILE = `${__dirname}/replicationMultiDestConfig.json`;
@@ -294,8 +284,8 @@ describe('Config', () => {
                     bootstrapList: [
                         { site: 'aws1', type: 'aws_s3' },
                         { site: 'aws2', type: 'aws_s3' },
-                        { site: 'aws3', type: 'aws_s3' }
-                    ]
+                        { site: 'aws3', type: 'aws_s3' },
+                    ],
                 });
                 const destConfig = conf.getReplicationSiteDestConfig('aws3');
                 assert.deepStrictEqual(destConfig, {
@@ -421,127 +411,191 @@ describe('historic config env vars', () => {
     const retryExpected = backend => ({
         [`extensions.replication.queueProcessor.retry.${backend}.maxRetries`]: 1,
         [`extensions.replication.queueProcessor.retry.${backend}.timeoutS`]: 2,
-        [`extensions.replication.queueProcessor.retry.${backend}.backoff`]:
-            { min: 3, max: 4, jitter: 0.5, factor: 6 },
+        [`extensions.replication.queueProcessor.retry.${backend}.backoff`]: { min: 3, max: 4, jitter: 0.5, factor: 6 },
     });
 
     const probeServer = { bindAddress: '0.0.0.0', port: 8100 };
     const contract = [
-        [{ LIVENESS_PROBE_PORT: '8100' }, {
-            'queuePopulator.probeServer': probeServer,
-            'extensions.ingestion.probeServer': probeServer,
-            'extensions.mongoProcessor.probeServer': probeServer,
-            'extensions.replication.queueProcessor.probeServer': probeServer,
-            'extensions.replication.replicationStatusProcessor.probeServer': probeServer,
-            'extensions.lifecycle.conductor.probeServer': probeServer,
-            'extensions.lifecycle.bucketProcessor.probeServer': probeServer,
-            'extensions.lifecycle.objectProcessor.probeServer': probeServer,
-            'extensions.gc.probeServer': probeServer,
-        }],
+        [
+            { LIVENESS_PROBE_PORT: '8100' },
+            {
+                'queuePopulator.probeServer': probeServer,
+                'extensions.ingestion.probeServer': probeServer,
+                'extensions.mongoProcessor.probeServer': probeServer,
+                'extensions.replication.queueProcessor.probeServer': probeServer,
+                'extensions.replication.replicationStatusProcessor.probeServer': probeServer,
+                'extensions.lifecycle.conductor.probeServer': probeServer,
+                'extensions.lifecycle.bucketProcessor.probeServer': probeServer,
+                'extensions.lifecycle.objectProcessor.probeServer': probeServer,
+                'extensions.gc.probeServer': probeServer,
+            },
+        ],
         [{ LOG_LEVEL: 'debug' }, { 'log.logLevel': 'debug' }],
         [{ ZOOKEEPER_AUTO_CREATE_NAMESPACE: 'true' }, { 'zookeeper.autoCreateNamespace': true }],
         [{ ZOOKEEPER_CONNECTION_STRING: 'zk:2181/bb' }, { 'zookeeper.connectionString': 'zk:2181/bb' }],
         [{ KAFKA_HOSTS: 'kafka:9092' }, { 'kafka.hosts': 'kafka:9092' }],
         [{ KAFKA_BACKLOG_METRICS_ZKPATH: '/bb/metrics' }, { 'kafka.backlogMetrics.zkPath': '/bb/metrics' }],
         [{ KAFKA_BACKLOG_METRICS_INTERVALS: '30' }, { 'kafka.backlogMetrics.intervalS': 30 }],
-        [{ REDIS_SENTINELS: 'sentinel1:26379,sentinel2:26379', REDIS_HA_NAME: 'group' }, {
-            redis: {
-                name: 'group',
-                sentinels: [{ host: 'sentinel1', port: 26379 }, { host: 'sentinel2', port: 26379 }],
-                // the passwords of the section survive the parsing of the list
-                password: '',
-                sentinelPassword: '',
+        [
+            { REDIS_SENTINELS: 'sentinel1:26379,sentinel2:26379', REDIS_HA_NAME: 'group' },
+            {
+                redis: {
+                    name: 'group',
+                    sentinels: [
+                        { host: 'sentinel1', port: 26379 },
+                        { host: 'sentinel2', port: 26379 },
+                    ],
+                    // the passwords of the section survive the parsing of the list
+                    password: '',
+                    sentinelPassword: '',
+                },
             },
-        }, { redis: {} }],
+            { redis: {} },
+        ],
         [{ REDIS_HOST: 'redis' }, { 'redis.host': 'redis', 'redis.port': 6379 }],
-        [{ REDIS_HOST: 'redis', REDIS_PORT: '6380' }, { 'redis.host': 'redis', 'redis.port': 6380 }],
+        [
+            { REDIS_HOST: 'redis', REDIS_PORT: '6380' },
+            { 'redis.host': 'redis', 'redis.port': 6380 },
+        ],
         [{ QUEUE_POPULATOR_BATCH_MAX_READ: '42' }, { 'queuePopulator.batchMaxRead': 42 }],
-        [{ QUEUE_POPULATOR_DMD_HOST: 'dmd', QUEUE_POPULATOR_DMD_PORT: '9991' }, {
-            'queuePopulator.dmd.host': 'dmd',
-            'queuePopulator.dmd.port': 9991,
-        }],
-        [{ MONGODB_HOSTS: 'mongo1:27017,mongo2:27017' }, {
-            'queuePopulator.mongo.replicaSetHosts': 'mongo1:27017,mongo2:27017',
-        }],
+        [
+            { QUEUE_POPULATOR_DMD_HOST: 'dmd', QUEUE_POPULATOR_DMD_PORT: '9991' },
+            {
+                'queuePopulator.dmd.host': 'dmd',
+                'queuePopulator.dmd.port': 9991,
+            },
+        ],
+        [
+            { MONGODB_HOSTS: 'mongo1:27017,mongo2:27017' },
+            {
+                'queuePopulator.mongo.replicaSetHosts': 'mongo1:27017,mongo2:27017',
+            },
+        ],
         [{ MONGODB_RS: 'rs1' }, { 'queuePopulator.mongo.replicaSet': 'rs1' }],
         [{ MONGODB_DATABASE: 'db' }, { 'queuePopulator.mongo.database': 'db' }],
-        [{ MONGODB_AUTH_USERNAME: 'user', MONGODB_AUTH_PASSWORD: 'pass' }, {
-            'queuePopulator.mongo.authCredentials': { username: 'user', password: 'pass' },
-        }],
-        [{ CLOUDSERVER_HOST: 'cloudserver', CLOUDSERVER_PORT: '8001' }, {
-            's3.host': 'cloudserver',
-            's3.port': 8001,
-        }],
-        [{ HEALTHCHECKS_ALLOWFROM: '10.0.0.0/8' }, {
-            // the loopback addresses are always allowed
-            'server.healthChecks.allowFrom': ['10.0.0.0/8', '127.0.0.1/8', '::1'],
-        }],
+        [
+            { MONGODB_AUTH_USERNAME: 'user', MONGODB_AUTH_PASSWORD: 'pass' },
+            {
+                'queuePopulator.mongo.authCredentials': { username: 'user', password: 'pass' },
+            },
+        ],
+        [
+            { CLOUDSERVER_HOST: 'cloudserver', CLOUDSERVER_PORT: '8001' },
+            {
+                's3.host': 'cloudserver',
+                's3.port': 8001,
+            },
+        ],
+        [
+            { HEALTHCHECKS_ALLOWFROM: '10.0.0.0/8' },
+            {
+                // the loopback addresses are always allowed
+                'server.healthChecks.allowFrom': ['10.0.0.0/8', '127.0.0.1/8', '::1'],
+            },
+        ],
         [{ REPLICATION_GROUP_ID: 'RG00002' }, { replicationGroupId: 'RG00002' }],
-        [{
-            EXTENSIONS_REPLICATION_SOURCE_S3_HOST: 'cloudserver',
-            EXTENSIONS_REPLICATION_SOURCE_S3_PORT: '8001',
-        }, {
-            'extensions.replication.source.s3.host': 'cloudserver',
-            'extensions.replication.source.s3.port': 8001,
-        }],
-        [{
-            EXTENSIONS_REPLICATION_SOURCE_AUTH_TYPE: 'account',
-            EXTENSIONS_REPLICATION_SOURCE_AUTH_ACCOUNT: 'source-account',
-        }, {
-            'extensions.replication.source.auth.type': 'account',
-            'extensions.replication.source.auth.account': 'source-account',
-        }],
-        [{
-            EXTENSIONS_REPLICATION_DEST_AUTH_TYPE: 'account',
-            EXTENSIONS_REPLICATION_DEST_AUTH_ACCOUNT: 'dest-account',
-        }, {
-            'extensions.replication.destination.auth.type': 'account',
-            'extensions.replication.destination.auth.account': 'dest-account',
-        }],
-        [{ EXTENSIONS_REPLICATION_DEST_BOOTSTRAPLIST: 'zenko-1:8000' }, {
-            'extensions.replication.destination.bootstrapList':
-                [{ site: 'zenko', servers: ['zenko-1:8000'], echo: false }],
-        }],
-        [{
-            EXTENSIONS_REPLICATION_DEST_BOOTSTRAPLIST: 'zenko-1:8000',
-            EXTENSIONS_REPLICATION_DEST_BOOTSTRAPLIST_MORE: '{ "site": "aws", "type": "aws_s3" }',
-        }, {
-            'extensions.replication.destination.bootstrapList': [
-                { site: 'zenko', servers: ['zenko-1:8000'], echo: false },
-                { site: 'aws', type: 'aws_s3' },
-            ],
-        }],
+        [
+            {
+                EXTENSIONS_REPLICATION_SOURCE_S3_HOST: 'cloudserver',
+                EXTENSIONS_REPLICATION_SOURCE_S3_PORT: '8001',
+            },
+            {
+                'extensions.replication.source.s3.host': 'cloudserver',
+                'extensions.replication.source.s3.port': 8001,
+            },
+        ],
+        [
+            {
+                EXTENSIONS_REPLICATION_SOURCE_AUTH_TYPE: 'account',
+                EXTENSIONS_REPLICATION_SOURCE_AUTH_ACCOUNT: 'source-account',
+            },
+            {
+                'extensions.replication.source.auth.type': 'account',
+                'extensions.replication.source.auth.account': 'source-account',
+            },
+        ],
+        [
+            {
+                EXTENSIONS_REPLICATION_DEST_AUTH_TYPE: 'account',
+                EXTENSIONS_REPLICATION_DEST_AUTH_ACCOUNT: 'dest-account',
+            },
+            {
+                'extensions.replication.destination.auth.type': 'account',
+                'extensions.replication.destination.auth.account': 'dest-account',
+            },
+        ],
+        [
+            { EXTENSIONS_REPLICATION_DEST_BOOTSTRAPLIST: 'zenko-1:8000' },
+            {
+                'extensions.replication.destination.bootstrapList': [
+                    { site: 'zenko', servers: ['zenko-1:8000'], echo: false },
+                ],
+            },
+        ],
+        [
+            {
+                EXTENSIONS_REPLICATION_DEST_BOOTSTRAPLIST: 'zenko-1:8000',
+                EXTENSIONS_REPLICATION_DEST_BOOTSTRAPLIST_MORE: '{ "site": "aws", "type": "aws_s3" }',
+            },
+            {
+                'extensions.replication.destination.bootstrapList': [
+                    { site: 'zenko', servers: ['zenko-1:8000'], echo: false },
+                    { site: 'aws', type: 'aws_s3' },
+                ],
+            },
+        ],
         [retryFields('AWS_S3'), retryExpected('aws_s3')],
         [retryFields('AZURE'), retryExpected('azure')],
         [retryFields('GCP'), retryExpected('gcp')],
-        [{ EXTENSIONS_REPLICATION_QUEUE_PROCESSOR_CONCURRENCY: '11' },
-            { 'extensions.replication.queueProcessor.concurrency': 11 }],
-        [{ EXTENSIONS_REPLICATION_STATUS_PROCESSOR_CONCURRENCY: '7' },
-            { 'extensions.replication.replicationStatusProcessor.concurrency': 7 }],
-        [{ EXTENSIONS_REPLICATION_QUEUE_PROCESSOR_MAX_POLL_INTERVAL_MS: '60000' },
-            { 'extensions.replication.queueProcessor.maxPollIntervalMs': 60000 }],
+        [
+            { EXTENSIONS_REPLICATION_QUEUE_PROCESSOR_CONCURRENCY: '11' },
+            { 'extensions.replication.queueProcessor.concurrency': 11 },
+        ],
+        [
+            { EXTENSIONS_REPLICATION_STATUS_PROCESSOR_CONCURRENCY: '7' },
+            { 'extensions.replication.replicationStatusProcessor.concurrency': 7 },
+        ],
+        [
+            { EXTENSIONS_REPLICATION_QUEUE_PROCESSOR_MAX_POLL_INTERVAL_MS: '60000' },
+            { 'extensions.replication.queueProcessor.maxPollIntervalMs': 60000 },
+        ],
         [{ EXTENSIONS_LIFECYCLE_ZOOKEEPER_PATH: '/lc' }, { 'extensions.lifecycle.zookeeperPath': '/lc' }],
-        [{ EXTENSIONS_LIFECYCLE_BUCKET_TASK_TOPIC: 'lc-buckets' },
-            { 'extensions.lifecycle.bucketTasksTopic': 'lc-buckets' }],
-        [{ EXTENSIONS_LIFECYCLE_OBJECT_TASK_TOPIC: 'lc-objects' },
-            { 'extensions.lifecycle.objectTasksTopic': 'lc-objects' }],
-        [{ EXTENSIONS_LIFECYCLE_CONDUCTOR_CRONRULE: '0 0 * * * *' },
-            { 'extensions.lifecycle.conductor.cronRule': '0 0 * * * *' }],
-        [{ EXTENSIONS_LIFECYCLE_BUCKET_PROCESSOR_GROUP_ID: 'lc-bucket-group' },
-            { 'extensions.lifecycle.bucketProcessor.groupId': 'lc-bucket-group' }],
-        [{ EXTENSIONS_LIFECYCLE_OBJECT_PROCESSOR_GROUP_ID: 'lc-object-group' },
-            { 'extensions.lifecycle.objectProcessor.groupId': 'lc-object-group' }],
-        [{ EXTENSIONS_LIFECYCLE_AUTH_TYPE: 'account', EXTENSIONS_LIFECYCLE_AUTH_ACCOUNT: 'lc-account' }, {
-            'extensions.lifecycle.auth.type': 'account',
-            'extensions.lifecycle.auth.account': 'lc-account',
-        }],
+        [
+            { EXTENSIONS_LIFECYCLE_BUCKET_TASK_TOPIC: 'lc-buckets' },
+            { 'extensions.lifecycle.bucketTasksTopic': 'lc-buckets' },
+        ],
+        [
+            { EXTENSIONS_LIFECYCLE_OBJECT_TASK_TOPIC: 'lc-objects' },
+            { 'extensions.lifecycle.objectTasksTopic': 'lc-objects' },
+        ],
+        [
+            { EXTENSIONS_LIFECYCLE_CONDUCTOR_CRONRULE: '0 0 * * * *' },
+            { 'extensions.lifecycle.conductor.cronRule': '0 0 * * * *' },
+        ],
+        [
+            { EXTENSIONS_LIFECYCLE_BUCKET_PROCESSOR_GROUP_ID: 'lc-bucket-group' },
+            { 'extensions.lifecycle.bucketProcessor.groupId': 'lc-bucket-group' },
+        ],
+        [
+            { EXTENSIONS_LIFECYCLE_OBJECT_PROCESSOR_GROUP_ID: 'lc-object-group' },
+            { 'extensions.lifecycle.objectProcessor.groupId': 'lc-object-group' },
+        ],
+        [
+            { EXTENSIONS_LIFECYCLE_AUTH_TYPE: 'account', EXTENSIONS_LIFECYCLE_AUTH_ACCOUNT: 'lc-account' },
+            {
+                'extensions.lifecycle.auth.type': 'account',
+                'extensions.lifecycle.auth.account': 'lc-account',
+            },
+        ],
         [{ EXTENSIONS_GC_TOPIC: 'gc-topic' }, { 'extensions.gc.topic': 'gc-topic' }],
-        [{ EXTENSIONS_INGESTION_AUTH_TYPE: 'service', EXTENSIONS_INGESTION_AUTH_ACCOUNT: 'ingest' }, {
-            'extensions.ingestion.auth.type': 'service',
-            'extensions.ingestion.auth.account': 'ingest',
-        }],
-        [{ EXTENSIONS_INGESTION_MAX_PARALLEL_READERS: '3' },
-            { 'extensions.ingestion.maxParallelReaders': 3 }],
+        [
+            { EXTENSIONS_INGESTION_AUTH_TYPE: 'service', EXTENSIONS_INGESTION_AUTH_ACCOUNT: 'ingest' },
+            {
+                'extensions.ingestion.auth.type': 'service',
+                'extensions.ingestion.auth.account': 'ingest',
+            },
+        ],
+        [{ EXTENSIONS_INGESTION_MAX_PARALLEL_READERS: '3' }, { 'extensions.ingestion.maxParallelReaders': 3 }],
     ];
 
     let ogConfigFile;
@@ -569,7 +623,8 @@ describe('historic config env vars', () => {
         const og = Object.fromEntries(Object.keys(env).map(name => [name, process.env[name]]));
         Object.assign(process.env, env);
         if (sections) {
-            sinon.stub(fs, 'readFileSync')
+            sinon
+                .stub(fs, 'readFileSync')
                 .callThrough()
                 .withArgs(process.env.BACKBEAT_CONFIG_FILE, sinon.match.any)
                 .returns(JSON.stringify({ ...backbeatConfig, ...sections }));
@@ -592,22 +647,22 @@ describe('historic config env vars', () => {
         it(`should apply ${Object.keys(env).join(', ')}`, () => {
             const config = configWith(env, sections);
             Object.entries(expected).forEach(([path, value]) =>
-                assert.deepStrictEqual(getField(config, path.split('.')), value, path));
+                assert.deepStrictEqual(getField(config, path.split('.')), value, path),
+            );
         });
     });
 
     it('should reject the sentinels over a standalone configuration', () => {
-        assert.throws(() => configWith({ REDIS_SENTINELS: 'sentinel1:26379' }),
-                      /"redis.host" is not allowed/);
+        assert.throws(() => configWith({ REDIS_SENTINELS: 'sentinel1:26379' }), /"redis.host" is not allowed/);
     });
 
     it('should account for every historic env var', () => {
-        const covered = new Set([
-            ...contract.flatMap(([env]) => Object.keys(env)),
-            ...removedEnvVars,
-        ]);
+        const covered = new Set([...contract.flatMap(([env]) => Object.keys(env)), ...removedEnvVars]);
 
-        assert.deepStrictEqual(historicEnvVars.filter(name => !covered.has(name)), []);
+        assert.deepStrictEqual(
+            historicEnvVars.filter(name => !covered.has(name)),
+            [],
+        );
     });
 
     it('should accept the log levels the entrypoint used to reject', () => {

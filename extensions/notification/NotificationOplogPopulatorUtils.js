@@ -7,14 +7,14 @@ class NotificationOplogPopulatorUtils extends OplogPopulatorUtils {
      * extension enabled
      * @returns {Object} MongoDB filter
      */
-     static getExtensionMongoDBFilter() {
+    static getExtensionMongoDBFilter() {
         return {
             'value.notificationConfiguration': {
                 $type: 3,
                 $not: {
-                    $size: 0
-                }
-            }
+                    $size: 0,
+                },
+            },
         };
     }
 

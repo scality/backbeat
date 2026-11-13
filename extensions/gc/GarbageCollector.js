@@ -24,7 +24,6 @@ const GC_CLIENT_ID = 'garbage-collector';
  * reclaim storage space
  */
 class GarbageCollector extends EventEmitter {
-
     /**
      * @constructor
      * @param {Object} params - constructor params
@@ -73,12 +72,15 @@ class GarbageCollector extends EventEmitter {
 
         this._logger = new Logger('Backbeat:GC');
 
-        this.clientManager = new ClientManager({
-            id: 'garbage collector',
-            authConfig: this._gcConfig.auth,
-            s3Config: params.s3Config,
-            transport: params.transport,
-        }, this._logger);
+        this.clientManager = new ClientManager(
+            {
+                id: 'garbage collector',
+                authConfig: this._gcConfig.auth,
+                s3Config: params.s3Config,
+                transport: params.transport,
+            },
+            this._logger,
+        );
 
         this.vaultClientWrapper = new VaultClientWrapper(
             GC_CLIENT_ID,
@@ -156,8 +158,7 @@ class GarbageCollector extends EventEmitter {
         this._consumer = new BackbeatConsumer(this._getConsumerOptions());
         this._consumer.on('error', () => {
             if (!consumerReady) {
-                this._logger.error('garbage collector failed to start the ' +
-                                   'kafka consumer');
+                this._logger.error('garbage collector failed to start the kafka consumer');
                 process.exit(1);
             }
         });
@@ -200,9 +201,9 @@ class GarbageCollector extends EventEmitter {
         const actionEntry = ActionQueueEntry.createFromKafkaEntry(kafkaEntry);
         actionEntry.setAttribute('timestamp', kafkaEntry.timestamp);
         if (actionEntry.error) {
-            this._logger.error(
-                'malformed kafka entry from garbage collector topic',
-                { error: actionEntry.error.message });
+            this._logger.error('malformed kafka entry from garbage collector topic', {
+                error: actionEntry.error.message,
+            });
             return process.nextTick(() => done(errors.InternalError));
         }
         const task = new GarbageCollectorTask(this);
@@ -213,19 +214,15 @@ class GarbageCollector extends EventEmitter {
         return {
             gcConfig: this._gcConfig,
             logger: this._logger,
-            getS3Client:
-                this.clientManager.getS3Client.bind(this.clientManager),
-            getBackbeatClient:
-                this.clientManager.getBackbeatClient.bind(this.clientManager),
-            getBackbeatMetadataProxy:
-                this.clientManager.getBackbeatMetadataProxy.bind(this.clientManager),
+            getS3Client: this.clientManager.getS3Client.bind(this.clientManager),
+            getBackbeatClient: this.clientManager.getBackbeatClient.bind(this.clientManager),
+            getBackbeatMetadataProxy: this.clientManager.getBackbeatMetadataProxy.bind(this.clientManager),
             getAccountId: this.getAccountId.bind(this),
         };
     }
 
     isReady() {
-        return this._consumer && this._consumer.isReady()
-            && this.vaultClientWrapper.tempCredentialsReady();
+        return this._consumer && this._consumer.isReady() && this.vaultClientWrapper.tempCredentialsReady();
     }
 }
 

@@ -1,7 +1,6 @@
 const assert = require('assert');
 
-const ReplicationStatusProcessor =
-    require('../../../extensions/replication/replicationStatusProcessor/ReplicationStatusProcessor');
+const ReplicationStatusProcessor = require('../../../extensions/replication/replicationStatusProcessor/ReplicationStatusProcessor');
 
 function makeReplicationStatusProcessor(replayTopics) {
     return new ReplicationStatusProcessor(
@@ -12,7 +11,8 @@ function makeReplicationStatusProcessor(replayTopics) {
             transport: 'http',
         },
         { replayTopics, objectSizeMetrics: [100, 1000] },
-        {});
+        {},
+    );
 }
 
 describe('ReplicationStatusProcessor', () => {
@@ -105,9 +105,7 @@ describe('ReplicationStatusProcessor', () => {
             const replicationStatusProcessor = makeReplicationStatusProcessor(replayTopics);
             const stateVars = replicationStatusProcessor.getStateVars();
 
-            assert.deepStrictEqual(stateVars.replayTopicNames, [
-                'backbeat-replication-replay-0',
-            ]);
+            assert.deepStrictEqual(stateVars.replayTopicNames, ['backbeat-replication-replay-0']);
         });
 
         it('should return an array of two items if two topic names', () => {
@@ -148,15 +146,13 @@ describe('ReplicationStatusProcessor', () => {
                     },
                     objectSizeMetrics: [100, 1000],
                 },
-                {});
-            const consumerOptions =
-                replicationStatusProcessor._getConsumerOptions({});
+                {},
+            );
+            const consumerOptions = replicationStatusProcessor._getConsumerOptions({});
 
             assert.strictEqual(consumerOptions.fromOffset, 'earliest');
-            assert.strictEqual(consumerOptions.topic,
-                'backbeat-replication-status');
-            assert.strictEqual(consumerOptions.groupId,
-                'backbeat-replication-status-group');
+            assert.strictEqual(consumerOptions.topic, 'backbeat-replication-status');
+            assert.strictEqual(consumerOptions.groupId, 'backbeat-replication-status-group');
             assert.strictEqual(consumerOptions.bootstrap, false);
         });
     });

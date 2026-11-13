@@ -50,12 +50,16 @@ class CircuitBreakerGroup {
             this.circuitBreakers[workflowType].global.push(circuitBreaker);
         }
         if (topic) {
-            this.circuitBreakers[workflowType].topic[topic] =
-                this._append(this.circuitBreakers[workflowType].topic[topic], circuitBreaker);
+            this.circuitBreakers[workflowType].topic[topic] = this._append(
+                this.circuitBreakers[workflowType].topic[topic],
+                circuitBreaker,
+            );
         }
         if (location) {
-            this.circuitBreakers[workflowType].location[location] =
-                this._append(this.circuitBreakers[workflowType].location[location], circuitBreaker);
+            this.circuitBreakers[workflowType].location[location] = this._append(
+                this.circuitBreakers[workflowType].location[location],
+                circuitBreaker,
+            );
         }
     }
 
@@ -65,20 +69,19 @@ class CircuitBreakerGroup {
             metricsName += `_${metricsSuffix}`;
         }
         this._latestBreakerId += 1;
-        startCircuitBreakerMetricsExport(
-            circuitBreaker,
-            metricsName
-        );
+        startCircuitBreakerMetricsExport(circuitBreaker, metricsName);
         return metricsName;
     }
 
     addCircuitBreaker(probeConf, query, isTransition, isExpiration, topic, location, metricsSuffix) {
         const circuitBreaker = new CircuitBreaker({
             ...this._cbGlobalConf,
-            probes: [{
-                ...probeConf,
-                query,
-            }],
+            probes: [
+                {
+                    ...probeConf,
+                    query,
+                },
+            ],
         });
         const breakerId = this.exportCircuitBreakerMetric(circuitBreaker, metricsSuffix);
         const logFields = {
@@ -123,18 +126,12 @@ class CircuitBreakerGroup {
                 return;
             }
             if (location && this.circuitBreakers[type].location[location]) {
-                breakers.push(
-                    ...this.circuitBreakers[type].location[location],
-                );
+                breakers.push(...this.circuitBreakers[type].location[location]);
             }
             if (topic && this.circuitBreakers[type].topic[topic]) {
-                breakers.push(
-                    ...this.circuitBreakers[type].topic[topic],
-                );
+                breakers.push(...this.circuitBreakers[type].topic[topic]);
             }
-            breakers.push(
-                ...this.circuitBreakers[type].global,
-            );
+            breakers.push(...this.circuitBreakers[type].global);
         });
         return breakers.some(breaker => breaker.state !== BreakerState.Nominal);
     }
@@ -148,10 +145,7 @@ class CircuitBreakerGroup {
  * @returns {string[]} list of topics
  */
 function getAllTopics(lcConfig, repConfig, locations) {
-    const topics = [
-        lcConfig.objectTasksTopic,
-        repConfig.dataMoverTopic,
-    ];
+    const topics = [lcConfig.objectTasksTopic, repConfig.dataMoverTopic];
     Object.keys(locations).forEach(locationName => {
         if (locations[locationName].isCold) {
             topics.push(lcConfig.coldStorageArchiveTopicPrefix + locationName);
