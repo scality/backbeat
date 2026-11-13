@@ -1,10 +1,12 @@
 const assert = require('assert');
+const sinon = require('sinon');
 const werelogs = require('werelogs');
 
 const { ObjectMD } = require('@scality/arsenal').models;
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const LifecycleUpdateTransitionTask = require(
     '../../../extensions/lifecycle/tasks/LifecycleUpdateTransitionTask');
+const { LifecycleMetrics } = require('../../../extensions/lifecycle/LifecycleMetrics');
 
 const {
     GarbageCollectorProducerMock,
@@ -158,6 +160,32 @@ describe('LifecycleUpdateTransitionTask', () => {
             const receivedMd = backbeatMetadataProxyClient.getReceivedMd();
             assert.deepStrictEqual(receivedMd.location, newLocation);
             assert.strictEqual(gcProducer.getReceivedEntry(), null);
+            done();
+        });
+    });
+
+    it('should report a completed transition on the destination location', done => {
+        const completedMetric = sinon.stub(LifecycleMetrics, 'onLifecycleCompleted');
+        actionEntry.setAttribute('toLocation', 'newLocationName');
+        task.processActionEntry(actionEntry, err => {
+            completedMetric.restore();
+            assert.ifError(err);
+            sinon.assert.calledOnceWithExactly(completedMetric, sinon.match.any,
+                'transition', 'newLocationName', sinon.match.number);
+            done();
+        });
+    });
+
+    it('should report a completed pull replication on the location pulled from', done => {
+        const completedMetric = sinon.stub(LifecycleMetrics, 'onLifecycleCompleted');
+        actionEntry
+            .setAttribute('toLocation', 'newLocationName')
+            .setAttribute('metrics', { origin: 'pullReplication', fromLocation: 'location-crr-source' });
+        task.processActionEntry(actionEntry, err => {
+            completedMetric.restore();
+            assert.ifError(err);
+            sinon.assert.calledOnceWithExactly(completedMetric, sinon.match.any,
+                'pullReplication', 'location-crr-source', sinon.match.number);
             done();
         });
     });

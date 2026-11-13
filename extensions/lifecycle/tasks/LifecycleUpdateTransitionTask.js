@@ -5,7 +5,7 @@ const errors = require('@scality/arsenal').errors;
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const ObjectMD = require('@scality/arsenal').models.ObjectMD;
-const { LifecycleMetrics, getCopyLocationMetricsType } = require('../LifecycleMetrics');
+const { LifecycleMetrics, getCopyLocationMetricsType, PULL_REPLICATION } = require('../LifecycleMetrics');
 const {
     TRANSITION_ATTEMPT_MD,
     getTransitionAttempt,
@@ -215,7 +215,8 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
                 return this._putMetadata(entry, objMD, log, err => {
                     const transitionTime = entry.getAttribute('metrics.transitionTime') ||
                         objMD.getTransitionTime();
-                    const locationName = entry.getAttribute('toLocation');
+                    const locationName = entry.getAttribute('metrics.origin') === PULL_REPLICATION ?
+                        entry.getAttribute('metrics.fromLocation') : entry.getAttribute('toLocation');
                     LifecycleMetrics.onLifecycleCompleted(log, getCopyLocationMetricsType(entry),
                         locationName, Date.now() - Date.parse(transitionTime));
                     next(err);

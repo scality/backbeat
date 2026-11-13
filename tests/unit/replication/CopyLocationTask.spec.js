@@ -72,6 +72,19 @@ describe('CopyLocationTask', () => {
             const res = task._checkObjectState(entry, objMd);
             assert.equal(res, null);
         });
+
+        it('should not skip a pull replication of an object still on the location pulled from', () => {
+            const objMd = new ObjectMD();
+            objMd.setDataStoreName('location-crr-source');
+            objMd.setLocation([{ dataStoreName: 'location-crr-source', targetLocation: 'us-east-1' }]);
+
+            const entry = new ActionQueueEntry({
+                target: {},
+                toLocation: 'location-crr-source',
+            });
+
+            assert.strictEqual(task._checkObjectState(entry, objMd), null);
+        });
     });
 
     describe('_publishCopyLocationStatus', () => {
@@ -102,6 +115,170 @@ describe('CopyLocationTask', () => {
             const res = task._publishCopyLocationStatus(errors.InvalidObjectState, entry, null, fakeLogger);
             assert.strictEqual(res.committable, true);
             assert(task.replicationStatusProducer.notCalled);
+        });
+
+        [
+            ['regular copy', 'lifecycle', 'test-site'],
+            ['pull replication', 'pullReplication', 'location-crr-source'],
+        ].forEach(([desc, origin, toLocation]) => {
+            it(`should publish the location the data was copied to for a ${desc}`, () => {
+                const entry = ActionQueueEntry.create('copyLocation')
+                    .setAttribute('target', { key: 'key' })
+                    .setAttribute('toLocation', toLocation)
+                    .setAttribute('metrics', { origin, fromLocation: 'location-crr-source' })
+                    .setResultsTopic('results-topic');
+                task.replicationStatusProducer = { sendToTopic: sinon.stub() };
+
+                const res = task._publishCopyLocationStatus(null, entry, null, fakeLogger);
+
+                assert.strictEqual(res.committable, false);
+                const [topic, [{ message }]] = task.replicationStatusProducer.sendToTopic.firstCall.args;
+                assert.strictEqual(topic, 'results-topic');
+                const published = JSON.parse(message);
+                assert.strictEqual(published.toLocation, 'test-site');
+                assert.strictEqual(published.metrics.fromLocation, 'location-crr-source');
+            });
+        });
+    });
+
+    describe('write destination', () => {
+        let task;
+
+        beforeEach(() => {
+            task = new CopyLocationTask({
+                getStateVars: () => ({
+                    site: 'location-crr-source',
+                    mProducer: {
+                        getProducer: () => {},
+                    },
+                }),
+            });
+            task.destType = 'scality';
+            task.backbeatClient = {
+                send: sinon.stub().resolves({ uploadId: 'upload-id' }),
+            };
+        });
+
+        afterEach(() => sinon.restore());
+
+        function pulledObjectMD(targetLocation) {
+            const objMd = new ObjectMD();
+            objMd.setDataStoreName('location-crr-source');
+            objMd.setLocation([{ dataStoreName: 'location-crr-source', targetLocation }]);
+            return objMd;
+        }
+
+        function initiateMPU(objMd) {
+            const entry = new ActionQueueEntry({
+                target: { bucket: 'bucket', key: 'key' },
+                toLocation: 'location-crr-source',
+            });
+            assert.strictEqual(task._setupDestination(entry, objMd, fakeLogger), null);
+            return new Promise((resolve, reject) => task._initiateMPU(entry, objMd, fakeLogger,
+                err => (err ? reject(err) : resolve(task.backbeatClient.send.firstCall.args[0].input))));
+        }
+
+        it('should write to this site for a regular copy', async () => {
+            const objMd = new ObjectMD();
+            objMd.setDataStoreName('us-east-1');
+
+            const input = await initiateMPU(objMd);
+            assert.strictEqual(input.StorageClass, 'location-crr-source');
+            assert.strictEqual(input.StorageType, 'scality');
+        });
+
+        it('should write to the target location for a pull replication', async () => {
+            const input = await initiateMPU(pulledObjectMD('us-east-2'));
+            assert.strictEqual(input.StorageClass, 'us-east-2');
+            assert.strictEqual(input.StorageType, 'aws_s3');
+        });
+
+        // the target may have been deleted since the metadata was written, and
+        // objects written before the pipeline named one carry no target at all
+        [
+            ['an unknown target', pulledObjectMD('a-deleted-location')],
+            ['no target', pulledObjectMD(undefined)],
+            ['no location', (() => {
+                const objMd = pulledObjectMD();
+                objMd.setLocation(null);
+                return objMd;
+            })()],
+        ].forEach(([desc, objMd]) => {
+            it(`should pull to the default location with ${desc}`, async () => {
+                const warnSpy = sinon.spy(fakeLogger, 'warn');
+
+                const input = await initiateMPU(objMd);
+                assert.strictEqual(input.StorageClass, 'us-east-1');
+                assert.strictEqual(input.StorageType, 'file');
+                sinon.assert.calledOnce(warnSpy);
+            });
+        });
+
+        it('should fail when there is no local location to pull to', () => {
+            const entry = new ActionQueueEntry({ target: {}, toLocation: 'location-crr-source' });
+            Object.keys(locationConfig).filter(name => !locationConfig[name].isCRR).forEach(
+                name => sinon.stub(locationConfig, name).value({ type: 'aws_s3' }));
+
+            const err = task._setupDestination(entry, pulledObjectMD('a-deleted-location'), fakeLogger);
+            assert(err.InternalError);
+            assert.strictEqual(task.site, 'location-crr-source');
+        });
+    });
+
+    describe('default local location', () => {
+        let task;
+        const entry = new ActionQueueEntry({ target: {}, toLocation: 'location-crr-source' });
+
+        function pullTarget() {
+            return task._getPullReplicationTarget(entry, [{ targetLocation: 'a-deleted-location' }], fakeLogger);
+        }
+
+        beforeEach(() => {
+            task = new CopyLocationTask({
+                getStateVars: () => ({ mProducer: { getProducer: () => {} } }),
+            });
+        });
+
+        afterEach(() => sinon.restore());
+
+        it('should pick us-east-1 from the shipped configuration', () => {
+            assert.strictEqual(pullTarget(), 'us-east-1');
+        });
+
+        it('should prefer us-east-1 over the other usable locations', () => {
+            sinon.stub(locationConfig, 'wontwork-location').value({ type: 'file' });
+
+            assert.strictEqual(pullTarget(), 'us-east-1');
+        });
+
+        it('should pick the first usable location when us-east-1 is not defined', () => {
+            sinon.stub(locationConfig, 'us-east-1').value(undefined);
+            sinon.stub(locationConfig, 'us-east-2').value({ type: 'file' });
+            sinon.stub(locationConfig, 'wontwork-location').value({ type: 'file' });
+
+            assert.strictEqual(pullTarget(), 'us-east-2');
+        });
+
+        [
+            ['cold', { type: 'tlp', isCold: true }],
+            ['CRR', { type: 'scality', isCRR: true }],
+            ['transient', { type: 'file', isTransient: true }],
+            ['an external backend', { type: 'aws_s3' }],
+        ].forEach(([desc, details]) => {
+            it(`should not pick a location which is ${desc}`, () => {
+                sinon.stub(locationConfig, 'us-east-1').value(details);
+                sinon.stub(locationConfig, 'us-east-2').value({ type: 'file' });
+
+                assert.strictEqual(pullTarget(), 'us-east-2');
+            });
+        });
+
+        // other specs add locations to the shared configuration, so rule them all out
+        it('should find no location when none can hold a local copy', () => {
+            Object.keys(locationConfig).forEach(
+                name => sinon.stub(locationConfig, name).value({ type: 'aws_s3' }));
+
+            assert.strictEqual(pullTarget(), undefined);
         });
     });
 

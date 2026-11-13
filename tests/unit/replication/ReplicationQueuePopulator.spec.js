@@ -482,7 +482,8 @@ describe('replication queue populator: pull replication', () => {
 
         const action = JSON.parse(message);
         assert.strictEqual(action.action, 'copyLocation');
-        assert.strictEqual(action.toLocation, TARGET_LOCATION);
+        // reversed: routed to the processor of the location pulled from
+        assert.strictEqual(action.toLocation, CRR_LOCATION);
         assert.strictEqual(action.resultsTopic, RESULTS_TOPIC);
         assert.strictEqual(action.contextInfo.ruleType, 'transition');
         assert.strictEqual(action.contextInfo.origin, 'pullReplication');
@@ -508,11 +509,11 @@ describe('replication queue populator: pull replication', () => {
             '2024-05-06T10:11:12.000Z');
     });
 
-    it('should report the transition as triggered', () => {
+    it('should report the transition as triggered on the location pulled from', () => {
         rqp._filterKeyOp(makeEntry(makeValue()));
 
         sinon.assert.calledOnceWithExactly(triggeredMetric, rqp.log,
-            'queuePopulator', 'pullReplication', TARGET_LOCATION,
+            'queuePopulator', 'pullReplication', CRR_LOCATION,
             sinon.match.number);
     });
 
@@ -608,8 +609,7 @@ describe('replication queue populator: pull replication', () => {
     });
 
     // an object to localize should carry a location, whatever its size
-    it('should pull empty objects, and report the missing location', () => {
-        const warnSpy = sinon.spy(rqp.log, 'warn');
+    it('should pull empty objects', () => {
         const value = makeValue({
             'location': null,
             'content-length': 0,
@@ -619,9 +619,8 @@ describe('replication queue populator: pull replication', () => {
         assert.strictEqual(rqp.published.length, 1);
         assert.strictEqual(rqp.published[0].topic, ReplicationAPI.getDataMoverTopic());
         const action = JSON.parse(rqp.published[0].message);
-        assert.strictEqual(action.toLocation, LOCAL_LOCATION);
+        assert.strictEqual(action.toLocation, CRR_LOCATION);
         assert.strictEqual(action.metrics.contentLength, 0);
-        sinon.assert.calledOnce(warnSpy);
     });
 
     it('should skip and report non-empty objects without location', () => {
@@ -669,115 +668,5 @@ describe('replication queue populator: pull replication', () => {
                 p => p.topic === ReplicationAPI.getDataMoverTopic()).length,
             0);
         sinon.assert.notCalled(triggeredMetric);
-    });
-
-    // the target may have been deleted since the metadata was written, and
-    // objects written before the pipeline named one carry no target at all
-    [
-        ['an unknown target', 'a-deleted-location'],
-        ['no target', undefined],
-    ].forEach(([desc, targetLocation]) => {
-        it(`should pull to the default location with ${desc}`, () => {
-            const warnSpy = sinon.spy(rqp.log, 'warn');
-            const value = makeValue({
-                location: [{
-                    key: 'some-data-key',
-                    size: 128,
-                    start: 0,
-                    dataStoreName: CRR_LOCATION,
-                    dataStoreETag: '1:d41d8cd98f00b204e9800118ecf8427e',
-                    targetLocation,
-                }],
-            });
-            rqp._filterKeyOp(makeEntry(value));
-
-            assert.strictEqual(rqp.published.length, 1);
-            const action = JSON.parse(rqp.published[0].message);
-            assert.strictEqual(action.toLocation, LOCAL_LOCATION);
-            sinon.assert.calledOnce(warnSpy);
-        });
-    });
-
-    it('should not pull anywhere when the config has no local location', () => {
-        // no location in the config can hold a local copy of the data
-        rqp.defaultLocalLocation = undefined;
-        const value = makeValue({
-            location: [{
-                key: 'some-data-key',
-                size: 128,
-                start: 0,
-                dataStoreName: CRR_LOCATION,
-                dataStoreETag: '1:d41d8cd98f00b204e9800118ecf8427e',
-                targetLocation: 'a-deleted-location',
-            }],
-        });
-        rqp._filterKeyOp(makeEntry(value));
-
-        assert.strictEqual(rqp.published.length, 0);
-        sinon.assert.notCalled(triggeredMetric);
-        sinon.assert.notCalled(queuedMetric);
-        sinon.assert.notCalled(params.metricsHandler.objects);
-    });
-
-    it('should skip pull replication when there is no local location', () => {
-        sinon.stub(rqp, '_getPullReplicationTarget').returns(undefined);
-        rqp._filterKeyOp(makeEntry(makeValue()));
-
-        assert.strictEqual(rqp.published.length, 0);
-        sinon.assert.notCalled(triggeredMetric);
-    });
-});
-
-describe('replication queue populator: default local location', () => {
-    // the populator module holds this very object
-    const locationsConfig = require('../../../conf/locationConfig.json');
-
-    function defaultLocalLocation() {
-        return new ReplicationQueuePopulator({
-            config: { topic: TOPIC },
-            logger: fakeLogger,
-        }).defaultLocalLocation;
-    }
-
-    afterEach(() => sinon.restore());
-
-    it('should pick us-east-1 from the shipped configuration', () => {
-        assert.strictEqual(defaultLocalLocation(), 'us-east-1');
-    });
-
-    it('should prefer us-east-1 over the other usable locations', () => {
-        sinon.stub(locationsConfig, 'wontwork-location').value({ type: 'file' });
-
-        assert.strictEqual(defaultLocalLocation(), 'us-east-1');
-    });
-
-    it('should pick the first usable location when us-east-1 is not defined', () => {
-        sinon.stub(locationsConfig, 'us-east-1').value(undefined);
-        sinon.stub(locationsConfig, 'us-east-2').value({ type: 'file' });
-        sinon.stub(locationsConfig, 'wontwork-location').value({ type: 'file' });
-
-        assert.strictEqual(defaultLocalLocation(), 'us-east-2');
-    });
-
-    [
-        ['cold', { type: 'tlp', isCold: true }],
-        ['CRR', { type: 'scality', isCRR: true }],
-        ['transient', { type: 'file', isTransient: true }],
-        ['an external backend', { type: 'aws_s3' }],
-    ].forEach(([desc, details]) => {
-        it(`should not pick a location which is ${desc}`, () => {
-            sinon.stub(locationsConfig, 'us-east-1').value(details);
-            sinon.stub(locationsConfig, 'us-east-2').value({ type: 'file' });
-
-            assert.strictEqual(defaultLocalLocation(), 'us-east-2');
-        });
-    });
-
-    // other specs add locations to the shared configuration, so rule them all out
-    it('should find no location when none can hold a local copy', () => {
-        Object.keys(locationsConfig).forEach(
-            name => sinon.stub(locationsConfig, name).value({ type: 'aws_s3' }));
-
-        assert.strictEqual(defaultLocalLocation(), undefined);
     });
 });
