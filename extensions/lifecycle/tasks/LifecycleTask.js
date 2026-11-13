@@ -1206,6 +1206,7 @@ class LifecycleTask extends BackbeatTask {
             eTag: params.eTag,
             lastModified: params.lastModified,
             toLocation: params.site,
+            site: params.site,
             originLabel: 'lifecycle',
             fromLocation: objectMD.getDataStoreName(),
             contentLength: objectMD.getContentLength(),

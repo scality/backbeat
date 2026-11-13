@@ -35,15 +35,26 @@ const MPU_GCP_MAX_PARTS = 1024;
 
 class CopyLocationTask extends BackbeatTask {
 
-    _getReplicationEndpointType() {
-        return this.destConfig?.replicationEndpoint?.type;
+    /**
+     * Where the data is copied to. For a pull replication, it differs from
+     * this.site, which is the location the data is read from.
+     *
+     * @param {ActionQueueEntry} actionEntry - the action entry
+     * @return {{location: string, storageType: string}} the destination
+     */
+    _getDestination(actionEntry) {
+        const location = actionEntry.getAttribute('toLocation');
+        if (location === this.site) {
+            return { location, storageType: this.destType };
+        }
+        return { location, storageType: locations[location]?.type };
     }
 
     constructor(qp) {
         const qpState = qp.getStateVars();
         super();
         Object.assign(this, qpState);
-        this.destType = this._getReplicationEndpointType();
+        this.destType = this.destConfig?.replicationEndpoint?.type;
         if (this.destConfig && this.destType) {
             const retryParams =
                   this.repConfig.queueProcessor.retry[this.destType];
@@ -318,7 +329,7 @@ class CopyLocationTask extends BackbeatTask {
             const { origin, fromLocation, contentLength } =
                   actionEntry.getAttribute('metrics');
             ReplicationMetrics.onReplicationProcessed(
-                origin, fromLocation, this.site, contentLength,
+                origin, fromLocation, actionEntry.getAttribute('toLocation'), contentLength,
                 actionEntry.getStatus(),
                 actionEntry.getElapsedMs());
 
@@ -467,13 +478,14 @@ class CopyLocationTask extends BackbeatTask {
     _sendMultipleBackendPutObject(actionEntry, objMD, size,
         incomingMsg, log, cb) {
         const { bucket, key, version } = actionEntry.getAttribute('target');
+        const { location, storageType } = this._getDestination(actionEntry);
         const command = new MultipleBackendPutObjectCommand({
             Bucket: bucket,
             Key: key,
             CanonicalID: objMD.getOwnerId(),
             ContentMD5: objMD.getContentMd5(),
-            StorageType: this.destType,
-            StorageClass: this.site,
+            StorageType: storageType,
+            StorageClass: location,
             VersionId: version,
             UserMetaData: objMD.getUserMetadata(),
             ContentType: objMD.getContentType() || undefined,
@@ -615,11 +627,12 @@ class CopyLocationTask extends BackbeatTask {
             uploadId,
         }, actionEntry.getLogInfo()));
         const { bucket, key } = actionEntry.getAttribute('target');
+        const { location, storageType } = this._getDestination(actionEntry);
         const command = new MultipleBackendAbortMPUCommand({
             Bucket: bucket,
             Key: key,
-            StorageType: this.destType,
-            StorageClass: this.site,
+            StorageType: storageType,
+            StorageClass: location,
             UploadId: uploadId,
             RequestUids: log.getSerializedUids(),
         });
@@ -648,11 +661,12 @@ class CopyLocationTask extends BackbeatTask {
     */
     _completeMPU(actionEntry, objMD, uploadId, data, log, doneOnce) {
         const { bucket, key, version } = actionEntry.getAttribute('target');
+        const { location, storageType } = this._getDestination(actionEntry);
         const command = new MultipleBackendCompleteMPUCommand({
             Bucket: bucket,
             Key: key,
-            StorageType: this.destType,
-            StorageClass: this.site,
+            StorageType: storageType,
+            StorageClass: location,
             VersionId: version,
             UserMetaData: objMD.getUserMetadata(),
             ContentType: objMD.getContentType(),
@@ -731,11 +745,12 @@ class CopyLocationTask extends BackbeatTask {
         }
 
         const { bucket, key } = actionEntry.getAttribute('target');
+        const { location, storageType } = this._getDestination(actionEntry);
         const command = new MultipleBackendPutMPUPartCommand({
             Bucket: bucket,
             Key: key,
-            StorageType: this.destType,
-            StorageClass: this.site,
+            StorageType: storageType,
+            StorageClass: location,
             PartNumber: partNumber,
             UploadId: uploadId,
             Body: incomingMsg,
@@ -782,16 +797,17 @@ class CopyLocationTask extends BackbeatTask {
 
     _initiateMPU(actionEntry, objMD, log, cb) {
         // If using Azure backend, create a unique ID to use as the block ID.
-        if (this._getReplicationEndpointType() === 'azure') {
+        if (this._getDestination(actionEntry).storageType === 'azure') {
             const uploadId = uuid().replace(/-/g, '');
             return setImmediate(() => cb(null, uploadId));
         }
         const { bucket, key, version } = actionEntry.getAttribute('target');
+        const { location, storageType } = this._getDestination(actionEntry);
         const command = new MultipleBackendInitiateMPUCommand({
             Bucket: bucket,
             Key: key,
-            StorageType: this.destType,
-            StorageClass: this.site,
+            StorageType: storageType,
+            StorageClass: location,
             VersionId: version,
             UserMetaData: objMD.getUserMetadata(),
             ContentType: objMD.getContentType() || undefined,
@@ -905,8 +921,9 @@ class CopyLocationTask extends BackbeatTask {
      * @return {undefined}
      */
     _completeRangedMPU(actionEntry, objMD, uploadId, log, cb) {
-        const isGCP = this._getReplicationEndpointType() === 'gcp';
-        const isAzure = this._getReplicationEndpointType() === 'azure';
+        const { storageType } = this._getDestination(actionEntry);
+        const isGCP = storageType === 'gcp';
+        const isAzure = storageType === 'azure';
         const ranges = this._getRanges(objMD.getContentLength(), isGCP);
         const mpuConcLimit = this.repConfig.queueProcessor.mpuPartsConcurrency;
         return async.timesLimit(ranges.length, mpuConcLimit, (n, next) =>

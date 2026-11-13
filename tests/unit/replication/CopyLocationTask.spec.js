@@ -128,12 +128,7 @@ describe('CopyLocationTask', () => {
             task.backbeatClient = {
                 send: sinon.stub().resolves({}),
             };
-            task.destConfig = {
-                replicationEndpoint: {
-                    site: 'test-site',
-                    type: 'aws_s3',
-                },
-            };
+            task.destType = 'aws_s3';
             task._initiateMPU(entry, new ObjectMD(), fakeLogger, err => {
                 assert.ifError(err);
                 assert(task.backbeatClient.send.calledOnce);
@@ -151,12 +146,7 @@ describe('CopyLocationTask', () => {
             task.backbeatClient = {
                 send: sinon.stub().resolves({}),
             };
-            task.destConfig = {
-                replicationEndpoint: {
-                    site: 'test-site',
-                    type: 'azure',
-                },
-            };
+            task.destType = 'azure';
             task._initiateMPU(entry, new ObjectMD(), fakeLogger, err => {
                 assert.ifError(err);
                 assert(task.backbeatClient.send.notCalled);
@@ -208,12 +198,7 @@ describe('CopyLocationTask', () => {
             const abortMpuFunc = sinon.stub(task, '_multipleBackendAbortMPU').yields();
             const completeMpuFunc = sinon.stub(task, '_completeMPU').yields();
             
-            task.destConfig = {
-                replicationEndpoint: {
-                    site: 'test-site',
-                    type: 'aws_s3',
-                },
-            };
+            task.destType = 'aws_s3';
             
             const uploadId = 'test-upload-id';
             task._completeRangedMPU(entry, objectMD, uploadId, fakeLogger, err => {
@@ -258,12 +243,7 @@ describe('CopyLocationTask', () => {
             
             const completeMpuFunc = sinon.stub(task, '_completeMPU').yields();
             
-            task.destConfig = {
-                replicationEndpoint: {
-                    site: 'test-site',
-                    type: 'azure',
-                },
-            };
+            task.destType = 'azure';
             
             task._completeRangedMPU(entry, objectMD, 'test-upload-id', fakeLogger, err => {
                 assert.ifError(err);
@@ -304,6 +284,40 @@ describe('CopyLocationTask', () => {
                 }),
             });
             assert.strictEqual(task.retryParams.maxRetries, 13);
+        });
+    });
+
+    describe('_getDestination', () => {
+        const task = new CopyLocationTask({
+            getStateVars: () => ({
+                site: 'aws-site',
+                mProducer: { getProducer: () => {} },
+                repConfig: { queueProcessor: { retry: {} } },
+                destConfig: { replicationEndpoint: { site: 'aws-site', type: 'aws_s3' } },
+            }),
+        });
+
+        it('should write a transition to this site, with its endpoint type', () => {
+            const entry = new ActionQueueEntry({
+                action: 'copyLocation',
+                toLocation: 'aws-site',
+            });
+            assert.deepStrictEqual(task._getDestination(entry), {
+                location: 'aws-site',
+                storageType: 'aws_s3',
+            });
+        });
+
+        it('should write a pull replication to its target location, with that location type', () => {
+            const entry = new ActionQueueEntry({
+                action: 'copyLocation',
+                site: 'aws-site',
+                toLocation: 'us-east-1',
+            });
+            assert.deepStrictEqual(task._getDestination(entry), {
+                location: 'us-east-1',
+                storageType: 'file',
+            });
         });
     });
 
