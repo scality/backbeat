@@ -932,7 +932,15 @@ class ReplicateObject extends BackbeatTask {
                 try {
                     await this._putMetadata(destEntry, mdOnly, conflict, log);
                 } catch (err) {
-                    await this._deleteOrphans(destEntry, destLocations, log);
+                    // We only clean up the data when putMetadata really failed.
+                    // If the metadata is already updated, it points to the data we
+                    // just wrote, so we must keep it.
+                    // Example: putMetadata works but we never get the answer. We
+                    // retry and the destination says "already updated". That is
+                    // not a failure (BB-946).
+                    if (!this._isMetadataAlreadyUpdated(err)) {
+                        await this._deleteOrphans(destEntry, destLocations, log);
+                    }
                     throw err;
                 }
             }
@@ -974,6 +982,13 @@ class ReplicateObject extends BackbeatTask {
             (comparison === Ordering.OLDER || comparison === Ordering.EQUAL);
     }
 
+    // Returns true when the destination says the metadata is already updated:
+    // it has this change, or a newer one.
+    _isMetadataAlreadyUpdated(err) {
+        return err instanceof MicroVersionIdAlreadyStoredException ||
+            err instanceof StaleMicroVersionIdException;
+    }
+
     async _processQueueEntryRetryFull(sourceEntry, destEntry, kafkaEntry, log) {
         let destLocations = null;
         try {
@@ -982,7 +997,9 @@ class ReplicateObject extends BackbeatTask {
             destEntry.setLocation(destLocations);
             await this._putMetadata(destEntry, false, conflict, log);
         } catch (err) {
-            if (destLocations !== null) {
+            // Same as in _processQueueEntry: if the metadata is already
+            // updated, we keep the data, because the metadata points to it.
+            if (destLocations !== null && !this._isMetadataAlreadyUpdated(err)) {
                 log.warn('putMetadata failed during full retry, cleaning up orphan data', {
                     method: 'ReplicateObject._processQueueEntryRetryFull',
                     entry: destEntry.getLogInfo(),
@@ -996,8 +1013,7 @@ class ReplicateObject extends BackbeatTask {
     }
 
     async _handleReplicationOutcome(err, sourceEntry, destEntry, kafkaEntry, log) {
-        if (err instanceof MicroVersionIdAlreadyStoredException ||
-            err instanceof StaleMicroVersionIdException) {
+        if (this._isMetadataAlreadyUpdated(err)) {
             log.info('replication completed: metadata revision already at destination',
                 { entry: sourceEntry.getLogInfo(), reason: err.name });
             this._publishReplicationStatus(sourceEntry, 'COMPLETED', { kafkaEntry, log });
