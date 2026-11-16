@@ -363,15 +363,6 @@ describe('MongoConfigManager ::', () => {
             assert.deepEqual(manager._cachedConfigs.get('example-bucket-1'), notificationConfiguration);
         });
 
-        it('should return undefined when bucket doesn\'t have notification configuration', async () => {
-            const manager = new MongoConfigManager(params);
-            manager._metastore = {
-                findOne: () => ({ value: {} }),
-            };
-            const config = await manager.getConfig('example-bucket-1');
-            assert.deepEqual(config, undefined);
-        });
-
         it('should throw when mongo findOne fails', done => {
             const manager = new MongoConfigManager(params);
             manager._metastore = {
@@ -387,23 +378,6 @@ describe('MongoConfigManager ::', () => {
             });
         });
 
-        it('should return undefined when bucket doesn\'t have notification configuration', async () => {
-            const manager = new MongoConfigManager(params);
-            manager._metastore = {
-                findOne: () => ({ value: { notificationConfiguration: null } }),
-            };
-            const config = await manager.getConfig('example-bucket-1');
-            assert.deepEqual(config, undefined);
-        });
-
-        it('should return undefined when notification configuration have been disabled in the bucket', async () => {
-            const manager = new MongoConfigManager(params);
-            manager._metastore = {
-                findOne: () => ({ value: { notificationConfiguration: {} } }),
-            };
-            const config = await manager.getConfig('example-bucket-1');
-            assert.deepEqual(config, undefined);
-        });
     });
 
     describe('getConfig of buckets without notification configuration ::', () => {

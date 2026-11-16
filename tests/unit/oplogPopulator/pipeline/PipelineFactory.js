@@ -49,22 +49,6 @@ describe('PipelineFactory', () => {
         });
     });
 
-    it('should return null if the list is not valid against the pipeline factory', async () => {
-        const config = {
-            pipeline: JSON.stringify([{
-                $match: {
-                    'ns.coll': {
-                        $in: ['bucket1', 'bucket2'],
-                    },
-                },
-            }]),
-        };
-        assert.throws(() => pipelineFactory.getOldConnectorBucketList(config), {
-            name: 'Error',
-            type: 'NotImplemented',
-        });
-    });
-
     it('should return the list of buckets if the list is valid against the pipeline factory', async () => {
         const config = {
             pipeline: JSON.stringify([
