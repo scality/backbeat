@@ -13,8 +13,7 @@ const management = require('../../lib/management/index');
 const logger = new werelogs.Logger('mdManagement:replication');
 
 function getS3Client(endpoint) {
-    const serviceCredentials =
-          management.getLatestServiceAccountCredentials();
+    const serviceCredentials = management.getLatestServiceAccountCredentials();
     // FIXME
     const keys = serviceCredentials.accounts[0].keys;
     const credentials = {
@@ -43,15 +42,16 @@ function putVersioning(bucketName, endpoint, cb) {
             Status: 'Enabled',
         },
     };
-    
+
     const command = new PutBucketVersioningCommand(params);
-    getS3Client(endpoint).send(command)
+    getS3Client(endpoint)
+        .send(command)
         .then(() => cb())
         .catch(err => {
             if (err.name === 'NoSuchBucket') {
-                logger.info('cannot apply replication configuration: bucket ' +
-                            'does not exist',
-                            { sourceBucket: bucketName });
+                logger.info('cannot apply replication configuration: bucket does not exist', {
+                    sourceBucket: bucketName,
+                });
                 return cb();
             }
             return cb(err);
@@ -68,8 +68,7 @@ function installReplicationConfiguration(bucketName, endpoint, workflows, cb) {
                     Bucket: `arn:aws:s3:::${wf.source.bucketName}`,
                     StorageClass: wf.destination.locations
                         .map(location => {
-                            if (wf.destination.preferredReadLocation
-                                === location.name) {
+                            if (wf.destination.preferredReadLocation === location.name) {
                                 return `${location.name}:preferred_read`;
                             }
                             return location.name;
@@ -83,15 +82,19 @@ function installReplicationConfiguration(bucketName, endpoint, workflows, cb) {
     };
 
     const command = new PutBucketReplicationCommand(params);
-    getS3Client(endpoint).send(command)
+    getS3Client(endpoint)
+        .send(command)
         .then(() => {
             logger.debug('replication configuration apply done', {
-                sourceBucket: bucketName });
+                sourceBucket: bucketName,
+            });
             return cb();
         })
         .catch(err => {
             logger.debug('replication configuration apply done', {
-                sourceBucket: bucketName, error: err });
+                sourceBucket: bucketName,
+                error: err,
+            });
             return cb(err);
         });
 }
@@ -101,12 +104,14 @@ function putReplication(bucketName, workflows, cb) {
     const cfg = config.extensions.replication.source.s3;
     const endpoint = `${cfg.host}:${cfg.port}`;
 
-    async.series([
-        done => putVersioning(bucketName, endpoint, done),
-        // TODO add service account in source & target bucket ACLs
-        done => installReplicationConfiguration(bucketName, endpoint,
-                                                workflows, done),
-    ], cb);
+    async.series(
+        [
+            done => putVersioning(bucketName, endpoint, done),
+            // TODO add service account in source & target bucket ACLs
+            done => installReplicationConfiguration(bucketName, endpoint, workflows, done),
+        ],
+        cb,
+    );
 }
 
 function deleteReplication(bucketName, cb) {
@@ -117,29 +122,32 @@ function deleteReplication(bucketName, cb) {
     const params = {
         Bucket: bucketName,
     };
-    
+
     const command = new DeleteBucketReplicationCommand(params);
-    getS3Client(endpoint).send(command)
+    getS3Client(endpoint)
+        .send(command)
         .then(() => {
             logger.debug('replication configuration deleted', {
-                sourceBucket: bucketName });
+                sourceBucket: bucketName,
+            });
             return cb();
         })
         .catch(err => {
             logger.debug('replication configuration deleted', {
-                sourceBucket: bucketName, error: err });
+                sourceBucket: bucketName,
+                error: err,
+            });
             if (err.name === 'NoSuchBucket') {
-                logger.info('cannot delete replication configuration: bucket ' +
-                            'does not exist',
-                            { sourceBucket: bucketName });
+                logger.info('cannot delete replication configuration: bucket does not exist', {
+                    sourceBucket: bucketName,
+                });
                 return cb();
             }
             return cb(err);
         });
 }
 
-function applyBucketReplicationWorkflows(bucketName, bucketWorkflows,
-                                         workflowUpdates, cb) {
+function applyBucketReplicationWorkflows(bucketName, bucketWorkflows, workflowUpdates, cb) {
     if (bucketWorkflows.length > 0) {
         putReplication(bucketName, bucketWorkflows, cb);
     } else {

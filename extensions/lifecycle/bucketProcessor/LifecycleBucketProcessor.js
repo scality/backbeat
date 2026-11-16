@@ -15,20 +15,11 @@ const safeJsonParse = require('../../../lib/util/safeJsonParse');
 const ClientManager = require('../../../lib/clients/ClientManager');
 const { authTypeAssumeRole } = require('../../../lib/constants');
 const LocationStatusStream = require('../../utils/LocationStatusStream');
-const {
-    formatSupportedLifecycleRules,
-    isExpirationRule
-} = require('../util/rules');
-const {
-    updateCircuitBreakerConfigForImplicitOutputQueue,
-} = require('../../../lib/CircuitBreaker');
-const {
-    extractBucketProcessorCircuitBreakerConfigs,
-} = require('../CircuitBreakerGroup');
+const { formatSupportedLifecycleRules, isExpirationRule } = require('../util/rules');
+const { updateCircuitBreakerConfigForImplicitOutputQueue } = require('../../../lib/CircuitBreaker');
+const { extractBucketProcessorCircuitBreakerConfigs } = require('../CircuitBreakerGroup');
 const { lifecycleTaskVersions } = require('../../../lib/constants');
-const {
-    LifecycleMetrics,
-} = require('../LifecycleMetrics');
+const { LifecycleMetrics } = require('../LifecycleMetrics');
 const locations = require('../../../conf/locationConfig.json');
 
 const PROCESS_OBJECTS_ACTION = 'processObjects';
@@ -100,12 +91,15 @@ class LifecycleBucketProcessor {
         this._pausedLocations = new Set();
         this._locationStatusStream = null;
 
-        this.clientManager = new ClientManager({
-            id: 'lifecycle',
-            authConfig: lcConfig.bucketProcessor.auth || lcConfig.auth,
-            s3Config,
-            transport,
-        }, this._log);
+        this.clientManager = new ClientManager(
+            {
+                id: 'lifecycle',
+                authConfig: lcConfig.bucketProcessor.auth || lcConfig.auth,
+                s3Config,
+                transport,
+            },
+            this._log,
+        );
 
         this.retryWrapper = new BackbeatTask(lcConfig.bucketProcessor.retry);
 
@@ -137,14 +131,17 @@ class LifecycleBucketProcessor {
         // The task scheduler for processing lifecycle tasks concurrently.
         this._internalTaskScheduler = async.queue((ctx, cb) => {
             const { task, rules, value, s3target, backbeatMetadataProxy } = ctx;
-            return this.retryWrapper.retry({
-                actionDesc: 'process bucket lifecycle entry',
-                logFields: { value },
-                actionFunc: (done, nbRetries) => task.processBucketEntry(
-                    rules, value, s3target, backbeatMetadataProxy, nbRetries, done),
-                shouldRetryFunc: err => err.retryable,
-                log: this._log,
-            }, cb);
+            return this.retryWrapper.retry(
+                {
+                    actionDesc: 'process bucket lifecycle entry',
+                    logFields: { value },
+                    actionFunc: (done, nbRetries) =>
+                        task.processBucketEntry(rules, value, s3target, backbeatMetadataProxy, nbRetries, done),
+                    shouldRetryFunc: err => err.retryable,
+                    log: this._log,
+                },
+                cb,
+            );
         }, this._lcConfig.bucketProcessor.concurrency);
 
         // Listen for errors from any task being processed.
@@ -157,11 +154,11 @@ class LifecycleBucketProcessor {
         });
 
         const globalCircuitBreakerConfig = extractBucketProcessorCircuitBreakerConfigs(
-                this._lcConfig.bucketProcessor.circuitBreaker,
-                this._lcConfig,
-                this._repConfig,
-                locations,
-                this._log,
+            this._lcConfig.bucketProcessor.circuitBreaker,
+            this._lcConfig,
+            this._repConfig,
+            locations,
+            this._log,
         );
 
         this._circuitBreakerConfig = updateCircuitBreakerConfigForImplicitOutputQueue(
@@ -245,8 +242,7 @@ class LifecycleBucketProcessor {
                 if (isExpirationRule(key)) {
                     return true;
                 }
-                return rule[key].some(transitionRule =>
-                    !this._pausedLocations.has(transitionRule.StorageClass));
+                return rule[key].some(transitionRule => !this._pausedLocations.has(transitionRule.StorageClass));
             });
         });
     }
@@ -265,8 +261,7 @@ class LifecycleBucketProcessor {
     _processBucketEntry(entry, cb) {
         const { error, result } = safeJsonParse(entry.value);
         if (error) {
-            this._log.error('could not parse bucket entry',
-                            { value: entry.value, error });
+            this._log.error('could not parse bucket entry', { value: entry.value, error });
             return process.nextTick(() => cb(error));
         }
         if (result.action !== PROCESS_OBJECTS_ACTION) {
@@ -302,20 +297,16 @@ class LifecycleBucketProcessor {
         log.debug('processing bucket entry', {
             method: 'LifecycleBucketProcessor._processBucketEntry',
         });
-        LifecycleMetrics.onBucketProcessorScanMessageReceived(
-            log, conductorScanId, conductorScanStartTimestamp);
+        LifecycleMetrics.onBucketProcessorScanMessageReceived(log, conductorScanId, conductorScanStartTimestamp);
 
         const s3Client = this.clientManager.getS3Client(accountId);
         if (!s3Client) {
-            return cb(errors.InternalError
-                .customizeDescription('failed to obtain a s3 client'));
+            return cb(errors.InternalError.customizeDescription('failed to obtain a s3 client'));
         }
 
-        const backbeatMetadataProxy =
-            this.clientManager.getBackbeatMetadataProxy(accountId);
+        const backbeatMetadataProxy = this.clientManager.getBackbeatMetadataProxy(accountId);
         if (!backbeatMetadataProxy) {
-            return cb(errors.InternalError
-                .customizeDescription('failed to obtain a backbeat client'));
+            return cb(errors.InternalError.customizeDescription('failed to obtain a backbeat client'));
         }
 
         const params = { Bucket: bucket };
@@ -362,13 +353,16 @@ class LifecycleBucketProcessor {
                 details: result.details,
                 taskName: task.constructor.name,
             });
-            return this._internalTaskScheduler.push({
-                task,
-                rules: config.Rules,
-                value: result,
-                s3target: s3Client,
-                backbeatMetadataProxy,
-            }, cb);
+            return this._internalTaskScheduler.push(
+                {
+                    task,
+                    rules: config.Rules,
+                    value: result,
+                    s3target: s3Client,
+                    backbeatMetadataProxy,
+                },
+                cb,
+            );
         });
     }
 
@@ -381,18 +375,22 @@ class LifecycleBucketProcessor {
      * @return {undefined}
      */
     _getBucketLifecycleConfiguration(s3Client, params, log, cb) {
-        return this.retryWrapper.retry({
-            actionDesc: 'get bucket lifecycle',
-            logFields: { params },
-            actionFunc: done => {
-                const command = new GetBucketLifecycleConfigurationCommand(params);
-                s3Client.send(command)
-                    .then(data => done(null, data))
-                    .catch(done);
+        return this.retryWrapper.retry(
+            {
+                actionDesc: 'get bucket lifecycle',
+                logFields: { params },
+                actionFunc: done => {
+                    const command = new GetBucketLifecycleConfigurationCommand(params);
+                    s3Client
+                        .send(command)
+                        .then(data => done(null, data))
+                        .catch(done);
+                },
+                shouldRetryFunc: err => err.retryable,
+                log,
             },
-            shouldRetryFunc: err => err.retryable,
-            log,
-        }, cb);
+            cb,
+        );
     }
 
     /**
@@ -417,8 +415,7 @@ class LifecycleBucketProcessor {
             process.exit(1);
         });
         producer.once('ready', () => {
-            this._log.debug('producer is ready',
-                { kafkaConfig: this.kafkaConfig });
+            this._log.debug('producer is ready', { kafkaConfig: this.kafkaConfig });
             producer.removeAllListeners('error');
             producer.on('error', err => {
                 this._log.error('error from backbeat producer', {
@@ -485,30 +482,35 @@ class LifecycleBucketProcessor {
     start(done) {
         this.clientManager.initSTSConfig();
         this.clientManager.initCredentialsManager();
-        async.series([
-            done => this._setupProducer(done),
-            done => this._initKafkaBacklogMetrics(done),
-            done => this._setupConsumer(done),
-            done => {
-                if (this._mongoConfig) {
-                    this._locationStatusStream = new LocationStatusStream(
-                        'lifecycle',
-                        this._mongoConfig,
-                        this._pauseServiceForLocation.bind(this),
-                        this._resumeServiceForLocation.bind(this),
-                        this._log
-                    );
-                    this._locationStatusStream.start(done);
-                } else {
-                    done();
-                }
-            }
-        ], done);
+        async.series(
+            [
+                done => this._setupProducer(done),
+                done => this._initKafkaBacklogMetrics(done),
+                done => this._setupConsumer(done),
+                done => {
+                    if (this._mongoConfig) {
+                        this._locationStatusStream = new LocationStatusStream(
+                            'lifecycle',
+                            this._mongoConfig,
+                            this._pauseServiceForLocation.bind(this),
+                            this._resumeServiceForLocation.bind(this),
+                            this._log,
+                        );
+                        this._locationStatusStream.start(done);
+                    } else {
+                        done();
+                    }
+                },
+            ],
+            done,
+        );
     }
 
     _initKafkaBacklogMetrics(cb) {
         this._kafkaBacklogMetrics = new KafkaBacklogMetrics(
-            this._zkConfig.connectionString, this._kafkaConfig.backlogMetrics);
+            this._zkConfig.connectionString,
+            this._kafkaConfig.backlogMetrics,
+        );
         this._kafkaBacklogMetrics.init();
         this._kafkaBacklogMetrics.once('ready', () => {
             this._kafkaBacklogMetrics.removeAllListeners('error');
@@ -529,24 +531,26 @@ class LifecycleBucketProcessor {
      * @return {undefined}
      */
     close(cb) {
-        async.parallel([
-            done => {
-                this._log.debug('closing bucket tasks consumer');
-                this._consumer.close(done);
+        async.parallel(
+            [
+                done => {
+                    this._log.debug('closing bucket tasks consumer');
+                    this._consumer.close(done);
+                },
+                done => {
+                    this._log.debug('closing producer');
+                    this._producer.close(done);
+                },
+            ],
+            () => {
+                this.clientManager.close();
+                cb();
             },
-            done => {
-                this._log.debug('closing producer');
-                this._producer.close(done);
-            },
-        ], () => {
-            this.clientManager.close();
-            cb();
-        });
+        );
     }
 
     isReady() {
-        return this._producer && this._producer.isReady() &&
-               this._consumer && this._consumer.isReady();
+        return this._producer && this._producer.isReady() && this._consumer && this._consumer.isReady();
     }
 }
 

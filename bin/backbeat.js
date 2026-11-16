@@ -17,22 +17,25 @@ werelogs.configure({
 function initAndStart() {
     const repConfig = config.extensions.replication;
     const sourceConfig = repConfig.source;
-    initManagement({
-        serviceName: 'replication',
-        serviceAccount: sourceConfig.auth.account,
-        enableIngestionUpdates: !!config.queuePopulator.mongo,
-    }, error => {
-        if (error) {
-            log.error('could not load management db', { error });
-            setTimeout(initAndStart, 5000);
-            return;
-        }
-        log.info('management init done');
+    initManagement(
+        {
+            serviceName: 'replication',
+            serviceAccount: sourceConfig.auth.account,
+            enableIngestionUpdates: !!config.queuePopulator.mongo,
+        },
+        error => {
+            if (error) {
+                log.error('could not load management db', { error });
+                setTimeout(initAndStart, 5000);
+                return;
+            }
+            log.info('management init done');
 
-        repConfig.destination.bootstrapList = config.getBootstrapList();
+            repConfig.destination.bootstrapList = config.getBootstrapList();
 
-        runServer(config, Logger);
-    });
+            runServer(config, Logger);
+        },
+    );
 }
 
 // Add SIGINT and SIGTERM handlers to exit gracefully, needed to get coverage

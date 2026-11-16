@@ -60,32 +60,32 @@ mapped Zenko bucket.
                      exists.
 ```
 
-* Create a new S3C location in Orbit by adding a versioning-enabled S3C bucket
-  and `bucketMatch`  option set to true. This ensures that objects appear
+- Create a new S3C location in Orbit by adding a versioning-enabled S3C bucket
+  and `bucketMatch` option set to true. This ensures that objects appear
   natively without any prefixes.
-* Create a bucket in Zenko and select the S3C location created in the above step
+- Create a bucket in Zenko and select the S3C location created in the above step
   as location constraint that is tagged as `Mirror mode`. This will setup the
   ingestion workflow on the Zenko bucket, allowing 1-1 mapping between the
   bucket defined through Zenko and the RING bucket.
-* Cloudserver tags the bucket with the attribute
+- Cloudserver tags the bucket with the attribute
   `ingestion: { status: 'enabled'}`
-* Backbeat will have a service that monitors the MongoDB oplog for the buckets
+- Backbeat will have a service that monitors the MongoDB oplog for the buckets
   that have ingestion enabled using the `ingestion` attribute and sets up
   the ingestion workflow.
-* The ingestion process is composed of two phases:
+- The ingestion process is composed of two phases:
     - **Initial ingestion of existing objects**
     - **Out of band updates for new objects**
 
 #### Initial ingestion of existing objects
 
-* Record the latest sequence ID from the Metadata Server (send a query using the
+- Record the latest sequence ID from the Metadata Server (send a query using the
   `metadataWrapper`) that is part of the S3 connector - this will serve as a
   marker that will be stored as a `log offset` to bookmark the point in journal
   to resume later, after the initial ingestion is completed.
-* Send List Object Versions API request to S3C to receive a list of
-  object versions in the bucket with details like  `key` and `versionId`.
-* Retrieve object JSON from S3C Metadata with the `key` and `versionId`.
-* `Next Continuation Token` from listings is used to keep track of listing, to
+- Send List Object Versions API request to S3C to receive a list of
+  object versions in the bucket with details like `key` and `versionId`.
+- Retrieve object JSON from S3C Metadata with the `key` and `versionId`.
+- `Next Continuation Token` from listings is used to keep track of listing, to
   recover during unexpected pod/node failures
 
 **Note: Requests to the remote S3C Metadata are performed over S3C's Cloudserver
@@ -99,11 +99,11 @@ to read from the remote S3C's Metadata and queue the journal entries to Kafka.
 Ingestion consumer picks up the entry from Kafka and processes the following
 fields for object metadata:
 
-* `owner`
-* `ownerDisplayName`
-* `owner-id`
-* `location` if defined
-* `dataStoreName` should match the S3C location name
+- `owner`
+- `ownerDisplayName`
+- `owner-id`
+- `location` if defined
+- `dataStoreName` should match the S3C location name
 
 The values for `owner`, `ownerDisplayName`, and `owner-id` are changed to match
 the Orbit user information to allow `GET` operations.
@@ -119,11 +119,11 @@ specified ingestion bucket.
 
 ## Dependencies
 
-* RING with S3 Connector on version 7.4.3 or newer
-* Backbeat
-* MongoDB
-* Kafka
-* Zookeeper
+- RING with S3 Connector on version 7.4.3 or newer
+- Backbeat
+- MongoDB
+- Kafka
+- Zookeeper
 
 ## Bucket/Object-Key Parity
 
@@ -144,21 +144,21 @@ ingestion.
 
 ## Background Information for Design
 
-* The `sequence id` from the RING Metadata is in numerical order.
-* Zenko only stores metadata, data associated with the object will remain in
+- The `sequence id` from the RING Metadata is in numerical order.
+- Zenko only stores metadata, data associated with the object will remain in
   S3C/RING
 
 ## Rejected Options
 
-* The option that was originally considered was to ingest all buckets in RING
+- The option that was originally considered was to ingest all buckets in RING
   in one setting, upon starting Zenko. The ingestion populator and consumers
   would be created automatically and begin listing all buckets and objects on
   the RING.
-* For large RINGs with many objects, this would be a very heavy workload that
+- For large RINGs with many objects, this would be a very heavy workload that
   could take extremely long periods of time to run to completion.
-* This also limits the flexibility for users, if they only wanted to ingest
+- This also limits the flexibility for users, if they only wanted to ingest
   and use one bucket with Zenko, they would still have to wait until all buckets
   and objects were processed.
-* This implementation also required a fresh install of Zenko, which would bar
+- This implementation also required a fresh install of Zenko, which would bar
   users from making any changes or updates to the ingestion process after the
   initial deployment.

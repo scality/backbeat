@@ -8,7 +8,7 @@ const baseConfig = {
         transport: 'http',
         s3: {
             host: '127.0.0.1',
-            port: 8000
+            port: 8000,
         },
         auth: {
             type: 'service',
@@ -16,9 +16,9 @@ const baseConfig = {
             vault: {
                 host: '127.0.0.1',
                 port: 8500,
-                adminPort: 8600
-            }
-        }
+                adminPort: 8600,
+            },
+        },
     },
     destination: {
         transport: 'http',
@@ -29,8 +29,8 @@ const baseConfig = {
         ],
         auth: {
             type: 'service',
-            account: 'service-replication'
-        }
+            account: 'service-replication',
+        },
     },
     topic: 'backbeat-replication',
     dataMoverTopic: 'backbeat-data-mover',
@@ -41,8 +41,8 @@ const baseConfig = {
     replayTopics: [
         {
             topicName: 'backbeat-replication-replay-0',
-            retries: 5
-        }
+            retries: 5,
+        },
     ],
     queueProcessor: {
         groupId: 'backbeat-replication-group',
@@ -54,16 +54,16 @@ const baseConfig = {
                     min: 1000,
                     max: 300000,
                     jitter: 0.1,
-                    factor: 1.5
-                }
-            }
+                    factor: 1.5,
+                },
+            },
         },
         concurrency: 10,
         mpuPartsConcurrency: 10,
         probeServer: {
             bindAddress: 'localhost',
-            port: 4043
-        }
+            port: 4043,
+        },
     },
     replicationStatusProcessor: {
         groupId: 'backbeat-replication-group',
@@ -74,20 +74,16 @@ const baseConfig = {
                 min: 1000,
                 max: 300000,
                 jitter: 0.1,
-                factor: 1.5
-            }
+                factor: 1.5,
+            },
         },
         concurrency: 10,
         probeServer: {
             bindAddress: 'localhost',
-            port: 4045
-        }
+            port: 4045,
+        },
     },
-    objectSizeMetrics: [
-        66560,
-        8388608,
-        68157440
-    ]
+    objectSizeMetrics: [66560, 8388608, 68157440],
 };
 
 describe('ReplicationConfigValidator', () => {
@@ -103,12 +99,14 @@ describe('ReplicationConfigValidator', () => {
                     aws4: {
                         auth: { type: 'service', account: 'service-replication' },
                     },
-                }
-            }
+                },
+            },
         };
         delete config.destination.auth;
-        assert.throws(() => configValidator({}, config),
-            err => err.message === 'missing destination configuration for sites: aws2,aws3');
+        assert.throws(
+            () => configValidator({}, config),
+            err => err.message === 'missing destination configuration for sites: aws2,aws3',
+        );
     });
 
     it('should not require all sites to have a config when destination.auth is defined', () => {
@@ -123,8 +121,8 @@ describe('ReplicationConfigValidator', () => {
                     aws4: {
                         auth: { type: 'service', account: 'service-replication' },
                     },
-                }
-            }
+                },
+            },
         };
         assert.doesNotThrow(() => configValidator({}, config));
     });
@@ -138,8 +136,8 @@ describe('ReplicationConfigValidator', () => {
                     aws1: {
                         transport: 'https',
                     },
-                }
-            }
+                },
+            },
         };
         assert.doesNotThrow(() => configValidator({}, config));
     });
@@ -153,26 +151,28 @@ describe('ReplicationConfigValidator', () => {
                     aws1: {
                         auth: {
                             type: 'assumeRole',
-                            account: 'service-replication'
+                            account: 'service-replication',
                         },
                     },
                     aws2: {
                         auth: {
                             type: 'service',
-                            account: 'service-replication'
+                            account: 'service-replication',
                         },
                     },
                     aws3: {
                         auth: {
                             type: 'service',
-                            account: 'service-replication'
+                            account: 'service-replication',
                         },
                     },
                 },
-            }
+            },
         };
-        assert.throws(() => configValidator({}, config),
-            err => err.message === '"destination.sites.aws1.auth.sts" is required');
+        assert.throws(
+            () => configValidator({}, config),
+            err => err.message === '"destination.sites.aws1.auth.sts" is required',
+        );
     });
 
     it('should validate new destination schema', () => {
@@ -208,7 +208,7 @@ describe('ReplicationConfigValidator', () => {
                         },
                     },
                 },
-            }
+            },
         };
         delete config.destination.auth;
         delete config.destination.transport;
@@ -227,9 +227,7 @@ describe('ReplicationConfigValidator', () => {
                 ...baseConfig,
                 destination: {
                     ...baseConfig.destination,
-                    bootstrapList: [
-                        { site: 'aws', type: 'aws_s3' },
-                    ],
+                    bootstrapList: [{ site: 'aws', type: 'aws_s3' }],
                     sites: {
                         aws: {
                             transport,
@@ -251,7 +249,7 @@ describe('ReplicationConfigValidator', () => {
 
             const result = configValidator({}, config);
             assert.strictEqual(result.destination.sites.aws.auth.sts.port, expected);
-        })
+        }),
     );
 
     it('should validate old destination schema', () => {
@@ -262,9 +260,9 @@ describe('ReplicationConfigValidator', () => {
                 transport: undefined,
                 auth: {
                     type: 'service',
-                    account: 'service-replication'
-                }
-            }
+                    account: 'service-replication',
+                },
+            },
         };
         assert.doesNotThrow(() => configValidator({}, config));
     });
@@ -308,29 +306,17 @@ describe('ReplicationConfigValidator', () => {
                         },
                     },
                 },
-            }
+            },
         };
         const conf = configValidator({}, config);
         const adminCredentials = {
             accessKey: 'HPZYD8TCLETBDZBPNTNQ',
             secretKey: 'prMKjH3Epf2O7+pLA0iwW9OcZjiFVRpHT=7ir3w6',
         };
-        assert.deepStrictEqual(
-            conf.source.auth.vault.adminCredentials,
-            adminCredentials,
-        );
-        assert.deepStrictEqual(
-            conf.destination.auth.vault.adminCredentials,
-            adminCredentials,
-        );
-        assert.deepStrictEqual(
-            conf.destination.auth.vault.adminCredentials,
-            adminCredentials,
-        );
-        assert.deepStrictEqual(
-            conf.destination.sites.aws1.auth.vault.adminCredentials,
-            adminCredentials,
-        );
+        assert.deepStrictEqual(conf.source.auth.vault.adminCredentials, adminCredentials);
+        assert.deepStrictEqual(conf.destination.auth.vault.adminCredentials, adminCredentials);
+        assert.deepStrictEqual(conf.destination.auth.vault.adminCredentials, adminCredentials);
+        assert.deepStrictEqual(conf.destination.sites.aws1.auth.vault.adminCredentials, adminCredentials);
     });
 });
 
@@ -356,26 +342,20 @@ function withValue(maxPollIntervalMs) {
 describe('ReplicationConfigValidator maxPollIntervalMs', () => {
     it('should read the queueProcessor value from config', () => {
         const validated = configValidator(null, replication);
-        assert.strictEqual(
-            validated.queueProcessor.maxPollIntervalMs, 350000);
+        assert.strictEqual(validated.queueProcessor.maxPollIntervalMs, 350000);
     });
 
     it('should leave it unset when not configured', () => {
         const validated = configValidator(null, withoutMaxPollInterval());
-        assert.strictEqual(
-            validated.queueProcessor.maxPollIntervalMs, undefined);
+        assert.strictEqual(validated.queueProcessor.maxPollIntervalMs, undefined);
     });
 
     it('should reject a value below 45000', () => {
-        assert.throws(
-            () => configValidator(null, withValue(30000)),
-            /greater than or equal to 45000/);
+        assert.throws(() => configValidator(null, withValue(30000)), /greater than or equal to 45000/);
     });
 
     it('should reject a value above 1800000 (30 minutes)', () => {
-        assert.throws(
-            () => configValidator(null, withValue(1900000)),
-            /less than or equal to 1800000/);
+        assert.throws(() => configValidator(null, withValue(1900000)), /less than or equal to 1800000/);
     });
 });
 
@@ -394,7 +374,8 @@ describe('ReplicationConfigValidator bootstrapList from the environment', () => 
     it('should hold the servers of the zenko site, comma separated', () => {
         assert.deepStrictEqual(
             bootstrapList({ EXTENSIONS_REPLICATION_DEST_BOOTSTRAPLIST: 'zenko-1:8000, zenko-2:8000' }),
-            [{ site: 'zenko', servers: ['zenko-1:8000', 'zenko-2:8000'], echo: false }]);
+            [{ site: 'zenko', servers: ['zenko-1:8000', 'zenko-2:8000'], echo: false }],
+        );
     });
 
     it('should append the additional sites', () => {
@@ -403,17 +384,22 @@ describe('ReplicationConfigValidator bootstrapList from the environment', () => 
                 EXTENSIONS_REPLICATION_DEST_BOOTSTRAPLIST: 'zenko-1:8000',
                 EXTENSIONS_REPLICATION_DEST_BOOTSTRAPLIST_MORE: '{ "site": "aws", "type": "aws_s3" }',
             }),
-            [{ site: 'zenko', servers: ['zenko-1:8000'], echo: false },
-                { site: 'aws', type: 'aws_s3' }]);
+            [
+                { site: 'zenko', servers: ['zenko-1:8000'], echo: false },
+                { site: 'aws', type: 'aws_s3' },
+            ],
+        );
     });
 
     it('should report an invalid additional site', () => {
         assert.throws(
-            () => bootstrapList({
-                EXTENSIONS_REPLICATION_DEST_BOOTSTRAPLIST: 'zenko-1:8000',
-                EXTENSIONS_REPLICATION_DEST_BOOTSTRAPLIST_MORE: '{ site: aws }',
-            }),
-            /invalid JSON value for EXTENSIONS_REPLICATION_DEST_BOOTSTRAPLIST_MORE/);
+            () =>
+                bootstrapList({
+                    EXTENSIONS_REPLICATION_DEST_BOOTSTRAPLIST: 'zenko-1:8000',
+                    EXTENSIONS_REPLICATION_DEST_BOOTSTRAPLIST_MORE: '{ site: aws }',
+                }),
+            /invalid JSON value for EXTENSIONS_REPLICATION_DEST_BOOTSTRAPLIST_MORE/,
+        );
     });
 
     it('should take the whole list as JSON', () => {
@@ -422,7 +408,10 @@ describe('ReplicationConfigValidator bootstrapList from the environment', () => 
                 EXTENSIONS_REPLICATION_DEST_BOOTSTRAPLIST:
                     '[{ "site": "zenko", "servers": ["zenko-1:8000"] }, { "site": "aws", "type": "aws_s3" }]',
             }),
-            [{ site: 'zenko', servers: ['zenko-1:8000'], echo: false },
-                { site: 'aws', type: 'aws_s3' }]);
+            [
+                { site: 'zenko', servers: ['zenko-1:8000'], echo: false },
+                { site: 'aws', type: 'aws_s3' },
+            ],
+        );
     });
 });

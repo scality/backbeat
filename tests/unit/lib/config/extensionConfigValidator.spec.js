@@ -41,16 +41,15 @@ describe('extension config validator', () => {
     const extConfig = () => ({ topic: 'demo-topic', consumer: { groupId: 'demo-group' } });
 
     it('should apply an env var named after the extension', () => {
-        const validated = withEnv(
-            { EXTENSIONS_DEMO_TOPIC: 'from-env' },
-            () => validator(globalConfig, extConfig()));
+        const validated = withEnv({ EXTENSIONS_DEMO_TOPIC: 'from-env' }, () => validator(globalConfig, extConfig()));
 
         assert.strictEqual(validated.topic, 'from-env');
     });
 
     it('should apply an env var of a nested field', () => {
-        const validated = withEnv({ EXTENSIONS_DEMO_CONSUMER_CONCURRENCY: '42' },
-                                  () => validator(globalConfig, extConfig()));
+        const validated = withEnv({ EXTENSIONS_DEMO_CONSUMER_CONCURRENCY: '42' }, () =>
+            validator(globalConfig, extConfig()),
+        );
 
         assert.strictEqual(validated.consumer.concurrency, 42);
     });
@@ -62,28 +61,30 @@ describe('extension config validator', () => {
     // the global configuration is the validation context, so that a field can
     // default to a global one
     it('should inherit a level from the global log config', () => {
-        const validated = withEnv({ EXTENSIONS_DEMO_LOG_LEVEL: 'debug' },
-                                  () => validator(globalConfig, extConfig()));
+        const validated = withEnv({ EXTENSIONS_DEMO_LOG_LEVEL: 'debug' }, () => validator(globalConfig, extConfig()));
 
         assert.deepStrictEqual(validated.log, { logLevel: 'debug', dumpLevel: 'trace' });
     });
 
     it('should reject a value the schema does not accept', () => {
-        assert.throws(() => withEnv({ EXTENSIONS_DEMO_CONSUMER_CONCURRENCY: 'many' },
-                                    () => validator(globalConfig, extConfig())),
-                      /"consumer.concurrency" must be a number/);
+        assert.throws(
+            () => withEnv({ EXTENSIONS_DEMO_CONSUMER_CONCURRENCY: 'many' }, () => validator(globalConfig, extConfig())),
+            /"consumer.concurrency" must be a number/,
+        );
     });
 
     it('should reject a field the schema does not declare', () => {
-        assert.throws(() => validator(globalConfig, { ...extConfig(), unknown: 1 }),
-                      /"unknown" is not allowed/);
+        assert.throws(() => validator(globalConfig, { ...extConfig(), unknown: 1 }), /"unknown" is not allowed/);
     });
 
     it('should leave the schema to report a generic override replacing the config', () => {
         assert.throws(
-            () => withEnv({ BACKBEAT_CONFIG_OVERRIDES: '{"extensions":{"demo":"nonsense"}}' },
-                () => validator(globalConfig, extConfig())),
-            /"value" must be of type object/);
+            () =>
+                withEnv({ BACKBEAT_CONFIG_OVERRIDES: '{"extensions":{"demo":"nonsense"}}' }, () =>
+                    validator(globalConfig, extConfig()),
+                ),
+            /"value" must be of type object/,
+        );
     });
 
     /**
@@ -105,9 +106,9 @@ describe('extension config validator', () => {
         cases.forEach(([name, envVar, field]) => {
             it(`should apply ${envVar}`, () => {
                 const config = JSON.parse(JSON.stringify(backbeatConfig.extensions[name]));
-                const validated = withEnv(
-                    { [envVar]: 'from-env' },
-                    () => extensions[name].configValidator(globalConfig, config));
+                const validated = withEnv({ [envVar]: 'from-env' }, () =>
+                    extensions[name].configValidator(globalConfig, config),
+                );
 
                 assert.strictEqual(validated[field], 'from-env');
             });
@@ -119,7 +120,10 @@ describe('extension config validator', () => {
                 .filter(([, extension]) => extension.configValidator)
                 .map(([name]) => name);
 
-            assert.deepStrictEqual(validated.filter(name => !covered.has(name)), []);
+            assert.deepStrictEqual(
+                validated.filter(name => !covered.has(name)),
+                [],
+            );
         });
     });
 });

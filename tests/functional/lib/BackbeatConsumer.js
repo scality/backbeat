@@ -9,8 +9,7 @@ const ZookeeperManager = require('../../../lib/clients/ZookeeperManager');
 const BackbeatProducer = require('../../../lib/BackbeatProducer');
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 const { BreakerState, CircuitBreaker } = require('@scality/breakbeat').CircuitBreaker;
-const { promMetricNames } =
-      require('../../../lib/constants').kafkaBacklogMetrics;
+const { promMetricNames } = require('../../../lib/constants').kafkaBacklogMetrics;
 const zookeeperConf = { connectionString: 'localhost:2181' };
 const producerKafkaConf = {
     hosts: 'localhost:9092',
@@ -45,22 +44,26 @@ describe('BackbeatConsumer main tests', () => {
     before(function before(done) {
         this.timeout(60000);
 
-        producer = new BackbeatProducer({ kafka: producerKafkaConf, topic,
-                                          pollIntervalMs: 100 });
+        producer = new BackbeatProducer({ kafka: producerKafkaConf, topic, pollIntervalMs: 100 });
         consumer = new BackbeatConsumer({
             zookeeper: zookeeperConf,
-            kafka: consumerKafkaConf, groupId, topic,
+            kafka: consumerKafkaConf,
+            groupId,
+            topic,
             queueProcessor,
             bootstrap: true,
         });
-        async.parallel([
-            innerDone => producer.on('ready', innerDone),
-            innerDone => consumer.on('ready', innerDone),
-            innerDone => {
-                zookeeper = new ZookeeperManager(zookeeperConf.connectionString, null, log);
-                zookeeper.on('ready', innerDone);
-            },
-        ], done);
+        async.parallel(
+            [
+                innerDone => producer.on('ready', innerDone),
+                innerDone => consumer.on('ready', innerDone),
+                innerDone => {
+                    zookeeper = new ZookeeperManager(zookeeperConf.connectionString, null, log);
+                    zookeeper.on('ready', innerDone);
+                },
+            ],
+            done,
+        );
     });
     afterEach(() => {
         consumer._consumer.unsubscribe();
@@ -69,47 +72,49 @@ describe('BackbeatConsumer main tests', () => {
     });
     after(function after(done) {
         this.timeout(10000);
-        async.parallel([
-            innerDone => producer.close(innerDone),
-            innerDone => consumer.close(innerDone),
-            innerDone => {
-                zookeeper.close();
-                innerDone();
-            },
-        ], done);
+        async.parallel(
+            [
+                innerDone => producer.close(innerDone),
+                innerDone => consumer.close(innerDone),
+                innerDone => {
+                    zookeeper.close();
+                    innerDone();
+                },
+            ],
+            done,
+        );
     });
 
-    it('should be able to read messages sent to the topic and publish ' +
-    'topic metrics', done => {
+    it('should be able to read messages sent to the topic and publish topic metrics', done => {
         let consumeCb = null;
         let totalConsumed = 0;
         let topicOffset;
         let consumerOffset;
         const zkMetricsPath = `/test/kafka-backlog-metrics/${topic}/0`;
-        const latestConsumedMetric = metrics.ZenkoMetrics.getMetric(
-            promMetricNames.latestConsumedMessageTimestamp);
+        const latestConsumedMetric = metrics.ZenkoMetrics.getMetric(promMetricNames.latestConsumedMessageTimestamp);
         const beforeConsume = Date.now();
         // reset to 0 before the test
         latestConsumedMetric.reset();
 
         function _checkZkMetrics(done) {
-            async.waterfall([
-                next => zookeeper.getData(`${zkMetricsPath}/topic`, next),
-                (topicOffsetData, stat, next) => {
-                    topicOffset = Number.parseInt(topicOffsetData, 10);
-                    zookeeper.getData(`${zkMetricsPath}/consumers/${groupId}`,
-                                      next);
+            async.waterfall(
+                [
+                    next => zookeeper.getData(`${zkMetricsPath}/topic`, next),
+                    (topicOffsetData, stat, next) => {
+                        topicOffset = Number.parseInt(topicOffsetData, 10);
+                        zookeeper.getData(`${zkMetricsPath}/consumers/${groupId}`, next);
+                    },
+                ],
+                (err, consumerOffsetData) => {
+                    assert.ifError(err);
+                    consumerOffset = Number.parseInt(consumerOffsetData, 10);
+                    assert.strictEqual(topicOffset, consumerOffset);
+                    done();
                 },
-            ], (err, consumerOffsetData) => {
-                assert.ifError(err);
-                consumerOffset = Number.parseInt(consumerOffsetData, 10);
-                assert.strictEqual(topicOffset, consumerOffset);
-                done();
-            });
+            );
         }
         async function _checkPromMetrics() {
-            const latestConsumedMetricValues =
-                  (await latestConsumedMetric.get()).values;
+            const latestConsumedMetricValues = (await latestConsumedMetric.get()).values;
             assert.strictEqual(latestConsumedMetricValues.length, 1);
             assert(latestConsumedMetricValues[0].value >= beforeConsume / 1000);
         }
@@ -120,7 +125,8 @@ describe('BackbeatConsumer main tests', () => {
             if (totalConsumed === messages.length) {
                 assert.deepStrictEqual(
                     messages.map(e => e.message),
-                    consumedMessages.map(buffer => buffer.toString()));
+                    consumedMessages.map(buffer => buffer.toString()),
+                );
                 // metrics are published every second, so they
                 // should be there after 5s
                 setTimeout(() => {
@@ -131,7 +137,8 @@ describe('BackbeatConsumer main tests', () => {
                 }, 5000);
                 assert.deepStrictEqual(
                     messages.map(e => e.message),
-                    consumedMessages.map(buffer => buffer.toString()));
+                    consumedMessages.map(buffer => buffer.toString()),
+                );
                 // Prometheus metrics are updated locally in memory so
                 // immediately visible
                 _checkPromMetrics();
@@ -146,62 +153,61 @@ describe('BackbeatConsumer main tests', () => {
         assert(metrics.ZenkoMetrics.getMetric('rdkafka_cgrp_assignment_size') !== undefined);
     }).timeout(30000);
 
-    it('should not consume messages when paused and when resumed, consume ' +
-    'messages from the previous offset', done => {
+    it('should not consume messages when paused and when resumed, consume messages from the previous offset', done => {
         let totalConsumed = 0;
         const kafkaConsumer = consumer._consumer;
         consumer.subscribe();
 
-        async.series([
-            next => {
-                assert.equal(kafkaConsumer.subscription().length, 1);
-                consumer.on('consumed', messagesConsumed => {
-                    totalConsumed += messagesConsumed;
-                    if (totalConsumed === 1) {
-                        consumer.pause();
-                        next();
-                    }
-                });
-                producer.send([messages[0]], err => {
-                    assert.ifError(err);
-                });
+        async.series(
+            [
+                next => {
+                    assert.equal(kafkaConsumer.subscription().length, 1);
+                    consumer.on('consumed', messagesConsumed => {
+                        totalConsumed += messagesConsumed;
+                        if (totalConsumed === 1) {
+                            consumer.pause();
+                            next();
+                        }
+                    });
+                    producer.send([messages[0]], err => {
+                        assert.ifError(err);
+                    });
+                },
+                next => {
+                    assert.equal(kafkaConsumer.subscription().length, 0);
+                    consumer.on('consumed', messagesConsumed => {
+                        totalConsumed += messagesConsumed;
+                        // should not consume when paused
+                        return next(new Error('expected consumer to be paused, messages were still consumed'));
+                    });
+                    // wait 5 seconds to see if any messages were consumed
+                    setTimeout(() => {
+                        consumer.removeAllListeners('consumed');
+                        assert.equal(totalConsumed, 1);
+                        return next();
+                    }, 5000);
+                    producer.send(messages, err => {
+                        assert.ifError(err);
+                    });
+                },
+                next => {
+                    consumer.resume();
+                    assert.equal(kafkaConsumer.subscription().length, 1);
+                    consumer.on('consumed', messagesConsumed => {
+                        totalConsumed += messagesConsumed;
+                        if (totalConsumed === messages.length + 1) {
+                            next();
+                        }
+                    });
+                },
+            ],
+            err => {
+                assert.ifError(err);
+                // when resumed, the messages are read from previous offset
+                assert.equal(totalConsumed, 4);
+                done();
             },
-            next => {
-                assert.equal(kafkaConsumer.subscription().length, 0);
-                consumer.on('consumed', messagesConsumed => {
-                    totalConsumed += messagesConsumed;
-                    // should not consume when paused
-                    return next(
-                        new Error('expected consumer to be paused, messages ' +
-                            'were still consumed')
-                        );
-                });
-                // wait 5 seconds to see if any messages were consumed
-                setTimeout(() => {
-                    consumer.removeAllListeners('consumed');
-                    assert.equal(totalConsumed, 1);
-                    return next();
-                }, 5000);
-                producer.send(messages, err => {
-                    assert.ifError(err);
-                });
-            },
-            next => {
-                consumer.resume();
-                assert.equal(kafkaConsumer.subscription().length, 1);
-                consumer.on('consumed', messagesConsumed => {
-                    totalConsumed += messagesConsumed;
-                    if (totalConsumed === messages.length + 1) {
-                        next();
-                    }
-                });
-            },
-        ], err => {
-            assert.ifError(err);
-            // when resumed, the messages are read from previous offset
-            assert.equal(totalConsumed, 4);
-            done();
-        });
+        );
     }).timeout(30000);
 });
 
@@ -232,23 +238,27 @@ describe('BackbeatConsumer rebalance tests', () => {
 
         // Shorter delay for first message, to ensure there is something being processed during the
         // rebalance
-        setTimeout(() => {
-            processedMessages.push(message.value);
-            assert(processedMessages.length <= messages.length);
+        setTimeout(
+            () => {
+                processedMessages.push(message.value);
+                assert(processedMessages.length <= messages.length);
 
-            process.nextTick(() => {
-                cb();
+                process.nextTick(() => {
+                    cb();
 
-                consumer.emit('processed.message', message.value.toString());
+                    consumer.emit('processed.message', message.value.toString());
 
-                if (processedMessages.length === messages.length) {
-                    assert.deepStrictEqual(
-                        processedMessages.map(buffer => buffer.toString()),
-                        messages.map(e => e.message));
-                    consumer.emit('processed.all');
-                }
-            });
-        }, consumedMessages++ ? 4000 : 2000);
+                    if (processedMessages.length === messages.length) {
+                        assert.deepStrictEqual(
+                            processedMessages.map(buffer => buffer.toString()),
+                            messages.map(e => e.message),
+                        );
+                        consumer.emit('processed.all');
+                    }
+                });
+            },
+            consumedMessages++ ? 4000 : 2000,
+        );
     }
 
     before(function before(done) {
@@ -257,7 +267,9 @@ describe('BackbeatConsumer rebalance tests', () => {
         // Bootstrap just once at the beginning of the test suite
         const bootstrapConsumer = new BackbeatConsumer({
             zookeeper: zookeeperConf,
-            kafka: consumerKafkaConf, groupId, topic,
+            kafka: consumerKafkaConf,
+            groupId,
+            topic,
             queueProcessor,
             bootstrap: true,
         });
@@ -270,33 +282,44 @@ describe('BackbeatConsumer rebalance tests', () => {
         consumedMessages = 0;
         processedMessages = [];
         producer = new BackbeatProducer({
-            kafka: producerKafkaConf, topic,
-            pollIntervalMs: 100
+            kafka: producerKafkaConf,
+            topic,
+            pollIntervalMs: 100,
         });
         consumer = new BackbeatConsumer({
             clientId: 'BackbeatConsumer-1',
             zookeeper: zookeeperConf,
             kafka: { ...consumerKafkaConf, maxPollIntervalMs: 45000 },
-            groupId, topic,
+            groupId,
+            topic,
             queueProcessor,
             concurrency: 2,
         });
 
-        async.parallel([
-            innerDone => producer.on('ready', innerDone),
-            innerDone => async.series([
-                cb => consumer.on('ready', cb),
-                cb => {
-                    consumer2 = new BackbeatConsumer({
-                        clientId: 'BackbeatConsumer-2',
-                        zookeeper: zookeeperConf,
-                        kafka: consumerKafkaConf, groupId, topic,
-                        queueProcessor,
-                    });
-                    consumer2.on('ready', cb);
-                },
-            ], innerDone),
-        ], done);
+        async.parallel(
+            [
+                innerDone => producer.on('ready', innerDone),
+                innerDone =>
+                    async.series(
+                        [
+                            cb => consumer.on('ready', cb),
+                            cb => {
+                                consumer2 = new BackbeatConsumer({
+                                    clientId: 'BackbeatConsumer-2',
+                                    zookeeper: zookeeperConf,
+                                    kafka: consumerKafkaConf,
+                                    groupId,
+                                    topic,
+                                    queueProcessor,
+                                });
+                                consumer2.on('ready', cb);
+                            },
+                        ],
+                        innerDone,
+                    ),
+            ],
+            done,
+        );
     });
 
     afterEach(function after(done) {
@@ -307,11 +330,14 @@ describe('BackbeatConsumer rebalance tests', () => {
             clearInterval(timer);
             timer = null;
         }
-        async.parallel([
-            innerDone => producer.close(innerDone),
-            innerDone => consumer.close(innerDone),
-            innerDone => (consumer2 ? consumer2.close(innerDone) : innerDone()),
-        ], done);
+        async.parallel(
+            [
+                innerDone => producer.close(innerDone),
+                innerDone => consumer.close(innerDone),
+                innerDone => (consumer2 ? consumer2.close(innerDone) : innerDone()),
+            ],
+            done,
+        );
     });
 
     it('should handle rebalance when no task in progress', done => {
@@ -388,8 +414,7 @@ describe('BackbeatConsumer rebalance tests', () => {
                 // timeout; wait past that before asserting nothing fired
                 setTimeout(() => {
                     try {
-                        assert(consumer2.isReady(),
-                            'the healthy consumer should still be ready');
+                        assert(consumer2.isReady(), 'the healthy consumer should still be ready');
                         sinon.assert.notCalled(exitStub);
                         done();
                     } catch (err) {
@@ -400,8 +425,7 @@ describe('BackbeatConsumer rebalance tests', () => {
         }, 1000);
     }).timeout(60000);
 
-    it('should exit on rebalance timeout when CRASH_ON_REBALANCE_TIMEOUT ' +
-    'is set', done => {
+    it('should exit on rebalance timeout when CRASH_ON_REBALANCE_TIMEOUT is set', done => {
         assert(consumer.isReady());
         assert(consumer2.isReady());
 
@@ -433,8 +457,7 @@ describe('BackbeatConsumer rebalance tests', () => {
                 // it room before asserting
                 setTimeout(() => {
                     try {
-                        assert(consumer2.isReady(),
-                            'the healthy consumer should still be ready');
+                        assert(consumer2.isReady(), 'the healthy consumer should still be ready');
                         sinon.assert.calledOnceWithExactly(exitStub, 1);
                         done();
                     } catch (err) {
@@ -462,7 +485,8 @@ describe('BackbeatConsumer rebalance during batch processing', () => {
     before(function before(done) {
         this.timeout(60000);
         producer = new BackbeatProducer({
-            kafka: producerKafkaConf, topic,
+            kafka: producerKafkaConf,
+            topic,
             pollIntervalMs: 100,
             compressionType: 'none',
         });
@@ -470,33 +494,40 @@ describe('BackbeatConsumer rebalance during batch processing', () => {
             clientId: 'BackbeatConsumer-SYNC-TAIL-1',
             zookeeper: zookeeperConf,
             kafka: { ...consumerKafkaConf, compressionType: 'none' },
-            groupId, topic,
+            groupId,
+            topic,
             queueProcessor: (_msg, cb) => cb(),
             bootstrap: true,
         });
-        async.parallel([
-            innerDone => producer.on('ready', innerDone),
-            innerDone => consumer1.on('ready', innerDone),
-        ], err => {
-            if (err) {return done(err);}
-            consumer2 = new BackbeatConsumer({
-                clientId: 'BackbeatConsumer-SYNC-TAIL-2',
-                zookeeper: zookeeperConf,
-                kafka: { ...consumerKafkaConf, compressionType: 'none' },
-                groupId, topic,
-                queueProcessor: (_msg, cb) => cb(),
-            });
-            return consumer2.on('ready', done);
-        });
+        async.parallel(
+            [innerDone => producer.on('ready', innerDone), innerDone => consumer1.on('ready', innerDone)],
+            err => {
+                if (err) {
+                    return done(err);
+                }
+                consumer2 = new BackbeatConsumer({
+                    clientId: 'BackbeatConsumer-SYNC-TAIL-2',
+                    zookeeper: zookeeperConf,
+                    kafka: { ...consumerKafkaConf, compressionType: 'none' },
+                    groupId,
+                    topic,
+                    queueProcessor: (_msg, cb) => cb(),
+                });
+                return consumer2.on('ready', done);
+            },
+        );
     });
 
     after(function after(done) {
         this.timeout(10000);
-        async.parallel([
-            innerDone => producer.close(innerDone),
-            innerDone => consumer1.close(innerDone),
-            innerDone => (consumer2 ? consumer2.close(innerDone) : innerDone()),
-        ], done);
+        async.parallel(
+            [
+                innerDone => producer.close(innerDone),
+                innerDone => consumer1.close(innerDone),
+                innerDone => (consumer2 ? consumer2.close(innerDone) : innerDone()),
+            ],
+            done,
+        );
     });
 
     it('commits all task offsets when rebalance fires during a batch', done => {
@@ -508,67 +539,69 @@ describe('BackbeatConsumer rebalance during batch processing', () => {
         };
         consumer2._queueProcessor = (_msg, cb) => process.nextTick(cb);
 
-        consumer2._consumer.committed(
-            [{ topic, partition: 0 }], 5000, (e1, base) => {
-                assert.ifError(e1);
-                const baseline = base[0].offset;
+        consumer2._consumer.committed([{ topic, partition: 0 }], 5000, (e1, base) => {
+            assert.ifError(e1);
+            const baseline = base[0].offset;
 
-                consumer1.subscribe();
-                const messages = [];
-                for (let i = 0; i < N; i++) {
-                    messages.push({ key: `k${i}`, message: `{"i":${i}}` });
-                }
-                producer.send(messages, err => {
-                    assert.ifError(err);
-                });
-
-                // Trigger consumer2.subscribe() once consumer1 has
-                // started processing the batch — that way the
-                // rebalance fires while the batch is in flight (some
-                // tasks already done, some still running). The
-                // synchronous-tail ordering matters for whichever task
-                // happens to be the last to flip the queue's running
-                // counter to zero.
-                let triggered = false;
-                consumer1.on('consumed', () => {
-                    if (triggered) {return;}
-                    triggered = true;
-                    consumer2.subscribe();
-                });
-
-                // Wait for processing + rebalance to settle, then
-                // verify all N offsets reached the broker. Use consumer1
-                // (still connected) and retry on transient "Local:
-                // Timed out" errors that can occur while the rebalance
-                // is mid-flight.
-                const queryCommitted = (attempts, finalCb) => {
-                    consumer1._consumer.committed(
-                        [{ topic, partition: 0 }], 5000, (e2, c) => {
-                            if (e2 && attempts > 0) {
-                                return setTimeout(
-                                    () => queryCommitted(attempts - 1,
-                                        finalCb),
-                                    1000);
-                            }
-                            return finalCb(e2, c);
-                        });
-                };
-                const checkInterval = setInterval(() => {
-                    if (processed < N) {
-                        return;
-                    }
-                    clearInterval(checkInterval);
-                    setTimeout(() => queryCommitted(10, (e2, c) => {
-                        assert.ifError(e2);
-                        assert.strictEqual(c[0].offset, baseline + N,
-                            'expected committed offset to advance ' +
-                            `from ${baseline} to ${baseline + N} ` +
-                            `after ${N} tasks processed during ` +
-                            `rebalance, but it stayed at ${c[0].offset}`);
-                        done();
-                    }), 3000);
-                }, 100);
+            consumer1.subscribe();
+            const messages = [];
+            for (let i = 0; i < N; i++) {
+                messages.push({ key: `k${i}`, message: `{"i":${i}}` });
+            }
+            producer.send(messages, err => {
+                assert.ifError(err);
             });
+
+            // Trigger consumer2.subscribe() once consumer1 has
+            // started processing the batch — that way the
+            // rebalance fires while the batch is in flight (some
+            // tasks already done, some still running). The
+            // synchronous-tail ordering matters for whichever task
+            // happens to be the last to flip the queue's running
+            // counter to zero.
+            let triggered = false;
+            consumer1.on('consumed', () => {
+                if (triggered) {
+                    return;
+                }
+                triggered = true;
+                consumer2.subscribe();
+            });
+
+            // Wait for processing + rebalance to settle, then
+            // verify all N offsets reached the broker. Use consumer1
+            // (still connected) and retry on transient "Local:
+            // Timed out" errors that can occur while the rebalance
+            // is mid-flight.
+            const queryCommitted = (attempts, finalCb) => {
+                consumer1._consumer.committed([{ topic, partition: 0 }], 5000, (e2, c) => {
+                    if (e2 && attempts > 0) {
+                        return setTimeout(() => queryCommitted(attempts - 1, finalCb), 1000);
+                    }
+                    return finalCb(e2, c);
+                });
+            };
+            const checkInterval = setInterval(() => {
+                if (processed < N) {
+                    return;
+                }
+                clearInterval(checkInterval);
+                setTimeout(
+                    () =>
+                        queryCommitted(10, (e2, c) => {
+                            assert.ifError(e2);
+                            assert.strictEqual(
+                                c[0].offset,
+                                baseline + N,
+                                `expected committed offset to advance from ${baseline} to ${baseline + N} ` +
+                                    `after ${N} tasks processed during rebalance, but it stayed at ${c[0].offset}`,
+                            );
+                            done();
+                        }),
+                    3000,
+                );
+            }, 100);
+        });
     }).timeout(60000);
 });
 
@@ -582,7 +615,8 @@ describe('BackbeatConsumer ledger drain on rebalance', () => {
     before(function before(done) {
         this.timeout(60000);
         producer = new BackbeatProducer({
-            kafka: producerKafkaConf, topic,
+            kafka: producerKafkaConf,
+            topic,
             pollIntervalMs: 100,
             compressionType: 'none',
         });
@@ -590,24 +624,28 @@ describe('BackbeatConsumer ledger drain on rebalance', () => {
             clientId: 'BackbeatConsumer-LEDGER-DRAIN-1',
             zookeeper: zookeeperConf,
             kafka: { ...consumerKafkaConf, compressionType: 'none' },
-            groupId, topic,
+            groupId,
+            topic,
             queueProcessor: (_msg, cb) => cb(),
             bootstrap: true,
         });
-        async.parallel([
-            innerDone => producer.on('ready', innerDone),
-            innerDone => consumer1.on('ready', innerDone),
-        ], err => {
-            if (err) {return done(err);}
-            consumer2 = new BackbeatConsumer({
-                clientId: 'BackbeatConsumer-LEDGER-DRAIN-2',
-                zookeeper: zookeeperConf,
-                kafka: { ...consumerKafkaConf, compressionType: 'none' },
-                groupId, topic,
-                queueProcessor: (_msg, cb) => cb(),
-            });
-            return consumer2.on('ready', done);
-        });
+        async.parallel(
+            [innerDone => producer.on('ready', innerDone), innerDone => consumer1.on('ready', innerDone)],
+            err => {
+                if (err) {
+                    return done(err);
+                }
+                consumer2 = new BackbeatConsumer({
+                    clientId: 'BackbeatConsumer-LEDGER-DRAIN-2',
+                    zookeeper: zookeeperConf,
+                    kafka: { ...consumerKafkaConf, compressionType: 'none' },
+                    groupId,
+                    topic,
+                    queueProcessor: (_msg, cb) => cb(),
+                });
+                return consumer2.on('ready', done);
+            },
+        );
     });
 
     afterEach(() => {
@@ -621,11 +659,14 @@ describe('BackbeatConsumer ledger drain on rebalance', () => {
 
     after(function after(done) {
         this.timeout(10000);
-        async.parallel([
-            innerDone => producer.close(innerDone),
-            innerDone => consumer1.close(innerDone),
-            innerDone => (consumer2 ? consumer2.close(innerDone) : innerDone()),
-        ], done);
+        async.parallel(
+            [
+                innerDone => producer.close(innerDone),
+                innerDone => consumer1.close(innerDone),
+                innerDone => (consumer2 ? consumer2.close(innerDone) : innerDone()),
+            ],
+            done,
+        );
     });
 
     // Two of the three timepoints of the wait predicate
@@ -633,43 +674,38 @@ describe('BackbeatConsumer ledger drain on rebalance', () => {
     // case is covered by the `BackbeatConsumer rebalance during batch
     // processing` suite above.
 
-    it('takes the IDLE path when both queue and ledger are already ' +
-       'drained at revoke time', done => {
+    it('takes the IDLE path when both queue and ledger are already drained at revoke time', done => {
         consumer1._queueProcessor = (_msg, cb) => process.nextTick(cb);
         consumer2._queueProcessor = (_msg, cb) => process.nextTick(cb);
 
-        consumer2._consumer.committed(
-            [{ topic, partition: 0 }], 5000, (e1, base) => {
-                assert.ifError(e1);
-                const baseline = base[0].offset;
+        consumer2._consumer.committed([{ topic, partition: 0 }], 5000, (e1, base) => {
+            assert.ifError(e1);
+            const baseline = base[0].offset;
 
-                consumer1.subscribe();
-                // No producer.send — consumer1 sits idle. Trigger the
-                // rebalance immediately; queue is idle and ledger is
-                // empty when revoke fires.
-                consumer2.subscribe();
+            consumer1.subscribe();
+            // No producer.send — consumer1 sits idle. Trigger the
+            // rebalance immediately; queue is idle and ledger is
+            // empty when revoke fires.
+            consumer2.subscribe();
 
-                consumer1.once('unassign', () => {
-                    assert.strictEqual(
-                        consumer1.getOffsetLedger()
-                            .getProcessingCount(topic),
-                        0);
-                    setTimeout(() => {
-                        consumer1._consumer.committed(
-                            [{ topic, partition: 0 }], 5000, (e2, c) => {
-                                assert.ifError(e2);
-                                assert.strictEqual(c[0].offset, baseline,
-                                    'committed offset should be unchanged ' +
-                                    'when there was no work pending');
-                                done();
-                            });
-                    }, 1000);
-                });
+            consumer1.once('unassign', () => {
+                assert.strictEqual(consumer1.getOffsetLedger().getProcessingCount(topic), 0);
+                setTimeout(() => {
+                    consumer1._consumer.committed([{ topic, partition: 0 }], 5000, (e2, c) => {
+                        assert.ifError(e2);
+                        assert.strictEqual(
+                            c[0].offset,
+                            baseline,
+                            'committed offset should be unchanged when there was no work pending',
+                        );
+                        done();
+                    });
+                }, 1000);
             });
+        });
     }).timeout(60000);
 
-    it('completes the wait when the ledger drains via the empty event',
-    done => {
+    it('completes the wait when the ledger drains via the empty event', done => {
         // queueProcessor returns committable: false (the Pattern A
         // flow used by replication / copy-location). A deferred
         // onEntryCommittable lands later, simulating the Kafka status
@@ -677,47 +713,43 @@ describe('BackbeatConsumer ledger drain on rebalance', () => {
         // wakes up the rebalance handler.
         const ackDelayMs = 3000;
         consumer1._queueProcessor = (message, cb) => {
-            setTimeout(
-                () => consumer1.onEntryCommittable(message), ackDelayMs);
+            setTimeout(() => consumer1.onEntryCommittable(message), ackDelayMs);
             process.nextTick(() => cb(null, { committable: false }));
         };
         consumer2._queueProcessor = (_msg, cb) => process.nextTick(cb);
 
-        consumer2._consumer.committed(
-            [{ topic, partition: 0 }], 5000, (e1, base) => {
-                assert.ifError(e1);
-                const baseline = base[0].offset;
+        consumer2._consumer.committed([{ topic, partition: 0 }], 5000, (e1, base) => {
+            assert.ifError(e1);
+            const baseline = base[0].offset;
 
-                consumer1.subscribe();
-                producer.send([{ key: 'k', message: '{"x":1}' }], err => {
-                    assert.ifError(err);
-                });
-
-                const waitForDispatch = setInterval(() => {
-                    if (consumer1.getOffsetLedger()
-                            .getProcessingCount(topic) === 0) {
-                        return;
-                    }
-                    clearInterval(waitForDispatch);
-                    consumer2.subscribe();
-                }, 50);
-
-                consumer1.once('unassign', () => {
-                    setTimeout(() => {
-                        consumer2._consumer.committed(
-                            [{ topic, partition: 0 }], 5000, (e2, c) => {
-                                assert.ifError(e2);
-                                assert.strictEqual(c[0].offset,
-                                    baseline + 1,
-                                    'expected committed offset to advance ' +
-                                    `from ${baseline} to ${baseline + 1} ` +
-                                    'after deferred onEntryCommittable, ' +
-                                    `but it stayed at ${c[0].offset}`);
-                                done();
-                            });
-                    }, 1000);
-                });
+            consumer1.subscribe();
+            producer.send([{ key: 'k', message: '{"x":1}' }], err => {
+                assert.ifError(err);
             });
+
+            const waitForDispatch = setInterval(() => {
+                if (consumer1.getOffsetLedger().getProcessingCount(topic) === 0) {
+                    return;
+                }
+                clearInterval(waitForDispatch);
+                consumer2.subscribe();
+            }, 50);
+
+            consumer1.once('unassign', () => {
+                setTimeout(() => {
+                    consumer2._consumer.committed([{ topic, partition: 0 }], 5000, (e2, c) => {
+                        assert.ifError(e2);
+                        assert.strictEqual(
+                            c[0].offset,
+                            baseline + 1,
+                            `expected committed offset to advance from ${baseline} to ${baseline + 1} ` +
+                                `after deferred onEntryCommittable, but it stayed at ${c[0].offset}`,
+                        );
+                        done();
+                    });
+                }, 1000);
+            });
+        });
     }).timeout(60000);
 });
 
@@ -747,15 +779,17 @@ describe('BackbeatConsumer concurrency tests', () => {
         });
         consumer = new BackbeatConsumer({
             zookeeper: zookeeperConf,
-            kafka: consumerKafkaConf, groupId: groupIdConc, topic: topicConc,
+            kafka: consumerKafkaConf,
+            groupId: groupIdConc,
+            topic: topicConc,
             queueProcessor,
             concurrency: 10,
             bootstrap: true,
         });
-        async.parallel([
-            innerDone => producer.on('ready', innerDone),
-            innerDone => consumer.on('ready', innerDone),
-        ], done);
+        async.parallel(
+            [innerDone => producer.on('ready', innerDone), innerDone => consumer.on('ready', innerDone)],
+            done,
+        );
     });
     afterEach(() => {
         consumedMessages = [];
@@ -765,10 +799,7 @@ describe('BackbeatConsumer concurrency tests', () => {
         taskStuckCallbacks = [];
     });
     after(done => {
-        async.parallel([
-            innerDone => producer.close(innerDone),
-            innerDone => consumer.close(innerDone),
-        ], done);
+        async.parallel([innerDone => producer.close(innerDone), innerDone => consumer.close(innerDone)], done);
     });
 
     it('should be able to process 1000 messages with concurrency', done => {
@@ -779,80 +810,88 @@ describe('BackbeatConsumer concurrency tests', () => {
                 message: `{"message_index":"${i}"}`,
             });
         }
-        async.series([
-            next => {
-                setTimeout(() => producer.send(boatloadOfMessages, err => {
-                    assert.ifError(err);
-                }), 1000);
-                let totalConsumed = 0;
-                consumer.subscribe();
-                consumer.on('consumed', messagesConsumed => {
-                    totalConsumed += messagesConsumed;
-                    assert(totalConsumed <= boatloadOfMessages.length);
-                    if (totalConsumed === boatloadOfMessages.length) {
-                        next();
+        async.series(
+            [
+                next => {
+                    setTimeout(
+                        () =>
+                            producer.send(boatloadOfMessages, err => {
+                                assert.ifError(err);
+                            }),
+                        1000,
+                    );
+                    let totalConsumed = 0;
+                    consumer.subscribe();
+                    consumer.on('consumed', messagesConsumed => {
+                        totalConsumed += messagesConsumed;
+                        assert(totalConsumed <= boatloadOfMessages.length);
+                        if (totalConsumed === boatloadOfMessages.length) {
+                            next();
+                        }
+                    });
+                },
+                next => {
+                    // looping to ease reporting when test fails
+                    // (otherwise node gets stuck for ages during diff
+                    // generation with an assert.deepStrictEqual() on
+                    // whole message arrays)
+                    assert.strictEqual(consumedMessages.length, boatloadOfMessages.length);
+                    for (let i = 0; i < consumedMessages.length; ++i) {
+                        assert.deepStrictEqual(consumedMessages[i].toString(), boatloadOfMessages[i].message);
                     }
-                });
-            },
-            next => {
-                // looping to ease reporting when test fails
-                // (otherwise node gets stuck for ages during diff
-                // generation with an assert.deepStrictEqual() on
-                // whole message arrays)
-                assert.strictEqual(consumedMessages.length,
-                                   boatloadOfMessages.length);
-                for (let i = 0; i < consumedMessages.length; ++i) {
-                    assert.deepStrictEqual(consumedMessages[i].toString(),
-                                           boatloadOfMessages[i].message);
-                }
-                next();
-            },
-        ], done);
+                    next();
+                },
+            ],
+            done,
+        );
     });
 
-    it('should not prevent progress with concurrency if one task is stuck',
-    done => {
+    it('should not prevent progress with concurrency if one task is stuck', done => {
         const boatloadOfMessages = [];
         const stuckIndex = 500;
         for (let i = 0; i < 1000; ++i) {
             boatloadOfMessages.push({
                 key: `message-${i}`,
-                message: i === stuckIndex ?
-                    'taskStuck' : `{"message_index":"${i}"}`,
+                message: i === stuckIndex ? 'taskStuck' : `{"message_index":"${i}"}`,
             });
         }
-        async.series([
-            next => {
-                setTimeout(() => producer.send(boatloadOfMessages, err => {
-                    assert.ifError(err);
-                }), 1000);
-                let totalConsumed = 0;
-                consumer.subscribe();
-                consumer.on('consumed', messagesConsumed => {
-                    totalConsumed += messagesConsumed;
-                    assert(totalConsumed <= boatloadOfMessages.length);
-                    if (totalConsumed === boatloadOfMessages.length) {
-                        next();
+        async.series(
+            [
+                next => {
+                    setTimeout(
+                        () =>
+                            producer.send(boatloadOfMessages, err => {
+                                assert.ifError(err);
+                            }),
+                        1000,
+                    );
+                    let totalConsumed = 0;
+                    consumer.subscribe();
+                    consumer.on('consumed', messagesConsumed => {
+                        totalConsumed += messagesConsumed;
+                        assert(totalConsumed <= boatloadOfMessages.length);
+                        if (totalConsumed === boatloadOfMessages.length) {
+                            next();
+                        }
+                    });
+                },
+                next => {
+                    // looping to ease reporting when test fails
+                    // (otherwise node gets stuck for ages during diff
+                    // generation with an assert.deepStrictEqual() on
+                    // whole message arrays)
+                    assert.strictEqual(consumedMessages.length, boatloadOfMessages.length - 1);
+                    for (let i = 0; i < consumedMessages.length; ++i) {
+                        assert.deepStrictEqual(
+                            consumedMessages[i].toString(),
+                            i < stuckIndex ? boatloadOfMessages[i].message : boatloadOfMessages[i + 1].message,
+                        );
                     }
-                });
-            },
-            next => {
-                // looping to ease reporting when test fails
-                // (otherwise node gets stuck for ages during diff
-                // generation with an assert.deepStrictEqual() on
-                // whole message arrays)
-                assert.strictEqual(consumedMessages.length,
-                                   boatloadOfMessages.length - 1);
-                for (let i = 0; i < consumedMessages.length; ++i) {
-                    assert.deepStrictEqual(
-                        consumedMessages[i].toString(),
-                        i < stuckIndex ?
-                            boatloadOfMessages[i].message :
-                            boatloadOfMessages[i + 1].message);
-                }
-                next();
-            },
-        ], done);
+                    next();
+                },
+            ],
+            done,
+        );
     });
 });
 
@@ -867,9 +906,12 @@ describe('BackbeatConsumer "deferred committable" tests', () => {
         consumedMessages.push(message.value);
         if (JSON.parse(message.value.toString()).deferred) {
             process.nextTick(() => cb(null, { committable: false }));
-            setTimeout(() => {
-                consumer.onEntryCommittable(message);
-            }, 900 + Math.floor(Math.random() * 200));
+            setTimeout(
+                () => {
+                    consumer.onEntryCommittable(message);
+                },
+                900 + Math.floor(Math.random() * 200),
+            );
         } else {
             process.nextTick(cb);
         }
@@ -884,55 +926,52 @@ describe('BackbeatConsumer "deferred committable" tests', () => {
         });
         consumer = new BackbeatConsumer({
             zookeeper: zookeeperConf,
-            kafka: consumerKafkaConf, groupId: groupIdConc, topic: topicConc,
+            kafka: consumerKafkaConf,
+            groupId: groupIdConc,
+            topic: topicConc,
             queueProcessor,
             concurrency: 10,
             bootstrap: true,
         });
-        async.parallel([
-            innerDone => producer.on('ready', innerDone),
-            innerDone => consumer.on('ready', innerDone),
-        ], done);
+        async.parallel(
+            [innerDone => producer.on('ready', innerDone), innerDone => consumer.on('ready', innerDone)],
+            done,
+        );
     });
     afterEach(() => {
         consumedMessages = [];
         consumer.removeAllListeners('consumed');
     });
     after(done => {
-        async.parallel([
-            innerDone => producer.close(innerDone),
-            innerDone => consumer.close(innerDone),
-        ], done);
+        async.parallel([innerDone => producer.close(innerDone), innerDone => consumer.close(innerDone)], done);
     });
 
-    it('should be able to process 1000 messages with some deferred ' +
-    'committable status', done => {
+    it('should be able to process 1000 messages with some deferred committable status', done => {
         const boatloadOfMessages = [];
         for (let i = 0; i < 1000; ++i) {
             boatloadOfMessages.push({
                 key: `message-${i}`,
-                message: `{"message_index":"${i}",` +
-                    `"deferred":${i % 2 === 0 ? 'true' : 'false'}}`,
+                message: `{"message_index":"${i}","deferred":${i % 2 === 0 ? 'true' : 'false'}}`,
             });
         }
-        setTimeout(() => producer.send(boatloadOfMessages, err => {
-            assert.ifError(err);
-        }), 1000);
+        setTimeout(
+            () =>
+                producer.send(boatloadOfMessages, err => {
+                    assert.ifError(err);
+                }),
+            1000,
+        );
         let totalConsumed = 0;
         consumer.subscribe();
         consumer.on('consumed', messagesConsumed => {
             totalConsumed += messagesConsumed;
             assert(totalConsumed <= boatloadOfMessages.length);
             if (totalConsumed === boatloadOfMessages.length) {
-                assert.strictEqual(
-                    consumer.getOffsetLedger().getProcessingCount(),
-                    500);
+                assert.strictEqual(consumer.getOffsetLedger().getProcessingCount(), 500);
                 // offsets are set to be committable after 1 second in this
                 // test, so wait for 2 seconds
                 setTimeout(() => {
-                    assert.strictEqual(
-                        consumer.getOffsetLedger().getProcessingCount(),
-                        0);
+                    assert.strictEqual(consumer.getOffsetLedger().getProcessingCount(), 0);
                     done();
                 }, 2000);
             }
@@ -964,16 +1003,18 @@ describe('BackbeatConsumer with circuit breaker', () => {
         });
         consumer = new BackbeatConsumer({
             zookeeper: zookeeperConf,
-            kafka: consumerKafkaConf, groupId: groupIdBreaker, topic: topicBreaker,
+            kafka: consumerKafkaConf,
+            groupId: groupIdBreaker,
+            topic: topicBreaker,
             queueProcessor,
             concurrency: 10,
             bootstrap: true,
             circuitBreaker: this.currentTest.breakerConf,
         });
-        async.parallel([
-            innerDone => producer.on('ready', innerDone),
-            innerDone => consumer.on('ready', innerDone),
-        ], done);
+        async.parallel(
+            [innerDone => producer.on('ready', innerDone), innerDone => consumer.on('ready', innerDone)],
+            done,
+        );
     });
 
     afterEach(done => {
@@ -985,10 +1026,7 @@ describe('BackbeatConsumer with circuit breaker', () => {
         // by polling (calling consumer.consume())
         consumer._circuitBreaker = new CircuitBreaker();
 
-        async.parallel([
-            innerDone => producer.close(innerDone),
-            innerDone => consumer.close(innerDone),
-        ], done);
+        async.parallel([innerDone => producer.close(innerDone), innerDone => consumer.close(innerDone)], done);
     });
 
     const nMessages = 50;
@@ -1033,22 +1071,29 @@ describe('BackbeatConsumer with circuit breaker', () => {
 
             let totalConsumed = 0;
 
-            async.series([
-                next => {
-                    setTimeout(() => producer.send(boatloadOfMessages, err => {
-                        assert.ifError(err);
-                    }), 1000);
-                    consumer.subscribe();
-                    setTimeout(next, 5000);
-                    consumer.on('consumed', messagesConsumed => {
-                        totalConsumed += messagesConsumed;
-                    });
-                },
-                next => {
-                    assert.strictEqual(totalConsumed, t.expectedMessages);
-                    next();
-                },
-            ], done);
+            async.series(
+                [
+                    next => {
+                        setTimeout(
+                            () =>
+                                producer.send(boatloadOfMessages, err => {
+                                    assert.ifError(err);
+                                }),
+                            1000,
+                        );
+                        consumer.subscribe();
+                        setTimeout(next, 5000);
+                        consumer.on('consumed', messagesConsumed => {
+                            totalConsumed += messagesConsumed;
+                        });
+                    },
+                    next => {
+                        assert.strictEqual(totalConsumed, t.expectedMessages);
+                        next();
+                    },
+                ],
+                done,
+            );
         });
 
         // Attach breakerConf to the test, so it can be used from the hooks
@@ -1081,37 +1126,44 @@ describe('BackbeatConsumer with circuit breaker', () => {
             totalConsumed += messagesConsumed;
         });
 
-        async.series([
-            next => {
-                const interval = setInterval(() => {
-                    if (consumer._consumer.assignments().length !== 0) {
-                        clearInterval(interval);
-                        next();
-                    }
-                }, 1000);
-            },
-            next => {
-                setTimeout(() => producer.send(boatloadOfMessages, err => {
-                    assert.ifError(err);
-                }), 1000);
-                consumer._circuitBreaker.emit('state-changed', BreakerState.Tripped);
-                setTimeout(next, 3000);
-            },
-            next => {
-                assert.strictEqual(totalConsumed, 0);
-                consumer._circuitBreaker.emit('state-changed', BreakerState.Stabilizing);
-                setTimeout(next, 3000);
-            },
-            next => {
-                assert.strictEqual(totalConsumed, 0);
-                consumer._circuitBreaker.emit('state-changed', BreakerState.Nominal);
-                setTimeout(next, 3000);
-            },
-            next => {
-                assert.strictEqual(totalConsumed, nMessages);
-                next();
-            }
-        ], done);
+        async.series(
+            [
+                next => {
+                    const interval = setInterval(() => {
+                        if (consumer._consumer.assignments().length !== 0) {
+                            clearInterval(interval);
+                            next();
+                        }
+                    }, 1000);
+                },
+                next => {
+                    setTimeout(
+                        () =>
+                            producer.send(boatloadOfMessages, err => {
+                                assert.ifError(err);
+                            }),
+                        1000,
+                    );
+                    consumer._circuitBreaker.emit('state-changed', BreakerState.Tripped);
+                    setTimeout(next, 3000);
+                },
+                next => {
+                    assert.strictEqual(totalConsumed, 0);
+                    consumer._circuitBreaker.emit('state-changed', BreakerState.Stabilizing);
+                    setTimeout(next, 3000);
+                },
+                next => {
+                    assert.strictEqual(totalConsumed, 0);
+                    consumer._circuitBreaker.emit('state-changed', BreakerState.Nominal);
+                    setTimeout(next, 3000);
+                },
+                next => {
+                    assert.strictEqual(totalConsumed, nMessages);
+                    next();
+                },
+            ],
+            done,
+        );
     }).timeout(30000);
 });
 
@@ -1139,13 +1191,16 @@ describe('BackbeatConsumer shutdown tests', () => {
             kafka: producerKafkaConf,
             pollIntervalMs: 100,
         });
-        async.parallel([
-            innerDone => producer.on('ready', innerDone),
-            innerDone => {
-                zookeeper = new ZookeeperManager(zookeeperConf.connectionString, null, log);
-                zookeeper.on('ready', innerDone);
-            },
-        ], done);
+        async.parallel(
+            [
+                innerDone => producer.on('ready', innerDone),
+                innerDone => {
+                    zookeeper = new ZookeeperManager(zookeeperConf.connectionString, null, log);
+                    zookeeper.on('ready', innerDone);
+                },
+            ],
+            done,
+        );
     });
 
     beforeEach(function beforeEach(done) {
@@ -1174,13 +1229,16 @@ describe('BackbeatConsumer shutdown tests', () => {
 
     after(function after(done) {
         this.timeout(10000);
-        async.parallel([
-            innerDone => producer.close(innerDone),
-            innerDone => {
-                zookeeper.close();
-                innerDone();
-            },
-        ], done);
+        async.parallel(
+            [
+                innerDone => producer.close(innerDone),
+                innerDone => {
+                    zookeeper.close();
+                    innerDone();
+                },
+            ],
+            done,
+        );
     });
 
     it('should stop consuming and wait for current jobs to end before shutting down', done => {
@@ -1191,87 +1249,99 @@ describe('BackbeatConsumer shutdown tests', () => {
         consumer.on('consumed', messagesConsumed => {
             totalConsumed += messagesConsumed;
         });
-        async.series([
-            next => {
-                const interval = setInterval(() => {
-                    if (consumer._processingQueue.idle()) {
-                        return;
-                    }
-                    clearInterval(interval);
-                    next();
-                }, 500);
-            },
-            next => {
-                assert(!consumer._processingQueue.idle());
-                consumer.close(() => {
-                    assert(consumer._processingQueue.idle());
-                    // concurrency set to 2, so should only consume the first two
-                    // initial messages before shutting down
-                    assert(totalConsumed <= 2);
-                    assert.strictEqual(consumer.getOffsetLedger().getProcessingCount(topic), 0);
-                    next();
-                });
-            },
-        ], done);
+        async.series(
+            [
+                next => {
+                    const interval = setInterval(() => {
+                        if (consumer._processingQueue.idle()) {
+                            return;
+                        }
+                        clearInterval(interval);
+                        next();
+                    }, 500);
+                },
+                next => {
+                    assert(!consumer._processingQueue.idle());
+                    consumer.close(() => {
+                        assert(consumer._processingQueue.idle());
+                        // concurrency set to 2, so should only consume the first two
+                        // initial messages before shutting down
+                        assert(totalConsumed <= 2);
+                        assert.strictEqual(consumer.getOffsetLedger().getProcessingCount(topic), 0);
+                        next();
+                    });
+                },
+            ],
+            done,
+        );
     }).timeout(30000);
 
     it('should immediatly shuttdown when no in progress tasks', done => {
         setTimeout(() => {
             producer.send([messages[0]], assert.ifError);
         }, 3000);
-        async.series([
-            next => {
-                const interval = setInterval(() => {
-                    if (!consumer._processingQueue.idle()) {
-                        return;
-                    }
-                    clearInterval(interval);
-                    next();
-                }, 500);
-            },
-            next => {
-                assert(consumer._processingQueue.idle());
-                consumer.close(() => {
+        async.series(
+            [
+                next => {
+                    const interval = setInterval(() => {
+                        if (!consumer._processingQueue.idle()) {
+                            return;
+                        }
+                        clearInterval(interval);
+                        next();
+                    }, 500);
+                },
+                next => {
                     assert(consumer._processingQueue.idle());
-                    assert.strictEqual(consumer.getOffsetLedger().getProcessingCount(topic), 0);
-                    next();
-                });
-            },
-        ], done);
+                    consumer.close(() => {
+                        assert(consumer._processingQueue.idle());
+                        assert.strictEqual(consumer.getOffsetLedger().getProcessingCount(topic), 0);
+                        next();
+                    });
+                },
+            ],
+            done,
+        );
     }).timeout(30000);
 
     it('should shuttdown when consumer has been disconnected', done => {
-        async.series([
-            next => {
-                consumer._consumer.disconnect();
-                consumer._consumer.on('disconnected', () => next());
-            },
-            next => consumer.close(next),
-        ], done);
+        async.series(
+            [
+                next => {
+                    consumer._consumer.disconnect();
+                    consumer._consumer.on('disconnected', () => next());
+                },
+                next => consumer.close(next),
+            ],
+            done,
+        );
     }).timeout(30000);
 
     it('should close even when a job is stuck', done => {
         setTimeout(() => {
             producer.send([{ key: 'key', message: 'taskStuck' }], assert.ifError);
         }, 3000);
-        async.series([
-            next => {
-                const interval = setInterval(() => {
-                    if (consumer._processingQueue.idle()) {
-                        return;
-                    }
-                    clearInterval(interval);
-                    next();
-                }, 500);
-            },
-            next => {
-                assert(!consumer._processingQueue.idle());
-                consumer.close(() => {
+        async.series(
+            [
+                next => {
+                    const interval = setInterval(() => {
+                        if (consumer._processingQueue.idle()) {
+                            return;
+                        }
+                        clearInterval(interval);
+                        next();
+                    }, 500);
+                },
+                next => {
                     assert(!consumer._processingQueue.idle());
-                    next();
-                });
-            },
-        ], done);
+                    consumer.close(() => {
+                        assert(!consumer._processingQueue.idle());
+                        next();
+                    });
+                },
+            ],
+            done,
+        );
     }).timeout(60000);
 });
 
@@ -1338,7 +1408,8 @@ describe('BackbeatConsumer fromOffset tests', () => {
         this.timeout(60000);
         consumedMessages = [];
         producer = new BackbeatProducer({
-            kafka: producerKafkaConf, topic,
+            kafka: producerKafkaConf,
+            topic,
             pollIntervalMs: 100,
         });
         producer.on('ready', done);
@@ -1346,30 +1417,37 @@ describe('BackbeatConsumer fromOffset tests', () => {
 
     afterEach(function afterEach(done) {
         this.timeout(90000);
-        async.parallel([
-            innerDone => producer.close(innerDone),
-            innerDone => (consumer ? consumer.close(innerDone) : innerDone()),
-        ], err => {
-            consumer = null;
-            done(err);
-        });
+        async.parallel(
+            [innerDone => producer.close(innerDone), innerDone => (consumer ? consumer.close(innerDone) : innerDone())],
+            err => {
+                consumer = null;
+                done(err);
+            },
+        );
     });
 
-    it('should consume messages produced before the group existed with ' +
-    'fromOffset earliest', function testEarliest(done) {
+    it('should consume messages produced before the group existed (fromOffset earliest)', function testEarliest(done) {
         this.timeout(120000);
         const marker = `marker-earliest-${Math.random()}`;
-        async.series([
-            next => producer.send([{ key: 'k', message: marker }], next),
-            // without fromOffset 'earliest', the client default
-            // ('latest') would position past this pre-existing
-            // message and never deliver it
-            next => startConsumer(next),
-            // wide budget: a consumer group's first join can take a
-            // session timeout (45s) to settle when a rebalance hits
-            // its joining window
-            next => waitFor(() => consumedMessages.includes(marker), 75000,
-                'the pre-existing message to be consumed', next),
-        ], done);
+        async.series(
+            [
+                next => producer.send([{ key: 'k', message: marker }], next),
+                // without fromOffset 'earliest', the client default
+                // ('latest') would position past this pre-existing
+                // message and never deliver it
+                next => startConsumer(next),
+                // wide budget: a consumer group's first join can take a
+                // session timeout (45s) to settle when a rebalance hits
+                // its joining window
+                next =>
+                    waitFor(
+                        () => consumedMessages.includes(marker),
+                        75000,
+                        'the pre-existing message to be consumed',
+                        next,
+                    ),
+            ],
+            done,
+        );
     });
 });

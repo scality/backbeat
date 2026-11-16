@@ -1,7 +1,6 @@
 const assert = require('assert');
 
-const ConnectorNameGenerator =
-    require('../../../extensions/oplogPopulator/modules/ConnectorNameGenerator');
+const ConnectorNameGenerator = require('../../../extensions/oplogPopulator/modules/ConnectorNameGenerator');
 
 describe('ConnectorNameGenerator', () => {
     const generator = new ConnectorNameGenerator('backbeat-oplog-');
@@ -16,8 +15,7 @@ describe('ConnectorNameGenerator', () => {
     it('should round-trip hashed connector names', () => {
         const name = generator.hashedName({ nbConnectors: 4, index: 3, pipeline: '[]' });
         assert.match(name, /^backbeat-oplog-source-connector-4-3-[0-9a-f]{8}$/);
-        assert.deepStrictEqual(generator.parseHashed(name),
-            { nbConnectors: 4, index: 3, hash: name.slice(-8) });
+        assert.deepStrictEqual(generator.parseHashed(name), { nbConnectors: 4, index: 3, hash: name.slice(-8) });
     });
 
     [
@@ -50,8 +48,7 @@ describe('ConnectorNameGenerator', () => {
         const name = unprefixed.hashedName({ nbConnectors: 2, index: 1, pipeline: '[]' });
         assert.match(name, /^source-connector-2-1-[0-9a-f]{8}$/);
         assert(unprefixed.isOwned(name));
-        assert.deepStrictEqual(unprefixed.parseHashed(name),
-            { nbConnectors: 2, index: 1, hash: name.slice(-8) });
+        assert.deepStrictEqual(unprefixed.parseHashed(name), { nbConnectors: 2, index: 1, hash: name.slice(-8) });
         assert(!generator.isOwned(name));
     });
 });

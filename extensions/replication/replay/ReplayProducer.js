@@ -39,7 +39,8 @@ class ReplayProducer {
             this._producer.on('error', err =>
                 this._log.error('error from backbeat producer', {
                     error: err,
-                }));
+                }),
+            );
             if (cb) {
                 cb();
             }

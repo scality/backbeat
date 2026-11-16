@@ -1,0 +1,4 @@
+bucket-scanner/
+monitoring/**/*dashboard.json
+CLAUDE.md
+.github/copilot-instructions.md

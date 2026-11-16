@@ -1,5 +1,4 @@
-const MongoProcessorConfigValidator =
-    require('./MongoProcessorConfigValidator');
+const MongoProcessorConfigValidator = require('./MongoProcessorConfigValidator');
 
 module.exports = {
     name: 'ingestion',

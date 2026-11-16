@@ -15,16 +15,17 @@ const Logger = werelogs.Logger;
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const replicationConstants = require('../../../extensions/replication/constants');
-const ReplicationAPI =
-      require('../../../extensions/replication/ReplicationAPI');
+const ReplicationAPI = require('../../../extensions/replication/ReplicationAPI');
 const TestConfigurator = require('../../utils/TestConfigurator');
-const ReplicationStatusProcessor = require('../../../extensions/replication' +
-    '/replicationStatusProcessor/ReplicationStatusProcessor');
+const ReplicationStatusProcessor = require('../../../extensions/replication/replicationStatusProcessor/ReplicationStatusProcessor');
 
 /* eslint-disable max-len */
 
 function waitForSourceMdPut(s3mock) {
-    return new Promise(resolve => { s3mock.onPutSourceMd = resolve; });
+    return new Promise(resolve => {
+        // eslint-disable-next-line no-param-reassign
+        s3mock.onPutSourceMd = resolve;
+    });
 }
 
 function getMD5(body) {
@@ -35,10 +36,7 @@ function buildLocations(keysArray, bodiesArray, options) {
     const locations = [];
     let start = 0;
     for (let i = 0; i < keysArray.length; ++i) {
-        const location = { key: keysArray[i],
-            start,
-            size: bodiesArray[i].length,
-            dataStoreName: 'file' };
+        const location = { key: keysArray[i], start, size: bodiesArray[i].length, dataStoreName: 'file' };
         if (!(options && options.doNotIncludeETag)) {
             location.dataStoreETag = `${i + 1}:${getMD5(bodiesArray[i])}`;
         }
@@ -49,7 +47,7 @@ function buildLocations(keysArray, bodiesArray, options) {
         locations.push(location);
         start += bodiesArray[i].length;
     }
-    return (locations.length > 0 ? locations : null);
+    return locations.length > 0 ? locations : null;
 }
 
 const XML_CHARACTER_MAP = {
@@ -60,30 +58,26 @@ const XML_CHARACTER_MAP = {
     '>': '&gt;',
 };
 
-const xmlRegex = new RegExp(
-    `[${Object.keys(XML_CHARACTER_MAP).join('')}]`, 'g');
+const xmlRegex = new RegExp(`[${Object.keys(XML_CHARACTER_MAP).join('')}]`, 'g');
 
 function escapeForXML(string) {
-    return string && string.replace
-        ? string.replace(xmlRegex, item => XML_CHARACTER_MAP[item])
-        : string;
+    return string && string.replace ? string.replace(xmlRegex, item => XML_CHARACTER_MAP[item]) : string;
 }
 
 const constants = {
     source: {
         s3: '127.0.0.1',
         vault: '127.0.0.2',
-        dataPartsKeys: ['6d808697fbaf9f16fb32b94be189b80b3b9b2890',
-            'ab30293a044eca5215068c6a06cfdb1b636a16e4'],
+        dataPartsKeys: ['6d808697fbaf9f16fb32b94be189b80b3b9b2890', 'ab30293a044eca5215068c6a06cfdb1b636a16e4'],
     },
     target: {
-        hosts: [{ host: '127.0.0.3', port: 7777 },
-                { host: '127.0.0.4', port: 7777 }],
-        dataPartsKeys: ['7d808697fbaf9f16fb32b94be189b80b3b9b2890',
-            'e54e2ced6625f67e07f4735fb7b897a7bc81d603'],
+        hosts: [
+            { host: '127.0.0.3', port: 7777 },
+            { host: '127.0.0.4', port: 7777 },
+        ],
+        dataPartsKeys: ['7d808697fbaf9f16fb32b94be189b80b3b9b2890', 'e54e2ced6625f67e07f4735fb7b897a7bc81d603'],
     },
-    partsContents: ['some contents to be replicated',
-                    'some more contents to be replicated'],
+    partsContents: ['some contents to be replicated', 'some more contents to be replicated'],
     copyLocationResultsTopic: 'backbeat-func-test-copy-location-results',
 };
 
@@ -94,18 +88,13 @@ class S3Mock extends TestConfigurator {
         this.log = new Logger('QueueProcessor:test:S3Mock');
 
         const sourceMd = {
-            versionedKey: () =>
-                `${this.getParam('key')}\u0000${this.getParam('versionId')}`,
+            versionedKey: () => `${this.getParam('key')}\u0000${this.getParam('versionId')}`,
             contentMd5: () => this.getParam('contentMd5'),
             contentLength: () => this.getParam('contentLength'),
-            location: () =>
-                buildLocations(this.getParam('source.dataPartsKeys'),
-                               this.getParam('partsContents')),
+            location: () => buildLocations(this.getParam('source.dataPartsKeys'), this.getParam('partsContents')),
             replicationInfo: {
-                role: () =>
-                    `${this.getParam('source.role')},${this.getParam('target.role')}`,
-                destination: () =>
-                    `arn:aws:s3:::${this.getParam('target.bucket')}`,
+                role: () => `${this.getParam('source.role')},${this.getParam('target.role')}`,
+                destination: () => `arn:aws:s3:::${this.getParam('target.bucket')}`,
                 content: ['DATA', 'METADATA'],
                 toazure: {
                     status: 'PENDING',
@@ -132,10 +121,9 @@ class S3Mock extends TestConfigurator {
                     'x-amz-server-version-id': '',
                     'x-amz-storage-class': 'sf',
                     // set some dummy source encryption params for non-empty objects
-                    'x-amz-server-side-encryption':
-                    this.getParam('source.md.location') !== null ? 'AES123' : '',
+                    'x-amz-server-side-encryption': this.getParam('source.md.location') !== null ? 'AES123' : '',
                     'x-amz-server-side-encryption-aws-kms-key-id':
-                    this.getParam('source.md.location') !== null ? 'MySourceEncryptionKey' : '',
+                        this.getParam('source.md.location') !== null ? 'MySourceEncryptionKey' : '',
                     'x-amz-server-side-encryption-customer-algorithm': '',
                     'x-amz-website-redirect-location': '',
                     'acl': {
@@ -151,19 +139,23 @@ class S3Mock extends TestConfigurator {
                     'tags': {},
                     'replicationInfo': {
                         status: 'PENDING',
-                        backends: [{
-                            site: 'sf',
-                            status: 'PENDING',
-                            dataStoreVersionId: '',
-                        }, {
-                            site: 'replicationaws',
-                            status: 'PENDING',
-                            dataStoreVersionId: '',
-                        }, {
-                            site: 'toazure',
-                            status: this.getParam('source.md.replicationInfo.toazure.status'),
-                            dataStoreVersionId: '',
-                        }],
+                        backends: [
+                            {
+                                site: 'sf',
+                                status: 'PENDING',
+                                dataStoreVersionId: '',
+                            },
+                            {
+                                site: 'replicationaws',
+                                status: 'PENDING',
+                                dataStoreVersionId: '',
+                            },
+                            {
+                                site: 'toazure',
+                                status: this.getParam('source.md.replicationInfo.toazure.status'),
+                                dataStoreVersionId: '',
+                            },
+                        ],
                         content: this.getParam('source.md.replicationInfo.content'),
 
                         destination: this.getParam('source.md.replicationInfo.destination'),
@@ -268,11 +260,8 @@ class S3Mock extends TestConfigurator {
                 accessKey: 'accessKey1',
                 secretKey: 'verySecretKey1',
                 canonicalId: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-                dataPartsKeys: () =>
-                    constants.source.dataPartsKeys.slice(
-                        0, this.getParam('nbParts')),
-                role: () =>
-                    `arn:aws:iam::${this.getParam('source.accountId')}:role/backbeat`,
+                dataPartsKeys: () => constants.source.dataPartsKeys.slice(0, this.getParam('nbParts')),
+                role: () => `arn:aws:iam::${this.getParam('source.accountId')}:role/backbeat`,
                 assumedRole: () =>
                     `arn:aws:sts::${this.getParam('source.accountId')}:assumed-role/backbeat/${this.getParam('roleSessionName')}`,
                 md: sourceMd,
@@ -283,19 +272,16 @@ class S3Mock extends TestConfigurator {
                 accessKey: 'accessKey2',
                 secretKey: 'verySecretKey2',
                 canonicalId: 'bac4bea7bac4bea7bac4bea7bac4bea7bac4bea7bac4bea7bac4bea7bac4bea7',
-                dataPartsKeys: () =>
-                    constants.target.dataPartsKeys.slice(
-                        0, this.getParam('nbParts')),
+                dataPartsKeys: () => constants.target.dataPartsKeys.slice(0, this.getParam('nbParts')),
                 bucketIsEncrypted: false,
-                role: () =>
-                    `arn:aws:iam::${this.getParam('target.accountId')}:role/backbeat`,
+                role: () => `arn:aws:iam::${this.getParam('target.accountId')}:role/backbeat`,
                 assumedRole: () =>
                     `arn:aws:sts::${this.getParam('target.accountId')}:assumed-role/backbeat/${this.getParam('roleSessionName')}`,
                 md: {
                     location: () =>
-                        buildLocations(this.getParam('target.dataPartsKeys'),
-                                       this.getParam('partsContents'),
-                                       { encrypted: this.getParam('target.bucketIsEncrypted') }),
+                        buildLocations(this.getParam('target.dataPartsKeys'), this.getParam('partsContents'), {
+                            encrypted: this.getParam('target.bucketIsEncrypted'),
+                        }),
                 },
             },
             key: 'key_to_replicate_with_some_utf8_䆩鈁櫨㟔罳_and_encoded_chars_%EA%9D%8B',
@@ -304,15 +290,10 @@ class S3Mock extends TestConfigurator {
             versionId: '98498980852335999999RG001  100',
             roleSessionName: 'backbeat-replication',
             replicationEnabled: true,
-            partsContents: () =>
-                constants.partsContents.slice(0, this.getParam('nbParts')),
-            versionIdEncoded: () =>
-                VersionIDUtils.encode(this.getParam('versionId')),
-            contentLength: () =>
-                this.getParam('partsContents')
-                .reduce((sum, partBody) => sum + partBody.length, 0),
-            contentMd5: () =>
-                getMD5(this.getParam('partsContents').join('')),
+            partsContents: () => constants.partsContents.slice(0, this.getParam('nbParts')),
+            versionIdEncoded: () => VersionIDUtils.encode(this.getParam('versionId')),
+            contentLength: () => this.getParam('partsContents').reduce((sum, partBody) => sum + partBody.length, 0),
+            contentMd5: () => getMD5(this.getParam('partsContents').join('')),
             kafkaEntry,
             routes,
         };
@@ -357,11 +338,8 @@ class S3Mock extends TestConfigurator {
         const routes = this.getParam(routesKey);
         const action = Object.keys(routes).find(key => {
             const route = routes[key];
-            const queryMatches = Object.keys(route.query).every(k =>
-                query[k] === route.query[k]);
-            return route.method === req.method &&
-                    route.path === url.pathname &&
-                    queryMatches;
+            const queryMatches = Object.keys(route.query).every(k => query[k] === route.query[k]);
+            return route.method === req.method && route.path === url.pathname && queryMatches;
         });
         if (action === undefined) {
             return undefined;
@@ -383,12 +361,14 @@ class S3Mock extends TestConfigurator {
             }
         }
         res.writeHead(501);
-        return res.end(JSON.stringify({
-            error: 'mock not implemented',
-            method: req.method,
-            url: req.url,
-            host: req.headers.host,
-        }));
+        return res.end(
+            JSON.stringify({
+                error: 'mock not implemented',
+                method: req.method,
+                url: req.url,
+                host: req.headers.host,
+            }),
+        );
     }
 
     onRequest(req, res) {
@@ -404,8 +384,7 @@ class S3Mock extends TestConfigurator {
                 const reqBody = Buffer.concat(chunks).toString();
                 if (req.method === 'POST') {
                     const formData = querystring.parse(reqBody);
-                    return this._onParsedRequest(req, url, formData,
-                                                 res, reqBody);
+                    return this._onParsedRequest(req, url, formData, res, reqBody);
                 }
                 return this._onParsedRequest(req, url, query, res, reqBody);
             });
@@ -414,14 +393,16 @@ class S3Mock extends TestConfigurator {
     }
 
     installS3ErrorResponder(action, error, options) {
-        this.setParam(`routes.${action}.handler`,
-                      (req, url, query, res) => {
-                          routesUtils.responseXMLBody(
-                              error, null, res, this.log.newRequestLogger());
-                          if (options && options.once) {
-                              this.resetParam(`routes.${action}.handler`);
-                          }
-                      }, { _static: true });
+        this.setParam(
+            `routes.${action}.handler`,
+            (req, url, query, res) => {
+                routesUtils.responseXMLBody(error, null, res, this.log.newRequestLogger());
+                if (options && options.once) {
+                    this.resetParam(`routes.${action}.handler`);
+                }
+            },
+            { _static: true },
+        );
     }
 
     installVaultErrorResponder(action, error, options) {
@@ -429,31 +410,40 @@ class S3Mock extends TestConfigurator {
             '<ErrorResponse ',
             'xmlns="https://iam.amazonaws.com/doc/2010-05-08/">',
             '<Error>',
-            '<Code>', error.message, '</Code>',
-            '<Message>', escapeForXML(error.description), '</Message>',
+            '<Code>',
+            error.message,
+            '</Code>',
+            '<Message>',
+            escapeForXML(error.description),
+            '</Message>',
             '</Error>',
             '<RequestId>42</RequestId>',
             '</ErrorResponse>',
         ];
-        this.setParam(`routes.${action}.handler`,
-                      (req, url, query, res) => {
-                          res.writeHead(error.code);
-                          res.end(xmlBody.join(''));
-                          if (options && options.once) {
-                              this.resetParam(`routes.${action}.handler`);
-                          }
-                      }, { _static: true });
+        this.setParam(
+            `routes.${action}.handler`,
+            (req, url, query, res) => {
+                res.writeHead(error.code);
+                res.end(xmlBody.join(''));
+                if (options && options.once) {
+                    this.resetParam(`routes.${action}.handler`);
+                }
+            },
+            { _static: true },
+        );
     }
 
     installBackbeatErrorResponder(action, error, options) {
-        this.setParam(`routes.${action}.handler`,
-                      (req, url, query, res) => {
-                          routesUtils.responseJSONBody(
-                              error, null, res, this.log.newRequestLogger());
-                          if (options && options.once) {
-                              this.resetParam(`routes.${action}.handler`);
-                          }
-                      }, { _static: true });
+        this.setParam(
+            `routes.${action}.handler`,
+            (req, url, query, res) => {
+                routesUtils.responseJSONBody(error, null, res, this.log.newRequestLogger());
+                if (options && options.once) {
+                    this.resetParam(`routes.${action}.handler`);
+                }
+            },
+            { _static: true },
+        );
     }
 
     // default handlers
@@ -461,76 +451,82 @@ class S3Mock extends TestConfigurator {
     _getBucketReplication(req, url, query, res) {
         res.setHeader('content-type', 'application/xml');
         res.writeHead(200);
-        res.end(['<?xml version="1.0" encoding="UTF-8"?>',
-            '<ReplicationConfiguration ',
-            'xmlns="http://s3.amazonaws.com/doc/2006-03-01/">',
-            '<Rule>',
-            '<ID>myrule</ID>', '<Prefix/>',
-            '<Status>',
-            this.getParam('replicationEnabled') ? 'Enabled' : 'Disabled',
-            '</Status>',
-            '<Destination>',
-            '<Bucket>',
-            this.getParam('source.md.replicationInfo.destination'),
-            '</Bucket>',
-            '<StorageClass>sf,toazure</StorageClass>',
-            '</Destination>',
-            '</Rule>',
-            '<Role>',
-            this.getParam('source.md.replicationInfo.role'),
-            '</Role>',
-            '</ReplicationConfiguration>'].join(''));
+        res.end(
+            [
+                '<?xml version="1.0" encoding="UTF-8"?>',
+                '<ReplicationConfiguration ',
+                'xmlns="http://s3.amazonaws.com/doc/2006-03-01/">',
+                '<Rule>',
+                '<ID>myrule</ID>',
+                '<Prefix/>',
+                '<Status>',
+                this.getParam('replicationEnabled') ? 'Enabled' : 'Disabled',
+                '</Status>',
+                '<Destination>',
+                '<Bucket>',
+                this.getParam('source.md.replicationInfo.destination'),
+                '</Bucket>',
+                '<StorageClass>sf,toazure</StorageClass>',
+                '</Destination>',
+                '</Rule>',
+                '<Role>',
+                this.getParam('source.md.replicationInfo.role'),
+                '</Role>',
+                '</ReplicationConfiguration>',
+            ].join(''),
+        );
     }
 
     _getAccountsCanonicalIds(req, url, query, res) {
-        assert.strictEqual(Number(query.accountIds),
-                           this.getParam('target.accountId'));
+        assert.strictEqual(Number(query.accountIds), this.getParam('target.accountId'));
 
         res.writeHead(200);
-        res.end(JSON.stringify([
-            {
-                accountId: query.accountId,
-                canonicalId: this.getParam('target.canonicalId'),
-            },
-        ]));
+        res.end(
+            JSON.stringify([
+                {
+                    accountId: query.accountId,
+                    canonicalId: this.getParam('target.canonicalId'),
+                },
+            ]),
+        );
     }
 
     _assumeRoleBackbeatSource(req, url, query, res) {
-        assert.strictEqual(query.RoleArn,
-                           this.getParam('source.role'));
-        assert.strictEqual(query.RoleSessionName,
-                           this.getParam('roleSessionName'));
+        assert.strictEqual(query.RoleArn, this.getParam('source.role'));
+        assert.strictEqual(query.RoleSessionName, this.getParam('roleSessionName'));
 
         res.setHeader('content-type', 'application/json');
         res.writeHead(200);
-        res.end(JSON.stringify({
-            Credentials: {
-                AccessKeyId: this.getParam('source.accessKey'),
-                SecretAccessKey: this.getParam('source.secretKey'),
-                SessionToken: 'dummySessionToken',
-                Expiration: 1501108900014,
-            },
-            AssumedRoleUser: this.getParam('source.assumedRole'),
-        }));
+        res.end(
+            JSON.stringify({
+                Credentials: {
+                    AccessKeyId: this.getParam('source.accessKey'),
+                    SecretAccessKey: this.getParam('source.secretKey'),
+                    SessionToken: 'dummySessionToken',
+                    Expiration: 1501108900014,
+                },
+                AssumedRoleUser: this.getParam('source.assumedRole'),
+            }),
+        );
     }
 
     _assumeRoleBackbeatTarget(req, url, query, res) {
-        assert.strictEqual(query.RoleArn,
-                           this.getParam('target.role'));
-        assert.strictEqual(query.RoleSessionName,
-                           this.getParam('roleSessionName'));
+        assert.strictEqual(query.RoleArn, this.getParam('target.role'));
+        assert.strictEqual(query.RoleSessionName, this.getParam('roleSessionName'));
 
         res.setHeader('content-type', 'application/json');
         res.writeHead(200);
-        res.end(JSON.stringify({
-            Credentials: {
-                AccessKeyId: this.getParam('target.accessKey'),
-                SecretAccessKey: this.getParam('target.secretKey'),
-                SessionToken: 'dummySessionToken',
-                Expiration: 1501108900014,
-            },
-            AssumedRoleUser: this.getParam('target.assumedRole'),
-        }));
+        res.end(
+            JSON.stringify({
+                Credentials: {
+                    AccessKeyId: this.getParam('target.accessKey'),
+                    SecretAccessKey: this.getParam('target.secretKey'),
+                    SessionToken: 'dummySessionToken',
+                    Expiration: 1501108900014,
+                },
+                AssumedRoleUser: this.getParam('target.assumedRole'),
+            }),
+        );
     }
 
     _getObject(req, url, query, res) {
@@ -541,8 +537,7 @@ class S3Mock extends TestConfigurator {
         } else {
             resBody = this.getParam('partsContents').join('');
         }
-        assert.strictEqual(query.versionId,
-                           this.getParam('versionIdEncoded'));
+        assert.strictEqual(query.versionId, this.getParam('versionIdEncoded'));
 
         res.setHeader('content-type', 'application/octet-stream');
         res.setHeader('content-length', resBody.length);
@@ -556,33 +551,26 @@ class S3Mock extends TestConfigurator {
         const srcLocations = this.getParam('source.md.location');
         const destLocations = this.getParam('target.md.location');
         const md5 = req.headers['content-md5'];
-        const { dataStoreETag } = srcLocations.find(
-            location => location.dataStoreETag.includes(md5));
+        const { dataStoreETag } = srcLocations.find(location => location.dataStoreETag.includes(md5));
         const partNumber = Number(dataStoreETag.split(':')[0]);
-        assert.strictEqual(reqBody,
-            this.getParam('partsContents')[partNumber - 1]);
+        assert.strictEqual(reqBody, this.getParam('partsContents')[partNumber - 1]);
 
         res.setHeader('content-type', 'application/json');
         if (this.getParam('target.bucketIsEncrypted')) {
             res.setHeader('x-amz-server-side-encryption', 'AES256');
-            res.setHeader('x-amz-server-side-encryption-aws-kms-key-id',
-                          'MyEncryptionKeyId');
+            res.setHeader('x-amz-server-side-encryption-aws-kms-key-id', 'MyEncryptionKeyId');
         }
         res.writeHead(200);
         res.end(JSON.stringify([destLocations[partNumber - 1]]));
         this.partsWritten[partNumber - 1] = true;
-        this.hasPutTargetData =
-            (this.partsWritten.filter(written => written === true).length
-             === srcLocations.length);
+        this.hasPutTargetData = this.partsWritten.filter(written => written === true).length === srcLocations.length;
     }
 
     _putMetadataTarget(req, url, query, res, reqBody) {
         if (this.getParam('nbParts') > 0) {
-            if (this.getParam('source.md.replicationInfo.content')
-                .includes('DATA')) {
+            if (this.getParam('source.md.replicationInfo.content').includes('DATA')) {
                 assert.strictEqual(this.hasPutTargetData, true);
-            } else if (req.headers['x-scal-replication-content']
-                       === 'METADATA') {
+            } else if (req.headers['x-scal-replication-content'] === 'METADATA') {
                 assert.strictEqual(this.hasPutTargetData, false);
             } else {
                 assert.strictEqual(this.hasPutTargetData, true);
@@ -591,28 +579,27 @@ class S3Mock extends TestConfigurator {
         assert.strictEqual(this.hasPutTargetMd, false);
 
         const parsedMd = JSON.parse(reqBody);
-        const replicatedContent =
-                  this.getParam('source.md.replicationInfo.content');
+        const replicatedContent = this.getParam('source.md.replicationInfo.content');
         assert.deepStrictEqual(parsedMd.replicationInfo, {
             status: 'REPLICA',
-            backends: [{
-                site: 'sf',
-                status: 'REPLICA',
-                dataStoreVersionId: '',
-            }],
+            backends: [
+                {
+                    site: 'sf',
+                    status: 'REPLICA',
+                    dataStoreVersionId: '',
+                },
+            ],
             content: replicatedContent,
             destination: this.getParam('source.md.replicationInfo.destination'),
             storageClass: 'sf,toazure',
             role: this.getParam('source.md.replicationInfo.role'),
         });
-        assert.strictEqual(parsedMd['owner-id'],
-                           this.getParam('target.canonicalId'));
+        assert.strictEqual(parsedMd['owner-id'], this.getParam('target.canonicalId'));
 
         if (req.headers['x-scal-replication-content'] === 'METADATA') {
             assert.deepStrictEqual(parsedMd.location, null);
         } else {
-            assert.deepStrictEqual(parsedMd.location,
-                                   this.getParam('target.md.location'));
+            assert.deepStrictEqual(parsedMd.location, this.getParam('target.md.location'));
         }
         // for metadata-only updates, cloudserver preserves target
         // encryption values and source values are ignored
@@ -621,8 +608,7 @@ class S3Mock extends TestConfigurator {
                 // if target bucket has encryption enabled, encryption
                 // params should have been set in the target metadata
                 assert.strictEqual(parsedMd['x-amz-server-side-encryption'], 'AES256');
-                assert.strictEqual(parsedMd['x-amz-server-side-encryption-aws-kms-key-id'],
-                                   'MyEncryptionKeyId');
+                assert.strictEqual(parsedMd['x-amz-server-side-encryption-aws-kms-key-id'], 'MyEncryptionKeyId');
             } else {
                 // if target bucket has encryption disabled, encryption
                 // params should have been emptied in the target metadata
@@ -636,34 +622,35 @@ class S3Mock extends TestConfigurator {
     }
 
     _putMetadataSource(req, url, query, res, reqBody) {
-        assert.strictEqual(this.hasPutTargetMd,
-                           (this.expectedReplicationStatus === 'PROCESSING'));
+        assert.strictEqual(this.hasPutTargetMd, this.expectedReplicationStatus === 'PROCESSING');
         assert.notStrictEqual(this.onPutSourceMd, null);
 
         const parsedMd = JSON.parse(reqBody);
         assert.deepStrictEqual(parsedMd.replicationInfo, {
             status: this.expectedReplicationStatus,
-            backends: [{
-                site: 'sf',
-                status: this.expectedReplicationStatus === 'FAILED' ? 'FAILED' :
-                    'COMPLETED',
-                dataStoreVersionId: '',
-            }, {
-                site: 'replicationaws',
-                status: 'PENDING',
-                dataStoreVersionId: '',
-            }, {
-                site: 'toazure',
-                status: 'PENDING',
-                dataStoreVersionId: '',
-            }],
+            backends: [
+                {
+                    site: 'sf',
+                    status: this.expectedReplicationStatus === 'FAILED' ? 'FAILED' : 'COMPLETED',
+                    dataStoreVersionId: '',
+                },
+                {
+                    site: 'replicationaws',
+                    status: 'PENDING',
+                    dataStoreVersionId: '',
+                },
+                {
+                    site: 'toazure',
+                    status: 'PENDING',
+                    dataStoreVersionId: '',
+                },
+            ],
             content: this.getParam('source.md.replicationInfo.content'),
             destination: this.getParam('source.md.replicationInfo.destination'),
             storageClass: 'sf,toazure',
             role: this.getParam('source.md.replicationInfo.role'),
         });
-        assert.strictEqual(parsedMd['owner-id'],
-                           this.getParam('source.canonicalId'));
+        assert.strictEqual(parsedMd['owner-id'], this.getParam('source.canonicalId'));
 
         res.writeHead(200);
         res.end();
@@ -673,9 +660,11 @@ class S3Mock extends TestConfigurator {
 
     _getMetadataSource(req, url, query, res) {
         res.writeHead(200);
-        res.end(JSON.stringify({
-            Body: JSON.parse(this.getParam('kafkaEntry.value')).value,
-        }));
+        res.end(
+            JSON.stringify({
+                Body: JSON.parse(this.getParam('kafkaEntry.value')).value,
+            }),
+        );
     }
 
     _batchDelete(req, url, query, res, reqBody) {
@@ -685,22 +674,23 @@ class S3Mock extends TestConfigurator {
     }
 
     _putObject(req, url, query, res, reqBody) {
-        this.hasPutTargetData =
-            reqBody === this.getParam('partsContents').join('');
+        this.hasPutTargetData = reqBody === this.getParam('partsContents').join('');
         res.writeHead(200);
         const sourceLocation = this.getParam('source.md.location');
-        const location = [{
-            key: `${this.getParam('source.bucket')}/` +
-                `${this.getParam('key')}`,
-            start: 0,
-            size: sourceLocation && sourceLocation.length > 0 ? 30 : 0,
-            dataStoreName: 'sf',
-            dataStoreType: 'aws',
-            dataStoreETag: sourceLocation && sourceLocation.length > 0 
-                ? sourceLocation[0].dataStoreETag 
-                : '1:d41d8cd98f00b204e9800998ecf8427e', // MD5 of empty string
-            dataStoreVersionId: 'awsversion',
-        }];
+        const location = [
+            {
+                key: `${this.getParam('source.bucket')}/${this.getParam('key')}`,
+                start: 0,
+                size: sourceLocation && sourceLocation.length > 0 ? 30 : 0,
+                dataStoreName: 'sf',
+                dataStoreType: 'aws',
+                dataStoreETag:
+                    sourceLocation && sourceLocation.length > 0
+                        ? sourceLocation[0].dataStoreETag
+                        : '1:d41d8cd98f00b204e9800998ecf8427e', // MD5 of empty string
+                dataStoreVersionId: 'awsversion',
+            },
+        ];
         res.end(JSON.stringify({ location }));
     }
 }
@@ -737,15 +727,18 @@ function createCopyLocationSender(s3mock, queueProcessor) {
             copyLocationCallbacks.delete(actionId);
             resultsCb(response);
         };
-        
+
         copyLocationCallbacks.set(actionId, wrappedCallback);
-        queueProcessor.processDataMoverEntry({
-            key: 'somekey',
-            value: actionEntry.toKafkaMessage(),
-        }, err => {
-            assert.ifError(err);
-        });
-        
+        queueProcessor.processDataMoverEntry(
+            {
+                key: 'somekey',
+                value: actionEntry.toKafkaMessage(),
+            },
+            err => {
+                assert.ifError(err);
+            },
+        );
+
         return () => copyLocationCallbacks.delete(actionId);
     };
 }
@@ -765,15 +758,12 @@ function getQueueProcessorSiteConfig(site) {
     };
     return [
         'backbeat-func-test-dummy-topic',
-        { connectionString: '127.0.0.1:2181/backbeat',
-          autoCreateNamespace: false },
+        { connectionString: '127.0.0.1:2181/backbeat', autoCreateNamespace: false },
         null,
         { hosts: 'localhost:9092' },
-        { auth: { type: 'role',
-            vault: { host: constants.source.vault,
-                port: 7777 } },
-            s3: { host: constants.source.s3,
-                port: 7777 },
+        {
+            auth: { type: 'role', vault: { host: constants.source.vault, port: 7777 } },
+            s3: { host: constants.source.s3, port: 7777 },
             transport: 'http',
         },
         {
@@ -781,20 +771,20 @@ function getQueueProcessorSiteConfig(site) {
             replicationEndpoint: replicationEndpoints[site],
             transport: 'http',
         },
-        { topic: 'backbeat-func-test-dummy-topic',
-          replicationStatusTopic: 'backbeat-func-test-repstatus',
-          queueProcessor: {
-              retry: {
-                  scality: { timeoutS: 5 },
-                  azure: { timeoutS: 5 },
-              },
-              groupId: 'backbeat-func-test-group-id',
-              mpuPartsConcurrency: 10,
-              sourceCheckIfSizeGreaterThanMB: 10,
-          },
+        {
+            topic: 'backbeat-func-test-dummy-topic',
+            replicationStatusTopic: 'backbeat-func-test-repstatus',
+            queueProcessor: {
+                retry: {
+                    scality: { timeoutS: 5 },
+                    azure: { timeoutS: 5 },
+                },
+                groupId: 'backbeat-func-test-group-id',
+                mpuPartsConcurrency: 10,
+                sourceCheckIfSizeGreaterThanMB: 10,
+            },
         },
-        { host: '127.0.0.1',
-          port: 6379 },
+        { host: '127.0.0.1', port: 6379 },
         { topic: 'metrics-test-topic' },
         {},
         {},
@@ -814,86 +804,96 @@ describe('queue processor functional tests with mocking', () => {
 
     before(function before(done) {
         this.timeout(60000);
-        async.series([
-            done => async.parallel([
-                done => {
-                    queueProcessorSF =
-                        new QueueProcessor(...getQueueProcessorSiteConfig('sf'));
-                    queueProcessorSF.start({ disableConsumer: true });
-                    queueProcessorSF.on('ready', done);
-                },
-                done => {
-                    queueProcessorAzure =
-                        new QueueProcessor(...getQueueProcessorSiteConfig('toazure'));
-                    queueProcessorAzure.start({ disableConsumer: true });
-                    queueProcessorAzure.on('ready', done);
-                },
-            ], done),
-            done => async.parallel([
-                done => {
-                    replicationStatusProcessor = new ReplicationStatusProcessor(
-                        { hosts: 'localhost:9092' },
-                        { auth: { type: 'role',
-                                  vault: { host: constants.source.vault,
-                                           port: 7777 } },
-                          s3: { host: constants.source.s3,
-                                port: 7777 },
-                          transport: 'http',
-                        },
-                        { replicationStatusTopic:
-                          'backbeat-func-test-repstatus',
-                          replicationStatusProcessor: {
-                              retry: {
-                                  timeoutS: 5,
-                              },
-                              groupId: 'backbeat-func-test-group-id',
-                          },
-                          monitorReplicationFailures: true,
-                          objectSizeMetrics: [100, 1000],
-                        },
-                        {},
-                        { topic: 'metrics-test-topic' });
-                    replicationStatusProcessor.start({ bootstrap: true }, done);
-                },
-                done => {
-                    copyLocationResultsConsumer = new BackbeatConsumer({
-                        topic: constants.copyLocationResultsTopic,
-                        queueProcessor: onCopyLocationResultsMessage,
-                        groupId: 'backbeat-func-test-group-id',
-                        zookeeper: {
-                            connectionString: 'localhost:2181',
-                        },
-                        kafka: {
-                            hosts: 'localhost:9092',
-                        },
-                        bootstrap: true,
-                    });
-                    copyLocationResultsConsumer.on('ready', done);
-                },
-            ], done),
-        ], err => {
-            if (err) {
-                return done(err);
-            }
-            copyLocationResultsConsumer.subscribe();
-            // it seems the consumer needs some extra time to start
-            // consuming the first messages
-            return setTimeout(done, 2000);
-        });
+        async.series(
+            [
+                done =>
+                    async.parallel(
+                        [
+                            done => {
+                                queueProcessorSF = new QueueProcessor(...getQueueProcessorSiteConfig('sf'));
+                                queueProcessorSF.start({ disableConsumer: true });
+                                queueProcessorSF.on('ready', done);
+                            },
+                            done => {
+                                queueProcessorAzure = new QueueProcessor(...getQueueProcessorSiteConfig('toazure'));
+                                queueProcessorAzure.start({ disableConsumer: true });
+                                queueProcessorAzure.on('ready', done);
+                            },
+                        ],
+                        done,
+                    ),
+                done =>
+                    async.parallel(
+                        [
+                            done => {
+                                replicationStatusProcessor = new ReplicationStatusProcessor(
+                                    { hosts: 'localhost:9092' },
+                                    {
+                                        auth: { type: 'role', vault: { host: constants.source.vault, port: 7777 } },
+                                        s3: { host: constants.source.s3, port: 7777 },
+                                        transport: 'http',
+                                    },
+                                    {
+                                        replicationStatusTopic: 'backbeat-func-test-repstatus',
+                                        replicationStatusProcessor: {
+                                            retry: {
+                                                timeoutS: 5,
+                                            },
+                                            groupId: 'backbeat-func-test-group-id',
+                                        },
+                                        monitorReplicationFailures: true,
+                                        objectSizeMetrics: [100, 1000],
+                                    },
+                                    {},
+                                    { topic: 'metrics-test-topic' },
+                                );
+                                replicationStatusProcessor.start({ bootstrap: true }, done);
+                            },
+                            done => {
+                                copyLocationResultsConsumer = new BackbeatConsumer({
+                                    topic: constants.copyLocationResultsTopic,
+                                    queueProcessor: onCopyLocationResultsMessage,
+                                    groupId: 'backbeat-func-test-group-id',
+                                    zookeeper: {
+                                        connectionString: 'localhost:2181',
+                                    },
+                                    kafka: {
+                                        hosts: 'localhost:9092',
+                                    },
+                                    bootstrap: true,
+                                });
+                                copyLocationResultsConsumer.on('ready', done);
+                            },
+                        ],
+                        done,
+                    ),
+            ],
+            err => {
+                if (err) {
+                    return done(err);
+                }
+                copyLocationResultsConsumer.subscribe();
+                // it seems the consumer needs some extra time to start
+                // consuming the first messages
+                return setTimeout(done, 2000);
+            },
+        );
         s3mock = new S3Mock();
-        httpServer = http.createServer(
-            (req, res) => s3mock.onRequest(req, res));
+        httpServer = http.createServer((req, res) => s3mock.onRequest(req, res));
         httpServer.listen(7777);
     });
 
     after(done => {
         httpServer.close();
-        async.parallel([
-            done => queueProcessorSF.stop(done),
-            done => queueProcessorAzure.stop(done),
-            done => replicationStatusProcessor.stop(done),
-            done => copyLocationResultsConsumer.close(done),
-        ], done);
+        async.parallel(
+            [
+                done => queueProcessorSF.stop(done),
+                done => queueProcessorAzure.stop(done),
+                done => replicationStatusProcessor.stop(done),
+                done => copyLocationResultsConsumer.close(done),
+            ],
+            done,
+        );
     });
 
     afterEach(() => {
@@ -903,18 +903,14 @@ describe('queue processor functional tests with mocking', () => {
     describe('success path tests', function successPath() {
         this.timeout(30000);
 
-        [{ caption: 'object with single part',
-            nbParts: 1 },
-        { caption: 'encrypted object with single part',
-            nbParts: 1,
-            encrypted: true },
-        { caption: 'object with multiple parts',
-            nbParts: 2 },
-        { caption: 'encrypted object with multiple parts',
-            nbParts: 2,
-            encrypted: true },
-        { caption: 'empty object',
-            nbParts: 0 }].forEach(testCase => describe(testCase.caption, () => {
+        [
+            { caption: 'object with single part', nbParts: 1 },
+            { caption: 'encrypted object with single part', nbParts: 1, encrypted: true },
+            { caption: 'object with multiple parts', nbParts: 2 },
+            { caption: 'encrypted object with multiple parts', nbParts: 2, encrypted: true },
+            { caption: 'empty object', nbParts: 0 },
+        ].forEach(testCase =>
+            describe(testCase.caption, () => {
                 before(() => {
                     s3mock.setParam('nbParts', testCase.nbParts);
                     if (testCase.encrypted) {
@@ -936,20 +932,19 @@ describe('queue processor functional tests with mocking', () => {
                         assert.strictEqual(response.getError(), undefined);
                         assert.strictEqual(response.getStatus(), 'success');
                         const results = response.getResults();
-                        assert.strictEqual(
-                            Array.isArray(results.location), true);
+                        assert.strictEqual(Array.isArray(results.location), true);
                         assert.strictEqual(results.location.length, 1);
                         // 0-byte objects must also be copied
                         assert.strictEqual(s3mock.hasPutTargetData, true);
                         done();
                     });
                 });
-            }));
+            }),
+        );
 
         it('should replicate metadata in metadata-only mode', async () => {
             s3mock.setParam('nbParts', 2);
-            s3mock.setParam('source.md.replicationInfo.content',
-                            ['METADATA']);
+            s3mock.setParam('source.md.replicationInfo.content', ['METADATA']);
             const sourceMdPut = waitForSourceMdPut(s3mock);
             await queueProcessorSF.processReplicationEntry(s3mock.getParam('kafkaEntry'));
             await sourceMdPut;
@@ -957,14 +952,10 @@ describe('queue processor functional tests with mocking', () => {
             assert(s3mock.hasPutTargetMd);
         });
 
-        it('should retry with full replication if metadata-only returns ' +
-        'ObjNotFound', async () => {
+        it('should retry with full replication if metadata-only returns ObjNotFound', async () => {
             s3mock.setParam('nbParts', 2);
-            s3mock.setParam('source.md.replicationInfo.content',
-                            ['METADATA']);
-            s3mock.installBackbeatErrorResponder('target.putMetadata',
-                                                 errors.ObjNotFound,
-                                                 { once: true });
+            s3mock.setParam('source.md.replicationInfo.content', ['METADATA']);
+            s3mock.installBackbeatErrorResponder('target.putMetadata', errors.ObjNotFound, { once: true });
             const sourceMdPut = waitForSourceMdPut(s3mock);
             await queueProcessorSF.processReplicationEntry(s3mock.getParam('kafkaEntry'));
             await sourceMdPut;
@@ -975,12 +966,15 @@ describe('queue processor functional tests with mocking', () => {
         it('should check object MD if size is bigger than sourceCheckIfSizeGreaterThanMB', async () => {
             s3mock.setParam('contentLength', 100000000);
             let checkMdCalled = false;
-            s3mock.setParam('routes.source.s3.getMetadata.handler',
+            s3mock.setParam(
+                'routes.source.s3.getMetadata.handler',
                 (req, url, query, res) => {
                     checkMdCalled = true;
                     s3mock.resetParam('routes.source.s3.getMetadata.handler');
                     s3mock._getMetadataSource(req, url, query, res);
-                }, { _static: true });
+                },
+                { _static: true },
+            );
 
             try {
                 const sourceMdPut = waitForSourceMdPut(s3mock);
@@ -1008,12 +1002,15 @@ describe('queue processor functional tests with mocking', () => {
 
             s3mock.setParam('contentLength', 1000);
             let checkMdCalled = false;
-            s3mock.setParam('routes.source.s3.getMetadata.handler',
+            s3mock.setParam(
+                'routes.source.s3.getMetadata.handler',
                 (req, url, query, res) => {
                     checkMdCalled = true;
                     s3mock.resetParam('routes.source.s3.getMetadata.handler');
                     s3mock._getMetadataSource(req, url, query, res);
-                }, { _static: true });
+                },
+                { _static: true },
+            );
 
             try {
                 const sourceMdPut = waitForSourceMdPut(s3mock);
@@ -1030,12 +1027,15 @@ describe('queue processor functional tests with mocking', () => {
         it('should not check object MD for small objects with location', async () => {
             s3mock.setParam('contentLength', 1);
             let checkMdCalled = false;
-            s3mock.setParam('routes.source.s3.getMetadata.handler',
+            s3mock.setParam(
+                'routes.source.s3.getMetadata.handler',
                 (req, url, query, res) => {
                     checkMdCalled = true;
                     s3mock.resetParam('routes.source.s3.getMetadata.handler');
                     s3mock._getMetadataSource(req, url, query, res);
-                }, { _static: true });
+                },
+                { _static: true },
+            );
 
             try {
                 const sourceMdPut = waitForSourceMdPut(s3mock);
@@ -1055,42 +1055,39 @@ describe('queue processor functional tests with mocking', () => {
 
     describe('error paths', function errorPaths() {
         this.timeout(20000); // give more time to leave room for retry
-                             // delays and timeout
+        // delays and timeout
 
         describe('source Vault errors', () => {
             ['assumeRoleBackbeat'].forEach(action => {
                 [errors.AccessDenied, errors.NoSuchEntity].forEach(error => {
-                    it(`should skip processing on ${error.code} ` +
-                    `(${error.message}) from source Vault on ${action}`,
-                    async () => {
-                        s3mock.installVaultErrorResponder(
-                            `source.vault.${action}`, error);
+                    it(
+                        `should skip processing on ${error.code} ` +
+                            `(${error.message}) from source Vault on ${action}`,
+                        async () => {
+                            s3mock.installVaultErrorResponder(`source.vault.${action}`, error);
 
-                        await queueProcessorSF.processReplicationEntry(s3mock.getParam('kafkaEntry'));
-                        assert(!s3mock.hasPutTargetData);
-                        assert(!s3mock.hasPutTargetMd);
-                        assert.strictEqual(s3mock.partsDeleted.length, 0);
-                    });
+                            await queueProcessorSF.processReplicationEntry(s3mock.getParam('kafkaEntry'));
+                            assert(!s3mock.hasPutTargetData);
+                            assert(!s3mock.hasPutTargetMd);
+                            assert.strictEqual(s3mock.partsDeleted.length, 0);
+                        },
+                    );
                 });
             });
         });
 
         describe('source S3 errors', () => {
             [errors.AccessDenied, errors.ObjNotFound].forEach(error => {
-                it(`replication should skip on ${error.code} ` +
-                `(${error.message}) from source S3 on getObject`, async () => {
-                    s3mock.installS3ErrorResponder('source.s3.getObject',
-                                                   error);
+                it(`replication should skip on ${error.code} (${error.message}) on source S3 getObject`, async () => {
+                    s3mock.installS3ErrorResponder('source.s3.getObject', error);
                     await queueProcessorSF.processReplicationEntry(s3mock.getParam('kafkaEntry'));
                     assert(!s3mock.hasPutTargetData);
                     assert(!s3mock.hasPutTargetMd);
                     assert.strictEqual(s3mock.partsDeleted.length, 0);
                 });
 
-                it(`copy location should skip on ${error.code} ` +
-                `(${error.message}) from source S3 on getObject`, done => {
-                    s3mock.installS3ErrorResponder('source.s3.getObject',
-                                                   error);
+                it(`copy location should skip on ${error.code} (${error.message}) on source S3 getObject`, done => {
+                    s3mock.installS3ErrorResponder('source.s3.getObject', error);
                     const sendAction = createCopyLocationSender(s3mock, queueProcessorSF);
                     sendAction(response => {
                         assert(!s3mock.hasPutTargetData);
@@ -1106,15 +1103,13 @@ describe('queue processor functional tests with mocking', () => {
                         } else if (error.message === 'ObjNotFound') {
                             expectedErrorMsg = 'This object does not exist';
                         }
-                        assert.strictEqual(
-                            response.getError().message, expectedErrorMsg);
+                        assert.strictEqual(response.getError().message, expectedErrorMsg);
                         done();
                     });
                 });
             });
 
-            it('should fail if replication is disabled in bucket replication ' +
-            'configuration', async () => {
+            it('should fail if replication is disabled in bucket replication configuration', async () => {
                 s3mock.setParam('replicationEnabled', false);
                 s3mock.setExpectedReplicationStatus('FAILED');
 
@@ -1129,9 +1124,10 @@ describe('queue processor functional tests with mocking', () => {
             it('should fail if object misses dataStoreETag property', async () => {
                 s3mock.setParam(
                     'source.md.location',
-                    buildLocations(s3mock.getParam('source.dataPartsKeys'),
-                                   s3mock.getParam('partsContents'),
-                                   { doNotIncludeETag: true }));
+                    buildLocations(s3mock.getParam('source.dataPartsKeys'), s3mock.getParam('partsContents'), {
+                        doNotIncludeETag: true,
+                    }),
+                );
                 s3mock.setExpectedReplicationStatus('FAILED');
 
                 const sourceMdPut = waitForSourceMdPut(s3mock);
@@ -1142,15 +1138,13 @@ describe('queue processor functional tests with mocking', () => {
                 assert.strictEqual(s3mock.partsDeleted.length, 0);
             });
 
-            it('should skip if replication status is already COMPLETED',
-            async () => {
+            it('should skip if replication status is already COMPLETED', async () => {
                 s3mock.setParam('nbParts', 2);
                 // kafka entry contains PENDING status as usual
                 const kafkaEntry = s3mock.getParam('kafkaEntry');
                 // getMetadata shall show a COMPLETED status for toazure
                 // location though, so configure it now
-                s3mock.setParam('source.md.replicationInfo.toazure.status',
-                                'COMPLETED');
+                s3mock.setParam('source.md.replicationInfo.toazure.status', 'COMPLETED');
                 // only effective with multi-cloud queue processor
                 await queueProcessorAzure.processReplicationEntry(kafkaEntry);
                 assert(!s3mock.hasPutTargetData);
@@ -1159,10 +1153,8 @@ describe('queue processor functional tests with mocking', () => {
 
             ['getBucketReplication', 'getObject'].forEach(action => {
                 [errors.InternalError].forEach(error => {
-                    it(`replication should retry on ${error.code} ` +
-                    `(${error.message}) from source S3 on ${action}`, async () => {
-                        s3mock.installS3ErrorResponder(
-                            `source.s3.${action}`, error, { once: true });
+                    it(`replication retries on ${error.code} (${error.message}) on source S3 ${action}`, async () => {
+                        s3mock.installS3ErrorResponder(`source.s3.${action}`, error, { once: true });
 
                         const sourceMdPut = waitForSourceMdPut(s3mock);
                         await queueProcessorSF.processReplicationEntry(s3mock.getParam('kafkaEntry'));
@@ -1174,22 +1166,19 @@ describe('queue processor functional tests with mocking', () => {
                 });
             });
 
-            it('copy location should retry on 500 (InternalError) ' +
-            'from source S3 on getObject', done => {
-                s3mock.installS3ErrorResponder(
-                    'source.s3.getObject', errors.InternalError,
-                    { once: true });
-                const expectedLocation = [{
-                    key: `${s3mock.getParam('source.bucket')}/` +
-                        `${s3mock.getParam('key')}`,
-                    start: 0,
-                    size: 30,
-                    dataStoreName: 'sf',
-                    dataStoreType: 'aws',
-                    dataStoreETag:
-                    s3mock.getParam('source.md.location')[0].dataStoreETag,
-                    dataStoreVersionId: 'awsversion',
-                }];
+            it('copy location should retry on 500 (InternalError) from source S3 on getObject', done => {
+                s3mock.installS3ErrorResponder('source.s3.getObject', errors.InternalError, { once: true });
+                const expectedLocation = [
+                    {
+                        key: `${s3mock.getParam('source.bucket')}/${s3mock.getParam('key')}`,
+                        start: 0,
+                        size: 30,
+                        dataStoreName: 'sf',
+                        dataStoreType: 'aws',
+                        dataStoreETag: s3mock.getParam('source.md.location')[0].dataStoreETag,
+                        dataStoreVersionId: 'awsversion',
+                    },
+                ];
                 const sendAction = createCopyLocationSender(s3mock, queueProcessorSF);
                 sendAction(response => {
                     assert(s3mock.hasPutTargetData);
@@ -1202,20 +1191,23 @@ describe('queue processor functional tests with mocking', () => {
             });
 
             it('should retry on error streaming from source S3 on getObject', async () => {
-                s3mock.setParam('routes.source.s3.getObject.handler', (req, url, query, res) => {
-                    const partNumber = Number.parseInt(query.partNumber, 10);
-                    const resBody = s3mock.getParam('partsContents')[partNumber - 1];
-                    assert.strictEqual(query.versionId,
-                                       s3mock.getParam('versionIdEncoded'));
+                s3mock.setParam(
+                    'routes.source.s3.getObject.handler',
+                    (req, url, query, res) => {
+                        const partNumber = Number.parseInt(query.partNumber, 10);
+                        const resBody = s3mock.getParam('partsContents')[partNumber - 1];
+                        assert.strictEqual(query.versionId, s3mock.getParam('versionIdEncoded'));
 
-                    res.setHeader('content-type', 'application/octet-stream');
-                    res.setHeader('content-length', resBody.length);
-                    res.writeHead(200);
-                    res.write(resBody.slice(0, -1));
-                    setTimeout(() => res.socket.destroy(), 1000);
-                    // restore original GET handler so that the next retry will succeed
-                    s3mock.resetParam('routes.source.s3.getObject.handler');
-                }, { _static: true });
+                        res.setHeader('content-type', 'application/octet-stream');
+                        res.setHeader('content-length', resBody.length);
+                        res.writeHead(200);
+                        res.write(resBody.slice(0, -1));
+                        setTimeout(() => res.socket.destroy(), 1000);
+                        // restore original GET handler so that the next retry will succeed
+                        s3mock.resetParam('routes.source.s3.getObject.handler');
+                    },
+                    { _static: true },
+                );
 
                 const sourceMdPut = waitForSourceMdPut(s3mock);
                 await queueProcessorSF.processReplicationEntry(s3mock.getParam('kafkaEntry'));
@@ -1226,32 +1218,26 @@ describe('queue processor functional tests with mocking', () => {
         });
 
         describe('target Vault errors', () => {
-            ['getAccountsCanonicalIds',
-                'assumeRoleBackbeat'].forEach(action => {
-                    [errors.AccessDenied, errors.NoSuchEntity].forEach(err => {
-                        it(`should fail on ${err.code} (${err.message}) ` +
-                        `from target Vault on ${action}`, async () => {
-                            s3mock.installVaultErrorResponder(
-                             `target.${action}`, err);
-                            s3mock.setExpectedReplicationStatus('FAILED');
+            ['getAccountsCanonicalIds', 'assumeRoleBackbeat'].forEach(action => {
+                [errors.AccessDenied, errors.NoSuchEntity].forEach(err => {
+                    it(`should fail on ${err.code} (${err.message}) from target Vault on ${action}`, async () => {
+                        s3mock.installVaultErrorResponder(`target.${action}`, err);
+                        s3mock.setExpectedReplicationStatus('FAILED');
 
-                            const sourceMdPut = waitForSourceMdPut(s3mock);
-                            await queueProcessorSF.processReplicationEntry(s3mock.getParam('kafkaEntry'));
-                            await sourceMdPut;
-                            assert(!s3mock.hasPutTargetData);
-                            assert(!s3mock.hasPutTargetMd);
-                            assert.strictEqual(s3mock.partsDeleted.length, 0);
-                        });
+                        const sourceMdPut = waitForSourceMdPut(s3mock);
+                        await queueProcessorSF.processReplicationEntry(s3mock.getParam('kafkaEntry'));
+                        await sourceMdPut;
+                        assert(!s3mock.hasPutTargetData);
+                        assert(!s3mock.hasPutTargetMd);
+                        assert.strictEqual(s3mock.partsDeleted.length, 0);
                     });
                 });
+            });
 
-            ['getAccountsCanonicalIds',
-            'assumeRoleBackbeat'].forEach(action => {
+            ['getAccountsCanonicalIds', 'assumeRoleBackbeat'].forEach(action => {
                 [errors.InternalError].forEach(error => {
-                    it(`should retry on ${error.code} (${error.message}) ` +
-                    `from target Vault on ${action}`, async () => {
-                        s3mock.installVaultErrorResponder(
-                            `target.${action}`, error, { once: true });
+                    it(`should retry on ${error.code} (${error.message}) from target Vault on ${action}`, async () => {
+                        s3mock.installVaultErrorResponder(`target.${action}`, error, { once: true });
 
                         const sourceMdPut = waitForSourceMdPut(s3mock);
                         await queueProcessorSF.processReplicationEntry(s3mock.getParam('kafkaEntry'));
@@ -1270,10 +1256,8 @@ describe('queue processor functional tests with mocking', () => {
         describe('target S3 errors', () => {
             ['putData', 'putMetadata'].forEach(action => {
                 [errors.AccessDenied].forEach(error => {
-                    it(`should fail on ${error.code} (${error.message}) ` +
-                    `from target S3 on ${action}`, async () => {
-                        s3mock.installS3ErrorResponder(`target.${action}`,
-                                                       error);
+                    it(`should fail on ${error.code} (${error.message}) from target S3 on ${action}`, async () => {
+                        s3mock.installS3ErrorResponder(`target.${action}`, error);
                         s3mock.setExpectedReplicationStatus('FAILED');
 
                         const sourceMdPut = waitForSourceMdPut(s3mock);
@@ -1281,10 +1265,12 @@ describe('queue processor functional tests with mocking', () => {
                         await sourceMdPut;
                         assert(!s3mock.hasPutTargetMd);
                         if (action === 'putMetadata') {
-                            assert.deepStrictEqual(s3mock.partsDeleted, [{
-                                key: constants.target.dataPartsKeys[0],
-                                dataStoreName: 'file',
-                            }]);
+                            assert.deepStrictEqual(s3mock.partsDeleted, [
+                                {
+                                    key: constants.target.dataPartsKeys[0],
+                                    dataStoreName: 'file',
+                                },
+                            ]);
                         } else {
                             assert.strictEqual(s3mock.partsDeleted.length, 0);
                         }
@@ -1294,10 +1280,8 @@ describe('queue processor functional tests with mocking', () => {
 
             ['putData', 'putMetadata'].forEach(action => {
                 [errors.InternalError].forEach(error => {
-                    it(`should retry on ${error.code} (${error.message}) ` +
-                    `from target S3 on ${action}`, async () => {
-                        s3mock.installS3ErrorResponder(`target.${action}`,
-                                                       error, { once: true });
+                    it(`should retry on ${error.code} (${error.message}) from target S3 on ${action}`, async () => {
+                        s3mock.installS3ErrorResponder(`target.${action}`, error, { once: true });
                         const sourceMdPut = waitForSourceMdPut(s3mock);
                         await queueProcessorSF.processReplicationEntry(s3mock.getParam('kafkaEntry'));
                         await sourceMdPut;
@@ -1311,23 +1295,20 @@ describe('queue processor functional tests with mocking', () => {
                 });
             });
 
-            it('copy location should retry on 500 (InternalError) ' +
-            'from target location on putObject', done => {
+            it('copy location should retry on 500 (InternalError) from target location on putObject', done => {
                 // PUTs are going to zenko cloudserver (source)
-                s3mock.installS3ErrorResponder(
-                    'source.s3.putObject',
-                    errors.InternalError, { once: true });
-                const expectedLocation = [{
-                    key: `${s3mock.getParam('source.bucket')}/` +
-                        `${s3mock.getParam('key')}`,
-                    start: 0,
-                    size: 30,
-                    dataStoreName: 'sf',
-                    dataStoreType: 'aws',
-                    dataStoreETag:
-                    s3mock.getParam('source.md.location')[0].dataStoreETag,
-                    dataStoreVersionId: 'awsversion',
-                }];
+                s3mock.installS3ErrorResponder('source.s3.putObject', errors.InternalError, { once: true });
+                const expectedLocation = [
+                    {
+                        key: `${s3mock.getParam('source.bucket')}/${s3mock.getParam('key')}`,
+                        start: 0,
+                        size: 30,
+                        dataStoreName: 'sf',
+                        dataStoreType: 'aws',
+                        dataStoreETag: s3mock.getParam('source.md.location')[0].dataStoreETag,
+                        dataStoreVersionId: 'awsversion',
+                    },
+                ];
                 const sendAction = createCopyLocationSender(s3mock, queueProcessorSF);
                 sendAction(response => {
                     assert(s3mock.hasPutTargetData);
@@ -1342,8 +1323,7 @@ describe('queue processor functional tests with mocking', () => {
 
         describe('retry behavior', () => {
             it('should give up retries after configured timeout (5s)', async () => {
-                s3mock.installS3ErrorResponder('source.s3.getObject',
-                                               errors.InternalError);
+                s3mock.installS3ErrorResponder('source.s3.getObject', errors.InternalError);
                 s3mock.setExpectedReplicationStatus('FAILED');
                 const sourceMdPut = waitForSourceMdPut(s3mock);
                 const failedPublished = new Promise(resolve => {
@@ -1351,16 +1331,20 @@ describe('queue processor functional tests with mocking', () => {
                     const origPublishFailedMethod = failedCRRProducer.publishFailedCRREntry;
                     failedCRRProducer.publishFailedCRREntry = message => {
                         const parsedFailedQueueMessage = JSON.parse(message);
-                        assert(parsedFailedQueueMessage.key.startsWith(
-                            `${replicationConstants.redisKeys.failedCRR}:${queueProcessorSF.site}:`));
+                        assert(
+                            parsedFailedQueueMessage.key.startsWith(
+                                `${replicationConstants.redisKeys.failedCRR}:${queueProcessorSF.site}:`,
+                            ),
+                        );
                         const role = querystring.escape(
-                            s3mock.getParam('source.md.replicationInfo.role').split(',')[0]
+                            s3mock.getParam('source.md.replicationInfo.role').split(',')[0],
                         );
                         assert.strictEqual(
                             parsedFailedQueueMessage.member,
-                            `${s3mock.getParam('source.bucket')}:${s3mock.getParam('key')}`
-                          + `:${s3mock.getParam('versionIdEncoded')}`
-                          + `:${role}`);
+                            `${s3mock.getParam('source.bucket')}:${s3mock.getParam('key')}` +
+                                `:${s3mock.getParam('versionIdEncoded')}` +
+                                `:${role}`,
+                        );
                         failedCRRProducer.publishFailedCRREntry = origPublishFailedMethod;
                         resolve();
                     };
@@ -1382,27 +1366,37 @@ describe('queue processor functional tests with mocking', () => {
                     'routes.source.s3.getObject.handler',
                     (req, url, query, res) => {
                         if (query.partNumber === '2') {
-                            setTimeout(() => routesUtils.responseXMLBody(
-                                errors.InternalError, null, res,
-                                s3mock.log.newRequestLogger()), 100);
+                            setTimeout(
+                                () =>
+                                    routesUtils.responseXMLBody(
+                                        errors.InternalError,
+                                        null,
+                                        res,
+                                        s3mock.log.newRequestLogger(),
+                                    ),
+                                100,
+                            );
                         } else {
                             // make the successful PUT a bit longer
                             // than the total retry time to check that
                             // orphan cleanup actually waits for
                             // pending requests before cleaning up
-                            setTimeout(() => s3mock._getObject(req, url, query, res),
-                                       6000);
+                            setTimeout(() => s3mock._getObject(req, url, query, res), 6000);
                         }
-                    }, { _static: true });
+                    },
+                    { _static: true },
+                );
 
                 const sourceMdPut = waitForSourceMdPut(s3mock);
                 await queueProcessorSF.processReplicationEntry(s3mock.getParam('kafkaEntry'));
                 await sourceMdPut;
                 assert(!s3mock.hasPutTargetMd);
-                assert.deepStrictEqual(s3mock.partsDeleted, [{
-                    key: constants.target.dataPartsKeys[0],
-                    dataStoreName: 'file',
-                }]);
+                assert.deepStrictEqual(s3mock.partsDeleted, [
+                    {
+                        key: constants.target.dataPartsKeys[0],
+                        dataStoreName: 'file',
+                    },
+                ]);
             });
 
             it('should gracefully handle orphan cleanup failure', async () => {
@@ -1412,13 +1406,22 @@ describe('queue processor functional tests with mocking', () => {
                     'routes.source.s3.getObject.handler',
                     (req, url, query, res) => {
                         if (query.partNumber === '2') {
-                            setTimeout(() => routesUtils.responseXMLBody(
-                                errors.InternalError, null, res,
-                                s3mock.log.newRequestLogger()), 100);
+                            setTimeout(
+                                () =>
+                                    routesUtils.responseXMLBody(
+                                        errors.InternalError,
+                                        null,
+                                        res,
+                                        s3mock.log.newRequestLogger(),
+                                    ),
+                                100,
+                            );
                         } else {
                             s3mock._getObject(req, url, query, res);
                         }
-                    }, { _static: true });
+                    },
+                    { _static: true },
+                );
                 s3mock.installS3ErrorResponder('target.batchDelete', errors.BadRequest);
 
                 const sourceMdPut = waitForSourceMdPut(s3mock);
@@ -1430,9 +1433,7 @@ describe('queue processor functional tests with mocking', () => {
 
         it('should fail a replication if unable to get metadata', async () => {
             s3mock.setParam('contentLength', 100000000);
-            s3mock.installBackbeatErrorResponder('source.s3.getMetadata',
-                errors.ObjNotFound,
-                { once: true });
+            s3mock.installBackbeatErrorResponder('source.s3.getMetadata', errors.ObjNotFound, { once: true });
             try {
                 await queueProcessorSF.processReplicationEntry(s3mock.getParam('kafkaEntry'));
                 assert(!s3mock.hasPutTargetData);
@@ -1449,27 +1450,26 @@ describe('GC should be created if config is provided', () => {
         this.timeout(60000);
         const replicationStatusProcessor = new ReplicationStatusProcessor(
             { hosts: 'localhost:9092' },
-            { auth: { type: 'role',
-                      vault: { host: constants.source.vault,
-                               port: 7777 } },
-              s3: { host: constants.source.s3,
-                    port: 7777 },
-              transport: 'http',
+            {
+                auth: { type: 'role', vault: { host: constants.source.vault, port: 7777 } },
+                s3: { host: constants.source.s3, port: 7777 },
+                transport: 'http',
             },
-            { replicationStatusTopic:
-              'backbeat-func-test-repstatus',
-              replicationStatusProcessor: {
-                  retry: {
-                      timeoutS: 5,
-                  },
-                  groupId: 'backbeat-func-test-group-id',
-              },
-              monitorReplicationFailures: true,
-              objectSizeMetrics: [100, 1000],
+            {
+                replicationStatusTopic: 'backbeat-func-test-repstatus',
+                replicationStatusProcessor: {
+                    retry: {
+                        timeoutS: 5,
+                    },
+                    groupId: 'backbeat-func-test-group-id',
+                },
+                monitorReplicationFailures: true,
+                objectSizeMetrics: [100, 1000],
             },
             {},
             { topic: 'metrics-test-topic' },
-            { topic: 'backbeat-gc' });
+            { topic: 'backbeat-gc' },
+        );
         replicationStatusProcessor.start({ bootstrap: true }, () => {
             assert(replicationStatusProcessor.getStateVars().gcProducer);
             replicationStatusProcessor.stop(done);
@@ -1480,26 +1480,25 @@ describe('GC should be created if config is provided', () => {
         this.timeout(60000);
         const replicationStatusProcessor = new ReplicationStatusProcessor(
             { hosts: 'localhost:9092' },
-            { auth: { type: 'role',
-                      vault: { host: constants.source.vault,
-                               port: 7777 } },
-              s3: { host: constants.source.s3,
-                    port: 7777 },
-              transport: 'http',
+            {
+                auth: { type: 'role', vault: { host: constants.source.vault, port: 7777 } },
+                s3: { host: constants.source.s3, port: 7777 },
+                transport: 'http',
             },
-            { replicationStatusTopic:
-              'backbeat-func-test-repstatus',
-              replicationStatusProcessor: {
-                  retry: {
-                      timeoutS: 5,
-                  },
-                  groupId: 'backbeat-func-test-group-id',
-              },
-              monitorReplicationFailures: true,
-              objectSizeMetrics: [100, 1000],
+            {
+                replicationStatusTopic: 'backbeat-func-test-repstatus',
+                replicationStatusProcessor: {
+                    retry: {
+                        timeoutS: 5,
+                    },
+                    groupId: 'backbeat-func-test-group-id',
+                },
+                monitorReplicationFailures: true,
+                objectSizeMetrics: [100, 1000],
             },
             {},
-            { topic: 'metrics-test-topic' });
+            { topic: 'metrics-test-topic' },
+        );
         replicationStatusProcessor.start({ bootstrap: true }, () => {
             assert.strictEqual(replicationStatusProcessor.getStateVars().gcProducer, null);
             replicationStatusProcessor.stop(done);

@@ -39,14 +39,13 @@ describe('WildcardPipelineFactory', () => {
             const pipeline = JSON.parse(result);
 
             assert.strictEqual(pipeline.length, 3);
-            assert.deepStrictEqual(pipeline[0], {$match:{'ns.coll':{$not:{$regex:'^(mpuShadowBucket|__).*'}}}});
+            assert.deepStrictEqual(pipeline[0], {
+                $match: { 'ns.coll': { $not: { $regex: '^(mpuShadowBucket|__).*' } } },
+            });
             assert.deepStrictEqual(pipeline[1], {
                 $addFields: {
                     key: {
-                        $ifNull: [
-                            '$fullDocument.value.key',
-                            '$updateDescription.updatedFields.value.key',
-                        ],
+                        $ifNull: ['$fullDocument.value.key', '$updateDescription.updatedFields.value.key'],
                     },
                 },
             });
@@ -77,10 +76,7 @@ describe('WildcardPipelineFactory', () => {
             assert.deepStrictEqual(pipeline[1], {
                 $addFields: {
                     key: {
-                        $ifNull: [
-                            '$fullDocument.value.key',
-                            '$updateDescription.updatedFields.value.key',
-                        ],
+                        $ifNull: ['$fullDocument.value.key', '$updateDescription.updatedFields.value.key'],
                     },
                 },
             });
@@ -90,13 +86,15 @@ describe('WildcardPipelineFactory', () => {
     describe('getOldConnectorBucketList', () => {
         it('should return null if the list is not valid against the pipeline factory', async () => {
             const config = {
-                pipeline: JSON.stringify([{
-                    $match: {
-                        'ns.coll': {
-                            $in: ['bucket1', 'bucket2'],
+                pipeline: JSON.stringify([
+                    {
+                        $match: {
+                            'ns.coll': {
+                                $in: ['bucket1', 'bucket2'],
+                            },
                         },
                     },
-                }]),
+                ]),
             };
             const result = wildcardPipelineFactory.getOldConnectorBucketList(config);
             assert.deepStrictEqual(result, null);

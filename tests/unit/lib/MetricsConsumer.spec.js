@@ -57,18 +57,19 @@ describe('MetricsConsumer', () => {
         it('should still call back when the consumer is not ready yet', done => {
             assert.strictEqual(mConsumer._consumer, null);
 
-            assert.doesNotThrow(() => mConsumer.close(err => {
-                assert.ifError(err);
-                sinon.assert.calledOnce(disconnect);
-                return done();
-            }));
+            assert.doesNotThrow(() =>
+                mConsumer.close(err => {
+                    assert.ifError(err);
+                    sinon.assert.calledOnce(disconnect);
+                    return done();
+                }),
+            );
         });
     });
 
     describe('close, on a live redis client', () => {
         it('should leave the connection unusable', done => {
-            const consumer = new MetricsConsumer(
-                { host: 'localhost', port: 6379 }, mConfig, kafkaConfig, 'crr');
+            const consumer = new MetricsConsumer({ host: 'localhost', port: 6379 }, mConfig, kafkaConfig, 'crr');
 
             consumer.close(err => {
                 assert.ifError(err);

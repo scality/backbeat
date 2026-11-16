@@ -36,15 +36,13 @@ class BackbeatClientMock {
 
     verifyRetries() {
         Object.keys(this.failures).forEach(f => {
-            assert.strictEqual(this.calls[f], this.failures[f] + 1,
-                `did not retry ${this.failures[f]} times`);
+            assert.strictEqual(this.calls[f], this.failures[f] + 1, `did not retry ${this.failures[f]} times`);
         });
     }
 
     verifyNoRetries() {
         Object.keys(this.failures).forEach(f => {
-            assert.strictEqual(this.calls[f], 1,
-                `called ${this.calls[f]} times, expected 1`);
+            assert.strictEqual(this.calls[f], 1, `called ${this.calls[f]} times, expected 1`);
         });
     }
 }

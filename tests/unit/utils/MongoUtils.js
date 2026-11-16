@@ -2,8 +2,7 @@ const assert = require('assert');
 const MongoUtils = require('../../../extensions/utils/MongoUtils');
 
 const mongoConfRepl = {
-    replicaSetHosts:
-    'localhost:27017,localhost:27018,localhost:27019',
+    replicaSetHosts: 'localhost:27017,localhost:27018,localhost:27019',
     writeConcern: 'majority',
     replicaSet: 'rs0',
     readPreference: 'primary',
@@ -11,33 +10,38 @@ const mongoConfRepl = {
     authCredentials: {
         username: 'user',
         password: 'pass',
-    }
+    },
 };
 
 const mongoConfShard = {
-    replicaSetHosts:
-    'localhost:27017,localhost:27018,localhost:27019',
+    replicaSetHosts: 'localhost:27017,localhost:27018,localhost:27019',
     writeConcern: 'majority',
     readPreference: 'primary',
     database: 'metadata',
     authCredentials: {
         username: 'user',
         password: 'pass',
-    }
+    },
 };
 
 describe('constructConnectionString', () => {
     it('should construct correct mongo connection string', done => {
         const url = MongoUtils.constructConnectionString(mongoConfRepl);
-        assert.strictEqual(url, 'mongodb://user:pass@localhost:27017,localhost:27018,localhost:27019' +
-            '/?w=majority&readPreference=primary&replicaSet=rs0');
+        assert.strictEqual(
+            url,
+            'mongodb://user:pass@localhost:27017,localhost:27018,localhost:27019' +
+                '/?w=majority&readPreference=primary&replicaSet=rs0',
+        );
         return done();
     });
 
     it('should construct correct mongo connection string (replica)', done => {
         const url = MongoUtils.constructConnectionString(mongoConfShard);
-        assert.strictEqual(url, 'mongodb://user:pass@localhost:27017,localhost:27018,localhost:27019' +
-            '/?w=majority&readPreference=primary');
+        assert.strictEqual(
+            url,
+            'mongodb://user:pass@localhost:27017,localhost:27018,localhost:27019' +
+                '/?w=majority&readPreference=primary',
+        );
         return done();
     });
 });

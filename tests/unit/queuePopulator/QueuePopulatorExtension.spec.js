@@ -2,8 +2,7 @@
 
 const assert = require('assert');
 
-const QueuePopulatorExtension =
-    require('../../../lib/queuePopulator/QueuePopulatorExtension');
+const QueuePopulatorExtension = require('../../../lib/queuePopulator/QueuePopulatorExtension');
 const fakeLogger = require('../../utils/fakeLogger');
 
 describe('QueuePopulatorExtension::publish', () => {

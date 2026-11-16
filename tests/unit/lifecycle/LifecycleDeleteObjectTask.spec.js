@@ -5,8 +5,7 @@ const werelogs = require('werelogs');
 const { ObjectMD } = require('@scality/arsenal').models;
 
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
-const LifecycleDeleteObjectTask = require(
-    '../../../extensions/lifecycle/tasks/LifecycleDeleteObjectTask');
+const LifecycleDeleteObjectTask = require('../../../extensions/lifecycle/tasks/LifecycleDeleteObjectTask');
 const { LifecycleMetrics } = require('../../../extensions/lifecycle/LifecycleMetrics');
 
 const day = 1000 * 60 * 60 * 24;
@@ -18,12 +17,7 @@ const invalidBucketStateError = {
     retryable: false,
 };
 
-const {
-    S3ClientMock,
-    BackbeatMetadataProxyMock,
-    ProcessorMock,
-    BackbeatClientMock,
-} = require('../mocks');
+const { S3ClientMock, BackbeatMetadataProxyMock, ProcessorMock, BackbeatClientMock } = require('../mocks');
 
 describe('LifecycleDeleteObjectTask', () => {
     let s3Client;
@@ -45,7 +39,8 @@ describe('LifecycleDeleteObjectTask', () => {
             null,
             null,
             null,
-            new werelogs.Logger('test:LifecycleDeleteObjectTask'));
+            new werelogs.Logger('test:LifecycleDeleteObjectTask'),
+        );
         objMd = new ObjectMD();
         backbeatMdProxyClient.setMdObj(objMd);
         task = new LifecycleDeleteObjectTask(objectProcessor);
@@ -120,11 +115,7 @@ describe('LifecycleDeleteObjectTask', () => {
         });
     });
 
-    [
-        'COMPLETED',
-        'REPLICA',
-        undefined,
-    ].forEach(status => {
+    ['COMPLETED', 'REPLICA', undefined].forEach(status => {
         it(`should delete replicating object with status: ${status}`, done => {
             objMd.setReplicationStatus(status);
             const entry = ActionQueueEntry.create('deleteObject')
@@ -144,11 +135,7 @@ describe('LifecycleDeleteObjectTask', () => {
         });
     });
 
-    [
-        'PENDING',
-        'PROCESSING',
-        'FAILED',
-    ].forEach(status => {
+    ['PENDING', 'PROCESSING', 'FAILED'].forEach(status => {
         it(`should skip replicating object with status: ${status}`, done => {
             objMd.setReplicationStatus(status);
             const entry = ActionQueueEntry.create('deleteObject')
@@ -169,43 +156,41 @@ describe('LifecycleDeleteObjectTask', () => {
     });
 
     // TODO: After the implementation of CLDSRV-461, we could remove this test.
-    it('should expire non-versioned object',
-        done => {
-            objMd.setLegalHold(true);
-            const entry = ActionQueueEntry.create('deleteObject')
-                .setAttribute('target.owner', 'testowner')
-                .setAttribute('target.bucket', 'testbucket')
-                .setAttribute('target.accountId', 'testid')
-                .setAttribute('target.key', 'testkey')
-                .setAttribute('details.lastModified', '2022-05-13T17:51:31.261Z');
-            s3Client.setResponse(null, {});
-            // <!> Only in S3C <!> Backbeat API returns 'InvalidBucketState' error if the bucket is not versioned
-            backbeatMdProxyClient.setError(invalidBucketStateError);
-            backbeatClient.setResponse(null, {});
-            task.processActionEntry(entry, err => {
-                assert.strictEqual(backbeatClient.times.deleteObjectFromExpiration, 1);
-                assert.ifError(err);
-                done();
-            });
+    it('should expire non-versioned object', done => {
+        objMd.setLegalHold(true);
+        const entry = ActionQueueEntry.create('deleteObject')
+            .setAttribute('target.owner', 'testowner')
+            .setAttribute('target.bucket', 'testbucket')
+            .setAttribute('target.accountId', 'testid')
+            .setAttribute('target.key', 'testkey')
+            .setAttribute('details.lastModified', '2022-05-13T17:51:31.261Z');
+        s3Client.setResponse(null, {});
+        // <!> Only in S3C <!> Backbeat API returns 'InvalidBucketState' error if the bucket is not versioned
+        backbeatMdProxyClient.setError(invalidBucketStateError);
+        backbeatClient.setResponse(null, {});
+        task.processActionEntry(entry, err => {
+            assert.strictEqual(backbeatClient.times.deleteObjectFromExpiration, 1);
+            assert.ifError(err);
+            done();
         });
+    });
 
-    it('should expire current version of locked object with legal hold',
-        done => {
-            objMd.setLegalHold(true);
-            const entry = ActionQueueEntry.create('deleteObject')
-                .setAttribute('target.owner', 'testowner')
-                .setAttribute('target.bucket', 'testbucket')
-                .setAttribute('target.accountId', 'testid')
-                .setAttribute('target.key', 'testkey')
-                .setAttribute('details.lastModified', '2022-05-13T17:51:31.261Z');
-            s3Client.setResponse(null, {});
-            backbeatClient.setResponse(null, {});
-            task.processActionEntry(entry, err => {
-                assert.strictEqual(backbeatClient.times.deleteObjectFromExpiration, 1);
-                assert.ifError(err);
-                done();
-            });
+    it('should expire current version of locked object with legal hold', done => {
+        objMd.setLegalHold(true);
+        const entry = ActionQueueEntry.create('deleteObject')
+            .setAttribute('target.owner', 'testowner')
+            .setAttribute('target.bucket', 'testbucket')
+            .setAttribute('target.accountId', 'testid')
+            .setAttribute('target.key', 'testkey')
+            .setAttribute('details.lastModified', '2022-05-13T17:51:31.261Z');
+        s3Client.setResponse(null, {});
+        backbeatClient.setResponse(null, {});
+        task.processActionEntry(entry, err => {
+            assert.strictEqual(backbeatClient.times.deleteObjectFromExpiration, 1);
+            assert.ifError(err);
+            done();
         });
+    });
 
     it('should skip locked object: retention date', done => {
         objMd.setRetentionDate(new Date(Date.now() + day));
@@ -225,24 +210,23 @@ describe('LifecycleDeleteObjectTask', () => {
         });
     });
 
-    it('should expire current version of locked object with retention date',
-        done => {
-            objMd.setRetentionDate(new Date(Date.now() + day));
-            objMd.setRetentionMode('GOVERNANCE');
-            const entry = ActionQueueEntry.create('deleteObject')
-                .setAttribute('target.owner', 'testowner')
-                .setAttribute('target.bucket', 'testbucket')
-                .setAttribute('target.accountId', 'testid')
-                .setAttribute('target.key', 'testkey')
-                .setAttribute('details.lastModified', '2022-05-13T17:51:31.261Z');
-            s3Client.setResponse(null, {});
-            backbeatClient.setResponse(null, {});
-            task.processActionEntry(entry, err => {
-                assert.strictEqual(backbeatClient.times.deleteObjectFromExpiration, 1);
-                assert.ifError(err);
-                done();
-            });
+    it('should expire current version of locked object with retention date', done => {
+        objMd.setRetentionDate(new Date(Date.now() + day));
+        objMd.setRetentionMode('GOVERNANCE');
+        const entry = ActionQueueEntry.create('deleteObject')
+            .setAttribute('target.owner', 'testowner')
+            .setAttribute('target.bucket', 'testbucket')
+            .setAttribute('target.accountId', 'testid')
+            .setAttribute('target.key', 'testkey')
+            .setAttribute('details.lastModified', '2022-05-13T17:51:31.261Z');
+        s3Client.setResponse(null, {});
+        backbeatClient.setResponse(null, {});
+        task.processActionEntry(entry, err => {
+            assert.strictEqual(backbeatClient.times.deleteObjectFromExpiration, 1);
+            assert.ifError(err);
+            done();
         });
+    });
 
     it('should delete locked object with valid date', done => {
         objMd.setRetentionDate(new Date(Date.now() - day));
@@ -280,7 +264,6 @@ describe('LifecycleDeleteObjectTask', () => {
             done();
         });
     });
-
 
     it('should emit expiration metrics with the cold location carried by the entry', done => {
         const startedMetric = sinon.stub(LifecycleMetrics, 'onLifecycleStarted');
@@ -389,7 +372,7 @@ describe('LifecycleDeleteObjectTask', () => {
         });
     });
 
-    it('should return an error when it can\'t get the BackbeatClient', done => {
+    it("should return an error when it can't get the BackbeatClient", done => {
         sinon.stub(task, 'getBackbeatClient').returns(null);
         const entry = ActionQueueEntry.create('deleteObject')
             .setAttribute('target.owner', 'testowner')
@@ -406,7 +389,7 @@ describe('LifecycleDeleteObjectTask', () => {
         });
     });
 
-    it('should return an error when it can\'t get the S3 client', done => {
+    it("should return an error when it can't get the S3 client", done => {
         sinon.stub(task, 'getS3Client').returns(null);
         const entry = ActionQueueEntry.create('deleteMPU')
             .setAttribute('target.owner', 'testowner')

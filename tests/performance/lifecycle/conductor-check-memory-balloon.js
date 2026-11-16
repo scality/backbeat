@@ -105,33 +105,35 @@ describe('Lifecycle Conductor', function testBackpressure() {
                 owner: 'a'.repeat(64),
             };
 
-            return c.drop()
-                .then(() => new Promise((resolve, reject) => {
-                    async.timesLimit(
-                        nBuckets / batchSize,
-                        4,
-                        (n, next) => {
-                            const batch = [];
-                            for (let i = 0; i < batchSize; i++) {
-                                const id = n * batchSize + i;
-                                const bucketName = ('0'.repeat(24) + id).slice(-24);
-                                batch[i] = {
-                                    _id: bucketName,
-                                    value: bucketMD,
-                                };
-                            }
-                            c.insertMany(batch)
-                                .then(() => next())
-                                .catch(next);
-                        },
-                        err => {
-                            if (err) {
-                                return reject(err);
-                            }
-                            return resolve();
-                        }
-                    );
-                }));
+            return c.drop().then(
+                () =>
+                    new Promise((resolve, reject) => {
+                        async.timesLimit(
+                            nBuckets / batchSize,
+                            4,
+                            (n, next) => {
+                                const batch = [];
+                                for (let i = 0; i < batchSize; i++) {
+                                    const id = n * batchSize + i;
+                                    const bucketName = ('0'.repeat(24) + id).slice(-24);
+                                    batch[i] = {
+                                        _id: bucketName,
+                                        value: bucketMD,
+                                    };
+                                }
+                                c.insertMany(batch)
+                                    .then(() => next())
+                                    .catch(next);
+                            },
+                            err => {
+                                if (err) {
+                                    return reject(err);
+                                }
+                                return resolve();
+                            },
+                        );
+                    }),
+            );
         };
 
         it('should apply backpressure on bucket queue instead of ballooning', done => {
@@ -155,7 +157,6 @@ describe('Lifecycle Conductor', function testBackpressure() {
                                 assert.deepStrictEqual(nEnqueued, nBuckets);
                                 return done();
                             });
-
                         });
                     })
                     .catch(err => {

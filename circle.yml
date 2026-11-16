@@ -1,31 +1,31 @@
 general:
-    branches:
-        ignore:
-            - /^ultron\/.*/ # Ignore ultron/* branches
+  branches:
+    ignore:
+      - /^ultron\/.*/ # Ignore ultron/* branches
 
 machine:
-    node:
-        version: 6.13.1
-    services:
-        - docker
-        - redis
-    environment:
-        CXX: g++-4.9
-        REMOTE_MANAGEMENT_DISABLE: 1
+  node:
+    version: 6.13.1
+  services:
+    - docker
+    - redis
+  environment:
+    CXX: g++-4.9
+    REMOTE_MANAGEMENT_DISABLE: 1
 
 dependencies:
-    override:
-        - rm -rf node_modules
-        - yarn install --frozen-lockfile
-    post:
-        - cd node_modules/@scality/cloudserver && yarn run mem_backend: {background: true}
+  override:
+    - rm -rf node_modules
+    - yarn install --frozen-lockfile
+  post:
+    - cd node_modules/@scality/cloudserver && yarn run mem_backend: { background: true }
 
 test:
-    override:
-        - docker run -e AUTO_CREATE_TOPICS=true -d --net=host --name kafka spotify/kafka
-        - yarn run --silent lint_md -- --max-warnings 0
-        - yarn run --silent lint -- --max-warnings 0
-        - npm test
-        - CI=true npm start & bash tests/utils/wait_for_local_port.bash 8900 40 && yarn run ft_test:api:routes
-        - CI=true BACKBEAT_CONFIG_FILE=tests/config.json npm start & bash tests/utils/wait_for_local_port.bash 8900 40 && BACKBEAT_CONFIG_FILE=tests/config.json yarn run ft_test:api:retry
-        - CI=true yarn run ft_test
+  override:
+    - docker run -e AUTO_CREATE_TOPICS=true -d --net=host --name kafka spotify/kafka
+    - yarn run --silent lint_md -- --max-warnings 0
+    - yarn run --silent lint -- --max-warnings 0
+    - npm test
+    - CI=true npm start & bash tests/utils/wait_for_local_port.bash 8900 40 && yarn run ft_test:api:routes
+    - CI=true BACKBEAT_CONFIG_FILE=tests/config.json npm start & bash tests/utils/wait_for_local_port.bash 8900 40 && BACKBEAT_CONFIG_FILE=tests/config.json yarn run ft_test:api:retry
+    - CI=true yarn run ft_test

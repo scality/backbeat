@@ -6,7 +6,7 @@ const locationName = 'aws-loc';
 const locationName2 = 'aws-loc2';
 
 const expectedEmptyResult = {
-    currents: []
+    currents: [],
 };
 
 const options = {
@@ -34,7 +34,7 @@ describe('RulesReducer with versioning Disabled', () => {
                 ID: '123',
                 Prefix: '',
                 Status: 'Enabled',
-            }
+            },
         ];
         const rulesReducer = new RulesReducer(versioningStatus, currentDate, bucketLCRules, options);
         const result = rulesReducer.toListings();
@@ -56,7 +56,7 @@ describe('RulesReducer with versioning Disabled', () => {
                 ID: '456',
                 Prefix: '',
                 Status: 'Enabled',
-            }
+            },
         ];
         const rulesReducer = new RulesReducer(versioningStatus, currentDate, bucketLCRules, options);
         const result = rulesReducer.toListings();
@@ -90,7 +90,7 @@ describe('RulesReducer with versioning Disabled', () => {
                 ID: '123',
                 Prefix: '',
                 Status: 'Disabled',
-            }
+            },
         ];
         const rulesReducer = new RulesReducer(versioningStatus, currentDate, bucketLCRules, options);
         const result = rulesReducer.toListings();
@@ -106,13 +106,15 @@ describe('RulesReducer with versioning Disabled', () => {
                 ID: '123',
                 Prefix: '',
                 Status: 'Enabled',
-            }
+            },
         ];
         const expected = {
-            currents: [{
-                prefix: '',
-                days: 0,
-            }]
+            currents: [
+                {
+                    prefix: '',
+                    days: 0,
+                },
+            ],
         };
         const rulesReducer = new RulesReducer(versioningStatus, currentDate, bucketLCRules, options);
         const result = rulesReducer.toListings();
@@ -129,13 +131,15 @@ describe('RulesReducer with versioning Disabled', () => {
                 ID: '123',
                 Prefix: prefix,
                 Status: 'Enabled',
-            }
+            },
         ];
         const expected = {
-            currents: [{
-                prefix: '',
-                days: 1,
-            }]
+            currents: [
+                {
+                    prefix: '',
+                    days: 1,
+                },
+            ],
         };
         const rulesReducer = new RulesReducer(versioningStatus, currentDate, bucketLCRules, options);
         const result = rulesReducer.toListings();
@@ -152,13 +156,15 @@ describe('RulesReducer with versioning Disabled', () => {
                 ID: '123',
                 Prefix: prefix,
                 Status: 'Enabled',
-            }
+            },
         ];
         const expected = {
-            currents: [{
-                prefix: '',
-                days: 0,
-            }]
+            currents: [
+                {
+                    prefix: '',
+                    days: 0,
+                },
+            ],
         };
         const rulesReducer = new RulesReducer(versioningStatus, currentDate, bucketLCRules, options);
         const result = rulesReducer.toListings();
@@ -175,13 +181,15 @@ describe('RulesReducer with versioning Disabled', () => {
                 ID: '123',
                 Prefix: prefix,
                 Status: 'Enabled',
-            }
+            },
         ];
         const expected = {
-            currents: [{
-                prefix,
-                days: 1,
-            }]
+            currents: [
+                {
+                    prefix,
+                    days: 1,
+                },
+            ],
         };
         const rulesReducer = new RulesReducer(versioningStatus, currentDate, bucketLCRules, options);
         const result = rulesReducer.toListings();
@@ -199,14 +207,16 @@ describe('RulesReducer with versioning Disabled', () => {
                 Status: 'Enabled',
                 Filter: {
                     Prefix: prefix,
-                }
-            }
+                },
+            },
         ];
         const expected = {
-            currents: [{
-                prefix,
-                days: 1,
-            }]
+            currents: [
+                {
+                    prefix,
+                    days: 1,
+                },
+            ],
         };
         const rulesReducer = new RulesReducer(versioningStatus, currentDate, bucketLCRules, options);
         const result = rulesReducer.toListings();
@@ -225,15 +235,17 @@ describe('RulesReducer with versioning Disabled', () => {
                 Filter: {
                     And: {
                         Prefix: prefix,
-                    }
-                }
-            }
+                    },
+                },
+            },
         ];
         const expected = {
-            currents: [{
-                prefix,
-                days: 1,
-            }]
+            currents: [
+                {
+                    prefix,
+                    days: 1,
+                },
+            ],
         };
         const rulesReducer = new RulesReducer(versioningStatus, currentDate, bucketLCRules, options);
         const result = rulesReducer.toListings();
@@ -250,14 +262,16 @@ describe('RulesReducer with versioning Disabled', () => {
                 ID: '123',
                 Prefix: prefix,
                 Status: 'Enabled',
-            }
+            },
         ];
         const expected = {
-            currents: [{
-                prefix: '',
-                days: 0,
-                storageClass: locationName,
-            }]
+            currents: [
+                {
+                    prefix: '',
+                    days: 0,
+                    storageClass: locationName,
+                },
+            ],
         };
         const rulesReducer = new RulesReducer(versioningStatus, currentDate, bucketLCRules, options);
         const result = rulesReducer.toListings();
@@ -275,13 +289,15 @@ describe('RulesReducer with versioning Disabled', () => {
                 ID: '123',
                 Prefix: prefix,
                 Status: 'Enabled',
-            }
+            },
         ];
         const expected = {
-            currents: [{
-                prefix: '',
-                days: 1,
-            }]
+            currents: [
+                {
+                    prefix: '',
+                    days: 1,
+                },
+            ],
         };
         const rulesReducer = new RulesReducer(versioningStatus, currentDate, bucketLCRules, options);
         const result = rulesReducer.toListings();
@@ -299,13 +315,15 @@ describe('RulesReducer with versioning Disabled', () => {
                 ID: '123',
                 Prefix: prefix,
                 Status: 'Enabled',
-            }
+            },
         ];
         const expected = {
-            currents: [{
-                prefix: '',
-                days: 0,
-            }]
+            currents: [
+                {
+                    prefix: '',
+                    days: 0,
+                },
+            ],
         };
         const rulesReducer = new RulesReducer(versioningStatus, currentDate, bucketLCRules, options);
         const result = rulesReducer.toListings();
@@ -319,7 +337,7 @@ describe('RulesReducer with versioning Disabled', () => {
             {
                 Transitions: [
                     { Days: 1, StorageClass: locationName },
-                    { Days: 2, StorageClass: locationName2 }
+                    { Days: 2, StorageClass: locationName2 },
                 ],
                 ID: '123',
                 Prefix: 'toto/titi',
@@ -327,10 +345,12 @@ describe('RulesReducer with versioning Disabled', () => {
             },
         ];
         const expected = {
-            currents: [{
-                prefix: 'toto/titi',
-                days: 1,
-            }]
+            currents: [
+                {
+                    prefix: 'toto/titi',
+                    days: 1,
+                },
+            ],
         };
         const rulesReducer = new RulesReducer(versioningStatus, currentDate, bucketLCRules, options);
         const result = rulesReducer.toListings();
@@ -352,13 +372,15 @@ describe('RulesReducer with versioning Disabled', () => {
                 ID: '456',
                 Prefix: 'toto',
                 Status: 'Enabled',
-            }
+            },
         ];
         const expected = {
-            currents: [{
-                prefix: 'toto',
-                days: 1,
-            }]
+            currents: [
+                {
+                    prefix: 'toto',
+                    days: 1,
+                },
+            ],
         };
         const rulesReducer = new RulesReducer(versioningStatus, currentDate, bucketLCRules, options);
         const result = rulesReducer.toListings();
@@ -380,14 +402,16 @@ describe('RulesReducer with versioning Disabled', () => {
                 ID: '456',
                 Prefix: 'toto',
                 Status: 'Enabled',
-            }
+            },
         ];
         const expected = {
-            currents: [{
-                prefix: 'toto',
-                days: 1,
-                storageClass: locationName,
-            }]
+            currents: [
+                {
+                    prefix: 'toto',
+                    days: 1,
+                    storageClass: locationName,
+                },
+            ],
         };
         const rulesReducer = new RulesReducer(versioningStatus, currentDate, bucketLCRules, options);
         const result = rulesReducer.toListings();
@@ -409,13 +433,15 @@ describe('RulesReducer with versioning Disabled', () => {
                 ID: '456',
                 Prefix: 'toto',
                 Status: 'Enabled',
-            }
+            },
         ];
         const expected = {
-            currents: [{
-                prefix: 'toto',
-                days: 1,
-            }]
+            currents: [
+                {
+                    prefix: 'toto',
+                    days: 1,
+                },
+            ],
         };
         const rulesReducer = new RulesReducer(versioningStatus, currentDate, bucketLCRules, options);
         const result = rulesReducer.toListings();
@@ -437,16 +463,19 @@ describe('RulesReducer with versioning Disabled', () => {
                 ID: '456',
                 Prefix: 'toto',
                 Status: 'Enabled',
-            }
+            },
         ];
         const expected = {
-            currents: [{
-                prefix: 'titi',
-                days: 1,
-            }, {
-                prefix: 'toto',
-                days: 2,
-            }]
+            currents: [
+                {
+                    prefix: 'titi',
+                    days: 1,
+                },
+                {
+                    prefix: 'toto',
+                    days: 2,
+                },
+            ],
         };
         const rulesReducer = new RulesReducer(versioningStatus, currentDate, bucketLCRules, options);
         const result = rulesReducer.toListings();
@@ -468,18 +497,21 @@ describe('RulesReducer with versioning Disabled', () => {
                 ID: '456',
                 Prefix: 'toto',
                 Status: 'Enabled',
-            }
+            },
         ];
         const expected = {
-            currents: [{
-                prefix: 'titi',
-                days: 1,
-                storageClass: locationName,
-            }, {
-                prefix: 'toto',
-                days: 0,
-                storageClass: locationName2,
-            }]
+            currents: [
+                {
+                    prefix: 'titi',
+                    days: 1,
+                    storageClass: locationName,
+                },
+                {
+                    prefix: 'toto',
+                    days: 0,
+                    storageClass: locationName2,
+                },
+            ],
         };
         const rulesReducer = new RulesReducer(versioningStatus, currentDate, bucketLCRules, options);
         const result = rulesReducer.toListings();
@@ -501,13 +533,15 @@ describe('RulesReducer with versioning Disabled', () => {
                 ID: '456',
                 Prefix: 'toto',
                 Status: 'Enabled',
-            }
+            },
         ];
         const expected = {
-            currents: [{
-                prefix: 'toto',
-                days: 0,
-            }]
+            currents: [
+                {
+                    prefix: 'toto',
+                    days: 0,
+                },
+            ],
         };
         const rulesReducer = new RulesReducer(versioningStatus, currentDate, bucketLCRules, options);
         const result = rulesReducer.toListings();
@@ -529,17 +563,20 @@ describe('RulesReducer with versioning Disabled', () => {
                 ID: '456',
                 Prefix: 'toto',
                 Status: 'Enabled',
-            }
+            },
         ];
         const expected = {
-            currents: [{
-                prefix: 'titi',
-                days: 1,
-            }, {
-                prefix: 'toto',
-                days: 0,
-                storageClass: locationName2,
-            }]
+            currents: [
+                {
+                    prefix: 'titi',
+                    days: 1,
+                },
+                {
+                    prefix: 'toto',
+                    days: 0,
+                    storageClass: locationName2,
+                },
+            ],
         };
         const rulesReducer = new RulesReducer(versioningStatus, currentDate, bucketLCRules, options);
         const result = rulesReducer.toListings();
@@ -609,7 +646,7 @@ describe('RulesReducer with versioning Disabled', () => {
                 ID: '9',
                 Prefix: 'd',
                 Status: 'Enabled',
-            }
+            },
         ];
         const expected = {
             currents: [
@@ -617,7 +654,7 @@ describe('RulesReducer with versioning Disabled', () => {
                 { prefix: 'b', days: 0, storageClass: locationName2 },
                 { prefix: 'c', days: 0 },
                 { prefix: 'd', days: 2 },
-            ]
+            ],
         };
         const rulesReducer = new RulesReducer(versioningStatus, currentDate, bucketLCRules, options);
         const result = rulesReducer.toListings();
@@ -643,17 +680,20 @@ describe('RulesReducer with versioning Disabled', () => {
                 ID: '456',
                 Prefix: 'toto',
                 Status: 'Enabled',
-            }
+            },
         ];
         const expected = {
-            currents: [{
-                prefix: 'titi',
-                days: 0,
-            }, {
-                prefix: 'toto',
-                days: 1,
-                storageClass: locationName2,
-            }]
+            currents: [
+                {
+                    prefix: 'titi',
+                    days: 0,
+                },
+                {
+                    prefix: 'toto',
+                    days: 1,
+                    storageClass: locationName2,
+                },
+            ],
         };
         const rulesReducer = new RulesReducer(versioningStatus, currentDate, bucketLCRules, customOptions);
         const result = rulesReducer.toListings();
@@ -679,17 +719,20 @@ describe('RulesReducer with versioning Disabled', () => {
                 ID: '456',
                 Prefix: 'toto',
                 Status: 'Enabled',
-            }
+            },
         ];
         const expected = {
-            currents: [{
-                prefix: 'titi',
-                days: 1,
-            }, {
-                prefix: 'toto',
-                days: 0,
-                storageClass: locationName2,
-            }]
+            currents: [
+                {
+                    prefix: 'titi',
+                    days: 1,
+                },
+                {
+                    prefix: 'toto',
+                    days: 0,
+                    storageClass: locationName2,
+                },
+            ],
         };
         const rulesReducer = new RulesReducer(versioningStatus, currentDate, bucketLCRules, customOptions);
         const result = rulesReducer.toListings();
@@ -715,17 +758,20 @@ describe('RulesReducer with versioning Disabled', () => {
                 ID: '456',
                 Prefix: 'toto',
                 Status: 'Enabled',
-            }
+            },
         ];
         const expected = {
-            currents: [{
-                prefix: 'titi',
-                days: 0,
-            }, {
-                prefix: 'toto',
-                days: 0,
-                storageClass: locationName2,
-            }]
+            currents: [
+                {
+                    prefix: 'titi',
+                    days: 0,
+                },
+                {
+                    prefix: 'toto',
+                    days: 0,
+                    storageClass: locationName2,
+                },
+            ],
         };
         const rulesReducer = new RulesReducer(versioningStatus, currentDate, bucketLCRules, customOptions);
         const result = rulesReducer.toListings();

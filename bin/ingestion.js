@@ -4,11 +4,8 @@ const zookeeper = require('node-zookeeper-client');
 
 const werelogs = require('werelogs');
 const { errors } = require('@scality/arsenal');
-const {
-    DEFAULT_LIVE_ROUTE,
-    DEFAULT_METRICS_ROUTE,
-    DEFAULT_READY_ROUTE,
-} = require('@scality/arsenal').network.probe.ProbeServer;
+const { DEFAULT_LIVE_ROUTE, DEFAULT_METRICS_ROUTE, DEFAULT_READY_ROUTE } =
+    require('@scality/arsenal').network.probe.ProbeServer;
 const { ZenkoMetrics } = require('@scality/arsenal').metrics;
 const { sendSuccess, sendError } = require('@scality/arsenal').network.probe.Utils;
 const { reshapeExceptionError } = require('@scality/arsenal').errorUtils;
@@ -17,8 +14,7 @@ const IngestionPopulator = require('../lib/queuePopulator/IngestionPopulator');
 const config = require('../lib/Config');
 const { initManagement } = require('../lib/management/index');
 const ZookeeperManager = require('../lib/clients/ZookeeperManager');
-const { zookeeperNamespace, zkStatePath } =
-    require('../extensions/ingestion/constants');
+const { zookeeperNamespace, zkStatePath } = require('../extensions/ingestion/constants');
 const { startProbeServer } = require('../lib/util/probe');
 
 const zkConfig = config.zookeeper;
@@ -34,8 +30,7 @@ const RESUME_NODE = 'scheduledResume';
 
 const log = new werelogs.Logger('Backbeat:IngestionPopulator');
 const ingestionLogConfig = ingestionExtConfigs.log ?? config.log;
-werelogs.configure({ level: ingestionLogConfig.logLevel,
-    dump: ingestionLogConfig.dumpLevel });
+werelogs.configure({ level: ingestionLogConfig.logLevel, dump: ingestionLogConfig.dumpLevel });
 
 let scheduler;
 let ingestionPopulator;
@@ -141,10 +136,11 @@ function setupZkLocationNode(zkClient, location, done) {
         if (err && err.name === 'NODE_EXISTS') {
             return zkClient.getData(path, (err, data) => {
                 if (err) {
-                    log.fatal('could not check location status in zookeeper',
-                        { method: 'bin::ingestion.setupZkLocationNode',
-                          zookeeperPath: path,
-                          error: err.message });
+                    log.fatal('could not check location status in zookeeper', {
+                        method: 'bin::ingestion.setupZkLocationNode',
+                        zookeeperPath: path,
+                        error: err.message,
+                    });
                     return done(err);
                 }
                 let d;
@@ -159,8 +155,7 @@ function setupZkLocationNode(zkClient, location, done) {
                     return done(e);
                 }
                 if (d[RESUME_NODE]) {
-                    return checkAndApplyScheduleResume(zkClient, d, location,
-                        done);
+                    return checkAndApplyScheduleResume(zkClient, d, location, done);
                 }
                 if (d.paused === true) {
                     ingestionPopulator.setPausedLocationState(location);
@@ -187,36 +182,40 @@ function updateProcessors(zkClient, bootstrapList) {
     const update = bootstrapList.map(i => i.site);
     const allLocations = [...new Set(active.concat(update))];
 
-    async.each(allLocations, (location, next) => {
-        if (!update.includes(location)) {
-            // stop tracking location and remove zookeeper path
-            return removeZkState(zkClient, location, err => {
-                if (err) {
-                    return next(err);
-                }
-                delete configuredLocations[location];
-                return next();
-            });
-        } else if (!active.includes(location)) {
-            // track new location and create zookeeper path if not exists
-            return setupZkLocationNode(zkClient, location, err => {
-                if (err) {
-                    return next(err);
-                }
-                configuredLocations[location] = true;
-                return next();
-            });
-        }
-        // else, existing location and has already been setup
-        return next();
-    }, err => {
-        if (err) {
-            log.fatal('error setting location state in zookeeper', {
-                method: 'bin::ingestion.updateProcessors',
-            });
-            process.exit(1);
-        }
-    });
+    async.each(
+        allLocations,
+        (location, next) => {
+            if (!update.includes(location)) {
+                // stop tracking location and remove zookeeper path
+                return removeZkState(zkClient, location, err => {
+                    if (err) {
+                        return next(err);
+                    }
+                    delete configuredLocations[location];
+                    return next();
+                });
+            } else if (!active.includes(location)) {
+                // track new location and create zookeeper path if not exists
+                return setupZkLocationNode(zkClient, location, err => {
+                    if (err) {
+                        return next(err);
+                    }
+                    configuredLocations[location] = true;
+                    return next();
+                });
+            }
+            // else, existing location and has already been setup
+            return next();
+        },
+        err => {
+            if (err) {
+                log.fatal('error setting location state in zookeeper', {
+                    method: 'bin::ingestion.updateProcessors',
+                });
+                process.exit(1);
+            }
+        },
+    );
 }
 
 function loadProcessors(zkClient) {
@@ -230,7 +229,7 @@ function loadProcessors(zkClient) {
  * @param {Logger} log - Logger
  * @returns {undefined}
  */
- function handleLiveness(res, log) {
+function handleLiveness(res, log) {
     const state = ingestionPopulator.zkStatus();
     if (state.code === zookeeper.State.SYNC_CONNECTED.code) {
         sendSuccess(res, log);
@@ -257,62 +256,81 @@ async function handleMetrics(res, log) {
 }
 
 function initAndStart(zkClient) {
-    initManagement({
-        serviceName: 'md-ingestion',
-        serviceAccount: ingestionExtConfigs.auth.account,
-        enableIngestionUpdates: true,
-    }, error => {
-        if (error) {
-            log.error('could not load management db', { error });
-            setTimeout(initAndStart, 5000);
-            return;
-        }
-        log.info('management init done');
-
-        ingestionPopulator = new IngestionPopulator(zkClient, zkConfig,
-            kafkaConfig, qpConfig, mConfig, rConfig, ingestionExtConfigs,
-            s3Config);
-
-        loadProcessors(zkClient);
-
-        async.series([
-            done => ingestionPopulator.open(done),
-            done => {
-                scheduler = schedule.scheduleJob(ingestionExtConfigs.cronRule,
-                    () => queueBatch(ingestionPopulator, log));
-                return done();
-            },
-            done => startProbeServer(ingestionExtConfigs.probeServer, (err, probeServer) => {
-                if (err) {
-                    log.error('error starting probe server', { error: err });
-                    return done(err);
-                }
-                if (probeServer !== undefined) {
-                    // following the same pattern as other extensions, where liveness
-                    // and readiness are handled by the same handler
-                    probeServer.addHandler([DEFAULT_LIVE_ROUTE, DEFAULT_READY_ROUTE], handleLiveness);
-                    // retaining the old route and adding support to new route, until
-                    // metrics handling is consolidated
-                    probeServer.addHandler(['/_/monitoring/metrics', DEFAULT_METRICS_ROUTE], handleMetrics);
-                }
-                return done();
-            }),
-        ], err => {
-            if (err) {
-                log.fatal('error during ingestion populator initialization', {
-                    method: 'bin::ingestion.initAndStart',
-                    error: err,
-                });
-                process.exit(1);
+    initManagement(
+        {
+            serviceName: 'md-ingestion',
+            serviceAccount: ingestionExtConfigs.auth.account,
+            enableIngestionUpdates: true,
+        },
+        error => {
+            if (error) {
+                log.error('could not load management db', { error });
+                setTimeout(initAndStart, 5000);
+                return;
             }
-        });
-    });
+            log.info('management init done');
+
+            ingestionPopulator = new IngestionPopulator(
+                zkClient,
+                zkConfig,
+                kafkaConfig,
+                qpConfig,
+                mConfig,
+                rConfig,
+                ingestionExtConfigs,
+                s3Config,
+            );
+
+            loadProcessors(zkClient);
+
+            async.series(
+                [
+                    done => ingestionPopulator.open(done),
+                    done => {
+                        scheduler = schedule.scheduleJob(ingestionExtConfigs.cronRule, () =>
+                            queueBatch(ingestionPopulator, log),
+                        );
+                        return done();
+                    },
+                    done =>
+                        startProbeServer(ingestionExtConfigs.probeServer, (err, probeServer) => {
+                            if (err) {
+                                log.error('error starting probe server', { error: err });
+                                return done(err);
+                            }
+                            if (probeServer !== undefined) {
+                                // following the same pattern as other extensions, where liveness
+                                // and readiness are handled by the same handler
+                                probeServer.addHandler([DEFAULT_LIVE_ROUTE, DEFAULT_READY_ROUTE], handleLiveness);
+                                // retaining the old route and adding support to new route, until
+                                // metrics handling is consolidated
+                                probeServer.addHandler(['/_/monitoring/metrics', DEFAULT_METRICS_ROUTE], handleMetrics);
+                            }
+                            return done();
+                        }),
+                ],
+                err => {
+                    if (err) {
+                        log.fatal('error during ingestion populator initialization', {
+                            method: 'bin::ingestion.initAndStart',
+                            error: err,
+                        });
+                        process.exit(1);
+                    }
+                },
+            );
+        },
+    );
 }
 
-const zkClient = new ZookeeperManager(connectionString, {
-    autoCreateNamespace,
-    retries,
-}, log);
+const zkClient = new ZookeeperManager(
+    connectionString,
+    {
+        autoCreateNamespace,
+        retries,
+    },
+    log,
+);
 zkClient.once('error', err => {
     log.fatal('error connecting to zookeeper', {
         error: err.message,

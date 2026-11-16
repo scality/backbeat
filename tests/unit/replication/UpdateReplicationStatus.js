@@ -1,10 +1,8 @@
 const assert = require('assert');
 const sinon = require('sinon');
 
-const UpdateReplicationStatus =
-    require('../../../extensions/replication/tasks/UpdateReplicationStatus');
-const ReplicationStatusProcessor =
-    require('../../../extensions/replication/replicationStatusProcessor/ReplicationStatusProcessor');
+const UpdateReplicationStatus = require('../../../extensions/replication/tasks/UpdateReplicationStatus');
+const ReplicationStatusProcessor = require('../../../extensions/replication/replicationStatusProcessor/ReplicationStatusProcessor');
 const QueueEntry = require('../../../lib/models/QueueEntry');
 const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
 const { replicationEntry } = require('../../utils/kafkaEntries');
@@ -25,18 +23,14 @@ function getCompletedEntry() {
 }
 
 function getRefreshedEntry() {
-    return QueueEntry.createFromKafkaEntry(replicationEntry)
-        .setSite('sf')
-        .setOriginOp('s3:ObjectCreated:Put');
+    return QueueEntry.createFromKafkaEntry(replicationEntry).setSite('sf').setOriginOp('s3:ObjectCreated:Put');
 }
 
 function checkReplicationInfo(site, status, updatedSourceEntry) {
-    assert.strictEqual(
-        updatedSourceEntry.getReplicationSiteStatus({ site }), status);
+    assert.strictEqual(updatedSourceEntry.getReplicationSiteStatus({ site }), status);
 }
 
-const metricHandlers = ReplicationStatusProcessor.loadMetricHandlers(
-    config.extensions.replication);
+const metricHandlers = ReplicationStatusProcessor.loadMetricHandlers(config.extensions.replication);
 
 const rspMock = {
     getStateVars: () => ({
@@ -55,7 +49,6 @@ const rspMock = {
 };
 
 describe('UpdateReplicationStatus', () => {
-
     afterEach(() => {
         sinon.restore();
     });
@@ -66,36 +59,38 @@ describe('UpdateReplicationStatus', () => {
         it('should return a COMPLETED entry when site status is PENDING', () => {
             const sourceEntry = getCompletedEntry();
             const refreshedEntry = getRefreshedEntry();
-            const updatedSourceEntry = updateReplicationStatus
-                  ._getUpdatedSourceEntry({ sourceEntry, refreshedEntry }, log);
+            const updatedSourceEntry = updateReplicationStatus._getUpdatedSourceEntry(
+                { sourceEntry, refreshedEntry },
+                log,
+            );
             checkReplicationInfo('sf', 'COMPLETED', updatedSourceEntry);
             checkReplicationInfo('replicationaws', 'PENDING', updatedSourceEntry);
             assert.strictEqual(updatedSourceEntry.getOriginOp(), 's3:Replication:OperationCompletedReplication');
         });
 
-        it('should return null when site status is COMPLETED and existing site ' +
-        'status is COMPLETED', () => {
+        it('should return null when site status is COMPLETED and existing site status is COMPLETED', () => {
             const sourceEntry = getCompletedEntry();
             const refreshedEntry = getCompletedEntry();
-            const updatedSourceEntry = updateReplicationStatus
-                  ._getUpdatedSourceEntry({ sourceEntry, refreshedEntry }, log);
+            const updatedSourceEntry = updateReplicationStatus._getUpdatedSourceEntry(
+                { sourceEntry, refreshedEntry },
+                log,
+            );
             assert.strictEqual(updatedSourceEntry, null);
         });
 
-        it('should return null when site status is FAILED and existing site ' +
-        'status is COMPLETED', () => {
-            const sourceEntry = getCompletedEntry()
-                  .toFailedEntry({ site: 'sf' })
-                  .setSite('sf');
+        it('should return null when site status is FAILED and existing site status is COMPLETED', () => {
+            const sourceEntry = getCompletedEntry().toFailedEntry({ site: 'sf' }).setSite('sf');
             const refreshedEntry = getCompletedEntry();
-            const updatedSourceEntry = updateReplicationStatus
-                  ._getUpdatedSourceEntry({ sourceEntry, refreshedEntry }, log);
+            const updatedSourceEntry = updateReplicationStatus._getUpdatedSourceEntry(
+                { sourceEntry, refreshedEntry },
+                log,
+            );
             assert.strictEqual(updatedSourceEntry, null);
         });
 
         it('marks the right backend when two share a site (multi-destination)', () => {
-          const _makeMultiDest = () => new ObjectQueueEntry(
-            'bucket', 'key 98500086134471999999RG001  0', {
+            const _makeMultiDest = () =>
+                new ObjectQueueEntry('bucket', 'key 98500086134471999999RG001  0', {
                     'md-model-version': 2,
                     'last-modified': new Date().toISOString(),
                     'replicationInfo': {
@@ -104,14 +99,20 @@ describe('UpdateReplicationStatus', () => {
                         destination: 'arn:aws:s3:::legacy',
                         role: 'arn:aws:iam::111:role/src',
                         backends: [
-                            { site: 'sf', status: 'COMPLETED',
-                              dataStoreVersionId: '',
-                              destination: 'arn:aws:s3:::bucket-a',
-                              role: 'arn:aws:iam::222:role/dst' },
-                            { site: 'sf', status: 'PENDING',
-                              dataStoreVersionId: '',
-                              destination: 'arn:aws:s3:::bucket-b',
-                              role: 'arn:aws:iam::222:role/dst' },
+                            {
+                                site: 'sf',
+                                status: 'COMPLETED',
+                                dataStoreVersionId: '',
+                                destination: 'arn:aws:s3:::bucket-a',
+                                role: 'arn:aws:iam::222:role/dst',
+                            },
+                            {
+                                site: 'sf',
+                                status: 'PENDING',
+                                dataStoreVersionId: '',
+                                destination: 'arn:aws:s3:::bucket-b',
+                                role: 'arn:aws:iam::222:role/dst',
+                            },
                         ],
                     },
                 });
@@ -120,28 +121,32 @@ describe('UpdateReplicationStatus', () => {
                 destination: 'arn:aws:s3:::bucket-b',
                 role: 'arn:aws:iam::222:role/dst',
             });
-            sourceEntry.setReplicationSiteStatus({
-                site: 'sf',
-                destination: 'arn:aws:s3:::bucket-b',
-                role: 'arn:aws:iam::222:role/dst',
-            }, 'COMPLETED');
+            sourceEntry.setReplicationSiteStatus(
+                {
+                    site: 'sf',
+                    destination: 'arn:aws:s3:::bucket-b',
+                    role: 'arn:aws:iam::222:role/dst',
+                },
+                'COMPLETED',
+            );
             const refreshedEntry = _makeMultiDest();
-            const updatedSourceEntry = updateReplicationStatus
-                ._getUpdatedSourceEntry({ sourceEntry, refreshedEntry }, log);
-            assert.ok(updatedSourceEntry,
-                'expected an entry, not the short-circuit null');
+            const updatedSourceEntry = updateReplicationStatus._getUpdatedSourceEntry(
+                { sourceEntry, refreshedEntry },
+                log,
+            );
+            assert.ok(updatedSourceEntry, 'expected an entry, not the short-circuit null');
             const backends = updatedSourceEntry.getReplicationBackends();
             assert.strictEqual(backends[0].status, 'COMPLETED');
             assert.strictEqual(backends[1].status, 'COMPLETED');
         });
 
         it('returns a PENDING entry when the source status is PENDING', () => {
-            const sourceEntry = getCompletedEntry()
-                .toPendingEntry({ site: 'sf' })
-                .setSite('sf');
+            const sourceEntry = getCompletedEntry().toPendingEntry({ site: 'sf' }).setSite('sf');
             const refreshedEntry = getRefreshedEntry();
-            const updatedSourceEntry = updateReplicationStatus
-                ._getUpdatedSourceEntry({ sourceEntry, refreshedEntry }, log);
+            const updatedSourceEntry = updateReplicationStatus._getUpdatedSourceEntry(
+                { sourceEntry, refreshedEntry },
+                log,
+            );
             checkReplicationInfo('sf', 'PENDING', updatedSourceEntry);
         });
     });
@@ -176,21 +181,23 @@ describe('UpdateReplicationStatus', () => {
         });
 
         it('does not publish metrics for PENDING entries', () => {
-            const sourceEntry = QueueEntry.createFromKafkaEntry(replicationEntry)
-                .setSite('sf');
+            const sourceEntry = QueueEntry.createFromKafkaEntry(replicationEntry).setSite('sf');
             updateReplicationStatus._reportMetrics(sourceEntry, sourceEntry);
             sinon.assert.notCalled(updateReplicationStatus.mProducer.publishMetrics);
         });
     });
 
     describe('_pushReplayEntry', () => {
-        const updateReplicationStatus = new UpdateReplicationStatus({
-            getStateVars: () => ({
-                repConfig: { replicationStatusProcessor: {} },
-                sourceConfig: { auth: {}, s3: { host: 'localhost', port: 8000 }, transport: 'http' },
-                replayTopics: ['replay-topic'],
-            }),
-        }, metricHandlers);
+        const updateReplicationStatus = new UpdateReplicationStatus(
+            {
+                getStateVars: () => ({
+                    repConfig: { replicationStatusProcessor: {} },
+                    sourceConfig: { auth: {}, s3: { host: 'localhost', port: 8000 }, transport: 'http' },
+                    replayTopics: ['replay-topic'],
+                }),
+            },
+            metricHandlers,
+        );
 
         it('publishes the retry entry to the replay topic and decrements replayCount', () => {
             const publishReplayEntry = sinon.stub();
@@ -210,8 +217,7 @@ describe('UpdateReplicationStatus', () => {
         it('should return a COMPLETED entry when metadata has not changed', () => {
             const sourceEntry = getCompletedEntry();
             const refreshedEntry = getRefreshedEntry();
-            const updatedSourceEntry = updateReplicationStatus
-                ._getNFSUpdatedSourceEntry(sourceEntry, refreshedEntry);
+            const updatedSourceEntry = updateReplicationStatus._getNFSUpdatedSourceEntry(sourceEntry, refreshedEntry);
             checkReplicationInfo('sf', 'COMPLETED', updatedSourceEntry);
             checkReplicationInfo('replicationaws', 'PENDING', updatedSourceEntry);
         });
@@ -220,8 +226,7 @@ describe('UpdateReplicationStatus', () => {
             const sourceEntry = getCompletedEntry();
             const refreshedEntry = getRefreshedEntry();
             refreshedEntry.setContentMd5('d41d8cd98f00b204e9800998ecf8427e');
-            const updatedSourceEntry = updateReplicationStatus
-                ._getNFSUpdatedSourceEntry(sourceEntry, refreshedEntry);
+            const updatedSourceEntry = updateReplicationStatus._getNFSUpdatedSourceEntry(sourceEntry, refreshedEntry);
             checkReplicationInfo('sf', 'PENDING', updatedSourceEntry);
             checkReplicationInfo('replicationaws', 'PENDING', updatedSourceEntry);
         });
@@ -230,8 +235,7 @@ describe('UpdateReplicationStatus', () => {
             const sourceEntry = getCompletedEntry();
             const refreshedEntry = getRefreshedEntry();
             refreshedEntry.setTags({ key: 'value' });
-            const updatedSourceEntry = updateReplicationStatus
-                ._getNFSUpdatedSourceEntry(sourceEntry, refreshedEntry);
+            const updatedSourceEntry = updateReplicationStatus._getNFSUpdatedSourceEntry(sourceEntry, refreshedEntry);
             checkReplicationInfo('sf', 'PENDING', updatedSourceEntry);
             checkReplicationInfo('replicationaws', 'PENDING', updatedSourceEntry);
         });
@@ -239,16 +243,19 @@ describe('UpdateReplicationStatus', () => {
 
     describe('_handleFailedReplicationEntry', () => {
         it('should trigger replication failure notification when replay is disabled', done => {
-            const task = new UpdateReplicationStatus({
-                getStateVars: () => ({
-                    repConfig: {
-                        replicationStatusProcessor: {},
-                        monitorReplicationFailures: false,
-                    },
-                    sourceConfig: config.extensions.replication.source,
-                    destConfig: config.extensions.replication.destination,
-                }),
-            }, metricHandlers);
+            const task = new UpdateReplicationStatus(
+                {
+                    getStateVars: () => ({
+                        repConfig: {
+                            replicationStatusProcessor: {},
+                            monitorReplicationFailures: false,
+                        },
+                        sourceConfig: config.extensions.replication.source,
+                        destConfig: config.extensions.replication.destination,
+                    }),
+                },
+                metricHandlers,
+            );
             const entry = new ObjectQueueEntry('test', '', new ObjectMD());
             const pushRelayEntryStub = sinon.stub(task, '_pushReplayEntry');
             const getReplayCountStub = sinon.stub(entry, 'getReplayCount');
@@ -261,17 +268,20 @@ describe('UpdateReplicationStatus', () => {
         });
 
         it('should trigger replication failure notification when replayCount is 0', done => {
-            const task = new UpdateReplicationStatus({
-                getStateVars: () => ({
-                    repConfig: {
-                        replicationStatusProcessor: {},
-                        monitorReplicationFailures: false,
-                    },
-                    sourceConfig: config.extensions.replication.source,
-                    destConfig: config.extensions.replication.destination,
-                    replayTopics: ['replay-topic'],
-                }),
-            }, metricHandlers);
+            const task = new UpdateReplicationStatus(
+                {
+                    getStateVars: () => ({
+                        repConfig: {
+                            replicationStatusProcessor: {},
+                            monitorReplicationFailures: false,
+                        },
+                        sourceConfig: config.extensions.replication.source,
+                        destConfig: config.extensions.replication.destination,
+                        replayTopics: ['replay-topic'],
+                    }),
+                },
+                metricHandlers,
+            );
             const entry = new ObjectQueueEntry('test', '', new ObjectMD());
             const pushRelayEntryStub = sinon.stub(task, '_pushReplayEntry');
             sinon.stub(entry, 'getReplayCount').returns(0);
@@ -283,17 +293,20 @@ describe('UpdateReplicationStatus', () => {
         });
 
         it('should not trigger replication failure notification on first replay', done => {
-            const task = new UpdateReplicationStatus({
-                getStateVars: () => ({
-                    repConfig: {
-                        replicationStatusProcessor: {},
-                        monitorReplicationFailures: false,
-                    },
-                    sourceConfig: config.extensions.replication.source,
-                    destConfig: config.extensions.replication.destination,
-                    replayTopics: ['replay-topic'],
-                }),
-            }, metricHandlers);
+            const task = new UpdateReplicationStatus(
+                {
+                    getStateVars: () => ({
+                        repConfig: {
+                            replicationStatusProcessor: {},
+                            monitorReplicationFailures: false,
+                        },
+                        sourceConfig: config.extensions.replication.source,
+                        destConfig: config.extensions.replication.destination,
+                        replayTopics: ['replay-topic'],
+                    }),
+                },
+                metricHandlers,
+            );
             const entry = new ObjectQueueEntry('test', '', new ObjectMD());
             const pushRelayEntryStub = sinon.stub(task, '_pushReplayEntry');
             sinon.stub(entry, 'getReplayCount').returns(null);
@@ -305,17 +318,20 @@ describe('UpdateReplicationStatus', () => {
         });
 
         it('should not trigger replication failure notification on next replay', done => {
-            const task = new UpdateReplicationStatus({
-                getStateVars: () => ({
-                    repConfig: {
-                        replicationStatusProcessor: {},
-                        monitorReplicationFailures: false,
-                    },
-                    sourceConfig: config.extensions.replication.source,
-                    destConfig: config.extensions.replication.destination,
-                    replayTopics: ['replay-topic'],
-                }),
-            }, metricHandlers);
+            const task = new UpdateReplicationStatus(
+                {
+                    getStateVars: () => ({
+                        repConfig: {
+                            replicationStatusProcessor: {},
+                            monitorReplicationFailures: false,
+                        },
+                        sourceConfig: config.extensions.replication.source,
+                        destConfig: config.extensions.replication.destination,
+                        replayTopics: ['replay-topic'],
+                    }),
+                },
+                metricHandlers,
+            );
             const entry = new ObjectQueueEntry('test', '', new ObjectMD());
             const pushRelayEntryStub = sinon.stub(task, '_pushReplayEntry');
             sinon.stub(entry, 'getReplayCount').returns(1);
@@ -334,50 +350,58 @@ describe('UpdateReplicationStatus', () => {
                 replicationInfo: {
                     role: 'replication',
                     status: 'SUCCESS',
-                    backends: [{
+                    backends: [
+                        {
                             site: 'azure',
                             status: 'SUCCESS',
                             dataStoreVersionId: '123456',
-                    }],
+                        },
+                    ],
                 },
                 expectedMember: 'test::746573742d6d79764964:replication',
-            }, {
+            },
+            {
                 description: 'should include the site in the failed entry member',
                 replicationInfo: {
                     status: 'SUCCESS',
-                    backends: [{
+                    backends: [
+                        {
                             site: 'azure',
                             status: 'SUCCESS',
                             dataStoreVersionId: '123456',
-                    }],
+                        },
+                    ],
                 },
                 expectedMember: 'test::746573742d6d79764964',
-            }
+            },
         ].forEach(opts => {
             it(opts.description, () => {
                 const publishFailedCRREntry = sinon.stub().returns();
                 const currentDate = new Date().getTime();
-                const task = new UpdateReplicationStatus({
-                    getStateVars: () => ({
-                        repConfig: {
-                            replicationStatusProcessor: {},
-                        },
-                        sourceConfig: {
-                            transport: 'https',
-                            s3: {
-                                host: 'localhost',
-                                port: 8000,
+                const task = new UpdateReplicationStatus(
+                    {
+                        getStateVars: () => ({
+                            repConfig: {
+                                replicationStatusProcessor: {},
                             },
-                            auth: {},
-                        },
-                        failedCRRProducer: {
-                            publishFailedCRREntry,
-                        },
-                        statsClient: {
-                            getSortedSetCurrentHour: () => currentDate,
-                        },
-                    }),
-                }, metricHandlers);
+                            sourceConfig: {
+                                transport: 'https',
+                                s3: {
+                                    host: 'localhost',
+                                    port: 8000,
+                                },
+                                auth: {},
+                            },
+                            failedCRRProducer: {
+                                publishFailedCRREntry,
+                            },
+                            statsClient: {
+                                getSortedSetCurrentHour: () => currentDate,
+                            },
+                        }),
+                    },
+                    metricHandlers,
+                );
                 const objectMD = {
                     'md-model-version': 2,
                     'owner-display-name': 'Bart',

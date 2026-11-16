@@ -4,12 +4,8 @@
         {
             "Sid": "LifecycleObjectTransitionProcessor",
             "Effect": "Allow",
-            "Action": [
-                "s3:ReplicateObject"
-            ],
-            "Resource": [
-                "*"
-            ]
+            "Action": ["s3:ReplicateObject"],
+            "Resource": ["*"]
         }
     ]
 }

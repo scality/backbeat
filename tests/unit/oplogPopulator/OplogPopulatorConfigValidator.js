@@ -1,5 +1,5 @@
 const assert = require('assert');
-const { OplogPopulatorConfigJoiSchema} = require('../../../extensions/oplogPopulator/OplogPopulatorConfigValidator');
+const { OplogPopulatorConfigJoiSchema } = require('../../../extensions/oplogPopulator/OplogPopulatorConfigValidator');
 
 const defaultConfig = {
     topic: 'backbeat-oplog',

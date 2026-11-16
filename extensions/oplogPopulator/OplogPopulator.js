@@ -19,13 +19,15 @@ const WildcardPipelineFactory = require('./pipeline/WildcardPipelineFactory');
 const MultipleBucketsPipelineFactory = require('./pipeline/MultipleBucketsPipelineFactory');
 const HashedConnectorsManager = require('./modules/HashedConnectorsManager');
 
-const paramsJoi = joi.object({
-    config: OplogPopulatorConfigJoiSchema.required(),
-    mongoConfig: mongoJoi.required(),
-    activeExtensions: joi.array().required(),
-    logger: joi.object().required(),
-    enableMetrics: joi.boolean().default(true),
-}).required();
+const paramsJoi = joi
+    .object({
+        config: OplogPopulatorConfigJoiSchema.required(),
+        mongoConfig: mongoJoi.required(),
+        activeExtensions: joi.array().required(),
+        logger: joi.object().required(),
+        enableMetrics: joi.boolean().default(true),
+    })
+    .required();
 
 /**
  * @class OplogPopulator
@@ -34,7 +36,6 @@ const paramsJoi = joi.object({
  * to read the correct entries from the MongoDB oplog
  */
 class OplogPopulator {
-
     /**
      * @constructor
      * @param {Object} params - constructor params
@@ -145,7 +146,8 @@ class OplogPopulator {
             return [];
         }
         try {
-            const buckets = await this._metastore.find(filter)
+            const buckets = await this._metastore
+                .find(filter)
                 .project({ _id: 1 })
                 .map(bucket => bucket._id)
                 .toArray();
@@ -165,8 +167,7 @@ class OplogPopulator {
      * @returns {boolean} is bucket backbeat enabled
      */
     _isBucketBackbeatEnabled(bucketMetadata) {
-        return Object.values(this._extHelpers).some(extHelper =>
-            extHelper.isBucketExtensionEnabled(bucketMetadata));
+        return Object.values(this._extHelpers).some(extHelper => extHelper.isBucketExtensionEnabled(bucketMetadata));
     }
 
     /**
@@ -190,12 +191,13 @@ class OplogPopulator {
             case 'update':
             case 'insert': {
                 // the updateLookup races with deletion, so the document may be gone
-                const isBackbeatEnabled = change.fullDocument ?
-                    this._isBucketBackbeatEnabled(change.fullDocument.value) : null;
+                const isBackbeatEnabled = change.fullDocument
+                    ? this._isBucketBackbeatEnabled(change.fullDocument.value)
+                    : null;
                 // remove bucket if no longer backbeat enabled
                 if (isListeningToBucket && !isBackbeatEnabled) {
                     await this._allocator.stopListeningToBucket(bucketName);
-                // add bucket if it became backbeat enabled
+                    // add bucket if it became backbeat enabled
                 } else if (!isListeningToBucket && isBackbeatEnabled) {
                     await this._allocator.listenToBucket(bucketName, eventDate);
                 }
@@ -247,8 +249,8 @@ class OplogPopulator {
                     // into a usable date string
                     'clusterTime': {
                         $dateToString: {
-                            date: '$clusterTime'
-                        }
+                            date: '$clusterTime',
+                        },
                     },
                 },
             },
@@ -313,7 +315,10 @@ class OplogPopulator {
                 logger: this._logger,
             });
             this._allocationStrategy.bindConnectorEvents(
-                this._connectorsManager, this._allocator, this._metricsHandler);
+                this._connectorsManager,
+                this._allocator,
+                this._metricsHandler,
+            );
             // get currently valid buckets from mongo
             const validBuckets = await this._getBackbeatEnabledBuckets();
             // listen to valid buckets

@@ -41,9 +41,7 @@ function _getObjectTagContent(entry, zenkoObjMd) {
     // Cases for DELETE_TAGGING:
     // - If zenko object tags exist and kafka entry tags do not
     if (kafkaTagLength === zenkoTagLength) {
-        const hasChanged = Object.keys(kafkaEntryTags).some(tag =>
-            kafkaEntryTags[tag] !== zenkoTags[tag]
-        );
+        const hasChanged = Object.keys(kafkaEntryTags).some(tag => kafkaEntryTags[tag] !== zenkoTags[tag]);
         if (hasChanged) {
             return ['METADATA', 'PUT_TAGGING'];
         }
@@ -53,8 +51,7 @@ function _getObjectTagContent(entry, zenkoObjMd) {
     if (kafkaTagLength === 0 && zenkoTagLength !== 0) {
         return ['METADATA', 'DELETE_TAGGING'];
     }
-    if ((kafkaTagLength !== 0 && zenkoTagLength === 0) ||
-         kafkaTagLength !== zenkoTagLength) {
+    if ((kafkaTagLength !== 0 && zenkoTagLength === 0) || kafkaTagLength !== zenkoTagLength) {
         return ['METADATA', 'PUT_TAGGING'];
     }
     return [];

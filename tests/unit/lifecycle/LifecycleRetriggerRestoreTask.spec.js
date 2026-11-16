@@ -3,53 +3,69 @@ const werelogs = require('werelogs');
 
 const { ObjectMD, ObjectMDArchive } = require('@scality/arsenal').models;
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
-const { LifecycleRetriggerRestoreTask } = require(
-    '../../../extensions/lifecycle/tasks/LifecycleRetriggerRestoreTask');
+const { LifecycleRetriggerRestoreTask } = require('../../../extensions/lifecycle/tasks/LifecycleRetriggerRestoreTask');
 
-const {
-    BackbeatMetadataProxyMock,
-    ProcessorMock,
-} = require('../mocks');
+const { BackbeatMetadataProxyMock, ProcessorMock } = require('../mocks');
 
 describe('LifecycleRetriggerRestoreTask', () => {
     let backbeatMetadataProxyClient;
     let objectProcessor;
     let task;
 
-    const actionEntry = ActionQueueEntry.create('requeueTransition')
-        .setAttribute('target', {
-            byAccount: {
-                123: {
-                    bucket1: [{
+    const actionEntry = ActionQueueEntry.create('requeueTransition').setAttribute('target', {
+        byAccount: {
+            123: {
+                bucket1: [
+                    {
                         objectKey: 'obj1',
                         objectVersion: 'v1',
                         try: 12,
-                    }]
-                },
+                    },
+                ],
             },
-        });
+        },
+    });
 
     const objectNotArchived = new ObjectMD();
     const objectAlreadyRestored = new ObjectMD().setArchive(
-        new ObjectMDArchive({
-            archiveId: '123456789',
-            }, Date.now(), 1, Date.now(), undefined));
+        new ObjectMDArchive(
+            {
+                archiveId: '123456789',
+            },
+            Date.now(),
+            1,
+            Date.now(),
+            undefined,
+        ),
+    );
     const objectRestoreNotRequested = new ObjectMD().setArchive(
-                new ObjectMDArchive({
-                    archiveId: '123456789',
-                    }));
-    const objectRestoreExpired = new ObjectMD().setArchive(
         new ObjectMDArchive({
             archiveId: '123456789',
-            }, Date.now() - 1000, 1, Date.now() - 999, Date.now() - 10));
-    const archiveInfo = new ObjectMDArchive({
-        archiveId: '123456789'
-    }, Date.now(), 1, undefined, undefined);
-    const objectArchived = new ObjectMD()
-        .setArchive(archiveInfo)
-        .setUserMetadata({
-            'x-amz-meta-scal-s3-restore-attempt': 11,
-        });
+        }),
+    );
+    const objectRestoreExpired = new ObjectMD().setArchive(
+        new ObjectMDArchive(
+            {
+                archiveId: '123456789',
+            },
+            Date.now() - 1000,
+            1,
+            Date.now() - 999,
+            Date.now() - 10,
+        ),
+    );
+    const archiveInfo = new ObjectMDArchive(
+        {
+            archiveId: '123456789',
+        },
+        Date.now(),
+        1,
+        undefined,
+        undefined,
+    );
+    const objectArchived = new ObjectMD().setArchive(archiveInfo).setUserMetadata({
+        'x-amz-meta-scal-s3-restore-attempt': 11,
+    });
 
     beforeEach(() => {
         backbeatMetadataProxyClient = new BackbeatMetadataProxyMock();
@@ -62,7 +78,8 @@ describe('LifecycleRetriggerRestoreTask', () => {
             null,
             null,
             null,
-            new werelogs.Logger('test:LifecycleRetriggerRestoreTask'));
+            new werelogs.Logger('test:LifecycleRetriggerRestoreTask'),
+        );
 
         task = new LifecycleRetriggerRestoreTask(objectProcessor);
     });
@@ -113,7 +130,7 @@ describe('LifecycleRetriggerRestoreTask', () => {
             assert.ifError(err);
 
             const md = backbeatMetadataProxyClient.mdObj;
-            const umd =  JSON.parse(md.getUserMetadata());
+            const umd = JSON.parse(md.getUserMetadata());
             const attempts = umd['x-amz-meta-scal-s3-restore-attempt'];
             assert.deepStrictEqual(12, attempts);
 

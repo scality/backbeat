@@ -13,7 +13,7 @@ class RulesReducer {
      * @param {boolean} options.transitionOneDayEarlier - moves lifecycle transition deadlines 1 day earlier
      * @param {number} options.timeProgressionFactor - decreases the weight attributed to a day in order to
      * expedite the lifecycle of objects.
-    */
+     */
     constructor(versioningStatus, currentDate, bucketLCRules, options) {
         this._isVersioning = versioningStatus === 'Enabled' || versioningStatus === 'Suspended';
         this._currentDate = currentDate;
@@ -87,11 +87,14 @@ class RulesReducer {
      * @return {array} aggregatedRules.currents - array of rules
      */
     _getListingsForNonVersionedBucket() {
-        const reducedRules = this._bucketLCRules.reduce((accumulator, r) => {
-            const currents = accumulator.currents;
-            const reducedCurrents = this._reduceCurrentRules(r, currents);
-            return { currents: reducedCurrents };
-        }, { currents: [] });
+        const reducedRules = this._bucketLCRules.reduce(
+            (accumulator, r) => {
+                const currents = accumulator.currents;
+                const reducedCurrents = this._reduceCurrentRules(r, currents);
+                return { currents: reducedCurrents };
+            },
+            { currents: [] },
+        );
 
         return reducedRules;
     }
@@ -108,17 +111,20 @@ class RulesReducer {
      * @return {array} aggregatedRules.orphans - array of rules
      */
     _getListingsForVersionedBucket() {
-        const reducedRules = this._bucketLCRules.reduce((accumulator, r) => {
-            const nonCurrents = accumulator.nonCurrents;
-            const currents = accumulator.currents;
-            const orphans = accumulator.orphans;
+        const reducedRules = this._bucketLCRules.reduce(
+            (accumulator, r) => {
+                const nonCurrents = accumulator.nonCurrents;
+                const currents = accumulator.currents;
+                const orphans = accumulator.orphans;
 
-            const reducedCurrents = this._reduceCurrentRules(r, currents);
-            const reducedNonCurrents = this._reduceNonCurrentRules(r, nonCurrents);
-            const reducedOrphans = this._reduceOrphanDeleteMarkerRule(r, orphans);
+                const reducedCurrents = this._reduceCurrentRules(r, currents);
+                const reducedNonCurrents = this._reduceNonCurrentRules(r, nonCurrents);
+                const reducedOrphans = this._reduceOrphanDeleteMarkerRule(r, orphans);
 
-            return { currents: reducedCurrents, nonCurrents: reducedNonCurrents, orphans: reducedOrphans };
-        }, { currents: [], nonCurrents: [], orphans: [] });
+                return { currents: reducedCurrents, nonCurrents: reducedNonCurrents, orphans: reducedOrphans };
+            },
+            { currents: [], nonCurrents: [], orphans: [] },
+        );
 
         return reducedRules;
     }
@@ -158,7 +164,6 @@ class RulesReducer {
                 let lowestTransitionDays = r.Transitions.map(t => t.Days).reduce(lowest);
                 lowestTransitionDays = this._decrementTransitionDay(lowestTransitionDays);
                 days = days === undefined ? lowestTransitionDays : Math.min(days, lowestTransitionDays);
-
             } else if (r.Transitions[0].Date) {
                 const lowestDate = r.Transitions.map(t => t.Date).reduce(lowest);
 
@@ -208,8 +213,7 @@ class RulesReducer {
         if (isTransitions) {
             // NoncurrentDays for NoncurrentVersionTransitions action can be 0
             if (r.NoncurrentVersionTransitions[0].NoncurrentDays !== undefined) {
-                let lowestTransitionDays = r.NoncurrentVersionTransitions
-                    .map(t => t.NoncurrentDays).reduce(lowest);
+                let lowestTransitionDays = r.NoncurrentVersionTransitions.map(t => t.NoncurrentDays).reduce(lowest);
                 lowestTransitionDays = this._decrementTransitionDay(lowestTransitionDays);
                 days = days === undefined ? lowestTransitionDays : Math.min(days, lowestTransitionDays);
             }

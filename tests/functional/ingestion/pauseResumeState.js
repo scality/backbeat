@@ -2,8 +2,7 @@ const assert = require('assert');
 const async = require('async');
 const schedule = require('node-schedule');
 
-const IngestionPopulator =
-    require('../../../lib/queuePopulator/IngestionPopulator');
+const IngestionPopulator = require('../../../lib/queuePopulator/IngestionPopulator');
 const TimeMachine = require('../utils/timeMachine');
 const ZKStateHelper = require('../utils/pauseResumeUtils/zkStateHelper');
 const MockAPI = require('../utils/pauseResumeUtils/mockAPI');
@@ -11,8 +10,7 @@ const MockAPI = require('../utils/pauseResumeUtils/mockAPI');
 // Configs
 const Config = require('../../../lib/Config');
 const testConfig = require('../../config.json');
-const { zookeeperNamespace } =
-    require('../../../extensions/ingestion/constants');
+const { zookeeperNamespace } = require('../../../extensions/ingestion/constants');
 
 const redisConfig = {
     host: testConfig.redis.host,
@@ -69,7 +67,6 @@ const existingLocationConstraints = {
 };
 
 class IngestionPopulatorMock extends IngestionPopulator {
-
     /* Overwrite setup process */
 
     open(cb) {
@@ -111,22 +108,26 @@ class IngestionPopulatorMock extends IngestionPopulator {
 }
 
 /* eslint-disable no-param-reassign */
-function locationConditionalCheck(iPopulator, location, zkPauseState, cFxn,
-done) {
+function locationConditionalCheck(iPopulator, location, zkPauseState, cFxn, done) {
     const zkClient = iPopulator.getZkClient();
     const path = `${ZK_TEST_STATE_PATH}/${location}`;
-    async.doWhilst(cb => setTimeout(() => {
-        zkClient.getData(path, (err, data) => {
-            if (err) {
-                return cb(err);
-            }
-            const parsedData = JSON.parse(data);
-            Object.keys(parsedData).forEach(key => {
-                zkPauseState[key] = parsedData[key];
-            });
-            return cb();
-        });
-    }, 1000), cFxn, error => done(error, zkPauseState));
+    async.doWhilst(
+        cb =>
+            setTimeout(() => {
+                zkClient.getData(path, (err, data) => {
+                    if (err) {
+                        return cb(err);
+                    }
+                    const parsedData = JSON.parse(data);
+                    Object.keys(parsedData).forEach(key => {
+                        zkPauseState[key] = parsedData[key];
+                    });
+                    return cb();
+                });
+            }, 1000),
+        cFxn,
+        error => done(error, zkPauseState),
+    );
 }
 /* eslint-enable no-param-reassign */
 
@@ -136,8 +137,7 @@ function pauseLocation(iPopulator, location, done) {
         const pausedLocations = iPopulator.getPausedLocationNames();
         return !pausedLocations.includes(location);
     };
-    locationConditionalCheck(iPopulator, location, state, conditionFxn,
-    (err, zkPauseState) => {
+    locationConditionalCheck(iPopulator, location, state, conditionFxn, (err, zkPauseState) => {
         if (err) {
             return done(err);
         }
@@ -152,8 +152,7 @@ function resumeLocation(iPopulator, location, done) {
         const pausedLocations = iPopulator.getPausedLocationNames();
         return pausedLocations.includes(location);
     };
-    locationConditionalCheck(iPopulator, location, state, conditionFxn,
-    (err, zkPauseState) => {
+    locationConditionalCheck(iPopulator, location, state, conditionFxn, (err, zkPauseState) => {
         if (err) {
             return done(err);
         }
@@ -164,9 +163,8 @@ function resumeLocation(iPopulator, location, done) {
 
 function resumeScheduleLocation(iPopulator, location, done) {
     const state = {};
-    const conditionFxn = () => (state && !state.scheduledResume);
-    locationConditionalCheck(iPopulator, location, state, conditionFxn,
-    (err, zkPauseState) => {
+    const conditionFxn = () => state && !state.scheduledResume;
+    locationConditionalCheck(iPopulator, location, state, conditionFxn, (err, zkPauseState) => {
         if (err) {
             return done(err);
         }
@@ -178,9 +176,8 @@ function resumeScheduleLocation(iPopulator, location, done) {
 
 function deleteScheduledResumeLocation(iPopulator, location, done) {
     const state = {};
-    const conditionFxn = () => (state && state.scheduledResume);
-    locationConditionalCheck(iPopulator, location, state, conditionFxn,
-    (err, zkPauseState) => {
+    const conditionFxn = () => state && state.scheduledResume;
+    locationConditionalCheck(iPopulator, location, state, conditionFxn, (err, zkPauseState) => {
         if (err) {
             return done(err);
         }
@@ -208,16 +205,28 @@ describe('Ingestion Pause/Resume', function d() {
     this.mockAPI = new MockAPI(ingestionConfig);
 
     before(done => {
-        this.zkHelper = new ZKStateHelper(zkConfig, ZK_TEST_STATE_PATH,
-            firstBucket.locationConstraint, secondBucket.locationConstraint,
-            futureDate);
+        this.zkHelper = new ZKStateHelper(
+            zkConfig,
+            ZK_TEST_STATE_PATH,
+            firstBucket.locationConstraint,
+            secondBucket.locationConstraint,
+            futureDate,
+        );
         this.zkHelper.init(err => {
             if (err) {
                 return done(err);
             }
             const zkClient = this.zkHelper.getClient();
-            this.iPopulator = new IngestionPopulatorMock(zkClient, zkConfig,
-                kafkaConfig, {}, {}, redisConfig, ingestionConfig, s3Config);
+            this.iPopulator = new IngestionPopulatorMock(
+                zkClient,
+                zkConfig,
+                kafkaConfig,
+                {},
+                {},
+                redisConfig,
+                ingestionConfig,
+                s3Config,
+            );
             return done();
         });
     });
@@ -233,22 +242,25 @@ describe('Ingestion Pause/Resume', function d() {
             this.iPopulator._pauseService(secondLocation);
             this.iPopulator.applyUpdates();
             let pausedList = this.iPopulator.getPausedLocations();
-            return async.whilst(() =>
-                Object.keys(pausedList).includes(firstLocation) ||
-                pausedList[secondLocation] === undefined ||
-                (pausedList[secondLocation] &&
-                 pausedList[secondLocation].constructor.name !== 'Job'),
-            cb => setTimeout(() => {
-                this.iPopulator._resumeService(firstLocation);
-                this.iPopulator._resumeService(secondLocation, futureDate);
-                pausedList = this.iPopulator.getPausedLocations();
-                cb();
-            }, 1000), err => {
-                if (err) {
-                    return done(err);
-                }
-                return setTimeout(done, 2000);
-            });
+            return async.whilst(
+                () =>
+                    Object.keys(pausedList).includes(firstLocation) ||
+                    pausedList[secondLocation] === undefined ||
+                    (pausedList[secondLocation] && pausedList[secondLocation].constructor.name !== 'Job'),
+                cb =>
+                    setTimeout(() => {
+                        this.iPopulator._resumeService(firstLocation);
+                        this.iPopulator._resumeService(secondLocation, futureDate);
+                        pausedList = this.iPopulator.getPausedLocations();
+                        cb();
+                    }, 1000),
+                err => {
+                    if (err) {
+                        return done(err);
+                    }
+                    return setTimeout(done, 2000);
+                },
+            );
         });
     });
 
@@ -267,41 +279,45 @@ describe('Ingestion Pause/Resume', function d() {
         const locations = Object.keys(existingLocationConstraints);
         const zkClient = this.iPopulator.getZkClient();
 
-        async.each(locations, (l, cb) => {
-            const path = `${ZK_TEST_STATE_PATH}/${l}`;
-            // assert bucket paths are created
-            zkClient.getData(path, (err, data) => {
+        async.each(
+            locations,
+            (l, cb) => {
+                const path = `${ZK_TEST_STATE_PATH}/${l}`;
+                // assert bucket paths are created
+                zkClient.getData(path, (err, data) => {
+                    assert.ifError(err);
+
+                    const parsedData = JSON.parse(data);
+                    if (firstBucket.locationConstraint === l) {
+                        assert.strictEqual(parsedData.paused, false);
+                    }
+                    if (secondBucket.locationConstraint === l) {
+                        // assert default state
+                        assert.strictEqual(parsedData.paused, true);
+                        // assert default state
+                        assert(parsedData.scheduledResume);
+                    }
+                    return cb();
+                });
+            },
+            err => {
                 assert.ifError(err);
 
-                const parsedData = JSON.parse(data);
-                if (firstBucket.locationConstraint === l) {
-                    assert.strictEqual(parsedData.paused, false);
-                }
-                if (secondBucket.locationConstraint === l) {
-                    // assert default state
-                    assert.strictEqual(parsedData.paused, true);
-                    // assert default state
-                    assert(parsedData.scheduledResume);
-                }
-                return cb();
-            });
-        }, err => {
-            assert.ifError(err);
+                const sourceListNames = this.iPopulator.getIngestionSourceNames();
+                const pausedListNames = this.iPopulator.getPausedLocationNames();
 
-            const sourceListNames = this.iPopulator.getIngestionSourceNames();
-            const pausedListNames = this.iPopulator.getPausedLocationNames();
+                // ingestion sources holds all IngestionReader instances
+                assert.strictEqual(sourceListNames.length, 2);
+                assert(sourceListNames.includes(firstBucket.name));
+                assert(sourceListNames.includes(secondBucket.name));
+                // paused locations holds all current paused locations and their
+                // schedules (schedule resume), if any
+                assert.strictEqual(pausedListNames.length, 1);
+                assert(pausedListNames.includes(secondBucket.locationConstraint));
 
-            // ingestion sources holds all IngestionReader instances
-            assert.strictEqual(sourceListNames.length, 2);
-            assert(sourceListNames.includes(firstBucket.name));
-            assert(sourceListNames.includes(secondBucket.name));
-            // paused locations holds all current paused locations and their
-            // schedules (schedule resume), if any
-            assert.strictEqual(pausedListNames.length, 1);
-            assert(pausedListNames.includes(secondBucket.locationConstraint));
-
-            done();
-        });
+                done();
+            },
+        );
     });
 
     it('should pause an active location', done => {
@@ -327,48 +343,49 @@ describe('Ingestion Pause/Resume', function d() {
             // should not have affected the other location
             const otherLocation = secondBucket.locationConstraint;
             assert(sourceListNames.includes(secondBucket.name));
-            assert.strictEqual(
-                pausedList[otherLocation].constructor.name, 'Job');
+            assert.strictEqual(pausedList[otherLocation].constructor.name, 'Job');
             done();
         });
     });
 
-    it('should not change state if pausing an already paused location',
-    done => {
+    it('should not change state if pausing an already paused location', done => {
         // using first location
         const zenkoBucket = firstBucket.name;
         const location = firstBucket.locationConstraint;
 
-        async.series([
-            // pause
-            next => {
-                this.mockAPI.pauseService(location);
-                pauseLocation(this.iPopulator, location, next);
-            },
-            // then send another pause request and confirm state has not changed
-            next => {
-                this.mockAPI.pauseService(location);
-                // just in case, give some time because we already expect state
-                // to be set as paused. If for some reason, state will change,
-                // we want to give the request time to make that unexpected
-                // change
-                setTimeout(() => {
+        async.series(
+            [
+                // pause
+                next => {
+                    this.mockAPI.pauseService(location);
                     pauseLocation(this.iPopulator, location, next);
-                }, 2000);
+                },
+                // then send another pause request and confirm state has not changed
+                next => {
+                    this.mockAPI.pauseService(location);
+                    // just in case, give some time because we already expect state
+                    // to be set as paused. If for some reason, state will change,
+                    // we want to give the request time to make that unexpected
+                    // change
+                    setTimeout(() => {
+                        pauseLocation(this.iPopulator, location, next);
+                    }, 2000);
+                },
+            ],
+            (error, zkPauseStates) => {
+                assert.ifError(error);
+
+                const sourceListNames = this.iPopulator.getIngestionSourceNames();
+                const pausedListNames = this.iPopulator.getPausedLocationNames();
+
+                // first location should still be paused
+                assert(sourceListNames.includes(zenkoBucket));
+                assert(pausedListNames.includes(location));
+                // zookeeper state should be the same
+                assert.deepStrictEqual(zkPauseStates[0], zkPauseStates[1]);
+                done();
             },
-        ], (error, zkPauseStates) => {
-            assert.ifError(error);
-
-            const sourceListNames = this.iPopulator.getIngestionSourceNames();
-            const pausedListNames = this.iPopulator.getPausedLocationNames();
-
-            // first location should still be paused
-            assert(sourceListNames.includes(zenkoBucket));
-            assert(pausedListNames.includes(location));
-            // zookeeper state should be the same
-            assert.deepStrictEqual(zkPauseStates[0], zkPauseStates[1]);
-            done();
-        });
+        );
     });
 
     it('should resume a paused location', done => {
@@ -391,14 +408,12 @@ describe('Ingestion Pause/Resume', function d() {
 
             // should not have affected other location
             assert(sourceListNames.includes(secondBucket.name));
-            assert(!pausedListNames.includes(
-                secondBucket.locationConstraint));
+            assert(!pausedListNames.includes(secondBucket.locationConstraint));
             done();
         });
     });
 
-    it('should not change state if resuming an already active location',
-    done => {
+    it('should not change state if resuming an already active location', done => {
         // using first location
         const zenkoBucket = firstBucket.name;
         const location = firstBucket.locationConstraint;
@@ -416,14 +431,11 @@ describe('Ingestion Pause/Resume', function d() {
         // to be set as not paused. If for some reason, state will change,
         // we want to give the request time to make that unexpected change
         setTimeout(() => {
-            resumeLocation(this.iPopulator, location,
-            (err, zkPauseState) => {
+            resumeLocation(this.iPopulator, location, (err, zkPauseState) => {
                 assert.ifError(err);
 
-                const sourceListNames =
-                    this.iPopulator.getIngestionSourceNames();
-                const pausedListNames =
-                    this.iPopulator.getPausedLocationNames();
+                const sourceListNames = this.iPopulator.getIngestionSourceNames();
+                const pausedListNames = this.iPopulator.getPausedLocationNames();
 
                 // first location should still be active
                 assert(sourceListNames.includes(zenkoBucket));
@@ -449,33 +461,27 @@ describe('Ingestion Pause/Resume', function d() {
 
             // send fake api request
             this.mockAPI.resumeService(location, futureDate);
-            resumeScheduleLocation(this.iPopulator, location,
-            (err, zkPauseState) => {
+            resumeScheduleLocation(this.iPopulator, location, (err, zkPauseState) => {
                 assert.ifError(err);
 
-                const sourceListNames =
-                    this.iPopulator.getIngestionSourceNames();
+                const sourceListNames = this.iPopulator.getIngestionSourceNames();
                 const pausedList = this.iPopulator.getPausedLocations();
-                const pausedListNames =
-                    this.iPopulator.getPausedLocationNames();
+                const pausedListNames = this.iPopulator.getPausedLocationNames();
 
                 // should still be paused
                 assert.strictEqual(zkPauseState.paused, true);
                 assert(pausedListNames.includes(location));
                 // should have a scheduled date matching futureDate
                 assert(zkPauseState.scheduledResume);
-                assert.strictEqual(futureDate.getTime(),
-                    (new Date(zkPauseState.scheduledResume).getTime()));
+                assert.strictEqual(futureDate.getTime(), new Date(zkPauseState.scheduledResume).getTime());
                 // should have saved the schedule in memory
                 assert(pausedList[location]);
-                assert.strictEqual(
-                    pausedList[location].constructor.name, 'Job');
+                assert.strictEqual(pausedList[location].constructor.name, 'Job');
 
                 // should not have affected other location
                 const otherLocation = secondBucket.locationConstraint;
                 assert(sourceListNames.includes(secondBucket.name));
-                assert.strictEqual(
-                    pausedList[otherLocation].constructor.name, 'Job');
+                assert.strictEqual(pausedList[otherLocation].constructor.name, 'Job');
 
                 done();
             });
@@ -487,8 +493,7 @@ describe('Ingestion Pause/Resume', function d() {
         const location = secondBucket.locationConstraint;
 
         this.mockAPI.deleteScheduledResumeService(location);
-        deleteScheduledResumeLocation(this.iPopulator, location,
-        (err, zkPauseState) => {
+        deleteScheduledResumeLocation(this.iPopulator, location, (err, zkPauseState) => {
             assert.ifError(err);
 
             const pausedList = this.iPopulator.getPausedLocations();
@@ -505,8 +510,7 @@ describe('Ingestion Pause/Resume', function d() {
         });
     });
 
-    it('should not schedule a resume when the location is already active',
-    done => {
+    it('should not schedule a resume when the location is already active', done => {
         // using first location
         const location = firstBucket.locationConstraint;
 
@@ -537,15 +541,91 @@ describe('Ingestion Pause/Resume', function d() {
             timeChange: 1,
         },
     ].forEach(item => {
-        it('should overwrite an existing scheduled resume on new valid ' +
-        `request where new time is ${item.testCase} current scheduled time`,
-        done => {
-            // using first location
-            const location = firstBucket.locationConstraint;
-            const zkClient = this.iPopulator.getZkClient();
+        it(
+            'should overwrite an existing scheduled resume on new valid ' +
+                `request where new time is ${item.testCase} current scheduled time`,
+            done => {
+                // using first location
+                const location = firstBucket.locationConstraint;
+                const zkClient = this.iPopulator.getZkClient();
 
-            let zkPauseState;
-            async.series([
+                let zkPauseState;
+                async.series(
+                    [
+                        next => {
+                            // pause
+                            this.mockAPI.pauseService(location);
+                            pauseLocation(this.iPopulator, location, next);
+                        },
+                        next => {
+                            // schedule resume
+                            this.mockAPI.resumeService(location, futureDate);
+                            resumeScheduleLocation(this.iPopulator, location, next);
+                        },
+                    ],
+                    error => {
+                        assert.ifError(error);
+
+                        const path = `${ZK_TEST_STATE_PATH}/${location}`;
+                        const newScheduledDate = new Date(futureDate);
+                        newScheduledDate.setHours(newScheduledDate.getHours() + item.timeChange);
+
+                        // send fake api request
+                        this.mockAPI.resumeService(location, newScheduledDate);
+
+                        async.doWhilst(
+                            cb =>
+                                setTimeout(() => {
+                                    zkClient.getData(path, (err, data) => {
+                                        if (err) {
+                                            return cb(err);
+                                        }
+                                        zkPauseState = JSON.parse(data);
+                                        return cb();
+                                    });
+                                }, 1000),
+                            () => {
+                                if (zkPauseState && zkPauseState.scheduledResume) {
+                                    const zkStateDate = new Date(zkPauseState.scheduledResume);
+                                    return zkStateDate.getTime() !== newScheduledDate.getTime();
+                                }
+                                return true;
+                            },
+                            error => {
+                                assert.ifError(error);
+
+                                const pausedList = this.iPopulator.getPausedLocations();
+                                const pausedListNames = this.iPopulator.getPausedLocationNames();
+
+                                // should still be paused
+                                assert.strictEqual(zkPauseState.paused, true);
+                                assert(pausedListNames.includes(location));
+                                // should have a different date
+                                assert.strictEqual(
+                                    new Date(zkPauseState.scheduledResume).toString(),
+                                    newScheduledDate.toString(),
+                                );
+                                // scheduled job should still be saved in-memory
+                                const schedule = pausedList[location];
+                                assert(schedule);
+                                assert.strictEqual(schedule.constructor.name, 'Job');
+                                done();
+                            },
+                        );
+                    },
+                );
+            },
+        );
+    });
+
+    it('should cancel a scheduled resume when the location is manually resumed', done => {
+        // using first location
+        const location = firstBucket.locationConstraint;
+        const zkClient = this.iPopulator.getZkClient();
+        const path = `${ZK_TEST_STATE_PATH}/${location}`;
+
+        return async.series(
+            [
                 next => {
                     // pause
                     this.mockAPI.pauseService(location);
@@ -554,102 +634,33 @@ describe('Ingestion Pause/Resume', function d() {
                 next => {
                     // schedule resume
                     this.mockAPI.resumeService(location, futureDate);
-                    resumeScheduleLocation(this.iPopulator, location,
-                        next);
+                    resumeScheduleLocation(this.iPopulator, location, next);
                 },
-            ], error => {
+                next => {
+                    // resume
+                    this.mockAPI.resumeService(location);
+                    resumeLocation(this.iPopulator, location, next);
+                },
+            ],
+            error => {
                 assert.ifError(error);
 
-                const path = `${ZK_TEST_STATE_PATH}/${location}`;
-                const newScheduledDate = new Date(futureDate);
-                newScheduledDate.setHours(newScheduledDate.getHours() +
-                    item.timeChange);
+                // check zookeeper
+                return zkClient.getData(path, (err, data) => {
+                    assert.ifError(err);
 
-                // send fake api request
-                this.mockAPI.resumeService(location, newScheduledDate);
+                    const zkPauseState = JSON.parse(data);
+                    const pausedListNames = this.iPopulator.getPausedLocationNames();
 
-                async.doWhilst(cb => setTimeout(() => {
-                    zkClient.getData(path, (err, data) => {
-                        if (err) {
-                            return cb(err);
-                        }
-                        zkPauseState = JSON.parse(data);
-                        return cb();
-                    });
-                }, 1000), () => {
-                    if (zkPauseState && zkPauseState.scheduledResume) {
-                        const zkStateDate =
-                            new Date(zkPauseState.scheduledResume);
-                        return zkStateDate.getTime() !==
-                            newScheduledDate.getTime();
-                    }
-                    return true;
-                }, error => {
-                    assert.ifError(error);
-
-                    const pausedList = this.iPopulator.getPausedLocations();
-                    const pausedListNames =
-                        this.iPopulator.getPausedLocationNames();
-
-                    // should still be paused
-                    assert.strictEqual(zkPauseState.paused, true);
-                    assert(pausedListNames.includes(location));
-                    // should have a different date
-                    assert.strictEqual(
-                        new Date(zkPauseState.scheduledResume).toString(),
-                        newScheduledDate.toString());
-                    // scheduled job should still be saved in-memory
-                    const schedule = pausedList[location];
-                    assert(schedule);
-                    assert.strictEqual(schedule.constructor.name, 'Job');
-                    done();
+                    // should not be paused
+                    assert.strictEqual(zkPauseState.paused, false);
+                    assert(!pausedListNames.includes(location));
+                    // scheduled resume job should be cancelled
+                    assert.strictEqual(zkPauseState.scheduledResume, null);
+                    return done();
                 });
-            });
-        });
-    });
-
-    it('should cancel a scheduled resume when the location is manually resumed',
-    done => {
-        // using first location
-        const location = firstBucket.locationConstraint;
-        const zkClient = this.iPopulator.getZkClient();
-        const path = `${ZK_TEST_STATE_PATH}/${location}`;
-
-        return async.series([
-            next => {
-                // pause
-                this.mockAPI.pauseService(location);
-                pauseLocation(this.iPopulator, location, next);
             },
-            next => {
-                // schedule resume
-                this.mockAPI.resumeService(location, futureDate);
-                resumeScheduleLocation(this.iPopulator, location, next);
-            },
-            next => {
-                // resume
-                this.mockAPI.resumeService(location);
-                resumeLocation(this.iPopulator, location, next);
-            }
-        ], error => {
-            assert.ifError(error);
-
-            // check zookeeper
-            return zkClient.getData(path, (err, data) => {
-                assert.ifError(err);
-
-                const zkPauseState = JSON.parse(data);
-                const pausedListNames =
-                    this.iPopulator.getPausedLocationNames();
-
-                // should not be paused
-                assert.strictEqual(zkPauseState.paused, false);
-                assert(!pausedListNames.includes(location));
-                // scheduled resume job should be cancelled
-                assert.strictEqual(zkPauseState.scheduledResume, null);
-                return done();
-            });
-        });
+        );
     });
 
     it('should resume a location when a scheduled resume triggers', done => {
@@ -663,57 +674,62 @@ describe('Ingestion Pause/Resume', function d() {
         // using first location
         const location = firstBucket.locationConstraint;
 
-        async.series([
-            next => {
-                // pause
-                this.mockAPI.pauseService(location);
-                pauseLocation(this.iPopulator, location, next);
-            },
-            next => {
-                // schedule resume
-                this.mockAPI.resumeService(location, futureDate);
-                resumeScheduleLocation(this.iPopulator, location, next);
-            },
-        ], error => {
-            assert.ifError(error);
-
-            let zkPauseState;
-            const zkClient = this.iPopulator.getZkClient();
-            const path = `${ZK_TEST_STATE_PATH}/${location}`;
-
-            // move time forward past `futureDate`
-            timeMachine.moveTimeForward(6);
-
-            async.doWhilst(cb => setTimeout(() => {
-                zkClient.getData(path, (err, data) => {
-                    if (err) {
-                        return cb(err);
-                    }
-                    zkPauseState = JSON.parse(data);
-                    return cb();
-                });
-            }, 1000), () => zkPauseState.paused !== false,
+        async.series(
+            [
+                next => {
+                    // pause
+                    this.mockAPI.pauseService(location);
+                    pauseLocation(this.iPopulator, location, next);
+                },
+                next => {
+                    // schedule resume
+                    this.mockAPI.resumeService(location, futureDate);
+                    resumeScheduleLocation(this.iPopulator, location, next);
+                },
+            ],
             error => {
                 assert.ifError(error);
 
-                const pausedListNames =
-                    this.iPopulator.getPausedLocationNames();
+                let zkPauseState;
+                const zkClient = this.iPopulator.getZkClient();
+                const path = `${ZK_TEST_STATE_PATH}/${location}`;
 
-                // location should be active
-                assert.strictEqual(zkPauseState.paused, false);
-                assert(!pausedListNames.includes(location));
-                // location should no longer have scheduled resume
-                assert.strictEqual(zkPauseState.scheduledResume, null);
+                // move time forward past `futureDate`
+                timeMachine.moveTimeForward(6);
 
-                timeMachine.uninstall();
+                async.doWhilst(
+                    cb =>
+                        setTimeout(() => {
+                            zkClient.getData(path, (err, data) => {
+                                if (err) {
+                                    return cb(err);
+                                }
+                                zkPauseState = JSON.parse(data);
+                                return cb();
+                            });
+                        }, 1000),
+                    () => zkPauseState.paused !== false,
+                    error => {
+                        assert.ifError(error);
 
-                done();
-            });
-        });
+                        const pausedListNames = this.iPopulator.getPausedLocationNames();
+
+                        // location should be active
+                        assert.strictEqual(zkPauseState.paused, false);
+                        assert(!pausedListNames.includes(location));
+                        // location should no longer have scheduled resume
+                        assert.strictEqual(zkPauseState.scheduledResume, null);
+
+                        timeMachine.uninstall();
+
+                        done();
+                    },
+                );
+            },
+        );
     });
 
-    it('should not trigger a scheduled job that was previously cancelled',
-    done => {
+    it('should not trigger a scheduled job that was previously cancelled', done => {
         // install time machine to eventually move time forward
         const timeMachine = new TimeMachine();
         timeMachine.install();
@@ -724,52 +740,54 @@ describe('Ingestion Pause/Resume', function d() {
         // using first location
         const location = firstBucket.locationConstraint;
 
-        async.series([
-            next => {
-                // pause
-                this.mockAPI.pauseService(location);
-                pauseLocation(this.iPopulator, location, next);
+        async.series(
+            [
+                next => {
+                    // pause
+                    this.mockAPI.pauseService(location);
+                    pauseLocation(this.iPopulator, location, next);
+                },
+                next => {
+                    // schedule resume
+                    this.mockAPI.resumeService(location, futureDate);
+                    resumeScheduleLocation(this.iPopulator, location, next);
+                },
+                next => {
+                    // cancel scheduled resume
+                    this.mockAPI.deleteScheduledResumeService(location);
+                    deleteScheduledResumeLocation(this.iPopulator, location, next);
+                },
+            ],
+            error => {
+                assert.ifError(error);
+
+                const zkClient = this.iPopulator.getZkClient();
+                const path = `${ZK_TEST_STATE_PATH}/${location}`;
+
+                // move time forward past `futureDate`
+                timeMachine.moveTimeForward(6);
+
+                // just in case, give some time
+                setTimeout(() => {
+                    zkClient.getData(path, (err, data) => {
+                        assert.ifError(err);
+
+                        const zkPauseState = JSON.parse(data);
+                        const pausedList = this.iPopulator.getPausedLocations();
+                        const pausedListNames = this.iPopulator.getPausedLocationNames();
+
+                        // location should not have a scheduled resume
+                        assert(pausedListNames.includes(location));
+                        assert.strictEqual(pausedList[location], null);
+                        // location should still be paused
+                        assert.strictEqual(zkPauseState.paused, true);
+
+                        timeMachine.uninstall();
+
+                        done();
+                    });
+                }, 2000);
             },
-            next => {
-                // schedule resume
-                this.mockAPI.resumeService(location, futureDate);
-                resumeScheduleLocation(this.iPopulator, location, next);
-            },
-            next => {
-                // cancel scheduled resume
-                this.mockAPI.deleteScheduledResumeService(location);
-                deleteScheduledResumeLocation(this.iPopulator, location, next);
-            },
-        ], error => {
-            assert.ifError(error);
-
-            const zkClient = this.iPopulator.getZkClient();
-            const path = `${ZK_TEST_STATE_PATH}/${location}`;
-
-            // move time forward past `futureDate`
-            timeMachine.moveTimeForward(6);
-
-            // just in case, give some time
-            setTimeout(() => {
-                zkClient.getData(path, (err, data) => {
-                    assert.ifError(err);
-
-                    const zkPauseState = JSON.parse(data);
-                    const pausedList = this.iPopulator.getPausedLocations();
-                    const pausedListNames =
-                        this.iPopulator.getPausedLocationNames();
-
-                    // location should not have a scheduled resume
-                    assert(pausedListNames.includes(location));
-                    assert.strictEqual(pausedList[location], null);
-                    // location should still be paused
-                    assert.strictEqual(zkPauseState.paused, true);
-
-                    timeMachine.uninstall();
-
-                    done();
-                });
-            }, 2000);
-        });
+        );
     });
 });

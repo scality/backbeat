@@ -35,8 +35,7 @@
             "port": 9990
         },
         "mongo": {
-            "replicaSetHosts":
-                "localhost:27017,localhost:27018,localhost:27019",
+            "replicaSetHosts": "localhost:27017,localhost:27018,localhost:27019",
             "writeConcern": "majority",
             "replicaSet": "rs0",
             "readPreference": "primary",
@@ -119,8 +118,7 @@
             "destination": {
                 "transport": "http",
                 "bootstrapList": [
-                    { "site": "zenko", "servers": ["localhost:8001"],
-                      "echo": false },
+                    { "site": "zenko", "servers": ["localhost:8001"], "echo": false },
                     { "site": "wontwork-location", "type": "aws_s3" },
                     { "site": "aws-location", "type": "aws_s3" }
                 ],
@@ -210,11 +208,7 @@
                     "port": 4045
                 }
             },
-            "objectSizeMetrics": [
-                66560,
-                8388608,
-                68157440
-            ]
+            "objectSizeMetrics": [66560, 8388608, 68157440]
         },
         "lifecycle": {
             "auth": {

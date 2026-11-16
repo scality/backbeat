@@ -29,7 +29,7 @@ describe('NotificationConfigValidator ::', () => {
                 port: 8000,
                 topic: 'topic',
                 requiredAcks: 1,
-            }
+            },
         },
         {
             valid: false,
@@ -71,7 +71,7 @@ describe('NotificationConfigValidator ::', () => {
                     keytab: 'path/to/keytab',
                     principal: 'my-principal',
                     serviceName: 'kafka',
-                }
+                },
             },
         },
         {
@@ -88,7 +88,7 @@ describe('NotificationConfigValidator ::', () => {
                     keytab: 'path/to/keytab',
                     principal: 'my-principal',
                     serviceName: 'kafka',
-                }
+                },
             },
         },
         {
@@ -106,7 +106,7 @@ describe('NotificationConfigValidator ::', () => {
                     keytab: 'path/to/keytab',
                     principal: 'my-principal',
                     serviceName: 'kafka',
-                }
+                },
             },
         },
         {
@@ -123,7 +123,7 @@ describe('NotificationConfigValidator ::', () => {
                     protocol: 'SASL_PLAINTEXT',
                     principal: 'my-principal',
                     serviceName: 'kafka',
-                }
+                },
             },
         },
         {
@@ -140,7 +140,7 @@ describe('NotificationConfigValidator ::', () => {
                     protocol: 'SASL_PLAINTEXT',
                     keytab: 'path/to/keytab',
                     serviceName: 'kafka',
-                }
+                },
             },
         },
         {
@@ -157,7 +157,7 @@ describe('NotificationConfigValidator ::', () => {
                     protocol: 'SASL_PLAINTEXT',
                     keytab: 'path/to/keytab',
                     principal: 'my-principal',
-                }
+                },
             },
         },
         {
@@ -173,7 +173,7 @@ describe('NotificationConfigValidator ::', () => {
                     type: 'basic',
                     protocol: 'SASL_PLAINTEXT',
                     credentialsFile: 'path/to/credentials',
-                }
+                },
             },
         },
         {
@@ -190,7 +190,7 @@ describe('NotificationConfigValidator ::', () => {
                     protocol: 'SASL_PLAINTEXT',
                     username: 'foo',
                     password: 'bar',
-                }
+                },
             },
         },
         {
@@ -205,7 +205,7 @@ describe('NotificationConfigValidator ::', () => {
                 auth: {
                     type: 'basic',
                     protocol: 'SASL_PLAINTEXT',
-                }
+                },
             },
         },
         {
@@ -222,7 +222,7 @@ describe('NotificationConfigValidator ::', () => {
                     protocol: 'SASL_PLAINTEXT',
                     username: 'foo',
                     password: '',
-                }
+                },
             },
         },
         {
@@ -238,7 +238,7 @@ describe('NotificationConfigValidator ::', () => {
                     type: 'basic',
                     protocol: 'SASL_PLAINTEXT',
                     password: 'bar',
-                }
+                },
             },
         },
         {
@@ -256,7 +256,7 @@ describe('NotificationConfigValidator ::', () => {
                     credentialsFile: 'credentials.json',
                     username: 'testuser',
                     password: 'testpassword',
-                }
+                },
             },
         },
         {
@@ -272,7 +272,7 @@ describe('NotificationConfigValidator ::', () => {
                     type: 'basic',
                     protocol: 'SASL_PLAINTEXT',
                     credentialsFile: '',
-                }
+                },
             },
         },
         // SCRAM auth
@@ -290,7 +290,7 @@ describe('NotificationConfigValidator ::', () => {
                     protocol: 'SASL_SSL',
                     mechanism: 'SHA-256',
                     credentialsFile: 'path/to/credentials',
-                }
+                },
             },
         },
         {
@@ -308,7 +308,7 @@ describe('NotificationConfigValidator ::', () => {
                     mechanism: 'SHA-512',
                     username: 'foo',
                     password: 'bar',
-                }
+                },
             },
         },
         {
@@ -324,7 +324,7 @@ describe('NotificationConfigValidator ::', () => {
                     type: 'scram',
                     protocol: 'SASL_PLAINTEXT',
                     mechanism: 'SHA-256',
-                }
+                },
             },
         },
         {
@@ -342,7 +342,7 @@ describe('NotificationConfigValidator ::', () => {
                     mechanism: 'SHA-256',
                     username: 'foo',
                     password: '',
-                }
+                },
             },
         },
         {
@@ -359,7 +359,7 @@ describe('NotificationConfigValidator ::', () => {
                     protocol: 'SASL_PLAINTEXT',
                     mechanism: 'SHA-256',
                     password: 'bar',
-                }
+                },
             },
         },
         {
@@ -378,7 +378,7 @@ describe('NotificationConfigValidator ::', () => {
                     credentialsFile: 'credentials.json',
                     username: 'testuser',
                     password: 'testpassword',
-                }
+                },
             },
         },
         {
@@ -395,7 +395,7 @@ describe('NotificationConfigValidator ::', () => {
                     protocol: 'SASL_PLAINTEXT',
                     mechanism: 'SHA-256',
                     credentialsFile: '',
-                }
+                },
             },
         },
         {
@@ -412,7 +412,7 @@ describe('NotificationConfigValidator ::', () => {
                     protocol: 'SASL_PLAINTEXT',
                     username: 'foo',
                     password: 'bar',
-                }
+                },
             },
         },
         {
@@ -430,7 +430,7 @@ describe('NotificationConfigValidator ::', () => {
                     mechanism: 'SHA-1',
                     username: 'foo',
                     password: 'bar',
-                }
+                },
             },
         },
         {
@@ -473,6 +473,6 @@ describe('NotificationConfigValidator ::', () => {
             };
             const tester = testCase.valid ? assert.doesNotThrow : assert.throws;
             tester(() => notificationConfigValidator(null, extConfig));
-        })
+        }),
     );
 });

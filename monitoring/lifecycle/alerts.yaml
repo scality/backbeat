@@ -1,445 +1,441 @@
 x-inputs:
-- name: namespace
-  type: constant
-- name: job_lifecycle_producer
-  type: constant
-- name: job_lifecycle_object_processor
-  type: constant
-- name: job_lifecycle_bucket_processor
-  type: constant
-- name: job_lifecycle_transition_processor
-  type: constant
-- name: job_sorbet_forwarder
-  type: constant
-- name: lifecycle_conductor_replicas
-  type: constant
-- name: lifecycle_bucket_replicas
-  type: constant
-- name: lifecycle_object_replicas
-  type: constant
-- name: lifecycle_transition_replicas
-  type: constant
-- name: lifecycle_latency_warning_threshold
-  type: config
-  value: 86400 # 24h, in seconds
-- name: lifecycle_latency_critical_threshold
-  type: config
-  value: 129600 # 36h, in seconds
-- name: lifecycle_conductor_scan_warning_threshold
-  type: config
-  value: 600 # 10m, in seconds
-- name: lifecycle_conductor_scan_critical_threshold
-  type: config
-  value: 1800 # 30m, in seconds
+  - name: namespace
+    type: constant
+  - name: job_lifecycle_producer
+    type: constant
+  - name: job_lifecycle_object_processor
+    type: constant
+  - name: job_lifecycle_bucket_processor
+    type: constant
+  - name: job_lifecycle_transition_processor
+    type: constant
+  - name: job_sorbet_forwarder
+    type: constant
+  - name: lifecycle_conductor_replicas
+    type: constant
+  - name: lifecycle_bucket_replicas
+    type: constant
+  - name: lifecycle_object_replicas
+    type: constant
+  - name: lifecycle_transition_replicas
+    type: constant
+  - name: lifecycle_latency_warning_threshold
+    type: config
+    value: 86400 # 24h, in seconds
+  - name: lifecycle_latency_critical_threshold
+    type: config
+    value: 129600 # 36h, in seconds
+  - name: lifecycle_conductor_scan_warning_threshold
+    type: config
+    value: 600 # 10m, in seconds
+  - name: lifecycle_conductor_scan_critical_threshold
+    type: config
+    value: 1800 # 30m, in seconds
 
 groups:
-- name: LifecycleProducer
-  rules:
+  - name: LifecycleProducer
+    rules:
+      - alert: LifecycleProducerDown
+        Expr: sum(up{namespace="${namespace}",job="${job_lifecycle_producer}"}) < ${lifecycle_conductor_replicas}
+        For: '30s'
+        Labels:
+          severity: critical
+        Annotations:
+          zenko_service: backbeat-lifecycle-producer
+          description: 'Lifecycle producer pod has been down for 30 seconds'
+          summary: 'Lifecycle producer service is down'
 
-  - alert: LifecycleProducerDown
-    Expr: sum(up{namespace="${namespace}",job="${job_lifecycle_producer}"}) < ${lifecycle_conductor_replicas}
-    For: "30s"
-    Labels:
-     severity: critical
-    Annotations:
-      zenko_service: backbeat-lifecycle-producer
-      description: "Lifecycle producer pod has been down for 30 seconds"
-      summary: "Lifecycle producer service is down"
-
-  - alert: LifecycleLateScan
-    Expr: |
-      (
-        time() - (
-          max(max_over_time(
-            s3_lifecycle_latest_batch_start_time{
-              namespace="${namespace}", job="${job_lifecycle_producer}"
-            }[${lifecycle_latency_warning_threshold}s]
-          )) / 1000
-          > 0 or max(kube_service_created{namespace="${namespace}", service="${job_lifecycle_producer}"})
-        )
-      ) / ${lifecycle_latency_warning_threshold} > 1
-    Labels:
-      severity: warning
-    Annotations:
-      zenko_service: backbeat-lifecycle-producer
-      description: >-
-        Last lifecycle scan was scheduled more than
-        {{ ${lifecycle_latency_warning_threshold} | humanizeDuration }} ago.
-      summary: "Lifecycle scan not scheduled in time"
-
-  - alert: LifecycleLateScan
-    Expr: |
-      (
-        time() - (
-          max(max_over_time(
-            s3_lifecycle_latest_batch_start_time{
-              namespace="${namespace}", job="${job_lifecycle_producer}"
-            }[${lifecycle_latency_warning_threshold}s]
-          )) / 1000
-          > 0 or max(kube_service_created{namespace="${namespace}", service="${job_lifecycle_producer}"})
-        )
-      ) / ${lifecycle_latency_critical_threshold} > 1
-    Labels:
-      severity: critical
-    Annotations:
-      zenko_service: backbeat-lifecycle-producer
-      description: >-
-        Last lifecycle scan was scheduled more than
-        {{ ${lifecycle_latency_critical_threshold} | humanizeDuration }} ago.
-      summary: "Lifecycle scan not scheduled in time"
-
-  - alert: LifecycleStalledScan
-    Expr: |
-      # Keep end_time=0 meaningful: if the first scan starts but never
-      # completes, or errors after starting without updating end_time,
-      # this alert should fire after the configured threshold.
-      time() - (
-        (
-          max(s3_lifecycle_latest_batch_start_time{
-            namespace="${namespace}", job="${job_lifecycle_producer}"
-          })
-          >
+      - alert: LifecycleLateScan
+        Expr: |
           (
-            max(s3_lifecycle_latest_batch_end_time{
-              namespace="${namespace}", job="${job_lifecycle_producer}"
-            })
-            or vector(0)
-          )
-        ) / 1000
-      ) > ${lifecycle_conductor_scan_warning_threshold}
-    Labels:
-      severity: warning
-    Annotations:
-      zenko_service: backbeat-lifecycle-producer
-      description: >-
-        Last lifecycle scan did not complete within
-        {{ ${lifecycle_conductor_scan_warning_threshold} | humanizeDuration }} of being scheduled
-        (it may be stalled or have failed).
-      summary: "Lifecycle scan did not complete in time"
+            time() - (
+              max(max_over_time(
+                s3_lifecycle_latest_batch_start_time{
+                  namespace="${namespace}", job="${job_lifecycle_producer}"
+                }[${lifecycle_latency_warning_threshold}s]
+              )) / 1000
+              > 0 or max(kube_service_created{namespace="${namespace}", service="${job_lifecycle_producer}"})
+            )
+          ) / ${lifecycle_latency_warning_threshold} > 1
+        Labels:
+          severity: warning
+        Annotations:
+          zenko_service: backbeat-lifecycle-producer
+          description: >-
+            Last lifecycle scan was scheduled more than
+            {{ ${lifecycle_latency_warning_threshold} | humanizeDuration }} ago.
+          summary: 'Lifecycle scan not scheduled in time'
 
-  - alert: LifecycleStalledScan
-    Expr: |
-      # Keep end_time=0 meaningful: if the first scan starts but never
-      # completes, or errors after starting without updating end_time,
-      # this alert should fire after the configured threshold.
-      time() - (
-        (
-          max(s3_lifecycle_latest_batch_start_time{
-            namespace="${namespace}", job="${job_lifecycle_producer}"
-          })
-          >
+      - alert: LifecycleLateScan
+        Expr: |
           (
-            max(s3_lifecycle_latest_batch_end_time{
-              namespace="${namespace}", job="${job_lifecycle_producer}"
-            })
-            or vector(0)
-          )
-        ) / 1000
-      ) > ${lifecycle_conductor_scan_critical_threshold}
-    Labels:
-      severity: critical
-    Annotations:
-      zenko_service: backbeat-lifecycle-producer
-      description: >-
-        Last lifecycle scan did not complete within
-        {{ ${lifecycle_conductor_scan_critical_threshold} | humanizeDuration }} of being scheduled
-        (it may be stalled or have failed).
-      summary: "Lifecycle scan did not complete in time"
+            time() - (
+              max(max_over_time(
+                s3_lifecycle_latest_batch_start_time{
+                  namespace="${namespace}", job="${job_lifecycle_producer}"
+                }[${lifecycle_latency_warning_threshold}s]
+              )) / 1000
+              > 0 or max(kube_service_created{namespace="${namespace}", service="${job_lifecycle_producer}"})
+            )
+          ) / ${lifecycle_latency_critical_threshold} > 1
+        Labels:
+          severity: critical
+        Annotations:
+          zenko_service: backbeat-lifecycle-producer
+          description: >-
+            Last lifecycle scan was scheduled more than
+            {{ ${lifecycle_latency_critical_threshold} | humanizeDuration }} ago.
+          summary: 'Lifecycle scan not scheduled in time'
 
-  - alert: LifecycleIndexCreationFailed
-    Expr: |
-      increase(s3_lifecycle_legacy_tasks_total{namespace="${namespace}", job="${job_lifecycle_producer}", status="putBucketIndexesFailed"}[12h]) > 0
-    Labels:
-     severity: warning
-    Annotations:
-      zenko_service: backbeat-lifecycle-producer
-      description: >-
-        The lifecycle producer failed to create the v2 lifecycle indexes on at
-        least one bucket in the last 12 hours. The producer will fall back to
-        v1 (full-scan) processing for that bucket. Check producer logs for the
-        bucket name and the underlying MongoDB error.
-      summary: "Lifecycle index creation failure"
+      - alert: LifecycleStalledScan
+        Expr: |
+          # Keep end_time=0 meaningful: if the first scan starts but never
+          # completes, or errors after starting without updating end_time,
+          # this alert should fire after the configured threshold.
+          time() - (
+            (
+              max(s3_lifecycle_latest_batch_start_time{
+                namespace="${namespace}", job="${job_lifecycle_producer}"
+              })
+              >
+              (
+                max(s3_lifecycle_latest_batch_end_time{
+                  namespace="${namespace}", job="${job_lifecycle_producer}"
+                })
+                or vector(0)
+              )
+            ) / 1000
+          ) > ${lifecycle_conductor_scan_warning_threshold}
+        Labels:
+          severity: warning
+        Annotations:
+          zenko_service: backbeat-lifecycle-producer
+          description: >-
+            Last lifecycle scan did not complete within
+            {{ ${lifecycle_conductor_scan_warning_threshold} | humanizeDuration }} of being scheduled
+            (it may be stalled or have failed).
+          summary: 'Lifecycle scan did not complete in time'
 
-- name: LifecycleBucketProcessor
-  rules:
+      - alert: LifecycleStalledScan
+        Expr: |
+          # Keep end_time=0 meaningful: if the first scan starts but never
+          # completes, or errors after starting without updating end_time,
+          # this alert should fire after the configured threshold.
+          time() - (
+            (
+              max(s3_lifecycle_latest_batch_start_time{
+                namespace="${namespace}", job="${job_lifecycle_producer}"
+              })
+              >
+              (
+                max(s3_lifecycle_latest_batch_end_time{
+                  namespace="${namespace}", job="${job_lifecycle_producer}"
+                })
+                or vector(0)
+              )
+            ) / 1000
+          ) > ${lifecycle_conductor_scan_critical_threshold}
+        Labels:
+          severity: critical
+        Annotations:
+          zenko_service: backbeat-lifecycle-producer
+          description: >-
+            Last lifecycle scan did not complete within
+            {{ ${lifecycle_conductor_scan_critical_threshold} | humanizeDuration }} of being scheduled
+            (it may be stalled or have failed).
+          summary: 'Lifecycle scan did not complete in time'
 
-  - alert: LifecycleBucketProcessorDown
-    Expr: sum(up{namespace="${namespace}", job="${job_lifecycle_bucket_processor}"}) < ${lifecycle_bucket_replicas}
-    For: "30s"
-    Labels:
-     severity: warning
-    Annotations:
-      zenko_service: backbeat-lifecycle-bucket-processor
-      description: "Less than 100% of lifecycle bucket processors are up and healthy"
-      summary: "Degraded lifecycle bucket processor"
+      - alert: LifecycleIndexCreationFailed
+        Expr: |
+          increase(s3_lifecycle_legacy_tasks_total{namespace="${namespace}", job="${job_lifecycle_producer}", status="putBucketIndexesFailed"}[12h]) > 0
+        Labels:
+          severity: warning
+        Annotations:
+          zenko_service: backbeat-lifecycle-producer
+          description: >-
+            The lifecycle producer failed to create the v2 lifecycle indexes on at
+            least one bucket in the last 12 hours. The producer will fall back to
+            v1 (full-scan) processing for that bucket. Check producer logs for the
+            bucket name and the underlying MongoDB error.
+          summary: 'Lifecycle index creation failure'
 
-  - alert: LifecycleBucketProcessorDown
-    Expr: sum(up{namespace="${namespace}", job="${job_lifecycle_bucket_processor}"}) * 2 < ${lifecycle_bucket_replicas}
-    For: "30s"
-    Labels:
-     severity: critical
-    Annotations:
-      zenko_service: backbeat-lifecycle-bucket-processor
-      description: "Less than 50% of lifecycle bucket processors are up and healthy"
-      summary: "Degraded lifecycle bucket processor"
+  - name: LifecycleBucketProcessor
+    rules:
+      - alert: LifecycleBucketProcessorDown
+        Expr: sum(up{namespace="${namespace}", job="${job_lifecycle_bucket_processor}"}) < ${lifecycle_bucket_replicas}
+        For: '30s'
+        Labels:
+          severity: warning
+        Annotations:
+          zenko_service: backbeat-lifecycle-bucket-processor
+          description: 'Less than 100% of lifecycle bucket processors are up and healthy'
+          summary: 'Degraded lifecycle bucket processor'
 
-  - alert: LifecycleBucketProcessorRequest
-    Expr: |
-      sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_bucket_processor}", status!~"^2..", process="bucket"}[5m]))
-        / sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_bucket_processor}", process="bucket"}[5m]))
-        >= 0.03
-    Labels:
-     severity: warning
-    Annotations:
-      zenko_service: backbeat-lifecycle-bucket-processor
-      description: "More than 3% of S3 requests by bucket processors resulting in errors"
-      summary: "High rate of S3 request errors"
+      - alert: LifecycleBucketProcessorDown
+        Expr: sum(up{namespace="${namespace}", job="${job_lifecycle_bucket_processor}"}) * 2 < ${lifecycle_bucket_replicas}
+        For: '30s'
+        Labels:
+          severity: critical
+        Annotations:
+          zenko_service: backbeat-lifecycle-bucket-processor
+          description: 'Less than 50% of lifecycle bucket processors are up and healthy'
+          summary: 'Degraded lifecycle bucket processor'
 
-  - alert: LifecycleBucketProcessorRequest
-    Expr: |
-      sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_bucket_processor}", status!~"^2..", process="bucket"}[5m]))
-        / sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_bucket_processor}", process="bucket"}[5m]))
-        >= 0.05
-    Labels:
-     severity: critical
-    Annotations:
-      zenko_service: backbeat-lifecycle-bucket-processor
-      description: "More than 5% of S3 requests by bucket processors resulting in errors"
-      summary: "Very high rate of S3 request errors"
+      - alert: LifecycleBucketProcessorRequest
+        Expr: |
+          sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_bucket_processor}", status!~"^2..", process="bucket"}[5m]))
+            / sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_bucket_processor}", process="bucket"}[5m]))
+            >= 0.03
+        Labels:
+          severity: warning
+        Annotations:
+          zenko_service: backbeat-lifecycle-bucket-processor
+          description: 'More than 3% of S3 requests by bucket processors resulting in errors'
+          summary: 'High rate of S3 request errors'
 
-  - alert: LifecycleBucketProcessorMultipleParallelScans
-    Expr: |
-      count(
-        sum by(conductor_scan_id) (
-          rate(s3_lifecycle_bucket_processor_scan_messages_total{
-            namespace="${namespace}", job="${job_lifecycle_bucket_processor}"
-          }[1m])
-        ) > 0
-      ) > 1
-    For: "10m"
-    Labels:
-      severity: warning
-    Annotations:
-      zenko_service: backbeat-lifecycle-bucket-processor
-      description: >-
-        Bucket processors have processed bucket-task messages from multiple
-        lifecycle conductor scans in parallel for more than 10 minutes.
-      summary: "Lifecycle bucket processors are receiving multiple scans"
+      - alert: LifecycleBucketProcessorRequest
+        Expr: |
+          sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_bucket_processor}", status!~"^2..", process="bucket"}[5m]))
+            / sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_bucket_processor}", process="bucket"}[5m]))
+            >= 0.05
+        Labels:
+          severity: critical
+        Annotations:
+          zenko_service: backbeat-lifecycle-bucket-processor
+          description: 'More than 5% of S3 requests by bucket processors resulting in errors'
+          summary: 'Very high rate of S3 request errors'
 
-- name: LifecycleObjectProcessor
-  rules:
+      - alert: LifecycleBucketProcessorMultipleParallelScans
+        Expr: |
+          count(
+            sum by(conductor_scan_id) (
+              rate(s3_lifecycle_bucket_processor_scan_messages_total{
+                namespace="${namespace}", job="${job_lifecycle_bucket_processor}"
+              }[1m])
+            ) > 0
+          ) > 1
+        For: '10m'
+        Labels:
+          severity: warning
+        Annotations:
+          zenko_service: backbeat-lifecycle-bucket-processor
+          description: >-
+            Bucket processors have processed bucket-task messages from multiple
+            lifecycle conductor scans in parallel for more than 10 minutes.
+          summary: 'Lifecycle bucket processors are receiving multiple scans'
 
-  - alert: LifecycleObjectProcessorDown
-    Expr: sum(up{namespace="${namespace}", job="${job_lifecycle_object_processor}"}) < ${lifecycle_object_replicas}
-    For: "30s"
-    Labels:
-     severity: warning
-    Annotations:
-      zenko_service: backbeat-lifecycle-object-processor
-      description: "Less than 100% of lifecycle object processors for expiration are up and healthy"
-      summary: "Degraded lifecycle object processor"
-  
-  - alert: LifecycleObjectProcessorDown
-    Expr: sum(up{namespace="${namespace}", job="${job_lifecycle_object_processor}"}) * 2 < ${lifecycle_object_replicas}
-    For: "30s"
-    Labels:
-     severity: critical 
-    Annotations:
-      zenko_service: backbeat-lifecycle-object-processor
-      description: "Less than 50% of lifecycle object processors for expiration are up and healthy"
-      summary: "Degraded lifecycle object processor"
-  
-  - alert: LifecycleObjectProcessorRequest
-    Expr: |
-      sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_object_processor}", status!~"^2..", process="expiration"}[5m]))
-        / sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_object_processor}", process="expiration"}[5m]))
-        >= 0.03
-    Labels:
-     severity: warning
-    Annotations:
-      zenko_service: backbeat-lifecycle-object-processor
-      description: "More than 3% of S3 requests by object processors resulting in errors"
-      summary: "High rate of S3 request errors"
+  - name: LifecycleObjectProcessor
+    rules:
+      - alert: LifecycleObjectProcessorDown
+        Expr: sum(up{namespace="${namespace}", job="${job_lifecycle_object_processor}"}) < ${lifecycle_object_replicas}
+        For: '30s'
+        Labels:
+          severity: warning
+        Annotations:
+          zenko_service: backbeat-lifecycle-object-processor
+          description: 'Less than 100% of lifecycle object processors for expiration are up and healthy'
+          summary: 'Degraded lifecycle object processor'
 
-  - alert: LifecycleObjectProcessorRequest
-    Expr: |
-      sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_object_processor}", status!~"^2..", process="expiration"}[5m]))
-        / sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_object_processor}", process="expiration"}[5m]))
-        >= 0.05
-    Labels:
-     severity: critical
-    Annotations:
-      zenko_service: backbeat-lifecycle-object-processor
-      description: "More than 5% of S3 requests by object processors resulting in errors"
-      summary: "Very high rate of S3 request errors"
+      - alert: LifecycleObjectProcessorDown
+        Expr: sum(up{namespace="${namespace}", job="${job_lifecycle_object_processor}"}) * 2 < ${lifecycle_object_replicas}
+        For: '30s'
+        Labels:
+          severity: critical
+        Annotations:
+          zenko_service: backbeat-lifecycle-object-processor
+          description: 'Less than 50% of lifecycle object processors for expiration are up and healthy'
+          summary: 'Degraded lifecycle object processor'
 
-  - alert: LifecycleTransitionProcessorDown
-    Expr: sum(up{namespace="${namespace}", job="${job_lifecycle_transition_processor}"}) < ${lifecycle_transition_replicas}
-    For: "30s"
-    Labels:
-     severity: warning
-    Annotations:
-      zenko_service: backbeat-lifecycle-transition-processor
-      description: "Less than 100% of lifecycle transition processors are up and healthy"
-      summary: "Degraded lifecycle transition processor"
+      - alert: LifecycleObjectProcessorRequest
+        Expr: |
+          sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_object_processor}", status!~"^2..", process="expiration"}[5m]))
+            / sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_object_processor}", process="expiration"}[5m]))
+            >= 0.03
+        Labels:
+          severity: warning
+        Annotations:
+          zenko_service: backbeat-lifecycle-object-processor
+          description: 'More than 3% of S3 requests by object processors resulting in errors'
+          summary: 'High rate of S3 request errors'
 
-  - alert: LifecycleTransitionProcessorDown
-    Expr: sum(up{namespace="${namespace}", job="${job_lifecycle_transition_processor}"}) * 2 < ${lifecycle_transition_replicas}
-    For: "30s"
-    Labels:
-     severity: critical
-    Annotations:
-      zenko_service: backbeat-lifecycle-transition-processor
-      description: "Less than 50% of lifecycle transition processors are up and healthy"
-      summary: "Degraded lifecycle transition processor"
+      - alert: LifecycleObjectProcessorRequest
+        Expr: |
+          sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_object_processor}", status!~"^2..", process="expiration"}[5m]))
+            / sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_object_processor}", process="expiration"}[5m]))
+            >= 0.05
+        Labels:
+          severity: critical
+        Annotations:
+          zenko_service: backbeat-lifecycle-object-processor
+          description: 'More than 5% of S3 requests by object processors resulting in errors'
+          summary: 'Very high rate of S3 request errors'
 
-  - alert: LifecycleTransitionProcessorRequest
-    Expr: |
-      sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_transition_processor}", status!~"^2.."}[5m]))
-        / sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_transition_processor}"}[5m]))
-        >= 0.03
-    Labels:
-     severity: warning
-    Annotations:
-      zenko_service: backbeat-lifecycle-transition-processor
-      description: "More than 3% of S3 requests by transition processors resulting in errors"
-      summary: "High rate of S3 request errors"
+      - alert: LifecycleTransitionProcessorDown
+        Expr: sum(up{namespace="${namespace}", job="${job_lifecycle_transition_processor}"}) < ${lifecycle_transition_replicas}
+        For: '30s'
+        Labels:
+          severity: warning
+        Annotations:
+          zenko_service: backbeat-lifecycle-transition-processor
+          description: 'Less than 100% of lifecycle transition processors are up and healthy'
+          summary: 'Degraded lifecycle transition processor'
 
-  - alert: LifecycleTransitionProcessorRequest
-    Expr: |
-      sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_transition_processor}", status!~"^2.."}[5m]))
-        / sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_transition_processor}"}[5m]))
-        >= 0.05
-    Labels:
-     severity: critical
-    Annotations:
-      zenko_service: backbeat-lifecycle-transition-processor
-      description: "More than 5% of S3 requests by transition processors resulting in errors"
-      summary: "Very high rate of S3 request errors"
+      - alert: LifecycleTransitionProcessorDown
+        Expr: sum(up{namespace="${namespace}", job="${job_lifecycle_transition_processor}"}) * 2 < ${lifecycle_transition_replicas}
+        For: '30s'
+        Labels:
+          severity: critical
+        Annotations:
+          zenko_service: backbeat-lifecycle-transition-processor
+          description: 'Less than 50% of lifecycle transition processors are up and healthy'
+          summary: 'Degraded lifecycle transition processor'
 
-  - alert: LifecycleLatency
-    Expr: |
-      histogram_quantile(0.95,
-        sum(rate(
-          s3_lifecycle_latency_seconds_bucket{
-            namespace="${namespace}",job=~"${job_lifecycle_object_processor}|${job_lifecycle_transition_processor}|${job_sorbet_forwarder}.*"
-          }[10m]
-        )) by(le, type, location)
-      ) / ${lifecycle_latency_warning_threshold} > 1
-    Labels:
-      severity: warning
-    Annotations:
-      description: >-
-        Lifecycle latency for `{{ $labels.type }}` is above the warning threshold on location
-        `{{ $labels.location }}`.
-      summary: "High lifecycle latency"
+      - alert: LifecycleTransitionProcessorRequest
+        Expr: |
+          sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_transition_processor}", status!~"^2.."}[5m]))
+            / sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_transition_processor}"}[5m]))
+            >= 0.03
+        Labels:
+          severity: warning
+        Annotations:
+          zenko_service: backbeat-lifecycle-transition-processor
+          description: 'More than 3% of S3 requests by transition processors resulting in errors'
+          summary: 'High rate of S3 request errors'
 
-  - alert: LifecycleLatency
-    Expr: |
-      histogram_quantile(0.95,
-        sum(rate(
-          s3_lifecycle_latency_seconds_bucket{
-            namespace="${namespace}", job=~"${job_lifecycle_object_processor}|${job_lifecycle_transition_processor}|${job_sorbet_forwarder}.*"
-          }[10m]
-        )) by(le, type, location)
-      ) / ${lifecycle_latency_critical_threshold} > 1
-    Labels:
-      severity: critical
-    Annotations:
-      description: >-
-        Lifecycle latency for `{{ $labels.type }}` is above the critical threshold on location
-        `{{ $labels.location }}`.
-      summary: "Very high lifecycle latency"
+      - alert: LifecycleTransitionProcessorRequest
+        Expr: |
+          sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_transition_processor}", status!~"^2.."}[5m]))
+            / sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_transition_processor}"}[5m]))
+            >= 0.05
+        Labels:
+          severity: critical
+        Annotations:
+          zenko_service: backbeat-lifecycle-transition-processor
+          description: 'More than 5% of S3 requests by transition processors resulting in errors'
+          summary: 'Very high rate of S3 request errors'
 
-- name: Kafka Messages
-  rules:
+      - alert: LifecycleLatency
+        Expr: |
+          histogram_quantile(0.95,
+            sum(rate(
+              s3_lifecycle_latency_seconds_bucket{
+                namespace="${namespace}",job=~"${job_lifecycle_object_processor}|${job_lifecycle_transition_processor}|${job_sorbet_forwarder}.*"
+              }[10m]
+            )) by(le, type, location)
+          ) / ${lifecycle_latency_warning_threshold} > 1
+        Labels:
+          severity: warning
+        Annotations:
+          description: >-
+            Lifecycle latency for `{{ $labels.type }}` is above the warning threshold on location
+            `{{ $labels.location }}`.
+          summary: 'High lifecycle latency'
 
-  - alert: LifecycleKafkaBucketMessages
-    Expr: |
-      sum(rate(s3_lifecycle_kafka_publish_error_total{namespace="${namespace}",op="BucketTopic"}[5m]) > 0)
-        / (sum(rate(s3_lifecycle_kafka_publish_error_total{namespace="${namespace}",op="BucketTopic"}[5m]) > 0)
-        + sum(rate(s3_lifecycle_kafka_publish_success_total{namespace="${namespace}",op="BucketTopic"}[5m]) > 0))
-        >= 0.03
-    For: "5m"
-    Labels:
-     severity: warning
-    Annotations:
-      description: "More than 3% of Kafka messages failed to publish to the lifecycle bucket topic"
-      summary: "High rate of failed messages to the bucket topic"
+      - alert: LifecycleLatency
+        Expr: |
+          histogram_quantile(0.95,
+            sum(rate(
+              s3_lifecycle_latency_seconds_bucket{
+                namespace="${namespace}", job=~"${job_lifecycle_object_processor}|${job_lifecycle_transition_processor}|${job_sorbet_forwarder}.*"
+              }[10m]
+            )) by(le, type, location)
+          ) / ${lifecycle_latency_critical_threshold} > 1
+        Labels:
+          severity: critical
+        Annotations:
+          description: >-
+            Lifecycle latency for `{{ $labels.type }}` is above the critical threshold on location
+            `{{ $labels.location }}`.
+          summary: 'Very high lifecycle latency'
 
-  - alert: LifecycleKafkaBucketMessages
-    Expr: |
-      sum(rate(s3_lifecycle_kafka_publish_error_total{namespace="${namespace}",op="BucketTopic"}[5m]) > 0)
-        / (sum(rate(s3_lifecycle_kafka_publish_error_total{namespace="${namespace}",op="BucketTopic"}[5m]) > 0)
-        + sum(rate(s3_lifecycle_kafka_publish_success_total{namespace="${namespace}",op="BucketTopic"}[5m]) > 0))
-        >= 0.05
-    For: "5m"
-    Labels:
-     severity: critical
-    Annotations:
-      description: "More than 5% of Kafka messages failed to publish to the lifecycle bucket topic"
-      summary: "High rate of failed messages to the bucket topic"
+  - name: Kafka Messages
+    rules:
+      - alert: LifecycleKafkaBucketMessages
+        Expr: |
+          sum(rate(s3_lifecycle_kafka_publish_error_total{namespace="${namespace}",op="BucketTopic"}[5m]) > 0)
+            / (sum(rate(s3_lifecycle_kafka_publish_error_total{namespace="${namespace}",op="BucketTopic"}[5m]) > 0)
+            + sum(rate(s3_lifecycle_kafka_publish_success_total{namespace="${namespace}",op="BucketTopic"}[5m]) > 0))
+            >= 0.03
+        For: '5m'
+        Labels:
+          severity: warning
+        Annotations:
+          description: 'More than 3% of Kafka messages failed to publish to the lifecycle bucket topic'
+          summary: 'High rate of failed messages to the bucket topic'
 
-  - alert: LifecycleKafkaObjectMessages
-    Expr: |
-      sum(rate(s3_lifecycle_kafka_publish_error_total{namespace="${namespace}",op="ObjectTopic"}[5m]) > 0)
-        / (sum(rate(s3_lifecycle_kafka_publish_error_total{namespace="${namespace}",op="ObjectTopic"}[5m]) > 0)
-        + sum(rate(s3_lifecycle_kafka_publish_success_total{namespace="${namespace}",op="ObjectTopic"}[5m]) > 0))
-        >= 0.03
-    For: "5m"
-    Labels:
-     severity: warning
-    Annotations:
-      description: "More than 3% of Kafka messages failed to publish to the lifecycle object topic"
-      summary: "High rate of failed messages to the object topic"
+      - alert: LifecycleKafkaBucketMessages
+        Expr: |
+          sum(rate(s3_lifecycle_kafka_publish_error_total{namespace="${namespace}",op="BucketTopic"}[5m]) > 0)
+            / (sum(rate(s3_lifecycle_kafka_publish_error_total{namespace="${namespace}",op="BucketTopic"}[5m]) > 0)
+            + sum(rate(s3_lifecycle_kafka_publish_success_total{namespace="${namespace}",op="BucketTopic"}[5m]) > 0))
+            >= 0.05
+        For: '5m'
+        Labels:
+          severity: critical
+        Annotations:
+          description: 'More than 5% of Kafka messages failed to publish to the lifecycle bucket topic'
+          summary: 'High rate of failed messages to the bucket topic'
 
-  - alert: LifecycleKafkaObjectMessages
-    Expr: |
-      sum(rate(s3_lifecycle_kafka_publish_error_total{namespace="${namespace}",op="ObjectTopic"}[5m]) > 0)
-        / (sum(rate(s3_lifecycle_kafka_publish_error_total{namespace="${namespace}",op="ObjectTopic"}[5m]) > 0)
-        + sum(rate(s3_lifecycle_kafka_publish_success_total{namespace="${namespace}",op="ObjectTopic"}[5m]) > 0))
-        >= 0.05
-    For: "5m"
-    Labels:
-     severity: critical
-    Annotations:
-      description: "More than 5% of Kafka messages failed to publish to the lifecycle object topic"
-      summary: "High rate of failed messages to the object topic"
+      - alert: LifecycleKafkaObjectMessages
+        Expr: |
+          sum(rate(s3_lifecycle_kafka_publish_error_total{namespace="${namespace}",op="ObjectTopic"}[5m]) > 0)
+            / (sum(rate(s3_lifecycle_kafka_publish_error_total{namespace="${namespace}",op="ObjectTopic"}[5m]) > 0)
+            + sum(rate(s3_lifecycle_kafka_publish_success_total{namespace="${namespace}",op="ObjectTopic"}[5m]) > 0))
+            >= 0.03
+        For: '5m'
+        Labels:
+          severity: warning
+        Annotations:
+          description: 'More than 3% of Kafka messages failed to publish to the lifecycle object topic'
+          summary: 'High rate of failed messages to the object topic'
 
-  - alert: KafkaConsumerSlowTask
-    Expr: |
-      sum(s3_backbeat_queue_slowtasks_count{namespace="${namespace}"}) by(job) > 0
-    For: "5m"
-    Labels:
-     severity: warning
-    Annotations:
-      description: >-
-        Some tasks are taking too long to process in {{ $labels.job }}. This is not expected, and
-        may be a sign that other components are not behaving nominally or may need to be scaled.
+      - alert: LifecycleKafkaObjectMessages
+        Expr: |
+          sum(rate(s3_lifecycle_kafka_publish_error_total{namespace="${namespace}",op="ObjectTopic"}[5m]) > 0)
+            / (sum(rate(s3_lifecycle_kafka_publish_error_total{namespace="${namespace}",op="ObjectTopic"}[5m]) > 0)
+            + sum(rate(s3_lifecycle_kafka_publish_success_total{namespace="${namespace}",op="ObjectTopic"}[5m]) > 0))
+            >= 0.05
+        For: '5m'
+        Labels:
+          severity: critical
+        Annotations:
+          description: 'More than 5% of Kafka messages failed to publish to the lifecycle object topic'
+          summary: 'High rate of failed messages to the object topic'
 
-        If this alert lasts, it may mean the task is blocked, and that the consumer should be
-        restarted.
-      summary: "Some Kafka messages are taking too long to process"
+      - alert: KafkaConsumerSlowTask
+        Expr: |
+          sum(s3_backbeat_queue_slowtasks_count{namespace="${namespace}"}) by(job) > 0
+        For: '5m'
+        Labels:
+          severity: warning
+        Annotations:
+          description: >-
+            Some tasks are taking too long to process in {{ $labels.job }}. This is not expected, and
+            may be a sign that other components are not behaving nominally or may need to be scaled.
 
-  - alert: KafkaConsumerRebalanceTimeout
-    Expr: |
-      sum(s3_backbeat_queue_rebalance_total_count{namespace="${namespace}", status="timeout"}) by(pod) > 0
-    Labels:
-     severity: critical
-    Annotations:
-      description: >-
-        Kafka rebalance has timed out for pod `{{ $labels.pod }}`, which indicates that the consumer
-        is not working anymore, and should be restarted.
-      summary: "Kafka consumer has stopped consuming messages"
+            If this alert lasts, it may mean the task is blocked, and that the consumer should be
+            restarted.
+          summary: 'Some Kafka messages are taking too long to process'
 
-- name: Circuit Breaker
-  rules:
-  - alert: CircuitBreakerError
-    Expr: |
-      increase(s3_circuit_breaker_errors_count{namespace="${namespace}"}[5m]) > 0
-    Labels:
-     severity: warning
-    Annotations:
-      description: >-
-        Circuit breaker is unable to query prometheus.
-      summary: "Circuit breaker is unable to query prometheus"
+      - alert: KafkaConsumerRebalanceTimeout
+        Expr: |
+          sum(s3_backbeat_queue_rebalance_total_count{namespace="${namespace}", status="timeout"}) by(pod) > 0
+        Labels:
+          severity: critical
+        Annotations:
+          description: >-
+            Kafka rebalance has timed out for pod `{{ $labels.pod }}`, which indicates that the consumer
+            is not working anymore, and should be restarted.
+          summary: 'Kafka consumer has stopped consuming messages'
+
+  - name: Circuit Breaker
+    rules:
+      - alert: CircuitBreakerError
+        Expr: |
+          increase(s3_circuit_breaker_errors_count{namespace="${namespace}"}[5m]) > 0
+        Labels:
+          severity: warning
+        Annotations:
+          description: >-
+            Circuit breaker is unable to query prometheus.
+          summary: 'Circuit breaker is unable to query prometheus'

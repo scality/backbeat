@@ -36,10 +36,7 @@ const stsConfig = {
 
 function _genSTSResponse(expDelta) {
     return {
-        Credentials: Object.assign(
-            { Expiration: Date.now() + expDelta },
-            credentialsSet
-        ),
+        Credentials: Object.assign({ Expiration: Date.now() + expDelta }, credentialsSet),
     };
 }
 
@@ -52,53 +49,66 @@ describe('CredentialsManager', () => {
             [
                 'should return client for assumeRole type',
                 {
-                    id: id1, accountId: accountId2,
+                    id: id1,
+                    accountId: accountId2,
                     authConfig: assumeRoleAuth,
                     stsConfig,
                 },
             ],
-        ].forEach(([msg, params]) => it(msg, () => {
-            const mgr = new CredentialsManager(extension, log);
-            const creds2 = mgr.getCredentials({
-                id: id2, accountId: accountId2,
-                authConfig: assumeRoleAuth,
-                stsConfig,
-            });
-            const creds = mgr.getCredentials(params);
-            assert(creds, 'credentials should exist');
-            assert(typeof creds.get === 'function',
-                'credentials should have .get() method');
-            assert(Object.prototype.hasOwnProperty.call(creds, 'expireTime'),
-                'credentials should have expireTime property');
-            assert(mgr._accountCredsCache[id1], 'cached credentials should exist');
-            assert(typeof mgr._accountCredsCache[id1].get === 'function',
-                'cached credentials should have .get() method');
-            assert.notEqual(creds, creds2);
-            assert.notEqual(mgr._accountCredsCache[id1], mgr._accountCredsCache[id2]);
-        }));
+        ].forEach(([msg, params]) =>
+            it(msg, () => {
+                const mgr = new CredentialsManager(extension, log);
+                const creds2 = mgr.getCredentials({
+                    id: id2,
+                    accountId: accountId2,
+                    authConfig: assumeRoleAuth,
+                    stsConfig,
+                });
+                const creds = mgr.getCredentials(params);
+                assert(creds, 'credentials should exist');
+                assert(typeof creds.get === 'function', 'credentials should have .get() method');
+                assert(
+                    Object.prototype.hasOwnProperty.call(creds, 'expireTime'),
+                    'credentials should have expireTime property',
+                );
+                assert(mgr._accountCredsCache[id1], 'cached credentials should exist');
+                assert(
+                    typeof mgr._accountCredsCache[id1].get === 'function',
+                    'cached credentials should have .get() method',
+                );
+                assert.notEqual(creds, creds2);
+                assert.notEqual(mgr._accountCredsCache[id1], mgr._accountCredsCache[id2]);
+            }),
+        );
 
         [
             [
                 'should return null when id is missing',
                 {
-                    id: id1, accountId: accountId1,
+                    id: id1,
+                    accountId: accountId1,
                     authConfig: assumeRoleAuth,
-                }, null,
+                },
+                null,
             ],
             [
                 'should return null when authConfig is missing',
                 {
-                    id: id1, accountId: accountId1,
+                    id: id1,
+                    accountId: accountId1,
                     authConfig: null,
-                }, null,
+                },
+                null,
             ],
             [
                 'should return null when stsConfig is missing for assumeRole type',
                 {
-                    id: id1, accountId: accountId1,
+                    id: id1,
+                    accountId: accountId1,
                     authConfig: assumeRoleAuth,
                     stsConfig: null,
-                }, null,
+                },
+                null,
             ],
             [
                 'should return null when accountId is missing for assumeRole type',
@@ -106,20 +116,25 @@ describe('CredentialsManager', () => {
                     id: id1,
                     authConfig: assumeRoleAuth,
                     stsConfig,
-                }, null,
+                },
+                null,
             ],
             [
                 'should return null for unsupported auth types',
                 {
-                    id: id1, accountId: accountId1,
+                    id: id1,
+                    accountId: accountId1,
                     authConfig: invalidAuth,
-                }, null,
+                },
+                null,
             ],
-        ].forEach(([msg, params, expected]) => it(msg, () => {
-            const mgr = new CredentialsManager(extension, log);
-            const creds = mgr.getCredentials(params);
-            assert.strictEqual(creds, expected);
-        }));
+        ].forEach(([msg, params, expected]) =>
+            it(msg, () => {
+                const mgr = new CredentialsManager(extension, log);
+                const creds = mgr.getCredentials(params);
+                assert.strictEqual(creds, expected);
+            }),
+        );
     });
 
     describe('::removeInactiveCredentials', () => {
@@ -142,9 +157,12 @@ describe('CredentialsManager', () => {
 
         beforeEach(() => {
             stsResponses
-                .onCall(0).returns(_genSTSResponse(50000)) // not expired
-                .onCall(1).returns(_genSTSResponse(-10000)) // expired
-                .onCall(2).returns(_genSTSResponse(-1000)); // recent expired
+                .onCall(0)
+                .returns(_genSTSResponse(50000)) // not expired
+                .onCall(1)
+                .returns(_genSTSResponse(-10000)) // expired
+                .onCall(2)
+                .returns(_genSTSResponse(-1000)); // recent expired
         });
 
         afterEach(() => {
@@ -158,65 +176,77 @@ describe('CredentialsManager', () => {
         it('should remove inactive credentials older than max duration (long)', done => {
             const mgr = new CredentialsManager(extension, log);
 
-            async.timesSeries(3, (n, next) => {
-                const client = mgr.getCredentials({
-                    id: `id${n}`,
-                    accountId: `account${n}`,
-                    stsConfig,
-                    authConfig: assumeRoleAuth,
-                });
-                client.get(next);
-            }, () => {
-                assert(mgr._accountCredsCache.id0);
-                assert(mgr._accountCredsCache.id1);
-                assert(mgr._accountCredsCache.id2);
-                mgr.removeInactiveCredentials(5000);
-                assert(mgr._accountCredsCache.id0);
-                assert(!mgr._accountCredsCache.id1);
-                assert(mgr._accountCredsCache.id2);
-                done();
-            });
+            async.timesSeries(
+                3,
+                (n, next) => {
+                    const client = mgr.getCredentials({
+                        id: `id${n}`,
+                        accountId: `account${n}`,
+                        stsConfig,
+                        authConfig: assumeRoleAuth,
+                    });
+                    client.get(next);
+                },
+                () => {
+                    assert(mgr._accountCredsCache.id0);
+                    assert(mgr._accountCredsCache.id1);
+                    assert(mgr._accountCredsCache.id2);
+                    mgr.removeInactiveCredentials(5000);
+                    assert(mgr._accountCredsCache.id0);
+                    assert(!mgr._accountCredsCache.id1);
+                    assert(mgr._accountCredsCache.id2);
+                    done();
+                },
+            );
         });
 
         it('should remove inactive credentials older than max duration (short)', done => {
             const mgr = new CredentialsManager(extension, log);
 
-            async.timesSeries(3, (n, next) => {
-                const client = mgr.getCredentials({
-                    id: `id${n}`,
-                    accountId: `account${n}`,
-                    stsConfig,
-                    authConfig: assumeRoleAuth,
-                });
-                client.get(next);
-            }, () => {
-                assert(mgr._accountCredsCache.id0);
-                assert(mgr._accountCredsCache.id1);
-                assert(mgr._accountCredsCache.id2);
-                mgr.removeInactiveCredentials(100);
-                assert(mgr._accountCredsCache.id0);
-                assert(!mgr._accountCredsCache.id1);
-                assert(!mgr._accountCredsCache.id2);
-                done();
-            });
+            async.timesSeries(
+                3,
+                (n, next) => {
+                    const client = mgr.getCredentials({
+                        id: `id${n}`,
+                        accountId: `account${n}`,
+                        stsConfig,
+                        authConfig: assumeRoleAuth,
+                    });
+                    client.get(next);
+                },
+                () => {
+                    assert(mgr._accountCredsCache.id0);
+                    assert(mgr._accountCredsCache.id1);
+                    assert(mgr._accountCredsCache.id2);
+                    mgr.removeInactiveCredentials(100);
+                    assert(mgr._accountCredsCache.id0);
+                    assert(!mgr._accountCredsCache.id1);
+                    assert(!mgr._accountCredsCache.id2);
+                    done();
+                },
+            );
         });
 
         it('should report how many credentials are left', done => {
             const mgr = new CredentialsManager(extension, log);
 
-            async.timesSeries(3, (n, next) => {
-                const client = mgr.getCredentials({
-                    id: `id${n}`,
-                    accountId: `account${n}`,
-                    stsConfig,
-                    authConfig: assumeRoleAuth,
-                });
-                client.get(next);
-            }, () => {
-                assert.strictEqual(mgr.removeInactiveCredentials(5000), 2);
-                assert.strictEqual(mgr.removeInactiveCredentials(100), 1);
-                done();
-            });
+            async.timesSeries(
+                3,
+                (n, next) => {
+                    const client = mgr.getCredentials({
+                        id: `id${n}`,
+                        accountId: `account${n}`,
+                        stsConfig,
+                        authConfig: assumeRoleAuth,
+                    });
+                    client.get(next);
+                },
+                () => {
+                    assert.strictEqual(mgr.removeInactiveCredentials(5000), 2);
+                    assert.strictEqual(mgr.removeInactiveCredentials(100), 1);
+                    done();
+                },
+            );
         });
     });
 

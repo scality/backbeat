@@ -1,7 +1,6 @@
 const { errors } = require('@scality/arsenal');
 
 class BaseConfigManager {
-
     /**
      * Setup the config manager
      * @param {Function} cb callback
@@ -16,7 +15,8 @@ class BaseConfigManager {
      * @param {String} bucket - bucket
      * @return {Object|undefined} - configuration if available or undefined
      */
-    getConfig(bucket) { // eslint-disable-line no-unused-vars
+    // eslint-disable-next-line no-unused-vars
+    getConfig(bucket) {
         throw new errors.NotImplemented('Method not implemented');
     }
 

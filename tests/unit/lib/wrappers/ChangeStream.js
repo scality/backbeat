@@ -6,8 +6,7 @@ const events = require('events');
 
 const logger = new werelogs.Logger('connect-wrapper-logger');
 
-const ChangeStream =
-    require('../../../../lib/wrappers/ChangeStream');
+const ChangeStream = require('../../../../lib/wrappers/ChangeStream');
 
 describe('ChangeStream', () => {
     let wrapper;
@@ -32,32 +31,47 @@ describe('ChangeStream', () => {
     describe('constructor', () => {
         it('should fail when params invalid', done => {
             assert.throws(() => new ChangeStream({}));
-            assert.throws(() => new ChangeStream({
-                logger,
-            }));
-            assert.throws(() => new ChangeStream({
-                logger,
-                collection: {},
-                handler: () => {},
-            }));
-            assert.throws(() => new ChangeStream({
-                pipeline: [],
-                throwOnError: false,
-            }));
-            assert.throws(() => new ChangeStream({
-                logger,
-                collection: 'coll',
-                handler: () => {},
-                pipeline: [],
-                throwOnError: false,
-            }));
-            assert.throws(() => new ChangeStream({
-                logger,
-                collection: {},
-                handler: () => {},
-                pipeline: {},
-                throwOnError: false,
-            }));
+            assert.throws(
+                () =>
+                    new ChangeStream({
+                        logger,
+                    }),
+            );
+            assert.throws(
+                () =>
+                    new ChangeStream({
+                        logger,
+                        collection: {},
+                        handler: () => {},
+                    }),
+            );
+            assert.throws(
+                () =>
+                    new ChangeStream({
+                        pipeline: [],
+                        throwOnError: false,
+                    }),
+            );
+            assert.throws(
+                () =>
+                    new ChangeStream({
+                        logger,
+                        collection: 'coll',
+                        handler: () => {},
+                        pipeline: [],
+                        throwOnError: false,
+                    }),
+            );
+            assert.throws(
+                () =>
+                    new ChangeStream({
+                        logger,
+                        collection: {},
+                        handler: () => {},
+                        pipeline: {},
+                        throwOnError: false,
+                    }),
+            );
             const csw = new ChangeStream({
                 logger,
                 collection: {},
@@ -70,7 +84,7 @@ describe('ChangeStream', () => {
         });
     });
 
-    describe('_handleChangeStreamErrorEvent', () =>  {
+    describe('_handleChangeStreamErrorEvent', () => {
         it('should reset change stream on error without closing it (already closed)', async () => {
             const removeListenerStub = sinon.stub();
             const closeStub = sinon.stub();
@@ -82,16 +96,19 @@ describe('ChangeStream', () => {
                 close: closeStub,
             };
             wrapper._changeHandler = changehandler;
-            await wrapper._handleChangeStreamErrorEvent()
-            .then(() => {
-                assert(startStub.calledOnce);
-                assert(closeStub.notCalled);
-                assert(removeListenerStub.getCall(0).calledWithMatch('change',
-                    changehandler));
-                assert(removeListenerStub.getCall(1).calledWithMatch('error',
-                    wrapper._handleChangeStreamErrorEvent.bind(wrapper)));
-            })
-            .catch(err => assert.ifError(err));
+            await wrapper
+                ._handleChangeStreamErrorEvent()
+                .then(() => {
+                    assert(startStub.calledOnce);
+                    assert(closeStub.notCalled);
+                    assert(removeListenerStub.getCall(0).calledWithMatch('change', changehandler));
+                    assert(
+                        removeListenerStub
+                            .getCall(1)
+                            .calledWithMatch('error', wrapper._handleChangeStreamErrorEvent.bind(wrapper)),
+                    );
+                })
+                .catch(err => assert.ifError(err));
         });
 
         it('should close then reset the change steam on error', async () => {
@@ -105,16 +122,19 @@ describe('ChangeStream', () => {
                 close: closeStub,
             };
             wrapper._changeHandler = changehandler;
-            await wrapper._handleChangeStreamErrorEvent()
-            .then(() => {
-                assert(startStub.calledOnce);
-                assert(closeStub.calledOnce);
-                assert(removeListenerStub.getCall(0).calledWithMatch('change',
-                    changehandler));
-                assert(removeListenerStub.getCall(1).calledWithMatch('error',
-                    wrapper._handleChangeStreamErrorEvent.bind(wrapper)));
-            })
-            .catch(err => assert.ifError(err));
+            await wrapper
+                ._handleChangeStreamErrorEvent()
+                .then(() => {
+                    assert(startStub.calledOnce);
+                    assert(closeStub.calledOnce);
+                    assert(removeListenerStub.getCall(0).calledWithMatch('change', changehandler));
+                    assert(
+                        removeListenerStub
+                            .getCall(1)
+                            .calledWithMatch('error', wrapper._handleChangeStreamErrorEvent.bind(wrapper)),
+                    );
+                })
+                .catch(err => assert.ifError(err));
         });
 
         it('should throw error when throwOnError is set to true', async () => {
@@ -125,13 +145,14 @@ describe('ChangeStream', () => {
                 close: () => {},
             };
             wrapper._throwOnError = true;
-            await wrapper._handleChangeStreamErrorEvent()
-            .then(() => assert(startStub.notCalled))
-            .catch(err => assert.deepEqual(err, errors.InternalError));
+            await wrapper
+                ._handleChangeStreamErrorEvent()
+                .then(() => assert(startStub.notCalled))
+                .catch(err => assert.deepEqual(err, errors.InternalError));
         });
     });
 
-    describe('start', () =>  {
+    describe('start', () => {
         it('should create and listen to the metastore change stream', done => {
             const watchStub = sinon.stub().returns(new events.EventEmitter());
             wrapper._collection = {
@@ -157,7 +178,7 @@ describe('ChangeStream', () => {
                         '_id': 1,
                         'operationType': 1,
                         'documentKey._id': 1,
-                        'fullDocument.value': 1
+                        'fullDocument.value': 1,
                     },
                 },
             ];
@@ -180,7 +201,7 @@ describe('ChangeStream', () => {
                 collection: {
                     watch: watchStub,
                 },
-                handler: () => { },
+                handler: () => {},
                 pipeline: [],
                 throwOnError: false,
                 useStartAfter: true,

@@ -4,14 +4,12 @@ const assert = require('assert');
 const async = require('async');
 
 const jsutil = require('@scality/arsenal').jsutil;
-const ProvisionDispatcher =
-          require('../../lib/provisioning/ProvisionDispatcher');
+const ProvisionDispatcher = require('../../lib/provisioning/ProvisionDispatcher');
 const mockZookeeperClient = require('../functional/utils/mockZookeeperClient');
 
 const sinon = require('sinon');
 
-describe('provision dispatcher based on zookeeper recipes',
-function testDispatch() {
+describe('provision dispatcher based on zookeeper recipes', function testDispatch() {
     const endpoint = 'fake.endpoint:2181';
     const zkConf = { connectionString: endpoint };
     const provisionList = ['0', '1', '2', '3', '4', '5', '6', '7'];
@@ -21,8 +19,7 @@ function testDispatch() {
 
     before(done => {
         mockZookeeperClient({ doLog: false, maxRandomDelay: 100 });
-        const prov = new ProvisionDispatcher(
-            zkConf);
+        const prov = new ProvisionDispatcher(zkConf);
         prov.addProvisions(provisionList, done);
     });
 
@@ -31,23 +28,26 @@ function testDispatch() {
     });
 
     afterEach(done => {
-        async.each(clients, (client, cb) => {
-            if (client !== undefined) {
-                client.unsubscribe(cb);
-            } else {
-                cb();
-            }
-        }, err => {
-            assert.ifError(err);
-            clients = [];
-            done();
-        });
+        async.each(
+            clients,
+            (client, cb) => {
+                if (client !== undefined) {
+                    client.unsubscribe(cb);
+                } else {
+                    cb();
+                }
+            },
+            err => {
+                assert.ifError(err);
+                clients = [];
+                done();
+            },
+        );
     });
 
     it('should be given all provisions when alone', done => {
         const cbOnce = jsutil.once(done);
-        clients[0] = new ProvisionDispatcher(
-            zkConf);
+        clients[0] = new ProvisionDispatcher(zkConf);
         clients[0].subscribe((err, items) => {
             assert.ifError(err);
             assert.deepStrictEqual(items, provisionList);
@@ -57,80 +57,78 @@ function testDispatch() {
 
     it('should recheck if missing a watcher event', done => {
         const cbOnce = jsutil.once(done);
-        clients[0] = new ProvisionDispatcher(
-            zkConf);
+        clients[0] = new ProvisionDispatcher(zkConf);
         let times = 0;
-        clients[0].subscribe((err, items) => {
-            assert.ifError(err);
-            if (times === 0) {
-                // first time we shall have all provisions
-                assert(items.length === 8);
-                // simulate a watcher event loss
-                const myPath =
-                      clients[0]._client.client._basePath +
-                      clients[0]._getMyPath();
-                const result = clients[0]._client.client._getZNode(myPath);
-                assert.ifError(result.err);
-                result.parent.children[result.baseName].emitter.removeAllListeners();
-                // introduce a new client
-                clients[1] = new ProvisionDispatcher(
-                    zkConf);
-                clients[1].subscribe(err => {
-                    assert.ifError(err);
-                }, false);
-            } else {
-                /* there might be various intermediate callbacks and
+        clients[0].subscribe(
+            (err, items) => {
+                assert.ifError(err);
+                if (times === 0) {
+                    // first time we shall have all provisions
+                    assert(items.length === 8);
+                    // simulate a watcher event loss
+                    const myPath = clients[0]._client.client._basePath + clients[0]._getMyPath();
+                    const result = clients[0]._client.client._getZNode(myPath);
+                    assert.ifError(result.err);
+                    result.parent.children[result.baseName].emitter.removeAllListeners();
+                    // introduce a new client
+                    clients[1] = new ProvisionDispatcher(zkConf);
+                    clients[1].subscribe(err => {
+                        assert.ifError(err);
+                    }, false);
+                } else {
+                    /* there might be various intermediate callbacks and
                    since we will not receive the watcher event we will
                    not be aware of the arrival of the new
                    ProvisionDispatcher, but after the timer we will
                    get notified, and we will get half of the
                    provisions 8/2 = 4 */
-                if (items.length === 4) {
-                    cbOnce();
+                    if (items.length === 4) {
+                        cbOnce();
+                    }
                 }
-            }
-            times++;
-        }, true, 5000);
+                times++;
+            },
+            true,
+            5000,
+        );
     });
 
     it('should not notify if provisions have not changed', done => {
-        clients[0] = new ProvisionDispatcher(
-            zkConf);
+        clients[0] = new ProvisionDispatcher(zkConf);
         let times = 0;
-        clients[0].subscribe((err, items) => {
-            assert.ifError(err);
-            if (times === 0) {
-                // first time we shall have all provisions
-                assert(items.length === 8);
-                // simulate a watcher event loss
-                const myPath =
-                      clients[0]._client.client._basePath +
-                      clients[0]._getMyPath();
-                const result = clients[0]._client.client._getZNode(myPath);
-                assert.ifError(result.err);
-                result.parent.children[result.baseName].emitter.removeAllListeners();
-                // leave enough time for the checker to trigger and make sure it does not notify
-                setTimeout(done, 6000);
-            } else {
-                assert.fail(`unexpected provisioning update received: ${items}`);
-            }
-            times++;
-        }, true, 5000);
+        clients[0].subscribe(
+            (err, items) => {
+                assert.ifError(err);
+                if (times === 0) {
+                    // first time we shall have all provisions
+                    assert(items.length === 8);
+                    // simulate a watcher event loss
+                    const myPath = clients[0]._client.client._basePath + clients[0]._getMyPath();
+                    const result = clients[0]._client.client._getZNode(myPath);
+                    assert.ifError(result.err);
+                    result.parent.children[result.baseName].emitter.removeAllListeners();
+                    // leave enough time for the checker to trigger and make sure it does not notify
+                    setTimeout(done, 6000);
+                } else {
+                    assert.fail(`unexpected provisioning update received: ${items}`);
+                }
+                times++;
+            },
+            true,
+            5000,
+        );
     });
 
-    it('should spread the load across participants with 10 participants',
-    done => {
+    it('should spread the load across participants with 10 participants', done => {
         const subscriptionLists = [];
         let nSubscriptionLists = 0;
 
         function checkResult() {
             subscriptionLists.sort();
-            const nbIdleOwners =
-                      subscriptionLists.length - provisionList.length;
+            const nbIdleOwners = subscriptionLists.length - provisionList.length;
             for (let i = 0; i < subscriptionLists.length; ++i) {
                 if (i >= nbIdleOwners) {
-                    assert.deepStrictEqual(subscriptionLists[i],
-                                           [provisionList[i - nbIdleOwners]]);
+                    assert.deepStrictEqual(subscriptionLists[i], [provisionList[i - nbIdleOwners]]);
                 } else {
                     assert.deepStrictEqual(subscriptionLists[i], []);
                 }
@@ -163,17 +161,14 @@ function testDispatch() {
         }
     });
 
-    it('should redispatch to remaining participants when some fail',
-    done => {
+    it('should redispatch to remaining participants when some fail', done => {
         const subscriptionLists = new Array(10).fill([]);
         let nSubscriptionLists = 0;
 
         function checkRedispatch() {
             const remainingSortedLists = subscriptionLists.slice(2);
             remainingSortedLists.sort();
-            assert.deepStrictEqual(remainingSortedLists,
-                [['0'], ['1'], ['2'], ['3'],
-                 ['4'], ['5'], ['6'], ['7']]);
+            assert.deepStrictEqual(remainingSortedLists, [['0'], ['1'], ['2'], ['3'], ['4'], ['5'], ['6'], ['7']]);
             // end of test
             done();
         }

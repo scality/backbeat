@@ -24,11 +24,14 @@ const redisClient = new RedisClient(config, fakeLogger);
 
 // setup stats model
 const sites = ['site1', 'site2'];
-const metrics = new Metrics({
-    redisConfig: config,
-    crrSites: ['site1', 'site2', 'all'],
-    internalStart: Date.now() - (EXPIRY * 1000), // 24 hours ago.
-}, fakeLogger);
+const metrics = new Metrics(
+    {
+        redisConfig: config,
+        crrSites: ['site1', 'site2', 'all'],
+        internalStart: Date.now() - EXPIRY * 1000, // 24 hours ago.
+    },
+    fakeLogger,
+);
 
 // Since many methods were overwritten, these tests should validate the changes
 // made to the original methods
@@ -48,52 +51,50 @@ describe('Metrics class', () => {
             bytesPending: 'bb:crr:opspending',
         };
         const routes = apiRoutes(redisKeys, { crr: sites });
-        const details = routes.find(route =>
-            route.category === 'metrics' && route.type === 'all');
+        const details = routes.find(route => route.category === 'metrics' && route.type === 'all');
         details.site = 'all';
         details.service = 'crr';
         metrics.getAllMetrics(details, (err, res) => {
             assert.ifError(err);
             const expected = {
                 pending: {
-                    description: 'Number of pending replication operations ' +
-                        '(count) and bytes (size)',
+                    description: 'Number of pending replication operations (count) and bytes (size)',
                     results: {
                         count: 0,
                         size: 0,
                     },
                 },
                 backlog: {
-                    description: 'Number of incomplete replication operations' +
-                        ' (count) and number of incomplete bytes transferred' +
-                        ' (size)',
+                    description:
+                        'Number of incomplete replication operations (count) ' +
+                        'and number of incomplete bytes transferred (size)',
                     results: {
                         count: 0,
                         size: 0,
                     },
                 },
                 completions: {
-                    description: 'Number of completed replication operations' +
-                        ' (count) and number of bytes transferred (size) in ' +
-                        `the last ${EXPIRY} seconds`,
+                    description:
+                        'Number of completed replication operations (count) and number ' +
+                        `of bytes transferred (size) in the last ${EXPIRY} seconds`,
                     results: {
                         count: 0,
                         size: 0,
                     },
                 },
                 failures: {
-                    description: 'Number of failed replication operations ' +
-                        `(count) and bytes (size) in the last ${EXPIRY} ` +
-                        'seconds',
+                    description:
+                        'Number of failed replication operations (count) ' +
+                        `and bytes (size) in the last ${EXPIRY} seconds`,
                     results: {
                         count: 0,
                         size: 0,
                     },
                 },
                 throughput: {
-                    description: 'Current throughput for replication' +
-                        ' operations in ops/sec (count) and bytes/sec (size) ' +
-                        `in the last ${THROUGHPUT_EXPIRY} seconds`,
+                    description:
+                        'Current throughput for replication operations in ops/sec (count) ' +
+                        `and bytes/sec (size) in the last ${THROUGHPUT_EXPIRY} seconds`,
                     results: {
                         count: '0.00',
                         size: '0.00',

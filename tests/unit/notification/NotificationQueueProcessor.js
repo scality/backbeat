@@ -5,14 +5,10 @@ const sinon = require('sinon');
 const NotificationQueueProcessor = require('../../../extensions/notification/queueProcessor/QueueProcessor');
 const constants = require('../../../extensions/notification/constants');
 
-const mongoConfig
-    = require('../../config.notification.json').queuePopulator.mongo;
-const kafkaConfig
-    = require('../../config.notification.json').queuePopulator.kafka;
-const notificationConfig
-    = require('../../config.notification.json').extensions.notification;
-const zookeeperConfig
-    = require('../../config.notification.json').zookeeper;
+const mongoConfig = require('../../config.notification.json').queuePopulator.mongo;
+const kafkaConfig = require('../../config.notification.json').queuePopulator.kafka;
+const notificationConfig = require('../../config.notification.json').extensions.notification;
+const zookeeperConfig = require('../../config.notification.json').zookeeper;
 
 const logger = new werelogs.Logger('NotificationQueueProcessor:test');
 
@@ -39,7 +35,7 @@ const kafkaEntry = {
         versionId: null,
         bucket: 'tmp-bucket',
         key: 'example-object',
-    })
+    }),
 };
 
 const sentEntry = JSON.stringify({
@@ -85,8 +81,14 @@ describe('NotificationQueueProcessor:: ', () => {
     let notificationQueueProcessor;
 
     beforeEach(() => {
-        notificationQueueProcessor = new NotificationQueueProcessor(mongoConfig, zookeeperConfig, kafkaConfig,
-            notificationConfig, notificationConfig.destinations[0].resource, null);
+        notificationQueueProcessor = new NotificationQueueProcessor(
+            mongoConfig,
+            zookeeperConfig,
+            kafkaConfig,
+            notificationConfig,
+            notificationConfig.destinations[0].resource,
+            null,
+        );
         notificationQueueProcessor.logger = logger;
     });
 
@@ -105,10 +107,12 @@ describe('NotificationQueueProcessor:: ', () => {
             };
             notificationQueueProcessor.processKafkaEntry(kafkaEntry, err => {
                 assert.ifError(err);
-                const expectedMessage = [{
-                    key: 'tmp-bucket/example-object',
-                    message: sentEntry,
-                }];
+                const expectedMessage = [
+                    {
+                        key: 'tmp-bucket/example-object',
+                        message: sentEntry,
+                    },
+                ];
                 assert.deepStrictEqual(sendStub.args[0][0], expectedMessage);
             });
         });

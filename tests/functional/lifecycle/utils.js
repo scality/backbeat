@@ -4,15 +4,7 @@ const ONE_DAY_IN_SEC = 60 * 60 * 24 * 1000;
 
 class TestKafkaEntry {
     constructor(state) {
-        const {
-            objectTopic,
-            transitionTopic,
-            bucketTopic,
-            dataMoverTopic,
-            ownerId,
-            accountId,
-            bucketName,
-        } = state;
+        const { objectTopic, transitionTopic, bucketTopic, dataMoverTopic, ownerId, accountId, bucketName } = state;
 
         this.objectTopic = objectTopic;
         this.transitionTopic = transitionTopic;
@@ -70,8 +62,10 @@ class TestKafkaEntry {
         }
     }
 
-    expectObjectTransitionEntry(e, { keyName, versionId, lastModified, eTag, contentLength,
-        sourceLocation, destinationLocation }) {
+    expectObjectTransitionEntry(
+        e,
+        { keyName, versionId, lastModified, eTag, contentLength, sourceLocation, destinationLocation },
+    ) {
         assert(e);
         assert.strictEqual(e.topicName, this.dataMoverTopic);
         assert.strictEqual(e.entry.length, 1);
@@ -101,16 +95,10 @@ class TestKafkaEntry {
         assert.strictEqual(message.resultsTopic, this.transitionTopic);
     }
 
-    expectBucketEntry(e, {
-        listType,
-        hasBeforeDate,
-        prefix,
-        marker,
-        keyMarker,
-        versionIdMarker,
-        uploadIdMarker,
-        storageClass,
-    }) {
+    expectBucketEntry(
+        e,
+        { listType, hasBeforeDate, prefix, marker, keyMarker, versionIdMarker, uploadIdMarker, storageClass },
+    ) {
         assert(e);
         assert.strictEqual(e.topicName, this.bucketTopic);
         assert.strictEqual(e.entry.length, 1);
@@ -137,10 +125,7 @@ class TestKafkaEntry {
 
 class KeyMock {
     constructor(state) {
-        const {
-            owner,
-            sourceLocation,
-        } = state;
+        const { owner, sourceLocation } = state;
 
         this.owner = owner;
         this.sourceLocation = sourceLocation;
@@ -148,7 +133,7 @@ class KeyMock {
 
     nonCurrent({ keyName, versionId, daysEarlier, size }) {
         const currentDate = Date.now();
-        const staleDate = (new Date(currentDate - (daysEarlier * ONE_DAY_IN_SEC))).toISOString();
+        const staleDate = new Date(currentDate - daysEarlier * ONE_DAY_IN_SEC).toISOString();
         return {
             Key: keyName,
             LastModified: '2023-03-13T16:43:59.200Z',
@@ -166,7 +151,7 @@ class KeyMock {
 
     current({ keyName, daysEarlier, tagSet, size }) {
         const currentDate = Date.now();
-        const lastModified = (new Date(currentDate - (daysEarlier * ONE_DAY_IN_SEC))).toISOString();
+        const lastModified = new Date(currentDate - daysEarlier * ONE_DAY_IN_SEC).toISOString();
         return {
             Key: keyName,
             LastModified: lastModified,
@@ -176,13 +161,13 @@ class KeyMock {
             StorageClass: 'STANDARD',
             TagSet: tagSet,
             DataStoreName: this.sourceLocation,
-            ListType: 'current'
+            ListType: 'current',
         };
     }
 
     orphanDeleteMarker({ keyName, versionId, daysEarlier }) {
         const currentDate = Date.now();
-        const lastModified = (new Date(currentDate - (daysEarlier * ONE_DAY_IN_SEC))).toISOString();
+        const lastModified = new Date(currentDate - daysEarlier * ONE_DAY_IN_SEC).toISOString();
         return {
             Key: keyName,
             LastModified: lastModified,

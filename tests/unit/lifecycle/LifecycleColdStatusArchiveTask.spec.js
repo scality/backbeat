@@ -5,10 +5,8 @@ const sinon = require('sinon');
 const config = require('../../config.json');
 
 const { LifecycleMetrics } = require('../../../extensions/lifecycle/LifecycleMetrics');
-const LifecycleColdStatusArchiveTask = require(
-    '../../../extensions/lifecycle/tasks/LifecycleColdStatusArchiveTask');
-const ColdStorageStatusQueueEntry =
-    require('../../../lib/models/ColdStorageStatusQueueEntry');
+const LifecycleColdStatusArchiveTask = require('../../../extensions/lifecycle/tasks/LifecycleColdStatusArchiveTask');
+const ColdStorageStatusQueueEntry = require('../../../lib/models/ColdStorageStatusQueueEntry');
 
 const {
     GarbageCollectorProducerMock,
@@ -30,15 +28,17 @@ const message = Buffer.from(`{
 
 const coldLocation = 'cold';
 
-const loc = [{
-    key: 'key',
-    size: 10,
-    start: 0,
-    dataStoreName: 'locationName',
-    dataStoreType: 'aws_s3',
-    dataStoreETag: 'tag',
-    dataStoreVersionId: '1234567890',
-}];
+const loc = [
+    {
+        key: 'key',
+        size: 10,
+        start: 0,
+        dataStoreName: 'locationName',
+        dataStoreType: 'aws_s3',
+        dataStoreETag: 'tag',
+        dataStoreVersionId: '1234567890',
+    },
+];
 
 describe('LifecycleColdStatusArchiveTask', () => {
     let archiveTask;
@@ -63,7 +63,8 @@ describe('LifecycleColdStatusArchiveTask', () => {
             gcProducer,
             coldProducer,
             null,
-            new werelogs.Logger('test:LifecycleColdStatusArchiveTask'));
+            new werelogs.Logger('test:LifecycleColdStatusArchiveTask'),
+        );
         archiveTask = new LifecycleColdStatusArchiveTask(objectProcessor);
     });
 
@@ -71,10 +72,7 @@ describe('LifecycleColdStatusArchiveTask', () => {
         backbeatClient.batchDeleteResponse = { error: null, res: null };
 
         const entry = ColdStorageStatusQueueEntry.createFromKafkaEntry({ value: message });
-        mdObj.setLocation(loc)
-            .setDataStoreName('us-east-1')
-            .setAmzStorageClass('us-east-1')
-            .setArchive(null);
+        mdObj.setLocation(loc).setDataStoreName('us-east-1').setAmzStorageClass('us-east-1').setArchive(null);
         backbeatMetadataProxyClient.setMdObj(mdObj);
 
         archiveTask.processEntry(coldLocation, entry, err => {
@@ -104,10 +102,7 @@ describe('LifecycleColdStatusArchiveTask', () => {
         backbeatClient.batchDeleteResponse = { error: { statusCode: 404 }, res: null };
 
         const entry = ColdStorageStatusQueueEntry.createFromKafkaEntry({ value: message });
-        mdObj.setLocation()
-            .setDataStoreName('us-east-1')
-            .setAmzStorageClass('us-east-1')
-            .setArchive(null);
+        mdObj.setLocation().setDataStoreName('us-east-1').setAmzStorageClass('us-east-1').setArchive(null);
         backbeatMetadataProxyClient.setMdObj(mdObj);
 
         archiveTask.processEntry(coldLocation, entry, err => {
@@ -131,7 +126,8 @@ describe('LifecycleColdStatusArchiveTask', () => {
         const onLifecycleCompleted = sinon.spy(LifecycleMetrics, 'onLifecycleCompleted');
 
         const entry = ColdStorageStatusQueueEntry.createFromKafkaEntry({ value: message });
-        mdObj.setLocation()
+        mdObj
+            .setLocation()
             .setDataStoreName('us-east-1')
             .setAmzStorageClass('us-east-1')
             .setTransitionInProgress(true, Date.now() - 1000)
@@ -155,10 +151,7 @@ describe('LifecycleColdStatusArchiveTask', () => {
         sinon.stub(backbeatMetadataProxyClient, 'putMetadata').yields(putError);
 
         const entry = ColdStorageStatusQueueEntry.createFromKafkaEntry({ value: message });
-        mdObj.setLocation(loc)
-            .setDataStoreName('us-east-1')
-            .setAmzStorageClass('us-east-1')
-            .setArchive(null);
+        mdObj.setLocation(loc).setDataStoreName('us-east-1').setAmzStorageClass('us-east-1').setArchive(null);
         backbeatMetadataProxyClient.setMdObj(mdObj);
 
         archiveTask.processEntry(coldLocation, entry, (err, commitInfo) => {
@@ -172,10 +165,7 @@ describe('LifecycleColdStatusArchiveTask', () => {
         backbeatClient.batchDeleteResponse = { error: { statusCode: 404 }, res: null };
 
         const entry = ColdStorageStatusQueueEntry.createFromKafkaEntry({ value: message });
-        mdObj.setLocation()
-            .setDataStoreName('us-east-1')
-            .setAmzStorageClass(coldLocation)
-            .setArchive(null);
+        mdObj.setLocation().setDataStoreName('us-east-1').setAmzStorageClass(coldLocation).setArchive(null);
         backbeatMetadataProxyClient.setMdObj(mdObj);
 
         archiveTask.processEntry(coldLocation, entry, err => {
@@ -192,9 +182,7 @@ describe('LifecycleColdStatusArchiveTask', () => {
         backbeatClient.batchDeleteResponse = { error: { statusCode: 404 }, res: null };
 
         const entry = ColdStorageStatusQueueEntry.createFromKafkaEntry({ value: message });
-        mdObj.setLocation()
-            .setDataStoreName('us-east-1')
-            .setAmzStorageClass(coldLocation);
+        mdObj.setLocation().setDataStoreName('us-east-1').setAmzStorageClass(coldLocation);
         // setArchive() requires archiveInfo, which the object does not have yet
         mdObj.getValue().archive = {
             restoreRequestedAt: '2017-07-11T02:44:25.515Z',
@@ -251,13 +239,17 @@ describe('LifecycleColdStatusArchiveTask', () => {
     });
 
     describe('eTag', () => {
-        const messageWithETag = eTag => Buffer.from(JSON.stringify({
-            ...JSON.parse(message),
-            eTag,
-        }));
+        const messageWithETag = eTag =>
+            Buffer.from(
+                JSON.stringify({
+                    ...JSON.parse(message),
+                    eTag,
+                }),
+            );
 
         beforeEach(() => {
-            mdObj.setLocation(loc)
+            mdObj
+                .setLocation(loc)
                 .setDataStoreName('us-east-1')
                 .setAmzStorageClass('us-east-1')
                 .setContentMd5('1ccc7006b902a4d30ec26e9ddcf759d8')
@@ -307,7 +299,8 @@ describe('LifecycleColdStatusArchiveTask', () => {
 
         it('should delete the new archive when the object was already archived', done => {
             const entry = ColdStorageStatusQueueEntry.createFromKafkaEntry({ value: message });
-            mdObj.setLocation(loc)
+            mdObj
+                .setLocation(loc)
                 .setDataStoreName('us-east-1')
                 .setAmzStorageClass('us-east-1')
                 .setArchive(new ObjectMDArchive(existingArchiveInfo));
@@ -329,11 +322,11 @@ describe('LifecycleColdStatusArchiveTask', () => {
 
         it('should delete the new archive when a restore is pending on the previous one', done => {
             const entry = ColdStorageStatusQueueEntry.createFromKafkaEntry({ value: message });
-            mdObj.setLocation(loc)
+            mdObj
+                .setLocation(loc)
                 .setDataStoreName('us-east-1')
                 .setAmzStorageClass(coldLocation)
-                .setArchive(new ObjectMDArchive(
-                    existingArchiveInfo, '2017-07-11T02:44:25.515Z', 3));
+                .setArchive(new ObjectMDArchive(existingArchiveInfo, '2017-07-11T02:44:25.515Z', 3));
             backbeatMetadataProxyClient.setMdObj(mdObj);
 
             archiveTask.processEntry(coldLocation, entry, err => {
@@ -351,9 +344,7 @@ describe('LifecycleColdStatusArchiveTask', () => {
 
         it('should delete the new archive when the object is restored', done => {
             const entry = ColdStorageStatusQueueEntry.createFromKafkaEntry({ value: message });
-            mdObj.setLocation(loc)
-                .setDataStoreName('us-east-1')
-                .setAmzStorageClass(coldLocation);
+            mdObj.setLocation(loc).setDataStoreName('us-east-1').setAmzStorageClass(coldLocation);
             mdObj.getValue().archive = {
                 archiveInfo: existingArchiveInfo,
                 restoreRequestedAt: '2017-07-11T02:44:25.515Z',
@@ -378,7 +369,8 @@ describe('LifecycleColdStatusArchiveTask', () => {
 
         it('should not delete anything when the status entry is a duplicate', done => {
             const entry = ColdStorageStatusQueueEntry.createFromKafkaEntry({ value: message });
-            mdObj.setLocation(loc)
+            mdObj
+                .setLocation(loc)
                 .setDataStoreName('us-east-1')
                 .setAmzStorageClass('us-east-1')
                 .setArchive(new ObjectMDArchive(entry.archiveInfo));
@@ -388,8 +380,7 @@ describe('LifecycleColdStatusArchiveTask', () => {
                 assert.ifError(err);
 
                 assert.strictEqual(coldProducer.getReceivedEntry(), null);
-                assert.strictEqual(gcProducer.getReceivedEntry().getActionType(),
-                    'deleteArchivedSourceData');
+                assert.strictEqual(gcProducer.getReceivedEntry().getActionType(), 'deleteArchivedSourceData');
                 done();
             });
         });
@@ -409,9 +400,7 @@ describe('LifecycleColdStatusArchiveTask', () => {
 
         it('should ignore a replayed status entry while the object is being restored', done => {
             const entry = ColdStorageStatusQueueEntry.createFromKafkaEntry({ value: message });
-            mdObj.setLocation()
-                .setDataStoreName(coldLocation)
-                .setAmzStorageClass(coldLocation);
+            mdObj.setLocation().setDataStoreName(coldLocation).setAmzStorageClass(coldLocation);
             mdObj.getValue().archive = { archiveInfo: entry.archiveInfo, ...restoreRequest };
             backbeatMetadataProxyClient.setMdObj(mdObj);
 
@@ -425,9 +414,7 @@ describe('LifecycleColdStatusArchiveTask', () => {
 
         it('should ignore a replayed status entry once the object is restored', done => {
             const entry = ColdStorageStatusQueueEntry.createFromKafkaEntry({ value: message });
-            mdObj.setLocation(loc)
-                .setDataStoreName('us-east-1')
-                .setAmzStorageClass(coldLocation);
+            mdObj.setLocation(loc).setDataStoreName('us-east-1').setAmzStorageClass(coldLocation);
             mdObj.getValue().archive = {
                 archiveInfo: entry.archiveInfo,
                 ...restoreRequest,
@@ -452,7 +439,8 @@ describe('LifecycleColdStatusArchiveTask', () => {
 
             // archived, but the hot data is not released yet: the restore is not started
             const setupArchivedMd = archiveInfo => {
-                mdObj.setLocation(loc)
+                mdObj
+                    .setLocation(loc)
                     .setDataStoreName('us-east-1')
                     .setAmzStorageClass(coldLocation)
                     .setTransitionInProgress(true, Date.now());
@@ -472,8 +460,7 @@ describe('LifecycleColdStatusArchiveTask', () => {
                         archiveInfo: entry.archiveInfo,
                         ...restoreRequest,
                     });
-                    assert.strictEqual(gcProducer.getReceivedEntry().getActionType(),
-                        'deleteArchivedSourceData');
+                    assert.strictEqual(gcProducer.getReceivedEntry().getActionType(), 'deleteArchivedSourceData');
                     assert.strictEqual(coldProducer.getReceivedEntry(), null);
                     done();
                 });

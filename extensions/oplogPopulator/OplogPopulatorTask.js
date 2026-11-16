@@ -6,32 +6,22 @@ const { errors } = require('@scality/arsenal');
 const config = require('../../lib/Config');
 const OplogPopulator = require('./OplogPopulator');
 
-const {
-    DEFAULT_LIVE_ROUTE,
-    DEFAULT_READY_ROUTE,
-    DEFAULT_METRICS_ROUTE,
-} = require('@scality/arsenal').network.probe.ProbeServer;
+const { DEFAULT_LIVE_ROUTE, DEFAULT_READY_ROUTE, DEFAULT_METRICS_ROUTE } =
+    require('@scality/arsenal').network.probe.ProbeServer;
 const { sendSuccess, sendError } = require('@scality/arsenal').network.probe.Utils;
 const { startProbeServerPromise } = require('../../lib/util/probe');
 
 const logger = new werelogs.Logger('Backbeat:OplogPopulator');
-werelogs.configure({ level: config.log.logLevel,
-    dump: config.log.dumpLevel });
+werelogs.configure({ level: config.log.logLevel, dump: config.log.dumpLevel });
 
 const mongoConfig = config.queuePopulator.mongo;
 const oplogPopulatorConfig = config.extensions.oplogPopulator;
-const replicationQPConfig = config.extensions.replication &&
-    config.extensions.replication.queueProcessor;
+const replicationQPConfig = config.extensions.replication && config.extensions.replication.queueProcessor;
 if (replicationQPConfig && replicationQPConfig.sourceCheckIfSizeGreaterThanMB) {
-    oplogPopulatorConfig.locationStrippingBytesThreshold =
-        replicationQPConfig.sourceCheckIfSizeGreaterThanMB * 1000000;
+    oplogPopulatorConfig.locationStrippingBytesThreshold = replicationQPConfig.sourceCheckIfSizeGreaterThanMB * 1000000;
 }
 
-const activeExtensions = [
-    'notification',
-    'lifecycle',
-    'replication',
-].filter(ext => config.extensions[ext]);
+const activeExtensions = ['notification', 'lifecycle', 'replication'].filter(ext => config.extensions[ext]);
 
 const oplogPopulator = new OplogPopulator({
     config: oplogPopulatorConfig,
@@ -47,7 +37,7 @@ const oplogPopulator = new OplogPopulator({
  * @param {Logger} log - Logger
  * @returns {undefined}
  */
- function handleLiveness(res, log) {
+function handleLiveness(res, log) {
     if (oplogPopulator.isReady()) {
         sendSuccess(res, log);
     } else {
@@ -64,9 +54,7 @@ const oplogPopulator = new OplogPopulator({
             // following the same pattern as other extensions, where liveness
             // and readiness are handled by the same handler
             probeServer.addHandler([DEFAULT_LIVE_ROUTE, DEFAULT_READY_ROUTE], handleLiveness);
-            probeServer.addHandler(DEFAULT_METRICS_ROUTE,
-                (res, log) => oplogPopulator.handleMetrics(res, log)
-            );
+            probeServer.addHandler(DEFAULT_METRICS_ROUTE, (res, log) => oplogPopulator.handleMetrics(res, log));
         }
     } catch (error) {
         logger.error('Error when starting up the oplog populator', {

@@ -20,8 +20,13 @@ describe('isRetryableMiddleware', () => {
     const middleware = isRetryableMiddleware();
 
     async function classify(error) {
-        const handler = middleware(async () => { throw error; });
-        const thrown = await handler({}).then(() => null, err => err);
+        const handler = middleware(async () => {
+            throw error;
+        });
+        const thrown = await handler({}).then(
+            () => null,
+            err => err,
+        );
         assert.strictEqual(thrown, error);
         assert.strictEqual(error.$retryable, error.retryable);
         return error.retryable;
@@ -45,9 +50,11 @@ describe('isRetryableMiddleware', () => {
         networkError('EPIPE'),
         networkError('ETIMEDOUT'),
         Object.assign(new Error('timed out'), { name: 'TimeoutError' }),
-    ].forEach(error => it(`should flag ${error.code || error.name} as retryable`, async () => {
-        assert.strictEqual(await classify(error), true);
-    }));
+    ].forEach(error =>
+        it(`should flag ${error.code || error.name} as retryable`, async () => {
+            assert.strictEqual(await classify(error), true);
+        }),
+    );
 
     [
         s3Error('NoSuchKey', 404),
@@ -55,7 +62,9 @@ describe('isRetryableMiddleware', () => {
         s3Error('InvalidArgument', 400),
         Object.assign(new Error('aborted'), { name: 'AbortError' }),
         new Error('boom'),
-    ].forEach(error => it(`should flag ${error.name} as not retryable`, async () => {
-        assert.strictEqual(await classify(error), false);
-    }));
+    ].forEach(error =>
+        it(`should flag ${error.name} as not retryable`, async () => {
+            assert.strictEqual(await classify(error), false);
+        }),
+    );
 });

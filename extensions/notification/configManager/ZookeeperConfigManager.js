@@ -14,28 +14,30 @@ const constants = require('../constants');
 const CONFIG_WRITE_MAX_ATTEMPTS = 5;
 const CONFIG_WRITE_RETRY_BASE_MS = 200;
 
-const paramsJoi = joi.object({
-    zkClient: joi.object().optional(),
-    zkConfig: joi.object().when('zkClient', {
-        is: joi.exist(),
-        then: joi.optional(),
-        otherwise: joi.required(),
-    }),
-    zkPath: joi.string().when('zkClient', {
-        is: joi.exist(),
-        then: joi.optional(),
-        otherwise: joi.required(),
-    }),
-    zkConcurrency: joi.number().required(),
-    logger: joi.object().required(),
-}).required();
+const paramsJoi = joi
+    .object({
+        zkClient: joi.object().optional(),
+        zkConfig: joi.object().when('zkClient', {
+            is: joi.exist(),
+            then: joi.optional(),
+            otherwise: joi.required(),
+        }),
+        zkPath: joi.string().when('zkClient', {
+            is: joi.exist(),
+            then: joi.optional(),
+            otherwise: joi.required(),
+        }),
+        zkConcurrency: joi.number().required(),
+        logger: joi.object().required(),
+    })
+    .required();
 
 /**
  * @class ZookeeperConfigManager
  *
  * @classdesc Manages bucket notification configurations in zookeeper
  */
-class ZookeeperConfigManager extends BaseConfigManager  {
+class ZookeeperConfigManager extends BaseConfigManager {
     /**
      * @constructor
      * @param {Object} params - constructor params
@@ -71,18 +73,19 @@ class ZookeeperConfigManager extends BaseConfigManager  {
         });
         const data = JSON.stringify(config);
         // retry with backoff; the write is idempotent so retrying is safe
-        return async.retry({
-            times: CONFIG_WRITE_MAX_ATTEMPTS,
-            interval: retryCount =>
-                CONFIG_WRITE_RETRY_BASE_MS * (2 ** (retryCount - 1)),
-        },
-        next => this._setBucketNotifConfig(bucket, data, next),
-        err => {
-            if (err) {
-                this._emitter.emit('error', err, 'setConfigListener');
-            }
-            return undefined;
-        });
+        return async.retry(
+            {
+                times: CONFIG_WRITE_MAX_ATTEMPTS,
+                interval: retryCount => CONFIG_WRITE_RETRY_BASE_MS * 2 ** (retryCount - 1),
+            },
+            next => this._setBucketNotifConfig(bucket, data, next),
+            err => {
+                if (err) {
+                    this._emitter.emit('error', err, 'setConfigListener');
+                }
+                return undefined;
+            },
+        );
     }
 
     _getConfigListener(updatedBucket = '') {
@@ -128,8 +131,7 @@ class ZookeeperConfigManager extends BaseConfigManager  {
     _setupEventListeners() {
         this._emitter
             .on('error', error => this._errorListener(error))
-            .on('setConfig',
-                (bucket, config) => this._setConfigListener(bucket, config))
+            .on('setConfig', (bucket, config) => this._setConfigListener(bucket, config))
             .on('getConfig', bucket => this._getConfigListener(bucket))
             .on('removeConfig', bucket => this._removeConfigListener(bucket));
     }
@@ -155,52 +157,52 @@ class ZookeeperConfigManager extends BaseConfigManager  {
     }
 
     _getBucketNotifConfig(bucket, cb) {
-        const method
-            = 'ZookeeperConfigManager._getBucketNotifConfig';
+        const method = 'ZookeeperConfigManager._getBucketNotifConfig';
         const zkPath = this._getBucketNodeZkPath(bucket);
         this.log.debug('fetching bucket notification configuration', {
             method,
             bucket,
             zkPath,
         });
-        return this._zkClient.getData(zkPath, event => {
-            this.log.debug('zookeeper getData watcher triggered', {
-                zkPath,
-                method,
-                event,
-                bucket,
-            });
-            if (event.type === zookeeper.Event.NODE_DATA_CHANGED) {
-                this._emitter.emit('getConfig', bucket);
-            }
-            if (event.type === zookeeper.Event.NODE_DELETED) {
-                this.removeConfig(bucket, false);
-            }
-        }, (error, data) => {
-            if (error && error.name !== 'NO_NODE') {
-                const errMsg
-                    = 'error fetching bucket notification configuration';
-                this.log.error(errMsg, {
+        return this._zkClient.getData(
+            zkPath,
+            event => {
+                this.log.debug('zookeeper getData watcher triggered', {
+                    zkPath,
                     method,
-                    error,
+                    event,
+                    bucket,
                 });
-                return this._callbackHandler(cb, error);
-            }
-            if (data) {
-                return this._callbackHandler(cb, null, data);
-            }
-            // no configuration
-            return this._callbackHandler(cb);
-        });
+                if (event.type === zookeeper.Event.NODE_DATA_CHANGED) {
+                    this._emitter.emit('getConfig', bucket);
+                }
+                if (event.type === zookeeper.Event.NODE_DELETED) {
+                    this.removeConfig(bucket, false);
+                }
+            },
+            (error, data) => {
+                if (error && error.name !== 'NO_NODE') {
+                    const errMsg = 'error fetching bucket notification configuration';
+                    this.log.error(errMsg, {
+                        method,
+                        error,
+                    });
+                    return this._callbackHandler(cb, error);
+                }
+                if (data) {
+                    return this._callbackHandler(cb, null, data);
+                }
+                // no configuration
+                return this._callbackHandler(cb);
+            },
+        );
     }
 
     _checkNodeExists(zkPath, cb) {
-        const method
-            = 'ZookeeperConfigManager._checkNodeExists';
+        const method = 'ZookeeperConfigManager._checkNodeExists';
         return this._zkClient.exists(zkPath, (err, stat) => {
             if (err) {
-                this.log.error('error checking node existence',
-                    { method, zkPath });
+                this.log.error('error checking node existence', { method, zkPath });
                 return this._callbackHandler(cb, err);
             }
             if (stat) {
@@ -213,8 +215,7 @@ class ZookeeperConfigManager extends BaseConfigManager  {
     }
 
     _setBucketNotifConfig(bucket, data, cb) {
-        const method
-            = 'ZookeeperConfigManager._setBucketNotifConfig';
+        const method = 'ZookeeperConfigManager._setBucketNotifConfig';
         const zkPath = this._getBucketNodeZkPath(bucket);
         this.log.debug('setting bucket notification configuration', {
             method,
@@ -239,8 +240,7 @@ class ZookeeperConfigManager extends BaseConfigManager  {
                     if (createErr) {
                         return cb(createErr);
                     }
-                    return this._zkClient.setData(zkPath, Buffer.from(data),
-                        -1, retryErr => cb(retryErr));
+                    return this._zkClient.setData(zkPath, Buffer.from(data), -1, retryErr => cb(retryErr));
                 });
             }
             return cb(err);
@@ -248,37 +248,34 @@ class ZookeeperConfigManager extends BaseConfigManager  {
     }
 
     _checkConfigurationParentNode(cb) {
-        const method
-            = 'ZookeeperConfigManager._checkConfigurationParentNode';
+        const method = 'ZookeeperConfigManager._checkConfigurationParentNode';
         const zkPath = `/${constants.zkConfigParentNode}`;
-        return async.waterfall([
-            next => this._checkNodeExists(zkPath, next),
-            (exists, next) => {
-                if (!exists) {
-                    this.log.debug('parent configuration zookeeper node does ' +
-                        'not exist', { method, zkPath });
-                    return this._zkClient.mkdirp(zkPath, err => next(err));
+        return async.waterfall(
+            [
+                next => this._checkNodeExists(zkPath, next),
+                (exists, next) => {
+                    if (!exists) {
+                        this.log.debug('parent configuration zookeeper node does not exist', { method, zkPath });
+                        return this._zkClient.mkdirp(zkPath, err => next(err));
+                    }
+                    this.log.debug('parent configuration zookeeper node exists', { method, zkPath });
+                    return next();
+                },
+            ],
+            err => {
+                if (err) {
+                    const errMsg = 'error checking configuration zookeeper parent node';
+                    this.log.error(errMsg, { method, zkPath, error: err.message });
+                    return this._callbackHandler(cb, err);
                 }
-                this.log.debug('parent configuration zookeeper node exists',
-                    { method, zkPath });
-                return next();
+                this.log.debug('parent configuration zookeeper checked/added', { method, zkPath });
+                return this._callbackHandler(cb);
             },
-        ], err => {
-            if (err) {
-                const errMsg
-                    = 'error checking configuration zookeeper parent node';
-                this.log.error(errMsg, { method, zkPath, error: err.message });
-                return this._callbackHandler(cb, err);
-            }
-            this.log.debug('parent configuration zookeeper checked/added',
-                { method, zkPath });
-            return this._callbackHandler(cb);
-        });
+        );
     }
 
     _createBucketNotifConfigNode(bucket, cb) {
-        const method
-            = 'ZookeeperConfigManager._createBucketNotifConfigNode';
+        const method = 'ZookeeperConfigManager._createBucketNotifConfigNode';
         const zkPath = this._getBucketNodeZkPath(bucket);
         this.log.debug('creating bucket notification configuration node', {
             method,
@@ -299,8 +296,7 @@ class ZookeeperConfigManager extends BaseConfigManager  {
     }
 
     _removeBucketNotifConfigNode(bucket, cb) {
-        const method
-            = 'ZookeeperConfigManager._removeBucketNotifConfigNode';
+        const method = 'ZookeeperConfigManager._removeBucketNotifConfigNode';
         const zkPath = this._getBucketNodeZkPath(bucket);
         this.log.debug('removing bucket notification configuration node', {
             method,
@@ -317,8 +313,7 @@ class ZookeeperConfigManager extends BaseConfigManager  {
                 return this._callbackHandler(cb, error);
             }
             if (!error) {
-                const msg
-                    = 'removed notification configuration zookeeper node';
+                const msg = 'removed notification configuration zookeeper node';
                 this.log.debug(msg, {
                     method,
                     bucket,
@@ -337,46 +332,53 @@ class ZookeeperConfigManager extends BaseConfigManager  {
     }
 
     _listBucketsWithConfig(cb) {
-        const method
-            = 'ZookeeperConfigManager._listBucketsWithConfig';
+        const method = 'ZookeeperConfigManager._listBucketsWithConfig';
         const zkPath = `/${constants.zkConfigParentNode}`;
-        this._zkClient.getChildren(zkPath, event => {
-            this.log.debug('zookeeper getChildren watcher triggered', {
-                zkPath,
-                method,
-                event,
-            });
-            if (event.type === zookeeper.Event.NODE_CHILDREN_CHANGED) {
-                this._emitter.emit('getConfig');
-            }
-        }, (error, buckets) => {
-            if (error) {
-                const errMsg
-                    = 'error listing buckets with configuration';
-                this.log.error(errMsg, {
+        this._zkClient.getChildren(
+            zkPath,
+            event => {
+                this.log.debug('zookeeper getChildren watcher triggered', {
                     zkPath,
                     method,
-                    error,
+                    event,
                 });
-                this._callbackHandler(cb, error);
-            }
-            this._callbackHandler(cb, null, buckets);
-        });
+                if (event.type === zookeeper.Event.NODE_CHILDREN_CHANGED) {
+                    this._emitter.emit('getConfig');
+                }
+            },
+            (error, buckets) => {
+                if (error) {
+                    const errMsg = 'error listing buckets with configuration';
+                    this.log.error(errMsg, {
+                        zkPath,
+                        method,
+                        error,
+                    });
+                    this._callbackHandler(cb, error);
+                }
+                this._callbackHandler(cb, null, buckets);
+            },
+        );
     }
 
     _updateLocalStore(buckets, cb) {
-        async.eachLimit(buckets, this._zkConcurrency, (bucket, next) => {
-            this._getBucketNotifConfig(bucket, (err, data) => {
-                if (err) {
-                    return next(err);
-                }
-                const configObject = this._getConfigDataFromBuffer(data);
-                if (configObject) {
-                    this._configs.set(bucket, configObject);
-                }
-                return next();
-            });
-        }, err => this._callbackHandler(cb, err));
+        async.eachLimit(
+            buckets,
+            this._zkConcurrency,
+            (bucket, next) => {
+                this._getBucketNotifConfig(bucket, (err, data) => {
+                    if (err) {
+                        return next(err);
+                    }
+                    const configObject = this._getConfigDataFromBuffer(data);
+                    if (configObject) {
+                        this._configs.set(bucket, configObject);
+                    }
+                    return next();
+                });
+            },
+            err => this._callbackHandler(cb, err),
+        );
     }
 
     /**
@@ -407,8 +409,7 @@ class ZookeeperConfigManager extends BaseConfigManager  {
             this._emitter.emit('setConfig', bucket, config);
             return true;
         } catch (err) {
-            const errMsg
-                = 'error setting bucket notification configuration';
+            const errMsg = 'error setting bucket notification configuration';
             this.log.error(errMsg, {
                 method: 'ZookeeperConfigManager.setConfig',
                 error: err.message,
@@ -435,8 +436,7 @@ class ZookeeperConfigManager extends BaseConfigManager  {
             this._emitter.emit('removeConfig', bucket);
             return true;
         } catch (err) {
-            const errMsg
-                = 'error removing bucket notification configuration';
+            const errMsg = 'error removing bucket notification configuration';
             this.log.error(errMsg, {
                 method: 'ZookeeperConfigManager.removeConfig',
                 error: err,
@@ -452,17 +452,19 @@ class ZookeeperConfigManager extends BaseConfigManager  {
             return;
         }
 
-        const zookeeperUrl =
-            `${this._zkConfig.connectionString}${this._zkPath}`;
-        this.log.info('opening zookeeper connection for reading ' +
-            'bucket notification configuration', {
-                zookeeperUrl,
-                method: 'ZookeeperConfigManager._setupZookeeper',
-            });
-        this._zkClient = new ZookeeperManager(zookeeperUrl, {
-            autoCreateNamespace: this._zkConfig.autoCreateNamespace,
-            retries: this._zkConfig.retries,
-        }, this.log);
+        const zookeeperUrl = `${this._zkConfig.connectionString}${this._zkPath}`;
+        this.log.info('opening zookeeper connection for reading bucket notification configuration', {
+            zookeeperUrl,
+            method: 'ZookeeperConfigManager._setupZookeeper',
+        });
+        this._zkClient = new ZookeeperManager(
+            zookeeperUrl,
+            {
+                autoCreateNamespace: this._zkConfig.autoCreateNamespace,
+                retries: this._zkConfig.retries,
+            },
+            this.log,
+        );
 
         this._zkClient.once('error', done);
         this._zkClient.once('ready', () => {
@@ -479,12 +481,15 @@ class ZookeeperConfigManager extends BaseConfigManager  {
      * @return {undefined}
      */
     setup(cb) {
-        async.waterfall([
-            next => this._setupZookeeper(next),
-            next => this._checkConfigurationParentNode(next),
-            (_, next) => this._listBucketsWithConfig(next),
-            (buckets, next) => this._updateLocalStore(buckets, next),
-        ], cb);
+        async.waterfall(
+            [
+                next => this._setupZookeeper(next),
+                next => this._checkConfigurationParentNode(next),
+                (_, next) => this._listBucketsWithConfig(next),
+                (buckets, next) => this._updateLocalStore(buckets, next),
+            ],
+            cb,
+        );
     }
 }
 

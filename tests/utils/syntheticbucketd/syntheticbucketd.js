@@ -10,8 +10,7 @@ const bucketdPort = 9001;
 const bucketNumber = Number.parseInt(process.argv[2], 10);
 const accountsNumber = Number.parseInt(process.argv[3], 10);
 
-if (!Number.isSafeInteger(bucketNumber) ||
-    !Number.isSafeInteger(accountsNumber)) {
+if (!Number.isSafeInteger(bucketNumber) || !Number.isSafeInteger(accountsNumber)) {
     logger.error(`usage: ${process.argv[1]} <bucketNumber> <accountsNumber>`);
     process.exit(1);
 }
@@ -29,7 +28,7 @@ function generateAccountIds(accountsNumber) {
     const ret = [];
 
     for (let i = 0; i < accountsNumber; i++) {
-        ret.push((`${accountPadding}${i}`.slice(-20)));
+        ret.push(`${accountPadding}${i}`.slice(-20));
     }
 
     ret.sort(() => Math.random() - 0.5);
@@ -47,7 +46,7 @@ function makeListing(marker, maxKeys) {
 
     for (let i = index; i < upperBound; i += 1) {
         const account = accountIds[i % accountsNumber];
-        const name = (`${namePadding}${i}`.slice(-24));
+        const name = `${namePadding}${i}`.slice(-24);
         ret.push(`${account}..|..${name}`);
     }
 
@@ -62,29 +61,28 @@ const bucketdHandler = (req, res) => {
     assert.strictEqual(pathname, '/default/bucket/users..bucket');
 
     const reqUid = req.headers['x-scal-request-uids'];
-    const log = reqUid ?
-        logger.newRequestLoggerFromSerializedUids(reqUid) :
-        logger.newRequestLogger();
+    const log = reqUid ? logger.newRequestLoggerFromSerializedUids(reqUid) : logger.newRequestLogger();
 
     const index = getMarkerIndex(marker);
-    const isTruncated = (index + maxKeys) < bucketNumber;
+    const isTruncated = index + maxKeys < bucketNumber;
 
     log.info('listing request', { marker, maxKeys, isTruncated, index });
 
-    res.end(JSON.stringify({
-        Contents: makeListing(marker, maxKeys).map(key => ({
-            key,
-            value: {},
-        })),
-        IsTruncated: isTruncated,
-    }));
+    res.end(
+        JSON.stringify({
+            Contents: makeListing(marker, maxKeys).map(key => ({
+                key,
+                value: {},
+            })),
+            IsTruncated: isTruncated,
+        }),
+    );
 };
 
-http.createServer(bucketdHandler)
-    .listen(bucketdPort, () => {
-        logger.info('listening', {
-            bucketdPort,
-            bucketNumber,
-            accountsNumber,
-        });
+http.createServer(bucketdHandler).listen(bucketdPort, () => {
+    logger.info('listening', {
+        bucketdPort,
+        bucketNumber,
+        accountsNumber,
     });
+});

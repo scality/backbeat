@@ -85,8 +85,7 @@ describe('backbeatProducer', () => {
         assert.strictEqual(backbeatProducer._maxRequestSize, 1234567);
     });
 
-    it('should return an error if send() called on producer with no default ' +
-    'topic', done => {
+    it('should return an error if send() called on producer with no default topic', done => {
         const backbeatProducer = new BackbeatProducer({
             kafka,
         });
@@ -107,8 +106,7 @@ describe('backbeatProducer', () => {
             assert.strictEqual(topic, 'custom-topic');
             done();
         };
-        backbeatProducer.sendToTopic(
-            'custom-topic', [{ key: 'foo', message: 'bar' }], () => {});
+        backbeatProducer.sendToTopic('custom-topic', [{ key: 'foo', message: 'bar' }], () => {});
     });
 
     describe('producerParams', () => {
@@ -127,17 +125,19 @@ describe('backbeatProducer', () => {
 
         it('should reject critical built-in params via Joi', () => {
             assert.throws(
-                () => new BackbeatProducer({
-                    kafka,
-                    producerParams: { 'metadata.broker.list': 'attacker:9092' },
-                }),
+                () =>
+                    new BackbeatProducer({
+                        kafka,
+                        producerParams: { 'metadata.broker.list': 'attacker:9092' },
+                    }),
                 /metadata\.broker\.list/,
             );
             assert.throws(
-                () => new BackbeatProducer({
-                    kafka,
-                    producerParams: { 'compression.type': 'gzip' },
-                }),
+                () =>
+                    new BackbeatProducer({
+                        kafka,
+                        producerParams: { 'compression.type': 'gzip' },
+                    }),
                 /compression\.type/,
             );
         });
@@ -158,8 +158,7 @@ describe('backbeatProducer', () => {
                 err = e;
             }
             assert(err, 'expected BackbeatProducer to throw on invalid producerParams key');
-            assert.match(err.message,
-                /No such configuration property: "not\.a\.valid\.librdkafka\.option"/);
+            assert.match(err.message, /No such configuration property: "not\.a\.valid\.librdkafka\.option"/);
         });
 
         it('should throw on out-of-range librdkafka producerParams values', () => {
@@ -173,8 +172,10 @@ describe('backbeatProducer', () => {
                 err = e;
             }
             assert(err, 'expected BackbeatProducer to throw on out-of-range value');
-            assert.match(err.message,
-                /Configuration property "queue\.buffering\.max\.kbytes" value -1 is outside allowed range/);
+            assert.match(
+                err.message,
+                /Configuration property "queue\.buffering\.max\.kbytes" value -1 is outside allowed range/,
+            );
         });
     });
 

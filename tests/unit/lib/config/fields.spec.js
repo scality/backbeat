@@ -56,15 +56,16 @@ describe('config fields', () => {
 
             setField(config, ['queuePopulator', 'mongo', 'authCredentials', 'username'], 'user');
 
-            assert.deepStrictEqual(config,
-                                   { queuePopulator: { mongo: { authCredentials: { username: 'user' } } } });
+            assert.deepStrictEqual(config, { queuePopulator: { mongo: { authCredentials: { username: 'user' } } } });
         });
 
         it('should report a node of the path holding a value', () => {
             const config = { queuePopulator: { mongo: 'localhost:27017' } };
 
-            assert.throws(() => setField(config, ['queuePopulator', 'mongo', 'database'], 'metadata'),
-                          /cannot set queuePopulator.mongo.database: queuePopulator.mongo is not an object/);
+            assert.throws(
+                () => setField(config, ['queuePopulator', 'mongo', 'database'], 'metadata'),
+                /cannot set queuePopulator.mongo.database: queuePopulator.mongo is not an object/,
+            );
         });
 
         // an array is not a section a field belongs in: the per site probe
@@ -72,8 +73,10 @@ describe('config fields', () => {
         it('should report a node of the path holding an array', () => {
             const config = { queueProcessor: { probeServer: [{ port: 4043, site: 'a' }] } };
 
-            assert.throws(() => setField(config, ['queueProcessor', 'probeServer', 'port'], '8100'),
-                          /queueProcessor.probeServer is not an object/);
+            assert.throws(
+                () => setField(config, ['queueProcessor', 'probeServer', 'port'], '8100'),
+                /queueProcessor.probeServer is not an object/,
+            );
             assert.deepStrictEqual(config.queueProcessor.probeServer, [{ port: 4043, site: 'a' }]);
         });
     });

@@ -6,14 +6,14 @@ const AllocationStrategy = require('../allocationStrategy/AllocationStrategy');
 const { EventEmitter } = require('./ConnectorsManager');
 const constants = require('../constants');
 
-const paramsJoi = joi.object({
-    connectorsManager: joi.object().required(),
-    metricsHandler: joi.object()
-        .instance(OplogPopulatorMetrics).required(),
-    allocationStrategy: joi.object()
-        .instance(AllocationStrategy).required(),
-    logger: joi.object().required(),
-}).required();
+const paramsJoi = joi
+    .object({
+        connectorsManager: joi.object().required(),
+        metricsHandler: joi.object().instance(OplogPopulatorMetrics).required(),
+        allocationStrategy: joi.object().instance(AllocationStrategy).required(),
+        logger: joi.object().required(),
+    })
+    .required();
 
 /**
  * @class Allocator
@@ -22,7 +22,6 @@ const paramsJoi = joi.object({
  * a connector to them.
  */
 class Allocator extends EventEmitter {
-
     /**
      * @constructor
      * @param {Object} params Allocator param
@@ -50,11 +49,10 @@ class Allocator extends EventEmitter {
     _initConnectorToBucketMap() {
         const connectors = this._connectorsManager.connectors;
         connectors.forEach(connector => {
-            connector.buckets
-                .forEach(bucket => {
-                    this._bucketsToConnectors.set(bucket, connector);
-                    this._metricsHandler.onConnectorConfigured(connector, 'add');
-                });
+            connector.buckets.forEach(bucket => {
+                this._bucketsToConnectors.set(bucket, connector);
+                this._metricsHandler.onConnectorConfigured(connector, 'add');
+            });
         });
     }
 

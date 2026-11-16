@@ -6,7 +6,9 @@ const { errors } = require('@scality/arsenal');
 const LifecycleTask = require('./LifecycleTask');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const { rulesToParams } = require('../util/rules');
-const { lifecycleListing: { NON_CURRENT_TYPE, CURRENT_TYPE, ORPHAN_DM_TYPE } } = require('../../../lib/constants');
+const {
+    lifecycleListing: { NON_CURRENT_TYPE, CURRENT_TYPE, ORPHAN_DM_TYPE },
+} = require('../../../lib/constants');
 // concurrency mainly used in async calls
 const CONCURRENCY_DEFAULT = 10;
 
@@ -50,12 +52,7 @@ class LifecycleTaskV2 extends LifecycleTask {
     _handleRemainingListings(remainings, bucketData, log) {
         if (remainings && remainings.length) {
             remainings.forEach(l => {
-                const {
-                    prefix,
-                    listType,
-                    beforeDate,
-                    storageClass,
-                } = l;
+                const { prefix, listType, beforeDate, storageClass } = l;
 
                 const entry = this._makeContinuationEntry(bucketData, log, {
                     beforeDate,
@@ -66,10 +63,9 @@ class LifecycleTaskV2 extends LifecycleTask {
 
                 this._sendBucketEntry(entry, err => {
                     if (!err) {
-                        log.debug(
-                            'sent kafka entry for bucket consumption', {
-                                method: 'LifecycleTaskV2._getVersionList',
-                            });
+                        log.debug('sent kafka entry for bucket consumption', {
+                            method: 'LifecycleTaskV2._getVersionList',
+                        });
                     }
                 });
             });
@@ -95,8 +91,13 @@ class LifecycleTaskV2 extends LifecycleTask {
             timeProgressionFactor,
         };
 
-        const { params, listType, remainings } =
-            rulesToParams('Disabled', currentDate, bucketLCRules, bucketData, ruleOptions);
+        const { params, listType, remainings } = rulesToParams(
+            'Disabled',
+            currentDate,
+            bucketLCRules,
+            bucketData,
+            ruleOptions,
+        );
         // If params is undefined listings can be skipped.
         // Undefined params can happen when lifecycle configuration rule is disabled for example
         if (!params) {
@@ -114,34 +115,36 @@ class LifecycleTaskV2 extends LifecycleTask {
             this._handleRemainingListings(remainings, bucketData, log);
         }
 
-        return this.backbeatMetadataProxy.listLifecycle(listType, params, log,
-        (err, contents, isTruncated, markerInfo) => {
-            if (err) {
-                return done(err);
-            }
+        return this.backbeatMetadataProxy.listLifecycle(
+            listType,
+            params,
+            log,
+            (err, contents, isTruncated, markerInfo) => {
+                if (err) {
+                    return done(err);
+                }
 
-            // re-queue truncated listing only once.
-            if (isTruncated && nbRetries === 0) {
-                const entry = this._makeContinuationEntry(bucketData, log, {
-                    beforeDate: params.BeforeDate,
-                    prefix: params.Prefix,
-                    storageClass: params.ExcludedDataStoreName,
-                    listType,
-                    ...markerInfo,
-                });
+                // re-queue truncated listing only once.
+                if (isTruncated && nbRetries === 0) {
+                    const entry = this._makeContinuationEntry(bucketData, log, {
+                        beforeDate: params.BeforeDate,
+                        prefix: params.Prefix,
+                        storageClass: params.ExcludedDataStoreName,
+                        listType,
+                        ...markerInfo,
+                    });
 
-                this._sendBucketEntry(entry, err => {
-                    if (!err) {
-                        log.debug(
-                            'sent kafka entry for bucket consumption', {
+                    this._sendBucketEntry(entry, err => {
+                        if (!err) {
+                            log.debug('sent kafka entry for bucket consumption', {
                                 method: 'LifecycleTaskV2._getObjectList',
                             });
-                    }
-                });
-            }
-            return this._compareRulesToList(bucketData, bucketLCRules,
-                contents, log, done);
-        });
+                        }
+                    });
+                }
+                return this._compareRulesToList(bucketData, bucketLCRules, contents, log, done);
+            },
+        );
     }
 
     /**
@@ -164,8 +167,13 @@ class LifecycleTaskV2 extends LifecycleTask {
             timeProgressionFactor,
         };
 
-        const { params, listType, remainings } =
-            rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, ruleOptions);
+        const { params, listType, remainings } = rulesToParams(
+            versioningStatus,
+            currentDate,
+            bucketLCRules,
+            bucketData,
+            ruleOptions,
+        );
         // If params is undefined listings can be skipped.
         // Undefined params can happen when lifecycle configuration rule is disabled for example.
         if (!params) {
@@ -183,45 +191,46 @@ class LifecycleTaskV2 extends LifecycleTask {
             this._handleRemainingListings(remainings, bucketData, log);
         }
 
-        return this.backbeatMetadataProxy.listLifecycle(listType, params, log,
-        (err, contents, isTruncated, markerInfo) => {
-            if (err) {
-                return done(err);
-            }
+        return this.backbeatMetadataProxy.listLifecycle(
+            listType,
+            params,
+            log,
+            (err, contents, isTruncated, markerInfo) => {
+                if (err) {
+                    return done(err);
+                }
 
-            // create Set of unique keys not matching the next marker to
-            // indicate the object level entries to be cleared at the end
-            // of the processing step
-            const uniqueObjectKeysNotNextMarker = new Set();
-            if (markerInfo.keyMarker) {
-                contents.forEach(v => {
-                    if (v.Key !== markerInfo.keyMarker) {
-                        uniqueObjectKeysNotNextMarker.add(v.Key);
-                    }
-                });
-            }
+                // create Set of unique keys not matching the next marker to
+                // indicate the object level entries to be cleared at the end
+                // of the processing step
+                const uniqueObjectKeysNotNextMarker = new Set();
+                if (markerInfo.keyMarker) {
+                    contents.forEach(v => {
+                        if (v.Key !== markerInfo.keyMarker) {
+                            uniqueObjectKeysNotNextMarker.add(v.Key);
+                        }
+                    });
+                }
 
-            // re-queue truncated listing only once.
-            if (isTruncated && nbRetries === 0) {
-                const entry = this._makeContinuationEntry(bucketData, log, {
-                    beforeDate: params.BeforeDate,
-                    prefix: params.Prefix,
-                    storageClass: params.ExcludedDataStoreName,
-                    listType,
-                    ...markerInfo,
-                });
+                // re-queue truncated listing only once.
+                if (isTruncated && nbRetries === 0) {
+                    const entry = this._makeContinuationEntry(bucketData, log, {
+                        beforeDate: params.BeforeDate,
+                        prefix: params.Prefix,
+                        storageClass: params.ExcludedDataStoreName,
+                        listType,
+                        ...markerInfo,
+                    });
 
-                this._sendBucketEntry(entry, err => {
-                    if (!err) {
-                        log.debug(
-                            'sent kafka entry for bucket consumption', {
+                    this._sendBucketEntry(entry, err => {
+                        if (!err) {
+                            log.debug('sent kafka entry for bucket consumption', {
                                 method: 'LifecycleTaskV2._getObjectVersions',
                             });
-                    }
-                });
-            }
-            return this._compareRulesToList(bucketData, bucketLCRules,
-                contents, log, err => {
+                        }
+                    });
+                }
+                return this._compareRulesToList(bucketData, bucketLCRules, contents, log, err => {
                     if (err) {
                         return done(err);
                     }
@@ -232,15 +241,13 @@ class LifecycleTaskV2 extends LifecycleTask {
                         this._ncvHeapBucketClear(bucketData.target.bucket);
                     } else {
                         // clear object level entries that have been processed
-                        this._ncvHeapObjectsClear(
-                            bucketData.target.bucket,
-                            uniqueObjectKeysNotNextMarker
-                        );
+                        this._ncvHeapObjectsClear(bucketData.target.bucket, uniqueObjectKeysNotNextMarker);
                     }
 
                     return done();
                 });
-        });
+            },
+        );
     }
 
     /**
@@ -263,18 +270,26 @@ class LifecycleTaskV2 extends LifecycleTask {
         if (!contents.length) {
             return done();
         }
-        return async.eachLimit(contents, CONCURRENCY_DEFAULT, (obj, cb) => {
-            const applicableRules = this._getRules(bucketData, lcRules, obj);
-            return this._retryEntry({
-                logFields: {
-                    key: obj.Key,
-                    versionId: obj.VersionId,
-                    staleDate: obj.staleDate,
-                },
-                log,
-                actionFunc: done => this._compare(bucketData, obj, applicableRules, log, done),
-            }, cb);
-        }, done);
+        return async.eachLimit(
+            contents,
+            CONCURRENCY_DEFAULT,
+            (obj, cb) => {
+                const applicableRules = this._getRules(bucketData, lcRules, obj);
+                return this._retryEntry(
+                    {
+                        logFields: {
+                            key: obj.Key,
+                            versionId: obj.VersionId,
+                            staleDate: obj.staleDate,
+                        },
+                        log,
+                        actionFunc: done => this._compare(bucketData, obj, applicableRules, log, done),
+                    },
+                    cb,
+                );
+            },
+            done,
+        );
     }
 
     /**
@@ -318,7 +333,6 @@ class LifecycleTaskV2 extends LifecycleTask {
             bucket: bucketData.target.bucket,
             key: obj.Key,
             listType: obj.ListType,
-
         });
 
         const errMsg = 'an implementation error occurred: listType is missing';
@@ -336,24 +350,26 @@ class LifecycleTaskV2 extends LifecycleTask {
      * @return {undefined}
      */
     _compareCurrent(bucketData, obj, rules, log, cb) {
-        if (rules.Expiration &&
-            this._checkAndApplyExpirationRule(bucketData, obj, rules, log)) {
+        if (rules.Expiration && this._checkAndApplyExpirationRule(bucketData, obj, rules, log)) {
             return process.nextTick(cb);
         }
         if (rules.Transition && !this._isDeleteMarker(obj)) {
-            return this._applyTransitionRule({
-                owner: bucketData.target.owner,
-                accountId: bucketData.target.accountId,
-                bucket: bucketData.target.bucket,
-                objectKey: obj.Key,
-                versionId: obj.VersionId,
-                eTag: obj.ETag,
-                lastModified: obj.LastModified,
-                site: rules.Transition.StorageClass,
-                transitionTime: this._lifecycleDateTime.getTransitionTimestamp(
-                    rules.Transition, obj.LastModified),
-                bucketData,
-            }, log, cb);
+            return this._applyTransitionRule(
+                {
+                    owner: bucketData.target.owner,
+                    accountId: bucketData.target.accountId,
+                    bucket: bucketData.target.bucket,
+                    objectKey: obj.Key,
+                    versionId: obj.VersionId,
+                    eTag: obj.ETag,
+                    lastModified: obj.LastModified,
+                    site: rules.Transition.StorageClass,
+                    transitionTime: this._lifecycleDateTime.getTransitionTimestamp(rules.Transition, obj.LastModified),
+                    bucketData,
+                },
+                log,
+                cb,
+            );
         }
 
         return process.nextTick(cb);
@@ -377,13 +393,12 @@ class LifecycleTaskV2 extends LifecycleTask {
                 bucket: bucketData.target.bucket,
                 versionId: obj.VersionId,
             });
-            const errMsg = 'an implementation error occurred: when comparing ' +
-                'lifecycle rules on a version, stale date was missing';
+            const errMsg =
+                'an implementation error occurred: when comparing lifecycle rules on a version, stale date was missing';
             return process.nextTick(() => cb(errors.InternalError.customizeDescription(errMsg)));
         }
 
-        if (rules.NoncurrentVersionExpiration &&
-            this._checkAndApplyNCVExpirationRule(bucketData, obj, rules, log)) {
+        if (rules.NoncurrentVersionExpiration && this._checkAndApplyNCVExpirationRule(bucketData, obj, rules, log)) {
             return process.nextTick(cb);
         }
 
@@ -408,20 +423,15 @@ class LifecycleTaskV2 extends LifecycleTask {
      * @return {undefined}
      */
     _checkAndApplyEODMRule(bucketData, deleteMarker, rules, log) {
-        const daysSinceInitiated = this._lifecycleDateTime.findDaysSince(
-            new Date(deleteMarker.LastModified)
-        );
+        const daysSinceInitiated = this._lifecycleDateTime.findDaysSince(new Date(deleteMarker.LastModified));
 
-        const eodm = rules.Expiration &&
-            rules.Expiration.ExpiredObjectDeleteMarker;
+        const eodm = rules.Expiration && rules.Expiration.ExpiredObjectDeleteMarker;
 
-        const applicableExpRule = rules.Expiration && (
-            (rules.Expiration.Days !== undefined &&
-                daysSinceInitiated >= rules.Expiration.Days) ||
-            (rules.Expiration.Date !== undefined &&
-                rules.Expiration.Date < Date.now()) ||
-            eodm === true
-        );
+        const applicableExpRule =
+            rules.Expiration &&
+            ((rules.Expiration.Days !== undefined && daysSinceInitiated >= rules.Expiration.Days) ||
+                (rules.Expiration.Date !== undefined && rules.Expiration.Date < Date.now()) ||
+                eodm === true);
 
         if (applicableExpRule) {
             const entry = ActionQueueEntry.create('deleteObject')
@@ -431,16 +441,21 @@ class LifecycleTaskV2 extends LifecycleTask {
                 .setAttribute('target.key', deleteMarker.Key)
                 .setAttribute('target.accountId', bucketData.target.accountId)
                 .setAttribute('target.version', deleteMarker.VersionId)
-                .setAttribute('transitionTime',
-                    this._lifecycleDateTime.getTransitionTimestamp(
-                        applicableExpRule, deleteMarker.LastModified)
+                .setAttribute(
+                    'transitionTime',
+                    this._lifecycleDateTime.getTransitionTimestamp(applicableExpRule, deleteMarker.LastModified),
                 );
             this._sendObjectAction(entry, err => {
                 if (!err) {
-                    log.debug('sent object entry for consumption',
-                    Object.assign({
-                        method: 'LifecycleTaskV2._checkAndApplyEODMRule',
-                    }, entry.getLogInfo()));
+                    log.debug(
+                        'sent object entry for consumption',
+                        Object.assign(
+                            {
+                                method: 'LifecycleTaskV2._checkAndApplyEODMRule',
+                            },
+                            entry.getLogInfo(),
+                        ),
+                    );
                 }
             });
         }

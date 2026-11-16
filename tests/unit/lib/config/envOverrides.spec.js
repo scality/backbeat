@@ -3,14 +3,8 @@
 const assert = require('assert');
 const joi = require('joi');
 
-const {
-    applyEnvOverrides,
-    envVarMappings,
-} = require('../../../../lib/config/envOverrides');
-const {
-    probeServerJoi,
-    probeServerPerSite,
-} = require('../../../../lib/config/configItems.joi');
+const { applyEnvOverrides, envVarMappings } = require('../../../../lib/config/envOverrides');
+const { probeServerJoi, probeServerPerSite } = require('../../../../lib/config/configItems.joi');
 
 describe('config env var mapping', () => {
     it('should derive names from the config path', () => {
@@ -26,20 +20,25 @@ describe('config env var mapping', () => {
             }),
         });
 
-        assert.deepStrictEqual([...envVarMappings(schema).keys()], [
-            'HOSTS',
-            'QUEUE_POPULATOR_BATCH_MAX_READ',
-            'QUEUE_POPULATOR_MONGO_REPLICA_SET_HOSTS',
-            'QUEUE_PROCESSOR_MIN_MPU_SIZE_MB',
-            'QUEUE_PROCESSOR_RETRY_AWS_S3_TIMEOUT_S',
-        ]);
+        assert.deepStrictEqual(
+            [...envVarMappings(schema).keys()],
+            [
+                'HOSTS',
+                'QUEUE_POPULATOR_BATCH_MAX_READ',
+                'QUEUE_POPULATOR_MONGO_REPLICA_SET_HOSTS',
+                'QUEUE_PROCESSOR_MIN_MPU_SIZE_MB',
+                'QUEUE_PROCESSOR_RETRY_AWS_S3_TIMEOUT_S',
+            ],
+        );
     });
 
     it('should prefix the names of an extension schema', () => {
         const schema = joi.object({ topic: joi.string(), consumer: joi.object({ groupId: joi.string() }) });
 
-        assert.deepStrictEqual([...envVarMappings(schema, ['extensions', 'gc']).keys()],
-                               ['EXTENSIONS_GC_TOPIC', 'EXTENSIONS_GC_CONSUMER_GROUP_ID']);
+        assert.deepStrictEqual(
+            [...envVarMappings(schema, ['extensions', 'gc']).keys()],
+            ['EXTENSIONS_GC_TOPIC', 'EXTENSIONS_GC_CONSUMER_GROUP_ID'],
+        );
     });
 
     it('should not derive a name for the fields of an object with unconstrained keys', () => {
@@ -69,15 +68,18 @@ describe('config env var mapping', () => {
     describe('name annotations', () => {
         it('should rename the segment a node contributes, for itself and its children', () => {
             const schema = joi.object({
-                destination: joi.object({
-                    transport: joi.string(),
-                    auth: joi.object({ type: joi.string() }),
-                }).meta({ env: 'DEST' }),
+                destination: joi
+                    .object({
+                        transport: joi.string(),
+                        auth: joi.object({ type: joi.string() }),
+                    })
+                    .meta({ env: 'DEST' }),
             });
 
-            assert.deepStrictEqual([...envVarMappings(schema, ['extensions', 'replication']).keys()],
-                                   ['EXTENSIONS_REPLICATION_DEST_TRANSPORT',
-                                       'EXTENSIONS_REPLICATION_DEST_AUTH_TYPE']);
+            assert.deepStrictEqual(
+                [...envVarMappings(schema, ['extensions', 'replication']).keys()],
+                ['EXTENSIONS_REPLICATION_DEST_TRANSPORT', 'EXTENSIONS_REPLICATION_DEST_AUTH_TYPE'],
+            );
         });
 
         it('should add a name replacing the path within the schema', () => {
@@ -87,8 +89,10 @@ describe('config env var mapping', () => {
                 }),
             });
 
-            assert.deepStrictEqual([...envVarMappings(schema).keys()],
-                                   ['QUEUE_POPULATOR_MONGO_DATABASE', 'MONGODB_DATABASE']);
+            assert.deepStrictEqual(
+                [...envVarMappings(schema).keys()],
+                ['QUEUE_POPULATOR_MONGO_DATABASE', 'MONGODB_DATABASE'],
+            );
         });
 
         it('should keep the extension prefix of an alias', () => {
@@ -96,9 +100,10 @@ describe('config env var mapping', () => {
                 bucketTasksTopic: joi.string().meta({ envVarAlias: 'BUCKET_TASK_TOPIC' }),
             });
 
-            assert.deepStrictEqual([...envVarMappings(schema, ['extensions', 'lifecycle']).keys()],
-                                   ['EXTENSIONS_LIFECYCLE_BUCKET_TASKS_TOPIC',
-                                       'EXTENSIONS_LIFECYCLE_BUCKET_TASK_TOPIC']);
+            assert.deepStrictEqual(
+                [...envVarMappings(schema, ['extensions', 'lifecycle']).keys()],
+                ['EXTENSIONS_LIFECYCLE_BUCKET_TASKS_TOPIC', 'EXTENSIONS_LIFECYCLE_BUCKET_TASK_TOPIC'],
+            );
         });
 
         it('should only annotate the use site of a shared schema', () => {
@@ -108,10 +113,8 @@ describe('config env var mapping', () => {
                 vaultAdmin: shared,
             });
 
-            assert.deepStrictEqual([...envVarMappings(schema).keys()],
-                                   ['CLOUDSERVER_HOST', 'VAULT_ADMIN_HOST']);
+            assert.deepStrictEqual([...envVarMappings(schema).keys()], ['CLOUDSERVER_HOST', 'VAULT_ADMIN_HOST']);
         });
-
     });
 
     describe('value injection', () => {
@@ -132,9 +135,11 @@ describe('config env var mapping', () => {
 
         it('should accept the usual boolean spellings', () => {
             ['true', 'TRUE', '1', 'y', 'yes', 'on'].forEach(value =>
-                assert.strictEqual(apply({ ENABLED: value }).enabled, true, value));
+                assert.strictEqual(apply({ ENABLED: value }).enabled, true, value),
+            );
             ['false', 'FALSE', '0', 'n', 'no', 'off'].forEach(value =>
-                assert.strictEqual(apply({ ENABLED: value }).enabled, false, value));
+                assert.strictEqual(apply({ ENABLED: value }).enabled, false, value),
+            );
         });
 
         it('should leave an unknown boolean spelling for joi to reject', () => {
@@ -142,25 +147,23 @@ describe('config env var mapping', () => {
         });
 
         it('should split a comma separated list into an array', () => {
-            assert.deepStrictEqual(apply({ ALLOW_FROM: '10.0.0.0/8, ::1' }).allowFrom,
-                                  ['10.0.0.0/8', '::1']);
+            assert.deepStrictEqual(apply({ ALLOW_FROM: '10.0.0.0/8, ::1' }).allowFrom, ['10.0.0.0/8', '::1']);
             assert.deepStrictEqual(apply({ ALLOW_FROM: '::1' }).allowFrom, ['::1']);
         });
 
         it('should parse a structured value from JSON', () => {
             assert.deepStrictEqual(apply({ TOPICS: '[{ "name": "t1" }]' }).topics, [{ name: 't1' }]);
-            assert.deepStrictEqual(apply({ SENTINELS: '[{ "host": "h", "port": 26379 }]' }).sentinels,
-                                   [{ host: 'h', port: 26379 }]);
+            assert.deepStrictEqual(apply({ SENTINELS: '[{ "host": "h", "port": 26379 }]' }).sentinels, [
+                { host: 'h', port: 26379 },
+            ]);
         });
 
         it('should report an invalid JSON value', () => {
-            assert.throws(() => apply({ TOPICS: '[{ "name" }]' }),
-                          /invalid JSON value for TOPICS/);
+            assert.throws(() => apply({ TOPICS: '[{ "name" }]' }), /invalid JSON value for TOPICS/);
         });
 
         it('should not coerce a value of ambiguous type', () => {
-            assert.strictEqual(apply({ SENTINELS: 'host1:26379,host2:26379' }).sentinels,
-                               'host1:26379,host2:26379');
+            assert.strictEqual(apply({ SENTINELS: 'host1:26379,host2:26379' }).sentinels, 'host1:26379,host2:26379');
         });
 
         it('should ignore an empty value', () => {
@@ -169,15 +172,17 @@ describe('config env var mapping', () => {
 
         it('should create the missing intermediate nodes', () => {
             const nested = joi.object({ mongo: joi.object({ auth: joi.object({ user: joi.string() }) }) });
-            assert.deepStrictEqual(applyEnvOverrides({}, nested, [], { MONGO_AUTH_USER: 'u' }),
-                                   { mongo: { auth: { user: 'u' } } });
+            assert.deepStrictEqual(applyEnvOverrides({}, nested, [], { MONGO_AUTH_USER: 'u' }), {
+                mongo: { auth: { user: 'u' } },
+            });
         });
 
         it('should report a node holding something else than a section', () => {
             const nested = joi.object({ mongo: joi.object({ auth: joi.object({ user: joi.string() }) }) });
             assert.throws(
                 () => applyEnvOverrides({ mongo: { auth: 'secret' } }, nested, [], { MONGO_AUTH_USER: 'u' }),
-                /cannot set mongo.auth.user: mongo.auth is not an object/);
+                /cannot set mongo.auth.user: mongo.auth is not an object/,
+            );
         });
 
         // one port cannot name the probe server of a specific site
@@ -191,7 +196,8 @@ describe('config env var mapping', () => {
 
             assert.throws(
                 () => applyEnvOverrides(config, perSite, [], { QUEUE_PROCESSOR_PROBE_SERVER_PORT: '8100' }),
-                /queueProcessor.probeServer is not an object/);
+                /queueProcessor.probeServer is not an object/,
+            );
             assert.deepStrictEqual(config.queueProcessor.probeServer, [{ port: 4043, site: 'a' }]);
         });
 
@@ -204,19 +210,22 @@ describe('config env var mapping', () => {
                 }),
             });
 
-            assert.deepStrictEqual(
-                joi.attempt(applyEnvOverrides({}, section, [], { LOG_LEVEL: 'warn' }), section),
-                { log: { level: 'warn', dump: 'error' } });
+            assert.deepStrictEqual(joi.attempt(applyEnvOverrides({}, section, [], { LOG_LEVEL: 'warn' }), section), {
+                log: { level: 'warn', dump: 'error' },
+            });
         });
     });
 
     describe('field decoder', () => {
         // a field with a syntax of its own, spanning a second variable
         const schema = joi.object({
-            servers: joi.array().items(joi.string()).meta({
-                envDecodeHook: (value, env) => (value.startsWith('[') ? undefined
-                    : [value, env.SERVERS_MORE].filter(more => more)),
-            }),
+            servers: joi
+                .array()
+                .items(joi.string())
+                .meta({
+                    envDecodeHook: (value, env) =>
+                        value.startsWith('[') ? undefined : [value, env.SERVERS_MORE].filter(more => more),
+                }),
         });
         const apply = env => applyEnvOverrides({}, schema, [], env);
 
@@ -225,8 +234,7 @@ describe('config env var mapping', () => {
         });
 
         it('should read the companion variable from the environment', () => {
-            assert.deepStrictEqual(apply({ SERVERS: 'a:8000', SERVERS_MORE: 'b:8000' }).servers,
-                                   ['a:8000', 'b:8000']);
+            assert.deepStrictEqual(apply({ SERVERS: 'a:8000', SERVERS_MORE: 'b:8000' }).servers, ['a:8000', 'b:8000']);
         });
 
         it('should coerce the value the decoder defers on', () => {
@@ -242,8 +250,7 @@ describe('config env var mapping', () => {
                 probeServer: joi.alternatives().try(probeServerJoi, probeServerPerSite),
             }),
         });
-        const apply = config =>
-            applyEnvOverrides(config, schema, [], { LIVENESS_PROBE_PORT: '8100' });
+        const apply = config => applyEnvOverrides(config, schema, [], { LIVENESS_PROBE_PORT: '8100' });
 
         it('should listen on all interfaces, for every probe server of the process', () => {
             const config = apply({ queuePopulator: { probeServer: { port: 4042 } }, processor: {} });
@@ -259,8 +266,7 @@ describe('config env var mapping', () => {
 
         it('should leave per site probe servers alone', () => {
             const perSite = { queueProcessor: { probeServer: [{ port: 4043, site: 'a' }] } };
-            assert.deepStrictEqual(apply(perSite),
-                                   { queueProcessor: { probeServer: [{ port: 4043, site: 'a' }] } });
+            assert.deepStrictEqual(apply(perSite), { queueProcessor: { probeServer: [{ port: 4043, site: 'a' }] } });
         });
 
         it('should be overriden by the port of a specific probe server', () => {
@@ -268,8 +274,7 @@ describe('config env var mapping', () => {
                 LIVENESS_PROBE_PORT: '8100',
                 PROCESSOR_PROBE_SERVER_PORT: '8200',
             });
-            assert.deepStrictEqual(config.processor.probeServer,
-                                   { bindAddress: '0.0.0.0', port: '8200' });
+            assert.deepStrictEqual(config.processor.probeServer, { bindAddress: '0.0.0.0', port: '8200' });
         });
     });
 });

@@ -1,106 +1,105 @@
 x-inputs:
-- name: namespace
-  type: constant
-  value: zenko
-- name: oplog_populator_job
-  type: config
-  value: artesca-data-backbeat-oplog-populator-headless
-- name: oplogPopulatorChangeStreamLagThreshold
-  type: config
-  value: 10
-- name: oplogPopulatorChangeStreamLimit
-  type: config
-  value: 10
+  - name: namespace
+    type: constant
+    value: zenko
+  - name: oplog_populator_job
+    type: config
+    value: artesca-data-backbeat-oplog-populator-headless
+  - name: oplogPopulatorChangeStreamLagThreshold
+    type: config
+    value: 10
+  - name: oplogPopulatorChangeStreamLimit
+    type: config
+    value: 10
 
 groups:
-- name: Oplog Populator
-  rules:
+  - name: Oplog Populator
+    rules:
+      - alert: OplogPopulatorUnavailable
+        Expr: |
+          sum(up{namespace="${namespace}",job="${oplog_populator_job}"}) < 1
+        For: '2m'
+        Labels:
+          severity: critical
+        Annotations:
+          zenko_service: backbeat-oplog-populator
+          description: 'Oplog populator pod is down'
+          summary: 'Oplog populator service is in critical state'
 
-  - alert: OplogPopulatorUnavailable
-    Expr: |
-      sum(up{namespace="${namespace}",job="${oplog_populator_job}"}) < 1
-    For: "2m"
-    Labels:
-     severity: critical
-    Annotations:
-      zenko_service: backbeat-oplog-populator
-      description: "Oplog populator pod is down"
-      summary: "Oplog populator service is in critical state"
+      - alert: KafkaConnectFailedConnectorConfiguration
+        Expr: |
+          sum by(connector) (increase(s3_oplog_populator_connector_configuration_applied_total{success="false",job="${oplog_populator_job}",namespace="${namespace}"}[5m]))
+          > 0
+        For: '5m'
+        Labels:
+          severity: critical
+        Annotations:
+          zenko_service: backbeat-oplog-populator
+          description: 'Oplog populator failed to configure connector'
+          summary: "Oplog populator couldn't update kafka connect connector"
 
-  - alert: KafkaConnectFailedConnectorConfiguration
-    Expr: |
-        sum by(connector) (increase(s3_oplog_populator_connector_configuration_applied_total{success="false",job="${oplog_populator_job}",namespace="${namespace}"}[5m]))
-        > 0
-    For: "5m"
-    Labels:
-     severity: critical
-    Annotations:
-      zenko_service: backbeat-oplog-populator
-      description: "Oplog populator failed to configure connector"
-      summary: "Oplog populator couldn't update kafka connect connector"
+      - alert: KafkaConnectTooManyConnectors
+        Expr: |
+          sum(s3_oplog_populator_connectors{state!="outdated",job="${oplog_populator_job}",namespace="${namespace}"})
+          > (
+            (sum(s3_oplog_populator_expected_connectors{job="${oplog_populator_job}",namespace="${namespace}"}) > 0)
+            or vector(${oplogPopulatorChangeStreamLimit})
+          )
+        For: '5m'
+        Labels:
+          severity: warning
+        Annotations:
+          zenko_service: backbeat-oplog-populator
+          description: 'Kafka connector count is above the number of hashed connectors, or above the soft limit with per-bucket ingestion. With per-bucket ingestion, if the number of buckets is too high, consider using a single replica for your cluster'
+          summary: 'Kafka connector count is above the soft limit'
 
-  - alert: KafkaConnectTooManyConnectors
-    Expr: |
-        sum(s3_oplog_populator_connectors{state!="outdated",job="${oplog_populator_job}",namespace="${namespace}"})
-        > (
-          (sum(s3_oplog_populator_expected_connectors{job="${oplog_populator_job}",namespace="${namespace}"}) > 0)
-          or vector(${oplogPopulatorChangeStreamLimit})
-        )
-    For: "5m"
-    Labels:
-     severity: warning
-    Annotations:
-      zenko_service: backbeat-oplog-populator
-      description: "Kafka connector count is above the number of hashed connectors, or above the soft limit with per-bucket ingestion. With per-bucket ingestion, if the number of buckets is too high, consider using a single replica for your cluster"
-      summary: "Kafka connector count is above the soft limit"
+      - alert: OplogPopulatorMetastoreChangeStreamLagThreshold
+        Expr: |
+          histogram_quantile(
+            0.99,
+            sum by(le) (rate(s3_oplog_populator_acknowledgement_lag_seconds_bucket{job="${oplog_populator_job}",namespace="${namespace}"}[5m]))
+          )
+          >= ${oplogPopulatorChangeStreamLagThreshold}
+        For: '5m'
+        Labels:
+          severity: critical
+        Annotations:
+          zenko_service: backbeat-oplog-populator
+          description: 'Oplog populator metastore change stream lag is too big'
+          summary: 'Oplog populator configuration lag is above threshold'
 
-  - alert: OplogPopulatorMetastoreChangeStreamLagThreshold
-    Expr: |
-        histogram_quantile(
-          0.99,
-          sum by(le) (rate(s3_oplog_populator_acknowledgement_lag_seconds_bucket{job="${oplog_populator_job}",namespace="${namespace}"}[5m]))
-        )
-        >= ${oplogPopulatorChangeStreamLagThreshold}
-    For: "5m"
-    Labels:
-     severity: critical
-    Annotations:
-      zenko_service: backbeat-oplog-populator
-      description: "Oplog populator metastore change stream lag is too big"
-      summary: "Oplog populator configuration lag is above threshold"
+      - alert: KafkaConnectFailedConnectors
+        Expr: |
+          sum by(connector) (increase(s3_oplog_populator_connector_restarts{job="${oplog_populator_job}",namespace="${namespace}"}[5m]))
+          > 0
+        For: '10m'
+        Labels:
+          severity: critical
+        Annotations:
+          zenko_service: backbeat-oplog-populator
+          description: 'Oplog populator restarted connectors too many times'
+          summary: 'Oplog populator connectors keep failing after restarts'
 
-  - alert: KafkaConnectFailedConnectors
-    Expr: |
-        sum by(connector) (increase(s3_oplog_populator_connector_restarts{job="${oplog_populator_job}",namespace="${namespace}"}[5m]))
-        > 0
-    For: "10m"
-    Labels:
-     severity: critical
-    Annotations:
-      zenko_service: backbeat-oplog-populator
-      description: "Oplog populator restarted connectors too many times"
-      summary: "Oplog populator connectors keep failing after restarts"
+      - alert: OplogPopulatorConnectorPaused
+        Expr: |
+          max(s3_oplog_populator_connectors{state="paused",job="${oplog_populator_job}",namespace="${namespace}"})
+          > 0
+        For: '10m'
+        Labels:
+          severity: critical
+        Annotations:
+          zenko_service: backbeat-oplog-populator
+          description: 'An oplog populator connector is paused or stopped, so changes to the buckets it covers are not processed: replication, lifecycle and notifications are delayed for these buckets'
+          summary: 'Oplog populator connector paused'
 
-  - alert: OplogPopulatorConnectorPaused
-    Expr: |
-        max(s3_oplog_populator_connectors{state="paused",job="${oplog_populator_job}",namespace="${namespace}"})
-        > 0
-    For: "10m"
-    Labels:
-     severity: critical
-    Annotations:
-      zenko_service: backbeat-oplog-populator
-      description: "An oplog populator connector is paused or stopped, so changes to the buckets it covers are not processed: replication, lifecycle and notifications are delayed for these buckets"
-      summary: "Oplog populator connector paused"
-
-  - alert: OplogPopulatorMigrationNotCompleting
-    Expr: |
-        max(s3_oplog_populator_connectors{state="outdated",job="${oplog_populator_job}",namespace="${namespace}"})
-        > 0
-    For: "30m"
-    Labels:
-     severity: warning
-    Annotations:
-      zenko_service: backbeat-oplog-populator
-      description: "The oplog populator has not completed the migration of its connectors for 30 minutes, so changes to some buckets may be delayed"
-      summary: "Oplog populator migration not completing"
+      - alert: OplogPopulatorMigrationNotCompleting
+        Expr: |
+          max(s3_oplog_populator_connectors{state="outdated",job="${oplog_populator_job}",namespace="${namespace}"})
+          > 0
+        For: '30m'
+        Labels:
+          severity: warning
+        Annotations:
+          zenko_service: backbeat-oplog-populator
+          description: 'The oplog populator has not completed the migration of its connectors for 30 minutes, so changes to some buckets may be delayed'
+          summary: 'Oplog populator migration not completing'

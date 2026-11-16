@@ -42,8 +42,7 @@ class ObjectFailureEntry {
     }
 
     getMember() {
-        const member =
-            `${this.bucket}:${this.objectKey}:${this.encodedVersionId}`;
+        const member = `${this.bucket}:${this.objectKey}:${this.encodedVersionId}`;
         if (this.role) {
             return `${member}:${this.role}`;
         }

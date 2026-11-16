@@ -4,8 +4,7 @@ const assert = require('assert');
 
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 
-const GarbageCollectorProducer =
-      require('../../../extensions/gc/GarbageCollectorProducer');
+const GarbageCollectorProducer = require('../../../extensions/gc/GarbageCollectorProducer');
 
 class KafkaProducerMock {
     constructor() {
@@ -23,15 +22,19 @@ class KafkaProducerMock {
     send(messages, cb) {
         if (this._expectedMessage) {
             assert.strictEqual(messages.length, 1);
-            assert.deepStrictEqual(this._expectedMessage,
-                                   JSON.parse(messages[0].message));
+            assert.deepStrictEqual(this._expectedMessage, JSON.parse(messages[0].message));
             this._expectedMessage = null;
         }
-        return process.nextTick(() => cb(null, messages.map(() => ({
-            topic: 'gc-topic',
-            partition: 1,
-            offset: 2,
-        }))));
+        return process.nextTick(() =>
+            cb(
+                null,
+                messages.map(() => ({
+                    topic: 'gc-topic',
+                    partition: 1,
+                    offset: 2,
+                })),
+            ),
+        );
     }
 }
 
@@ -43,26 +46,34 @@ describe('garbage collector producer', () => {
         gcProducer = new GarbageCollectorProducer();
         gcProducer._producer = kafkaProducerMock;
     });
-    [{
-        testDesc: 'with no dataStoreVersionId',
-        dataLocations: [{
-            key: 'foo',
-            dataStoreName: 'ds',
-            size: 10,
-        }],
-    }, {
-        testDesc: 'with a dataStoreVersionId',
-        dataLocations: [{
-            key: 'foo',
-            dataStoreName: 'ds',
-            size: 10,
-            dataStoreVersionId: 'someversion',
-        }],
-    }].forEach(testSpec => {
-        it(`should send a valid GC message to kafka ${testSpec.testDesc}`,
-        done => {
-            const action = ActionQueueEntry.create('deleteData')
-                  .setAttribute('target.locations', testSpec.dataLocations);
+    [
+        {
+            testDesc: 'with no dataStoreVersionId',
+            dataLocations: [
+                {
+                    key: 'foo',
+                    dataStoreName: 'ds',
+                    size: 10,
+                },
+            ],
+        },
+        {
+            testDesc: 'with a dataStoreVersionId',
+            dataLocations: [
+                {
+                    key: 'foo',
+                    dataStoreName: 'ds',
+                    size: 10,
+                    dataStoreVersionId: 'someversion',
+                },
+            ],
+        },
+    ].forEach(testSpec => {
+        it(`should send a valid GC message to kafka ${testSpec.testDesc}`, done => {
+            const action = ActionQueueEntry.create('deleteData').setAttribute(
+                'target.locations',
+                testSpec.dataLocations,
+            );
             kafkaProducerMock.setExpectedMessage({
                 action: 'deleteData',
                 actionId: action.getActionId(),

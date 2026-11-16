@@ -3,12 +3,9 @@ const sinon = require('sinon');
 const { errors } = require('@scality/arsenal');
 const config = require('../../config.json');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
-const LifecycleObjectTransitionProcessor =
-    require('../../../extensions/lifecycle/objectProcessor/LifecycleObjectTransitionProcessor');
-const LifecycleColdStatusArchiveTask =
-    require('../../../extensions/lifecycle/tasks/LifecycleColdStatusArchiveTask');
-const { LifecycleMetrics } =
-    require('../../../extensions/lifecycle/LifecycleMetrics');
+const LifecycleObjectTransitionProcessor = require('../../../extensions/lifecycle/objectProcessor/LifecycleObjectTransitionProcessor');
+const LifecycleColdStatusArchiveTask = require('../../../extensions/lifecycle/tasks/LifecycleColdStatusArchiveTask');
+const { LifecycleMetrics } = require('../../../extensions/lifecycle/LifecycleMetrics');
 const { BackbeatProducerMock } = require('../mocks');
 
 describe('LifecycleObjectTransitionProcessor', () => {
@@ -25,10 +22,7 @@ describe('LifecycleObjectTransitionProcessor', () => {
 
     it('should consume the transition tasks topic from the earliest offset', () => {
         const consumerParams = objectProcessor.getConsumerParams();
-        assert.strictEqual(
-            consumerParams[config.extensions.lifecycle.transitionTasksTopic].fromOffset,
-            'earliest'
-        );
+        assert.strictEqual(consumerParams[config.extensions.lifecycle.transitionTasksTopic].fromOffset, 'earliest');
     });
 
     it('should consume the cold status topics from the earliest offset', () => {
@@ -48,7 +42,7 @@ describe('LifecycleObjectTransitionProcessor', () => {
         assert.deepStrictEqual(Object.keys(consumerParams), [config.extensions.lifecycle.transitionTasksTopic]);
         assert.strictEqual(
             consumerParams[config.extensions.lifecycle.transitionTasksTopic].topic,
-            config.extensions.lifecycle.transitionTasksTopic
+            config.extensions.lifecycle.transitionTasksTopic,
         );
     });
 
@@ -63,15 +57,17 @@ describe('LifecycleObjectTransitionProcessor', () => {
     describe('processColdStorageStatusEntry failure metric', () => {
         const kafkaEntry = {
             topic: `${config.extensions.lifecycle.coldStorageStatusTopicPrefix}glacier`,
-            value: Buffer.from(JSON.stringify({
-                op: 'archive',
-                bucketName: 'testBucket',
-                objectKey: 'testObj',
-                objectVersion: 'testversion',
-                accountId: '834789881858',
-                archiveInfo: { archiveId: 'x', archiveVersion: 1 },
-                requestId: 'r1',
-            })),
+            value: Buffer.from(
+                JSON.stringify({
+                    op: 'archive',
+                    bucketName: 'testBucket',
+                    objectKey: 'testObj',
+                    objectVersion: 'testversion',
+                    accountId: '834789881858',
+                    archiveInfo: { archiveId: 'x', archiveVersion: 1 },
+                    requestId: 'r1',
+                }),
+            ),
         };
 
         beforeEach(() => {
@@ -98,8 +94,7 @@ describe('LifecycleObjectTransitionProcessor', () => {
             objectProcessor.processColdStorageStatusEntry(kafkaEntry, cbErr => {
                 assert.strictEqual(cbErr, err);
                 assert.strictEqual(spy.callCount, 1);
-                assert.deepStrictEqual(spy.firstCall.args.slice(1),
-                    ['transition-processor', 'archive', 'glacier']);
+                assert.deepStrictEqual(spy.firstCall.args.slice(1), ['transition-processor', 'archive', 'glacier']);
                 done();
             });
         });
@@ -113,8 +108,7 @@ describe('LifecycleObjectTransitionProcessor', () => {
             objectProcessor.processColdStorageStatusEntry(kafkaEntry, cbErr => {
                 assert.strictEqual(cbErr, err);
                 assert.strictEqual(spy.callCount, 1);
-                assert.deepStrictEqual(spy.firstCall.args.slice(1),
-                    ['transition-processor', 'archive', 'glacier']);
+                assert.deepStrictEqual(spy.firstCall.args.slice(1), ['transition-processor', 'archive', 'glacier']);
                 done();
             });
         });
@@ -169,8 +163,7 @@ describe('LifecycleObjectTransitionProcessor', () => {
         });
 
         it('should resolve through vault and cache the result', done => {
-            const stub = sinon.stub(processor.vaultClientWrapper, 'getAccountId')
-                .yields(null, accountId);
+            const stub = sinon.stub(processor.vaultClientWrapper, 'getAccountId').yields(null, accountId);
 
             processor.getAccountId(ownerId, log, (err, id) => {
                 assert.ifError(err);
@@ -187,8 +180,7 @@ describe('LifecycleObjectTransitionProcessor', () => {
         });
 
         it('should fail on a cached miss instead of returning no account id', done => {
-            const stub = sinon.stub(processor.vaultClientWrapper, 'getAccountId')
-                .yields(errors.NoSuchEntity);
+            const stub = sinon.stub(processor.vaultClientWrapper, 'getAccountId').yields(errors.NoSuchEntity);
 
             processor.getAccountId(ownerId, log, err => {
                 assert(err.NoSuchEntity);
@@ -205,8 +197,7 @@ describe('LifecycleObjectTransitionProcessor', () => {
         });
 
         it('should propagate other vault errors without caching them', done => {
-            const stub = sinon.stub(processor.vaultClientWrapper, 'getAccountId')
-                .yields(errors.InternalError);
+            const stub = sinon.stub(processor.vaultClientWrapper, 'getAccountId').yields(errors.InternalError);
 
             processor.getAccountId(ownerId, log, err => {
                 assert(err.InternalError);

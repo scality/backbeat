@@ -7,7 +7,6 @@ const objectList = mockRes.objectList.objectList1;
 const dummyBucketMD = mockRes.bucketMD;
 const objectMD = mockRes.objectMD;
 
-
 class MetadataMock {
     onRequest(req, res) {
         // TODO: for PUT/POST, edit the mockRes object
@@ -26,8 +25,7 @@ class MetadataMock {
                 res.writeHead(err.code, resObj.name);
                 res.end();
             } else {
-                const resType =
-                    JSON.parse(JSON.stringify(mockRes[resObj.resType]));
+                const resType = JSON.parse(JSON.stringify(mockRes[resObj.resType]));
                 if (resObj['content-type']) {
                     res.writeHead(200, {
                         'Content-Type': resObj['content-type'],
@@ -37,17 +35,14 @@ class MetadataMock {
                 const resContent = resType[resObj.name];
                 if (resObj.resType === 'objectList') {
                     resContent.Contents.forEach((obj, i) => {
-                        resContent.Contents[i].value =
-                            JSON.stringify(obj.value);
+                        resContent.Contents[i].value = JSON.stringify(obj.value);
                     });
                 }
                 if (resObj.resType === 'raftLogs') {
                     resContent.log.forEach((log, i) => {
                         log.entries.forEach((entry, j) => {
-                            resContent.log[i].entries[j].value.attributes =
-                                JSON.stringify(entry.value.attributes);
-                            resContent.log[i].entries[j].value =
-                                JSON.stringify(entry.value);
+                            resContent.log[i].entries[j].value.attributes = JSON.stringify(entry.value.attributes);
+                            resContent.log[i].entries[j].value = JSON.stringify(entry.value);
                         });
                     });
                     const beginParam = queryParamsObj.get('begin');
@@ -71,9 +66,11 @@ class MetadataMock {
                     const objMd = Object.assign({}, resContent, {
                         versionId: decodedVersionId,
                     });
-                    res.end(JSON.stringify({
-                        Body: JSON.stringify(objMd)
-                    }));
+                    res.end(
+                        JSON.stringify({
+                            Body: JSON.stringify(objMd),
+                        }),
+                    );
                     return;
                 }
                 if (resObj.resType === 'bucketList') {
@@ -96,8 +93,7 @@ class MetadataMock {
                 req.on('end', () => {
                     const data = JSON.parse(body);
                     const usersBucketInfo = {};
-                    usersBucketInfo.key = data.
-                        res.end('ok');
+                    usersBucketInfo.key = data.res.end('ok');
                 });
             }
         } else if (req.method === 'PUT') {

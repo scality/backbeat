@@ -15,17 +15,17 @@ const locationName2 = 'aws-loc2';
 const bucketData = {
     action: 'processObjects',
     target: {
-      bucket: bucketName,
-      owner: ownerId,
-      accountId,
+        bucket: bucketName,
+        owner: ownerId,
+        accountId,
     },
-    details: {}
+    details: {},
 };
 
 const expectedEmptyResult = {
     listType: undefined,
     params: undefined,
-    remainings: []
+    remainings: [],
 };
 
 const options = {
@@ -52,7 +52,7 @@ describe('rulesToParams with versioning Disabled', () => {
                 ID: '123',
                 Prefix: '',
                 Status: 'Enabled',
-            }
+            },
         ];
 
         const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, options);
@@ -73,7 +73,7 @@ describe('rulesToParams with versioning Disabled', () => {
                 ID: '456',
                 Prefix: '',
                 Status: 'Enabled',
-            }
+            },
         ];
 
         const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, options);
@@ -105,7 +105,7 @@ describe('rulesToParams with versioning Disabled', () => {
                 ID: '123',
                 Prefix: '',
                 Status: 'Disabled',
-            }
+            },
         ];
 
         const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, options);
@@ -117,7 +117,7 @@ describe('rulesToParams with versioning Disabled', () => {
         const details = {
             listType: 'current',
             prefix: '',
-            marker: 'key1'
+            marker: 'key1',
         };
         const bd = { ...bucketData, details };
         const bucketLCRules = [
@@ -126,19 +126,19 @@ describe('rulesToParams with versioning Disabled', () => {
                 ID: '123',
                 Prefix: '',
                 Status: 'Enabled',
-            }
+            },
         ];
 
         const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bd, options);
         const expected = {
             params: {
-               Bucket: bucketName,
-               Prefix: '',
-               MaxKeys: MAX_KEYS,
-               Marker: 'key1',
+                Bucket: bucketName,
+                Prefix: '',
+                MaxKeys: MAX_KEYS,
+                Marker: 'key1',
             },
             listType: 'current',
-            remainings: []
+            remainings: [],
         };
         assert.deepStrictEqual(result, expected);
     });
@@ -149,7 +149,7 @@ describe('rulesToParams with versioning Disabled', () => {
         const details = {
             listType: 'invalid',
             prefix,
-            marker: 'key1'
+            marker: 'key1',
         };
         const bd = { ...bucketData, details };
         const bucketLCRules = [
@@ -158,7 +158,7 @@ describe('rulesToParams with versioning Disabled', () => {
                 ID: '123',
                 Prefix: '',
                 Status: 'Enabled',
-            }
+            },
         ];
 
         const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bd, options);
@@ -172,7 +172,7 @@ describe('rulesToParams with versioning Disabled', () => {
         const details = {
             listType: 'current',
             prefix,
-            marker: 'key1'
+            marker: 'key1',
         };
         const bd = { ...bucketData, details };
         const bucketLCRules = [
@@ -181,19 +181,19 @@ describe('rulesToParams with versioning Disabled', () => {
                 ID: '123',
                 Prefix: '',
                 Status: 'Enabled',
-            }
+            },
         ];
 
         const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bd, options);
         const expected = {
             params: {
-               Bucket: bucketName,
-               Prefix: prefix,
-               MaxKeys: MAX_KEYS,
-               Marker: 'key1',
+                Bucket: bucketName,
+                Prefix: prefix,
+                MaxKeys: MAX_KEYS,
+                Marker: 'key1',
             },
             listType: 'current',
-            remainings: []
+            remainings: [],
         };
         assert.deepStrictEqual(result, expected);
     });
@@ -201,12 +201,12 @@ describe('rulesToParams with versioning Disabled', () => {
     it('with details and beforeDate', () => {
         const currentDate = Date.now();
         const prefix = 'pre';
-        const beforeDate = (new Date(currentDate)).toISOString();
+        const beforeDate = new Date(currentDate).toISOString();
         const details = {
             listType: 'current',
             prefix,
             beforeDate,
-            marker: 'key1'
+            marker: 'key1',
         };
         const bd = { ...bucketData, details };
         const bucketLCRules = [
@@ -215,20 +215,20 @@ describe('rulesToParams with versioning Disabled', () => {
                 ID: '123',
                 Prefix: '',
                 Status: 'Enabled',
-            }
+            },
         ];
 
         const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bd, options);
         const expected = {
             params: {
-               Bucket: bucketName,
-               Prefix: prefix,
-               MaxKeys: MAX_KEYS,
-               Marker: 'key1',
-               BeforeDate: beforeDate,
+                Bucket: bucketName,
+                Prefix: prefix,
+                MaxKeys: MAX_KEYS,
+                Marker: 'key1',
+                BeforeDate: beforeDate,
             },
             listType: 'current',
-            remainings: []
+            remainings: [],
         };
         assert.deepStrictEqual(result, expected);
     });
@@ -240,7 +240,7 @@ describe('rulesToParams with versioning Disabled', () => {
             listType: 'current',
             prefix,
             storageClass: locationName,
-            marker: 'key1'
+            marker: 'key1',
         };
         const bd = { ...bucketData, details };
         const bucketLCRules = [
@@ -249,20 +249,20 @@ describe('rulesToParams with versioning Disabled', () => {
                 ID: '123',
                 Prefix: '',
                 Status: 'Enabled',
-            }
+            },
         ];
 
         const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bd, options);
         const expected = {
             params: {
-               Bucket: bucketName,
-               Prefix: prefix,
-               MaxKeys: MAX_KEYS,
-               Marker: 'key1',
-               ExcludedDataStoreName: locationName,
+                Bucket: bucketName,
+                Prefix: prefix,
+                MaxKeys: MAX_KEYS,
+                Marker: 'key1',
+                ExcludedDataStoreName: locationName,
             },
             listType: 'current',
-            remainings: []
+            remainings: [],
         };
         assert.deepStrictEqual(result, expected);
     });
@@ -275,16 +275,16 @@ describe('rulesToParams with versioning Disabled', () => {
                 ID: '123',
                 Prefix: '',
                 Status: 'Enabled',
-            }
+            },
         ];
         const expected = {
             params: {
-               Bucket: bucketName,
-               Prefix: '',
-               MaxKeys: MAX_KEYS,
+                Bucket: bucketName,
+                Prefix: '',
+                MaxKeys: MAX_KEYS,
             },
             listType: 'current',
-            remainings: []
+            remainings: [],
         };
 
         const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, options);
@@ -294,25 +294,25 @@ describe('rulesToParams with versioning Disabled', () => {
     it('with Expiration rule using Days', () => {
         const currentDate = Date.now();
         const prefix = '';
-        const expectedBeforeDate = (new Date(currentDate - ONE_DAY_IN_SEC)).toISOString();
+        const expectedBeforeDate = new Date(currentDate - ONE_DAY_IN_SEC).toISOString();
         const bucketLCRules = [
             {
                 Expiration: { Days: 1 },
                 ID: '123',
                 Prefix: prefix,
                 Status: 'Enabled',
-            }
+            },
         ];
         const expected = {
             params: {
-               Bucket: bucketName,
-               Prefix: prefix,
-               MaxKeys: MAX_KEYS,
-               BeforeDate: expectedBeforeDate,
+                Bucket: bucketName,
+                Prefix: prefix,
+                MaxKeys: MAX_KEYS,
+                BeforeDate: expectedBeforeDate,
             },
             listType: 'current',
-            remainings: []
-         };
+            remainings: [],
+        };
 
         const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, options);
         assert.deepStrictEqual(result, expected);
@@ -327,16 +327,16 @@ describe('rulesToParams with versioning Disabled', () => {
                 ID: '123',
                 Prefix: prefix,
                 Status: 'Enabled',
-            }
+            },
         ];
         const expected = {
             params: {
-               Bucket: bucketName,
-               Prefix: prefix,
-               MaxKeys: MAX_KEYS,
+                Bucket: bucketName,
+                Prefix: prefix,
+                MaxKeys: MAX_KEYS,
             },
             listType: 'current',
-            remainings: []
+            remainings: [],
         };
 
         const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, options);
@@ -346,25 +346,25 @@ describe('rulesToParams with versioning Disabled', () => {
     it('with Expiration rule using Days and prefix', () => {
         const currentDate = Date.now();
         const prefix = 'pre';
-        const expectedBeforeDate = (new Date(currentDate - ONE_DAY_IN_SEC)).toISOString();
+        const expectedBeforeDate = new Date(currentDate - ONE_DAY_IN_SEC).toISOString();
         const bucketLCRules = [
             {
                 Expiration: { Days: 1 },
                 ID: '123',
                 Prefix: prefix,
                 Status: 'Enabled',
-            }
+            },
         ];
         const expected = {
             params: {
-               Bucket: bucketName,
-               Prefix: prefix,
-               MaxKeys: MAX_KEYS,
-               BeforeDate: expectedBeforeDate,
+                Bucket: bucketName,
+                Prefix: prefix,
+                MaxKeys: MAX_KEYS,
+                BeforeDate: expectedBeforeDate,
             },
             listType: 'current',
-            remainings: []
-         };
+            remainings: [],
+        };
 
         const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, options);
         assert.deepStrictEqual(result, expected);
@@ -373,7 +373,7 @@ describe('rulesToParams with versioning Disabled', () => {
     it('with Expiration rule using Filter.Prefix', () => {
         const currentDate = Date.now();
         const prefix = 'pre';
-        const expectedBeforeDate = (new Date(currentDate - ONE_DAY_IN_SEC)).toISOString();
+        const expectedBeforeDate = new Date(currentDate - ONE_DAY_IN_SEC).toISOString();
         const bucketLCRules = [
             {
                 Expiration: { Days: 1 },
@@ -382,18 +382,18 @@ describe('rulesToParams with versioning Disabled', () => {
                     Prefix: prefix,
                 },
                 Status: 'Enabled',
-            }
+            },
         ];
         const expected = {
             params: {
-               Bucket: bucketName,
-               Prefix: prefix,
-               MaxKeys: MAX_KEYS,
-               BeforeDate: expectedBeforeDate,
+                Bucket: bucketName,
+                Prefix: prefix,
+                MaxKeys: MAX_KEYS,
+                BeforeDate: expectedBeforeDate,
             },
             listType: 'current',
-            remainings: []
-         };
+            remainings: [],
+        };
 
         const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, options);
         assert.deepStrictEqual(result, expected);
@@ -402,7 +402,7 @@ describe('rulesToParams with versioning Disabled', () => {
     it('with Expiration rule using Filter.And.Prefix', () => {
         const currentDate = Date.now();
         const prefix = 'pre';
-        const expectedBeforeDate = (new Date(currentDate - ONE_DAY_IN_SEC)).toISOString();
+        const expectedBeforeDate = new Date(currentDate - ONE_DAY_IN_SEC).toISOString();
         const bucketLCRules = [
             {
                 Expiration: { Days: 1 },
@@ -410,21 +410,21 @@ describe('rulesToParams with versioning Disabled', () => {
                 Filter: {
                     And: {
                         Prefix: prefix,
-                    }
+                    },
                 },
                 Status: 'Enabled',
-            }
+            },
         ];
         const expected = {
             params: {
-               Bucket: bucketName,
-               Prefix: prefix,
-               MaxKeys: MAX_KEYS,
-               BeforeDate: expectedBeforeDate,
+                Bucket: bucketName,
+                Prefix: prefix,
+                MaxKeys: MAX_KEYS,
+                BeforeDate: expectedBeforeDate,
             },
             listType: 'current',
-            remainings: []
-         };
+            remainings: [],
+        };
 
         const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, options);
         assert.deepStrictEqual(result, expected);
@@ -439,18 +439,18 @@ describe('rulesToParams with versioning Disabled', () => {
                 ID: '123',
                 Prefix: prefix,
                 Status: 'Enabled',
-            }
+            },
         ];
         const expected = {
             params: {
-               Bucket: bucketName,
-               Prefix: prefix,
-               MaxKeys: MAX_KEYS,
-               ExcludedDataStoreName: locationName,
+                Bucket: bucketName,
+                Prefix: prefix,
+                MaxKeys: MAX_KEYS,
+                ExcludedDataStoreName: locationName,
             },
             listType: 'current',
-            remainings: []
-         };
+            remainings: [],
+        };
 
         const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, options);
         assert.deepStrictEqual(result, expected);
@@ -459,7 +459,7 @@ describe('rulesToParams with versioning Disabled', () => {
     it('with Expiration and Transitions rule using Days', () => {
         const currentDate = Date.now();
         const prefix = '';
-        const expectedBeforeDate = (new Date(currentDate - ONE_DAY_IN_SEC)).toISOString();
+        const expectedBeforeDate = new Date(currentDate - ONE_DAY_IN_SEC).toISOString();
         const bucketLCRules = [
             {
                 Expiration: { Days: 1 },
@@ -467,18 +467,18 @@ describe('rulesToParams with versioning Disabled', () => {
                 ID: '123',
                 Prefix: prefix,
                 Status: 'Enabled',
-            }
+            },
         ];
         const expected = {
             params: {
-               Bucket: bucketName,
-               Prefix: prefix,
-               MaxKeys: MAX_KEYS,
-               BeforeDate: expectedBeforeDate,
+                Bucket: bucketName,
+                Prefix: prefix,
+                MaxKeys: MAX_KEYS,
+                BeforeDate: expectedBeforeDate,
             },
             listType: 'current',
-            remainings: []
-         };
+            remainings: [],
+        };
 
         const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, options);
         assert.deepStrictEqual(result, expected);
@@ -494,17 +494,17 @@ describe('rulesToParams with versioning Disabled', () => {
                 ID: '123',
                 Prefix: prefix,
                 Status: 'Enabled',
-            }
+            },
         ];
         const expected = {
             params: {
-               Bucket: bucketName,
-               Prefix: prefix,
-               MaxKeys: MAX_KEYS,
+                Bucket: bucketName,
+                Prefix: prefix,
+                MaxKeys: MAX_KEYS,
             },
             listType: 'current',
-            remainings: []
-         };
+            remainings: [],
+        };
 
         const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, options);
         assert.deepStrictEqual(result, expected);
@@ -512,12 +512,12 @@ describe('rulesToParams with versioning Disabled', () => {
 
     it('with one Transition rule but multiple transitions', () => {
         const currentDate = Date.now();
-        const expectedBeforeDate = (new Date(currentDate - ONE_DAY_IN_SEC)).toISOString();
+        const expectedBeforeDate = new Date(currentDate - ONE_DAY_IN_SEC).toISOString();
         const bucketLCRules = [
             {
                 Transitions: [
                     { Days: 1, StorageClass: locationName },
-                    { Days: 2, StorageClass: locationName2 }
+                    { Days: 2, StorageClass: locationName2 },
                 ],
                 ID: '123',
                 Prefix: 'toto/titi',
@@ -526,14 +526,14 @@ describe('rulesToParams with versioning Disabled', () => {
         ];
         const expected = {
             params: {
-               Bucket: bucketName,
-               Prefix: 'toto/titi',
-               MaxKeys: MAX_KEYS,
-               BeforeDate: expectedBeforeDate,
+                Bucket: bucketName,
+                Prefix: 'toto/titi',
+                MaxKeys: MAX_KEYS,
+                BeforeDate: expectedBeforeDate,
             },
             listType: 'current',
-            remainings: []
-         };
+            remainings: [],
+        };
 
         const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, options);
         assert.deepStrictEqual(result, expected);
@@ -541,7 +541,7 @@ describe('rulesToParams with versioning Disabled', () => {
 
     it('with multiple Expiration rules that share prefix', () => {
         const currentDate = Date.now();
-        const expectedBeforeDate = (new Date(currentDate - ONE_DAY_IN_SEC)).toISOString();
+        const expectedBeforeDate = new Date(currentDate - ONE_DAY_IN_SEC).toISOString();
         const bucketLCRules = [
             {
                 Expiration: { Days: 1 },
@@ -554,18 +554,18 @@ describe('rulesToParams with versioning Disabled', () => {
                 ID: '456',
                 Prefix: 'toto',
                 Status: 'Enabled',
-            }
+            },
         ];
         const expected = {
             params: {
-               Bucket: bucketName,
-               Prefix: 'toto',
-               MaxKeys: MAX_KEYS,
-               BeforeDate: expectedBeforeDate,
+                Bucket: bucketName,
+                Prefix: 'toto',
+                MaxKeys: MAX_KEYS,
+                BeforeDate: expectedBeforeDate,
             },
             listType: 'current',
-            remainings: []
-         };
+            remainings: [],
+        };
 
         const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, options);
         assert.deepStrictEqual(result, expected);
@@ -573,7 +573,7 @@ describe('rulesToParams with versioning Disabled', () => {
 
     it('with multiple Transition rules that share prefix', () => {
         const currentDate = Date.now();
-        const expectedBeforeDate = (new Date(currentDate - ONE_DAY_IN_SEC)).toISOString();
+        const expectedBeforeDate = new Date(currentDate - ONE_DAY_IN_SEC).toISOString();
         const bucketLCRules = [
             {
                 Transitions: [{ Days: 1, StorageClass: locationName }],
@@ -586,19 +586,19 @@ describe('rulesToParams with versioning Disabled', () => {
                 ID: '456',
                 Prefix: 'toto',
                 Status: 'Enabled',
-            }
+            },
         ];
         const expected = {
             params: {
-               Bucket: bucketName,
-               Prefix: 'toto',
-               MaxKeys: MAX_KEYS,
-               BeforeDate: expectedBeforeDate,
-               ExcludedDataStoreName: locationName,
+                Bucket: bucketName,
+                Prefix: 'toto',
+                MaxKeys: MAX_KEYS,
+                BeforeDate: expectedBeforeDate,
+                ExcludedDataStoreName: locationName,
             },
             listType: 'current',
-            remainings: []
-         };
+            remainings: [],
+        };
 
         const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, options);
         assert.deepStrictEqual(result, expected);
@@ -606,7 +606,7 @@ describe('rulesToParams with versioning Disabled', () => {
 
     it('with multiple Transition rules that share prefix with one disabled', () => {
         const currentDate = Date.now();
-        const expectedBeforeDate = (new Date(currentDate - 2 * ONE_DAY_IN_SEC)).toISOString();
+        const expectedBeforeDate = new Date(currentDate - 2 * ONE_DAY_IN_SEC).toISOString();
         const bucketLCRules = [
             {
                 Transitions: [{ Days: 1, StorageClass: locationName }],
@@ -619,19 +619,19 @@ describe('rulesToParams with versioning Disabled', () => {
                 ID: '456',
                 Prefix: 'toto',
                 Status: 'Enabled',
-            }
+            },
         ];
         const expected = {
             params: {
-               Bucket: bucketName,
-               Prefix: 'toto',
-               MaxKeys: MAX_KEYS,
-               BeforeDate: expectedBeforeDate,
-               ExcludedDataStoreName: locationName2,
+                Bucket: bucketName,
+                Prefix: 'toto',
+                MaxKeys: MAX_KEYS,
+                BeforeDate: expectedBeforeDate,
+                ExcludedDataStoreName: locationName2,
             },
             listType: 'current',
-            remainings: []
-         };
+            remainings: [],
+        };
 
         const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, options);
         assert.deepStrictEqual(result, expected);
@@ -639,7 +639,7 @@ describe('rulesToParams with versioning Disabled', () => {
 
     it('with multiple Transition rules that share prefix but not location', () => {
         const currentDate = Date.now();
-        const expectedBeforeDate = (new Date(currentDate - ONE_DAY_IN_SEC)).toISOString();
+        const expectedBeforeDate = new Date(currentDate - ONE_DAY_IN_SEC).toISOString();
         const bucketLCRules = [
             {
                 Transitions: [{ Days: 1, StorageClass: locationName }],
@@ -652,18 +652,18 @@ describe('rulesToParams with versioning Disabled', () => {
                 ID: '456',
                 Prefix: 'p1',
                 Status: 'Enabled',
-            }
+            },
         ];
         const expected = {
             params: {
-               Bucket: bucketName,
-               Prefix: 'p1',
-               MaxKeys: MAX_KEYS,
-               BeforeDate: expectedBeforeDate,
+                Bucket: bucketName,
+                Prefix: 'p1',
+                MaxKeys: MAX_KEYS,
+                BeforeDate: expectedBeforeDate,
             },
             listType: 'current',
-            remainings: []
-         };
+            remainings: [],
+        };
 
         const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, options);
         assert.deepStrictEqual(result, expected);
@@ -671,8 +671,8 @@ describe('rulesToParams with versioning Disabled', () => {
 
     it('with multiple Expiration rules that do not share prefix', () => {
         const currentDate = Date.now();
-        const expectedBeforeDate = (new Date(currentDate - ONE_DAY_IN_SEC)).toISOString();
-        const expectedBeforeDate2 = (new Date(currentDate - 2 * ONE_DAY_IN_SEC)).toISOString();
+        const expectedBeforeDate = new Date(currentDate - ONE_DAY_IN_SEC).toISOString();
+        const expectedBeforeDate2 = new Date(currentDate - 2 * ONE_DAY_IN_SEC).toISOString();
         const bucketLCRules = [
             {
                 Expiration: { Days: 1 },
@@ -685,22 +685,24 @@ describe('rulesToParams with versioning Disabled', () => {
                 ID: '456',
                 Prefix: 'toto',
                 Status: 'Enabled',
-            }
+            },
         ];
         const expected = {
             params: {
-               Bucket: bucketName,
-               Prefix: 'titi',
-               MaxKeys: MAX_KEYS,
-               BeforeDate: expectedBeforeDate,
+                Bucket: bucketName,
+                Prefix: 'titi',
+                MaxKeys: MAX_KEYS,
+                BeforeDate: expectedBeforeDate,
             },
             listType: 'current',
-            remainings: [{
-                listType: 'current',
-                prefix: 'toto',
-                beforeDate: expectedBeforeDate2,
-             }]
-         };
+            remainings: [
+                {
+                    listType: 'current',
+                    prefix: 'toto',
+                    beforeDate: expectedBeforeDate2,
+                },
+            ],
+        };
 
         const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, options);
         assert.deepStrictEqual(result, expected);
@@ -708,7 +710,7 @@ describe('rulesToParams with versioning Disabled', () => {
 
     it('with multiple Transitions rules that do not share prefix', () => {
         const currentDate = Date.now();
-        const expectedBeforeDate = (new Date(currentDate - ONE_DAY_IN_SEC)).toISOString();
+        const expectedBeforeDate = new Date(currentDate - ONE_DAY_IN_SEC).toISOString();
         const bucketLCRules = [
             {
                 Transitions: [{ Days: 1, StorageClass: locationName }],
@@ -721,23 +723,25 @@ describe('rulesToParams with versioning Disabled', () => {
                 ID: '456',
                 Prefix: 'toto',
                 Status: 'Enabled',
-            }
+            },
         ];
         const expected = {
             params: {
-               Bucket: bucketName,
-               Prefix: 'titi',
-               BeforeDate: expectedBeforeDate,
-               MaxKeys: MAX_KEYS,
-               ExcludedDataStoreName: locationName,
+                Bucket: bucketName,
+                Prefix: 'titi',
+                BeforeDate: expectedBeforeDate,
+                MaxKeys: MAX_KEYS,
+                ExcludedDataStoreName: locationName,
             },
             listType: 'current',
-            remainings: [{
-                listType: 'current',
-                prefix: 'toto',
-                storageClass: locationName2,
-             }]
-         };
+            remainings: [
+                {
+                    listType: 'current',
+                    prefix: 'toto',
+                    storageClass: locationName2,
+                },
+            ],
+        };
 
         const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, options);
         assert.deepStrictEqual(result, expected);
@@ -757,17 +761,17 @@ describe('rulesToParams with versioning Disabled', () => {
                 ID: '456',
                 Prefix: 'toto',
                 Status: 'Enabled',
-            }
+            },
         ];
         const expected = {
             params: {
-               Bucket: bucketName,
-               Prefix: 'toto',
-               MaxKeys: MAX_KEYS,
+                Bucket: bucketName,
+                Prefix: 'toto',
+                MaxKeys: MAX_KEYS,
             },
             listType: 'current',
-            remainings: []
-         };
+            remainings: [],
+        };
 
         const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, options);
         assert.deepStrictEqual(result, expected);
@@ -775,7 +779,7 @@ describe('rulesToParams with versioning Disabled', () => {
 
     it('with Expiration and Transitions rules that do not share prefix', () => {
         const currentDate = Date.now();
-        const expectedBeforeDate = (new Date(currentDate - ONE_DAY_IN_SEC)).toISOString();
+        const expectedBeforeDate = new Date(currentDate - ONE_DAY_IN_SEC).toISOString();
         const bucketLCRules = [
             {
                 Expiration: { Days: 1 },
@@ -788,22 +792,24 @@ describe('rulesToParams with versioning Disabled', () => {
                 ID: '456',
                 Prefix: 'toto',
                 Status: 'Enabled',
-            }
+            },
         ];
         const expected = {
             params: {
-               Bucket: bucketName,
-               Prefix: 'titi',
-               MaxKeys: MAX_KEYS,
-               BeforeDate: expectedBeforeDate,
+                Bucket: bucketName,
+                Prefix: 'titi',
+                MaxKeys: MAX_KEYS,
+                BeforeDate: expectedBeforeDate,
             },
             listType: 'current',
-            remainings: [{
-                listType: 'current',
-                prefix: 'toto',
-                storageClass: locationName2,
-             }]
-         };
+            remainings: [
+                {
+                    listType: 'current',
+                    prefix: 'toto',
+                    storageClass: locationName2,
+                },
+            ],
+        };
 
         const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, options);
         assert.deepStrictEqual(result, expected);
@@ -816,7 +822,7 @@ describe('rulesToParams with versioning Disabled', () => {
             transitionOneDayEarlier: false,
             timeProgressionFactor: 1,
         };
-        const expectedBeforeDate = (new Date(currentDate - ONE_DAY_IN_SEC)).toISOString();
+        const expectedBeforeDate = new Date(currentDate - ONE_DAY_IN_SEC).toISOString();
         const bucketLCRules = [
             {
                 Expiration: { Days: 1 },
@@ -829,22 +835,24 @@ describe('rulesToParams with versioning Disabled', () => {
                 ID: '456',
                 Prefix: 'toto',
                 Status: 'Enabled',
-            }
+            },
         ];
         const expected = {
             params: {
-               Bucket: bucketName,
-               Prefix: 'titi',
-               MaxKeys: MAX_KEYS,
+                Bucket: bucketName,
+                Prefix: 'titi',
+                MaxKeys: MAX_KEYS,
             },
             listType: 'current',
-            remainings: [{
-                listType: 'current',
-                prefix: 'toto',
-                beforeDate: expectedBeforeDate,
-                storageClass: locationName2,
-             }]
-         };
+            remainings: [
+                {
+                    listType: 'current',
+                    prefix: 'toto',
+                    beforeDate: expectedBeforeDate,
+                    storageClass: locationName2,
+                },
+            ],
+        };
 
         const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, customOptions);
         assert.deepStrictEqual(result, expected);
@@ -857,7 +865,7 @@ describe('rulesToParams with versioning Disabled', () => {
             transitionOneDayEarlier: true,
             timeProgressionFactor: 1,
         };
-        const expectedBeforeDate = (new Date(currentDate - ONE_DAY_IN_SEC)).toISOString();
+        const expectedBeforeDate = new Date(currentDate - ONE_DAY_IN_SEC).toISOString();
         const bucketLCRules = [
             {
                 Expiration: { Days: 1 },
@@ -870,22 +878,24 @@ describe('rulesToParams with versioning Disabled', () => {
                 ID: '456',
                 Prefix: 'toto',
                 Status: 'Enabled',
-            }
+            },
         ];
 
         const expected = {
             params: {
-               Bucket: bucketName,
-               Prefix: 'titi',
-               MaxKeys: MAX_KEYS,
-               BeforeDate: expectedBeforeDate,
+                Bucket: bucketName,
+                Prefix: 'titi',
+                MaxKeys: MAX_KEYS,
+                BeforeDate: expectedBeforeDate,
             },
             listType: 'current',
-            remainings: [{
-                listType: 'current',
-                prefix: 'toto',
-                storageClass: locationName2,
-            }]
+            remainings: [
+                {
+                    listType: 'current',
+                    prefix: 'toto',
+                    storageClass: locationName2,
+                },
+            ],
         };
 
         const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, customOptions);
@@ -911,21 +921,23 @@ describe('rulesToParams with versioning Disabled', () => {
                 ID: '456',
                 Prefix: 'toto',
                 Status: 'Enabled',
-            }
+            },
         ];
 
         const expected = {
             params: {
-               Bucket: bucketName,
-               Prefix: 'titi',
-               MaxKeys: MAX_KEYS,
+                Bucket: bucketName,
+                Prefix: 'titi',
+                MaxKeys: MAX_KEYS,
             },
             listType: 'current',
-            remainings: [{
-                listType: 'current',
-                prefix: 'toto',
-                storageClass: locationName2,
-            }]
+            remainings: [
+                {
+                    listType: 'current',
+                    prefix: 'toto',
+                    storageClass: locationName2,
+                },
+            ],
         };
         const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, customOptions);
         assert.deepStrictEqual(result, expected);
@@ -938,7 +950,7 @@ describe('rulesToParams with versioning Disabled', () => {
             transitionOneDayEarlier: false,
             timeProgressionFactor: 2,
         };
-        const expectedBeforeDate = (new Date(currentDate -  (ONE_DAY_IN_SEC / 2))).toISOString();
+        const expectedBeforeDate = new Date(currentDate - ONE_DAY_IN_SEC / 2).toISOString();
         const bucketLCRules = [
             {
                 Expiration: { Days: 1 },
@@ -951,23 +963,25 @@ describe('rulesToParams with versioning Disabled', () => {
                 ID: '456',
                 Prefix: 'toto',
                 Status: 'Enabled',
-            }
+            },
         ];
         const expected = {
             params: {
-               Bucket: bucketName,
-               Prefix: 'titi',
-               MaxKeys: MAX_KEYS,
-               BeforeDate: expectedBeforeDate,
+                Bucket: bucketName,
+                Prefix: 'titi',
+                MaxKeys: MAX_KEYS,
+                BeforeDate: expectedBeforeDate,
             },
             listType: 'current',
-            remainings: [{
-                listType: 'current',
-                prefix: 'toto',
-                beforeDate: expectedBeforeDate,
-                storageClass: locationName2,
-             }]
-         };
+            remainings: [
+                {
+                    listType: 'current',
+                    prefix: 'toto',
+                    beforeDate: expectedBeforeDate,
+                    storageClass: locationName2,
+                },
+            ],
+        };
 
         const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, customOptions);
         assert.deepStrictEqual(result, expected);
@@ -980,7 +994,7 @@ describe('rulesToParams with versioning Disabled', () => {
             transitionOneDayEarlier: false,
             timeProgressionFactor: 24 * 60,
         };
-        const expectedBeforeDate = (new Date(currentDate -  ONE_MINUTE_IN_SEC)).toISOString();
+        const expectedBeforeDate = new Date(currentDate - ONE_MINUTE_IN_SEC).toISOString();
         const bucketLCRules = [
             {
                 Expiration: { Days: 1 },
@@ -993,23 +1007,25 @@ describe('rulesToParams with versioning Disabled', () => {
                 ID: '456',
                 Prefix: 'toto',
                 Status: 'Enabled',
-            }
+            },
         ];
         const expected = {
             params: {
-               Bucket: bucketName,
-               Prefix: 'titi',
-               MaxKeys: MAX_KEYS,
-               BeforeDate: expectedBeforeDate,
+                Bucket: bucketName,
+                Prefix: 'titi',
+                MaxKeys: MAX_KEYS,
+                BeforeDate: expectedBeforeDate,
             },
             listType: 'current',
-            remainings: [{
-                listType: 'current',
-                prefix: 'toto',
-                beforeDate: expectedBeforeDate,
-                storageClass: locationName2,
-             }]
-         };
+            remainings: [
+                {
+                    listType: 'current',
+                    prefix: 'toto',
+                    beforeDate: expectedBeforeDate,
+                    storageClass: locationName2,
+                },
+            ],
+        };
 
         const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, customOptions);
         assert.deepStrictEqual(result, expected);
@@ -1018,21 +1034,12 @@ describe('rulesToParams with versioning Disabled', () => {
 
 describe('rulesSupportTransition', () => {
     it('sould return false if no transition rule supported', () => {
-        const rules = [
-            'Expiration',
-            'NoncurrentVersionExpiration',
-            'AbortIncompleteMultipartUpload',
-        ];
+        const rules = ['Expiration', 'NoncurrentVersionExpiration', 'AbortIncompleteMultipartUpload'];
         assert.strictEqual(rulesSupportTransition(rules), false);
     });
 
     it('sould return true if "transitions" rule supported', () => {
-        const rules = [
-            'Expiration',
-            'NoncurrentVersionExpiration',
-            'AbortIncompleteMultipartUpload',
-            'Transition',
-        ];
+        const rules = ['Expiration', 'NoncurrentVersionExpiration', 'AbortIncompleteMultipartUpload', 'Transition'];
         assert.strictEqual(rulesSupportTransition(rules), true);
     });
 

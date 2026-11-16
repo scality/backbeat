@@ -5,26 +5,22 @@ const path = require('path');
 
 const { generateKafkaAuthObject } = require('../../../../extensions/notification/utils/auth');
 
-
 describe('generateKafkaAuthObject', () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'backbeat-test-'));
     const currentConfDir = process.env.CONF_DIR;
 
     before(() => {
         fs.mkdirSync(path.join(tempDir, 'ssl'), { recursive: true });
-        [
-            'keytab.keytab',
-            'ca-cert.pem',
-            'client-cert.pem',
-            'client-key.pem'
-        ].forEach(file => fs.writeFileSync(path.join(tempDir, 'ssl', file), `fake-${file}`));
+        ['keytab.keytab', 'ca-cert.pem', 'client-cert.pem', 'client-key.pem'].forEach(file =>
+            fs.writeFileSync(path.join(tempDir, 'ssl', file), `fake-${file}`),
+        );
         fs.writeFileSync(
             path.join(tempDir, 'ssl', 'credentials.json'),
             JSON.stringify({
                 username: 'testuser',
-                password: 'testpassword'
-            }
-        ));
+                password: 'testpassword',
+            }),
+        );
         process.env.CONF_DIR = tempDir;
     });
 
@@ -45,7 +41,7 @@ describe('generateKafkaAuthObject', () => {
             description: 'SSL-only with ssl flag enabled',
             valid: true,
             input: {
-                ssl: true
+                ssl: true,
             },
             expected: {
                 'security.protocol': 'ssl',
@@ -55,7 +51,7 @@ describe('generateKafkaAuthObject', () => {
             description: 'SSL-only with ssl flag disabled',
             valid: true,
             input: {
-                ssl: false
+                ssl: false,
             },
             expected: {},
         },
@@ -234,7 +230,7 @@ describe('generateKafkaAuthObject', () => {
                 protocol: 'UNSUPPORTED_PROTOCOL',
                 credentialsFile: 'credentials.json',
             },
-        }
+        },
     ];
 
     testCases.forEach(({ description, input, expected, valid }) => {

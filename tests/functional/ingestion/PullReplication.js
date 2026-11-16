@@ -5,12 +5,10 @@ const { promisify } = require('util');
 const sinon = require('sinon');
 const { ObjectMD, BucketInfo } = require('@scality/arsenal').models;
 const { VersionID } = require('@scality/arsenal').versioning;
-const VID_SEP = require('@scality/arsenal').versioning.VersioningConstants
-          .VersionId.Separator;
+const VID_SEP = require('@scality/arsenal').versioning.VersioningConstants.VersionId.Separator;
 
 const config = require('../../config.json');
-const MongoQueueProcessor =
-    require('../../../extensions/mongoProcessor/MongoQueueProcessor');
+const MongoQueueProcessor = require('../../../extensions/mongoProcessor/MongoQueueProcessor');
 const fakeLogger = require('../../utils/fakeLogger');
 
 const REPLICATION_GROUP_ID = 'RG001';
@@ -29,7 +27,8 @@ describe('MongoQueueProcessor in dr mode against mongodb', function drMongo() {
     let bucketId = 0;
 
     before(async () => {
-        mqp = new MongoQueueProcessor(config.kafka,
+        mqp = new MongoQueueProcessor(
+            config.kafka,
             { ...config.extensions.mongoProcessor, mode: 'dr' },
             {
                 ...config.queuePopulator.mongo,
@@ -38,7 +37,8 @@ describe('MongoQueueProcessor in dr mode against mongodb', function drMongo() {
                 database: `pullreplication${Date.now()}`,
                 replicationGroupId: REPLICATION_GROUP_ID,
             },
-            {});
+            {},
+        );
         mqp._mProducer = { publishMetrics: () => {}, close: () => {} };
         mqp._bootstrapList = [];
         mongoClient = mqp._mongoClient;
@@ -53,12 +53,16 @@ describe('MongoQueueProcessor in dr mode against mongodb', function drMongo() {
     beforeEach(async () => {
         bucketId += 1;
         bucket = `pull-replication-bucket-${bucketId}`;
-        const bucketInfo = new BucketInfo(bucket, 'owner-id', 'owner',
-            new Date().toJSON(), BucketInfo.currentModelVersion());
+        const bucketInfo = new BucketInfo(
+            bucket,
+            'owner-id',
+            'owner',
+            new Date().toJSON(),
+            BucketInfo.currentModelVersion(),
+        );
         bucketInfo.setLocationConstraint(LOCATION);
         bucketInfo.setVersioningConfiguration({ Status: 'Enabled' });
-        await promisify(mongoClient.createBucket.bind(mongoClient))(
-            bucket, bucketInfo, fakeLogger);
+        await promisify(mongoClient.createBucket.bind(mongoClient))(bucket, bucketInfo, fakeLogger);
     });
 
     afterEach(() => sinon.restore());
@@ -91,7 +95,11 @@ describe('MongoQueueProcessor in dr mode against mongodb', function drMongo() {
 
     function getObject(versionId) {
         return promisify(mongoClient.getObject.bind(mongoClient))(
-            bucket, KEY, versionId ? { versionId } : {}, fakeLogger);
+            bucket,
+            KEY,
+            versionId ? { versionId } : {},
+            fakeLogger,
+        );
     }
 
     // a null master is moved into a version document of its own once a new
@@ -108,43 +116,44 @@ describe('MongoQueueProcessor in dr mode against mongodb', function drMongo() {
             master: () => coldObject(undefined),
         },
     ].forEach(({ title, nullVersionId, master }) =>
-    it(`should keep a null version ${title} once a newer one replicates`, async () => {
-        const newVersionId = VersionID.generateVersionId('', REPLICATION_GROUP_ID);
+        it(`should keep a null version ${title} once a newer one replicates`, async () => {
+            const newVersionId = VersionID.generateVersionId('', REPLICATION_GROUP_ID);
 
-        const nullMaster = master(nullVersionId);
-        await replicate(KEY, nullMaster);
-        await replicate(`${KEY}${VID_SEP}${nullVersionId}`, {
-            ...nullMaster,
-            versionId: nullVersionId,
-            isNull: true,
-            originOp: 's3:StoreNullVersion',
-        });
-        const newVersion = coldObject(newVersionId, { nullVersionId });
-        await replicate(`${KEY}${VID_SEP}${newVersionId}`, newVersion);
-        await replicate(KEY, newVersion);
+            const nullMaster = master(nullVersionId);
+            await replicate(KEY, nullMaster);
+            await replicate(`${KEY}${VID_SEP}${nullVersionId}`, {
+                ...nullMaster,
+                versionId: nullVersionId,
+                isNull: true,
+                originOp: 's3:StoreNullVersion',
+            });
+            const newVersion = coldObject(newVersionId, { nullVersionId });
+            await replicate(`${KEY}${VID_SEP}${newVersionId}`, newVersion);
+            await replicate(KEY, newVersion);
 
-        const nullVersion = await getObject(nullVersionId);
-        assert.strictEqual(nullVersion.isNull, true);
-        assert.deepStrictEqual(nullVersion.archive, nullMaster.archive);
-        assert.strictEqual((await getObject(newVersionId)).versionId, newVersionId);
-        assert.strictEqual((await getObject()).versionId, newVersionId);
-    }));
+            const nullVersion = await getObject(nullVersionId);
+            assert.strictEqual(nullVersion.isNull, true);
+            assert.deepStrictEqual(nullVersion.archive, nullMaster.archive);
+            assert.strictEqual((await getObject(newVersionId)).versionId, newVersionId);
+            assert.strictEqual((await getObject()).versionId, newVersionId);
+        }),
+    );
 
     [
         { title: 'a version', versioned: true },
         { title: 'an object with no version of its own', versioned: false },
     ].forEach(({ title, versioned }) =>
-    it(`should leave the document unchanged on a replayed entry for ${title}`, async () => {
-        const versionId = versioned ?
-            VersionID.generateVersionId('', REPLICATION_GROUP_ID) : undefined;
-        const documentKey = versionId ? `${KEY}${VID_SEP}${versionId}` : KEY;
-        // a dotted key is escaped when stored, and unescaped when read back
-        const value = coldObject(versionId, { tags: { 'dotted.key': 'value' } });
+        it(`should leave the document unchanged on a replayed entry for ${title}`, async () => {
+            const versionId = versioned ? VersionID.generateVersionId('', REPLICATION_GROUP_ID) : undefined;
+            const documentKey = versionId ? `${KEY}${VID_SEP}${versionId}` : KEY;
+            // a dotted key is escaped when stored, and unescaped when read back
+            const value = coldObject(versionId, { tags: { 'dotted.key': 'value' } });
 
-        await replicate(documentKey, value);
-        const written = await getObject(versionId);
-        await replicate(documentKey, value);
+            await replicate(documentKey, value);
+            const written = await getObject(versionId);
+            await replicate(documentKey, value);
 
-        assert.deepStrictEqual(await getObject(versionId), written);
-    }));
+            assert.deepStrictEqual(await getObject(versionId), written);
+        }),
+    );
 });

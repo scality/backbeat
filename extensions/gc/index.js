@@ -1,5 +1,4 @@
-const GarbageCollectorConfigValidator =
-          require('./GarbageCollectorConfigValidator');
+const GarbageCollectorConfigValidator = require('./GarbageCollectorConfigValidator');
 
 module.exports = {
     name: 'gc',

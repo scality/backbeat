@@ -118,6 +118,5 @@ describe('routes', () => {
             method: 'getCompletions',
             dataPoints: ['opsDone', 'bytesDone'],
         });
-
     });
 });
