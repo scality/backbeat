@@ -33,7 +33,7 @@ describe('PipelineFactory', () => {
         assert.deepEqual(buckets, ['example-bucket-1, example-bucket-2']);
     });
 
-    it('should return the list of buckets if the list is valid against the pipeline factory', async () => {
+    it('getOldConnectorBucketList throws NotImplemented for a bucket list pipeline', async () => {
         const config = {
             pipeline: JSON.stringify([{
                 $match: {
@@ -49,7 +49,7 @@ describe('PipelineFactory', () => {
         });
     });
 
-    it('should return the list of buckets if the list is valid against the pipeline factory', async () => {
+    it('getOldConnectorBucketList throws NotImplemented for a wildcard pipeline', async () => {
         const config = {
             pipeline: JSON.stringify([
                 {

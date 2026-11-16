@@ -217,7 +217,7 @@ describe('Site name', () => {
 });
 
 
-describe('Config', () => {
+describe('Config replication site destinations', () => {
     describe('getReplicationSiteDestConfig', () => {
         let ogConfigFileEnv;
 

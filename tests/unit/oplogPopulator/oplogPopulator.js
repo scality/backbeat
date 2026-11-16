@@ -148,7 +148,7 @@ describe('OplogPopulator', () => {
             assert(arePipelinesImmutableStub.calledOnce);
         });
 
-        it('should return an instance of RetainBucketsDecorator for immutable pipelines', () => {
+        it('should wrap a LeastFullConnector in a RetainBucketsDecorator for mutable pipelines', () => {
             const arePipelinesImmutableStub = sinon.stub(oplogPopulator, '_arePipelinesImmutable').returns(false);
             const configuration = oplogPopulator.initConfiguration();
             assert(configuration.allocationStrategy instanceof RetainBucketsDecorator);

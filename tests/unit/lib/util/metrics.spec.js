@@ -71,7 +71,7 @@ describe('Metrics', () => {
             { defaultLabel: 'default', label: 'value' }, 15);
     });
 
-    it('can add default labels to wrapped histogram', () => {
+    it('lets call-time labels override default labels', () => {
         const mockHistogram = sinon.spy();
         mockHistogram.observe = sinon.spy();
         const observeFn = wrapHistogramObserve(mockHistogram, { label: 'default' });
