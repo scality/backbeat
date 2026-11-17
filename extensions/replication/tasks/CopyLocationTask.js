@@ -301,7 +301,7 @@ class CopyLocationTask extends BackbeatTask {
                     LifecycleMetrics.onLifecycleStarted(
                         log,
                         getCopyLocationMetricsType(actionEntry),
-                        actionEntry.getAttribute('toLocation'),
+                        actionEntry.getAttribute('site') || actionEntry.getAttribute('toLocation'),
                         startTime - Date.parse(transitionTime),
                     );
 

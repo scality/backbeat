@@ -246,7 +246,7 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
                     return this._putMetadata(entry, objMD, log, err => {
                         const transitionTime =
                             entry.getAttribute('metrics.transitionTime') || objMD.getTransitionTime();
-                        const locationName = entry.getAttribute('toLocation');
+                        const locationName = entry.getAttribute('site') || entry.getAttribute('toLocation');
                         LifecycleMetrics.onLifecycleCompleted(
                             log,
                             getCopyLocationMetricsType(entry),

@@ -1,8 +1,10 @@
 const assert = require('assert');
+const sinon = require('sinon');
 const werelogs = require('werelogs');
 
 const { ObjectMD } = require('@scality/arsenal').models;
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
+const { LifecycleMetrics } = require('../../../extensions/lifecycle/LifecycleMetrics');
 const LifecycleUpdateTransitionTask = require('../../../extensions/lifecycle/tasks/LifecycleUpdateTransitionTask');
 
 const { GarbageCollectorProducerMock, BackbeatMetadataProxyMock, ProcessorMock } = require('../mocks');
@@ -170,6 +172,26 @@ describe('LifecycleUpdateTransitionTask', () => {
             assert.strictEqual(backbeatMetadataProxyClient.getReceivedMd(), null);
             const receivedGcEntry = gcProducer.getReceivedEntry();
             assert.deepStrictEqual(receivedGcEntry.getAttribute('target.locations'), newLocation);
+            done();
+        });
+    });
+
+    it('should report a pull replication completed on the location pulled from', done => {
+        const completedMetric = sinon.stub(LifecycleMetrics, 'onLifecycleCompleted');
+        actionEntry
+            .setAttribute('site', 'location-crr-source')
+            .setAttribute('toLocation', 'newLocationName')
+            .setAttribute('metrics', { origin: 'pullReplication' });
+        task.processActionEntry(actionEntry, err => {
+            completedMetric.restore();
+            assert.ifError(err);
+            sinon.assert.calledOnceWithExactly(
+                completedMetric,
+                sinon.match.any,
+                'pullReplication',
+                'location-crr-source',
+                sinon.match.number,
+            );
             done();
         });
     });
