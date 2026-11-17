@@ -266,6 +266,7 @@ class CopyLocationTask extends BackbeatTask {
             bucketName: 'target.bucket',
             objectKey: 'target.key',
             versionId: 'target.version',
+            copyFromLocation: 'metrics.fromLocation',
             copyToLocation: 'toLocation',
         });
         log.debug('action execution starts', actionEntry.getLogInfo());
