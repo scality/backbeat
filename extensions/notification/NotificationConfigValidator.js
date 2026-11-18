@@ -77,6 +77,9 @@ const destinationSchema = joi.object({
         then: joi.forbidden(),
         otherwise: joi.string().default('none'),
     }),
+    // number of record keys the destination is spread over: raise it to let
+    // more than one delivery worker handle the destination in parallel
+    spreadFactor: joi.number().integer().min(1).default(1),
 });
 
 const joiSchema = joi.object({
@@ -89,6 +92,29 @@ const joiSchema = joi.object({
         concurrency: joi.number().greater(0).default(1000),
         maxQueued: joi.number().greater(0).default(MAX_QUEUED_DEFAULT),
     }),
+    // single consumer group delivering to every destination, addressed by
+    // the record itself instead of by one topic per destination.
+    // deliveryTimeoutMs must stay above the producer request timeout (5000)
+    // and below kafka.maxPollIntervalMs minus a margin, otherwise a slow
+    // destination holds the partition past the poll deadline and the
+    // consumer is evicted.
+    deliveryPool: joi.object({
+        enabled: joi.boolean().default(false),
+        topic: joi.string().when('enabled', {
+            is: joi.boolean().valid(true).required(),
+            then: joi.required(),
+        }),
+        groupId: joi.string().when('enabled', {
+            is: joi.boolean().valid(true).required(),
+            then: joi.required(),
+        }),
+        deliveryTimeoutMs: joi.number().min(6000).max(240000).default(30000),
+        producerIdleMs: joi.number().greater(0).default(300000),
+        maxProducers: joi.number().greater(0).default(50),
+        concurrency: joi.number().greater(0).default(1000),
+        maxQueued: joi.number().greater(0).default(MAX_QUEUED_DEFAULT),
+        probeServer: probeServerJoi.optional(),
+    }).optional(),
     destinations: joi.array().items(destinationSchema).default([]),
     // TODO: BB-625 reset to being required after supporting probeserver in S3C
     // for bucket notification proceses
