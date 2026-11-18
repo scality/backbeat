@@ -211,7 +211,7 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
             this.log,
             'queuePopulator',
             PULL_REPLICATION,
-            targetLocation,
+            queueEntry.getDataStoreName(),
             Date.now() - transitionTime.getTime(),
         );
 

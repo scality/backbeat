@@ -538,7 +538,7 @@ describe('replication queue populator: pull replication', () => {
         assert.strictEqual(action.metrics.transitionTime, '2024-05-06T10:11:12.000Z');
     });
 
-    it('should report the transition as triggered', () => {
+    it('should report the transition as triggered on the location pulled from', () => {
         rqp._filterKeyOp(makeEntry(makeValue()));
 
         sinon.assert.calledOnceWithExactly(
@@ -546,7 +546,7 @@ describe('replication queue populator: pull replication', () => {
             rqp.log,
             'queuePopulator',
             'pullReplication',
-            TARGET_LOCATION,
+            CRR_LOCATION,
             sinon.match.number,
         );
     });
