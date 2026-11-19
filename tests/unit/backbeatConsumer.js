@@ -1,10 +1,15 @@
 const assert = require('assert');
 const sinon = require('sinon');
+const { EventEmitter } = require('events');
 
 const BackbeatConsumer = require('../../lib/BackbeatConsumer');
 const { CODES } = require('node-rdkafka');
 
 const { kafka } = require('../config.json');
+const {
+    unassignStatus,
+    backbeatConsumer: { SHUTDOWN_DRAIN_GRACE_MS },
+} = require('../../lib/constants');
 const { BreakerState } = require('breakbeat').CircuitBreaker;
 
 class BackbeatConsumerMock extends BackbeatConsumer {
@@ -394,6 +399,219 @@ describe('backbeatConsumer', () => {
                 consumer._nConsumePendingRequests = params.state.nConsumePendingRequests;
                 const availableSlots = consumer._getAvailableSlotsInPipeline();
                 assert.strictEqual(availableSlots, params.expectedSlots);
+            });
+        });
+    });
+
+    describe('shutdown', () => {
+        let consumer;
+        let mockConsumer;
+
+        function makeMockConsumer(overrides) {
+            const mock = new EventEmitter();
+            return Object.assign(mock, {
+                isConnected: () => true,
+                subscription: () => ['my-test-topic'],
+                assignments: () => [],
+                unsubscribe: sinon.stub(),
+                unassign: sinon.stub(),
+                assign: sinon.stub(),
+                commit: sinon.stub(),
+                pause: sinon.stub(),
+                resume: sinon.stub(),
+                consume: sinon.stub(),
+                disconnect: sinon.stub().callsFake(() => process.nextTick(
+                    () => mock.emit('disconnected'))),
+            }, overrides);
+        }
+
+        beforeEach(() => {
+            consumer = new BackbeatConsumerMock({
+                kafka,
+                groupId: 'unittest-group',
+                topic: 'my-test-topic',
+            });
+            mockConsumer = makeMockConsumer();
+            consumer._consumer = mockConsumer;
+        });
+
+        afterEach(() => {
+            sinon.restore();
+        });
+
+        describe('close', () => {
+            it('should not wait for an un-assign when nothing is assigned',
+            done => {
+                consumer.close(() => {
+                    assert(mockConsumer.unsubscribe.calledOnce);
+                    assert(mockConsumer.disconnect.calledOnce);
+                    assert.strictEqual(consumer.listenerCount('unassign'), 0);
+                    done();
+                });
+            });
+
+            it('should disconnect without waiting when reading the consumer ' +
+            'state throws', done => {
+                const err = new Error('Local: Erroneous state');
+                mockConsumer.subscription = sinon.stub().throws(err);
+                mockConsumer.assignments = sinon.stub().throws(err);
+                consumer.close(() => {
+                    // unsubscribe is attempted best-effort regardless, but
+                    // with no readable assignment we do not wait for an
+                    // un-assign that may never come
+                    assert.strictEqual(consumer.listenerCount('unassign'), 0);
+                    assert(mockConsumer.disconnect.calledOnce);
+                    done();
+                });
+            });
+
+            it('should not disconnect when not connected', done => {
+                mockConsumer.isConnected = () => false;
+                consumer.close(() => {
+                    assert(mockConsumer.disconnect.notCalled);
+                    done();
+                });
+            });
+
+            it('should wait for the revoke of a held assignment before ' +
+            'disconnecting', done => {
+                mockConsumer.assignments =
+                    () => [{ topic: 'my-test-topic', partition: 0 }];
+                let closed = false;
+                consumer.close(() => {
+                    closed = true;
+                    assert(mockConsumer.disconnect.calledOnce);
+                    done();
+                });
+                setImmediate(() => {
+                    assert.strictEqual(closed, false);
+                    assert(mockConsumer.disconnect.notCalled);
+                    consumer.emit('unassign', unassignStatus.DRAINED);
+                });
+            });
+
+            it('should wait for a parked revoke to finish draining before ' +
+            'disconnecting', done => {
+                consumer._waitingDrain = true;
+                let closed = false;
+                consumer.close(() => {
+                    closed = true;
+                    assert(mockConsumer.disconnect.calledOnce);
+                    done();
+                });
+                setImmediate(() => {
+                    assert.strictEqual(closed, false);
+                    assert(mockConsumer.disconnect.notCalled);
+                    consumer.emit('unassign', unassignStatus.DRAINED);
+                });
+            });
+
+            it('should give up waiting after the grace when no revoke ' +
+            'starts, then disconnect', done => {
+                const clock = sinon.useFakeTimers({ toFake: ['setTimeout'] });
+                mockConsumer.assignments =
+                    () => [{ topic: 'my-test-topic', partition: 0 }];
+                consumer.close(() => {
+                    assert(mockConsumer.unassign.calledOnce);
+                    assert(mockConsumer.disconnect.calledOnce);
+                    done();
+                });
+                // no revoke arrives: the short grace elapses and we
+                // disconnect rather than waiting the full poll interval
+                clock.tick(SHUTDOWN_DRAIN_GRACE_MS + 1);
+            });
+
+            it('should keep waiting under the full budget while a revoke ' +
+            'is draining', done => {
+                const clock = sinon.useFakeTimers({ toFake: ['setTimeout'] });
+                consumer._waitingDrain = true;
+                let closed = false;
+                consumer.close(() => {
+                    closed = true;
+                    done();
+                });
+                // past the short grace: because a revoke is in progress we
+                // must not give up yet
+                clock.tick(SHUTDOWN_DRAIN_GRACE_MS + 1);
+                assert.strictEqual(closed, false);
+                assert(mockConsumer.disconnect.notCalled);
+                // the drain completes and emits 'unassign'
+                consumer._waitingDrain = false;
+                consumer.emit('unassign', unassignStatus.DRAINED);
+            });
+
+            it('should give up waiting for the disconnect event after ' +
+            'DISCONNECT_TIMEOUT_MS', done => {
+                const clock = sinon.useFakeTimers({ toFake: ['setTimeout'] });
+                mockConsumer.disconnect = sinon.stub();
+                consumer.close(() => {
+                    assert(mockConsumer.disconnect.calledOnce);
+                    done();
+                });
+                process.nextTick(() => clock.tick(5001));
+            });
+        });
+
+        describe('_onRebalance during shutdown', () => {
+            it('should decline a partition grant with unassign()', () => {
+                consumer._closing = true;
+                let emitted = null;
+                consumer.once('unassign', status => { emitted = status; });
+                consumer._onRebalance(
+                    { code: CODES.ERRORS.ERR__ASSIGN_PARTITIONS },
+                    [{ topic: 'my-test-topic', partition: 0 }]);
+                assert(mockConsumer.assign.notCalled);
+                assert(mockConsumer.unassign.calledOnce);
+                assert.strictEqual(emitted, unassignStatus.SHUTDOWN);
+            });
+
+            it('should not signal un-assign for a declined grant while a ' +
+            'revoke is still draining', () => {
+                consumer._closing = true;
+                consumer._waitingDrain = true;
+                let emitted = null;
+                consumer.once('unassign', status => { emitted = status; });
+                consumer._onRebalance(
+                    { code: CODES.ERRORS.ERR__ASSIGN_PARTITIONS },
+                    [{ topic: 'my-test-topic', partition: 0 }]);
+                assert(mockConsumer.unassign.calledOnce);
+                assert.strictEqual(emitted, null);
+            });
+
+            it('should answer a revoke immediately once disconnecting, ' +
+            'without arming a drain', () => {
+                consumer._closing = true;
+                consumer._disconnecting = true;
+                let emitted = null;
+                consumer.once('unassign', status => { emitted = status; });
+                consumer._onRebalance(
+                    { code: CODES.ERRORS.ERR__REVOKE_PARTITIONS },
+                    [{ topic: 'my-test-topic', partition: 0 }]);
+                assert(mockConsumer.unassign.calledOnce);
+                assert.strictEqual(emitted, unassignStatus.SHUTDOWN);
+                assert.strictEqual(consumer._drainCallback, null);
+                assert.strictEqual(consumer._drainProcessQueueTimeout, null);
+            });
+
+            it('should keep the drain-first revoke handling when not ' +
+            'shutting down', () => {
+                let emitted = null;
+                consumer.once('unassign', status => { emitted = status; });
+                consumer._onRebalance(
+                    { code: CODES.ERRORS.ERR__REVOKE_PARTITIONS },
+                    [{ topic: 'my-test-topic', partition: 0 }]);
+                assert(mockConsumer.commit.calledOnce);
+                assert(mockConsumer.unassign.calledOnce);
+                assert.strictEqual(emitted, unassignStatus.IDLE);
+                assert.strictEqual(consumer._waitingDrain, false);
+            });
+        });
+
+        describe('_tryConsume during shutdown', () => {
+            it('should not consume once the shutdown has started', () => {
+                consumer._closing = true;
+                consumer._tryConsume();
+                assert(mockConsumer.consume.notCalled);
             });
         });
     });
