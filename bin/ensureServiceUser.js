@@ -7,7 +7,7 @@ const fs = require('fs');
 const util = require('util');
 
 const { errors, errorUtils } = require('@scality/arsenal');
-const { program } = require('commander');
+const { program, Option, InvalidArgumentError } = require('commander');
 const werelogs = require('werelogs');
 const version = require('../package.json').version;
 const async = require('async');
@@ -46,6 +46,28 @@ function generateUserAssumeRolePolicyDocument(roleName, targetAccount) {
             Resource: `arn:aws:iam::${targetAccount}:role${systemPrefix}${roleName}`,
         },
     };
+}
+
+function generateCrossAccountUserPolicyDocument(roleName, userPolicies = []) {
+    const policy = generateUserAssumeRolePolicyDocument(roleName, '*');
+    const statements = userPolicies.flatMap(userPolicy => userPolicy.Statement);
+    if (statements.length === 0) {
+        return policy;
+    }
+    return { ...policy, Statement: [policy.Statement, ...statements] };
+}
+
+function parseUserPolicy(value, previous = []) {
+    let policy;
+    try {
+        policy = JSON.parse(value);
+    } catch {
+        throw new InvalidArgumentError('Not a JSON document.');
+    }
+    if (!policy?.Statement) {
+        throw new InvalidArgumentError('The policy document has no Statement.');
+    }
+    return [...previous, policy];
 }
 
 function generateRoleTrustPolicyDocument(userArn) {
@@ -429,12 +451,12 @@ function collectResourcesFromHandlers(handlers, cb) {
     async.parallel(tasks, cb);
 }
 
-function buildServiceUserForCrossAccountAssumeRoleHandlers(serviceName, client, log) {
+function buildServiceUserForCrossAccountAssumeRoleHandlers(serviceName, userPolicies, client, log) {
     return [
         new UserHandler(serviceName, client, log),
         new PolicyHandler(serviceName, client, log, {
             name: 'user',
-            policy: generateUserAssumeRolePolicyDocument(serviceName, '*'),
+            policy: generateCrossAccountUserPolicyDocument(serviceName, userPolicies),
         }),
         new PolicyUserAttachmentHandler(serviceName, client, log),
         new AccessKeyHandler(serviceName, client, log),
@@ -462,15 +484,15 @@ function buildServiceUserForInAccountAssumeRoleHandlers(serviceName, policy, iam
     ];
 }
 
-function apply(iamClient, stsClient, serviceName, policyFile, log, cb) {
+function apply(iamClient, stsClient, serviceName, options, log, cb) {
     let handlers;
 
-    if (policyFile) {
-        const policyStr = fs.readFileSync(policyFile);
+    if (options.policy) {
+        const policyStr = fs.readFileSync(options.policy);
         const policy = JSON.parse(policyStr);
         handlers = buildServiceUserForInAccountAssumeRoleHandlers(serviceName, policy, iamClient, stsClient, log);
     } else {
-        handlers = buildServiceUserForCrossAccountAssumeRoleHandlers(serviceName, iamClient, log);
+        handlers = buildServiceUserForCrossAccountAssumeRoleHandlers(serviceName, options.userPolicy, iamClient, log);
     }
 
     async.waterfall(
@@ -496,7 +518,7 @@ function buildServiceUserDeleteHandlers(serviceName, iamClient, log) {
     ];
 }
 
-async function deleteServiceUser(iamClient, stsClient, serviceName, policyFile, log) {
+async function deleteServiceUser(iamClient, stsClient, serviceName, _options, log) {
     const handlers = buildServiceUserDeleteHandlers(serviceName, iamClient, log);
 
     // look everything up first: nothing is deleted if one of them was not created by apply
@@ -535,7 +557,7 @@ function wrapAction(actionFunc, serviceName, _, cmd) {
     const iamClient = createIAMClient(options);
     const stsClient = createSTSClient(options);
 
-    actionFunc(iamClient, stsClient, serviceName, options.policy, log, (err, data) => {
+    actionFunc(iamClient, stsClient, serviceName, options, log, (err, data) => {
         if (err) {
             log.error('failed', {
                 data,
@@ -564,6 +586,14 @@ program
         'Create a policy using the provided document' +
             ' and attach it to a role that the service user is allowed to assume, instead' +
             ' of only allowing the user to assume one (seeded) role named <service-name> in all accounts.',
+    )
+    .addOption(
+        new Option(
+            '--user-policy <document>',
+            'Also give the user the statements of this JSON policy document (repeatable).',
+        )
+            .argParser(parseUserPolicy)
+            .conflicts('policy'),
     )
     .action(wrapAction.bind(null, apply));
 

@@ -139,4 +139,5 @@ jobs:
             extensions/gc/policy.json:application/vnd.iam-policy+json \
             policies/queue_populator_policy.json:application/vnd.iam-policy+json \
             policies/read_accounts.json:application/vnd.iam-policy+json \
-            policies/pull_replication_read.json.tmpl:application/vnd.iam-policy-template
+            policies/pull_replication_read.json.tmpl:application/vnd.iam-policy-template \
+            policies/pull_replication_account_lookup.json.tmpl:application/vnd.iam-policy-template
