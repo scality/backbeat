@@ -7,6 +7,7 @@ const MongoClient = require('mongodb').MongoClient;
 const ChangeStream = require('../../../../lib/wrappers/ChangeStream');
 const MongoConfigManager = require('../../../../extensions/notification/configManager/MongoConfigManager');
 const { errors } = require('@scality/arsenal');
+const { ZenkoMetrics } = require('@scality/arsenal').metrics;
 const mongoConfig = require('../../../config.json').queuePopulator.mongo;
 
 const logger = new werelogs.Logger('MongoConfigManager:test');
@@ -424,6 +425,97 @@ describe('MongoConfigManager ::', () => {
             assert.strictEqual(manager._cachedConfigs.count(), 0);
             await manager.getConfig('example-bucket-1');
             assert.strictEqual(findOne.callCount, 2);
+        });
+    });
+
+    describe('getConfig of buckets changed during the lookup ::', () => {
+        const updateEvent = (bucket, config) => ({
+            _id: 'resumeToken',
+            operationType: 'update',
+            documentKey: { _id: bucket },
+            fullDocument: {
+                _id: bucket,
+                value: { notificationConfiguration: config },
+            },
+        });
+
+        it('should return but not cache a configuration that changed during its lookup', async () => {
+            const manager = new MongoConfigManager(params);
+            const findOne = sinon.stub().callsFake(async () => {
+                manager._handleChangeStreamChangeEvent(
+                    updateEvent('example-bucket-1', notificationConfigurationVariant),
+                );
+                return { value: { notificationConfiguration } };
+            });
+            manager._metastore = { findOne };
+            const cacheUpdates = sinon.stub(
+                ZenkoMetrics.getMetric('s3_notification_config_manager_cache_updates_total'),
+                'inc',
+            );
+            assert.deepStrictEqual(await manager.getConfig('example-bucket-1'), {
+                bucket: 'example-bucket-1',
+                notificationConfiguration,
+            });
+            assert.strictEqual(manager._cachedConfigs.get('example-bucket-1'), undefined);
+            assert(cacheUpdates.calledOnceWithExactly({ op: 'skip' }));
+            await manager.getConfig('example-bucket-1');
+            assert.strictEqual(findOne.callCount, 2);
+        });
+
+        it('should not cache a missing configuration when one got enabled during its lookup', async () => {
+            const manager = new MongoConfigManager(params);
+            const findOne = sinon.stub();
+            findOne.onFirstCall().callsFake(async () => {
+                manager._handleChangeStreamChangeEvent(updateEvent('example-bucket-1', notificationConfiguration));
+                return { value: {} };
+            });
+            findOne.onSecondCall().resolves({ value: { notificationConfiguration } });
+            manager._metastore = { findOne };
+            assert.strictEqual(await manager.getConfig('example-bucket-1'), undefined);
+            assert.strictEqual(manager._cachedConfigs.get('example-bucket-1'), undefined);
+            assert.deepStrictEqual(await manager.getConfig('example-bucket-1'), {
+                bucket: 'example-bucket-1',
+                notificationConfiguration,
+            });
+        });
+
+        it('should cache a configuration when another bucket changed during its lookup', async () => {
+            const manager = new MongoConfigManager(params);
+            manager._metastore = {
+                findOne: async () => {
+                    manager._handleChangeStreamChangeEvent(
+                        updateEvent('example-bucket-2', notificationConfigurationVariant),
+                    );
+                    return { value: { notificationConfiguration } };
+                },
+            };
+            await manager.getConfig('example-bucket-1');
+            assert.deepStrictEqual(manager._cachedConfigs.get('example-bucket-1'), notificationConfiguration);
+        });
+
+        it('should cache a lookup started after the change', async () => {
+            const manager = new MongoConfigManager(params);
+            let second;
+            const findOne = sinon.stub();
+            findOne.onFirstCall().callsFake(async () => {
+                manager._handleChangeStreamChangeEvent(
+                    updateEvent('example-bucket-1', notificationConfigurationVariant),
+                );
+                second = manager.getConfig('example-bucket-1');
+                return { value: { notificationConfiguration } };
+            });
+            findOne.onSecondCall().resolves({ value: { notificationConfiguration: notificationConfigurationVariant } });
+            manager._metastore = { findOne };
+            await manager.getConfig('example-bucket-1');
+            await second;
+            assert.deepStrictEqual(manager._cachedConfigs.get('example-bucket-1'), notificationConfigurationVariant);
+        });
+
+        it('should forget the lookup when it fails', async () => {
+            const manager = new MongoConfigManager(params);
+            manager._metastore = { findOne: sinon.stub().rejects(new Error('read failed')) };
+            await assert.rejects(manager.getConfig('example-bucket-1'));
+            assert.strictEqual(manager._pendingLookups.size, 0);
         });
     });
 
