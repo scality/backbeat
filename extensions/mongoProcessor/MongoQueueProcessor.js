@@ -18,6 +18,7 @@ const { metricsExtension, metricsTypeCompleted, metricsTypePendingOnly } = requi
 const { metadataPolicies, defaultMode } = require('./metadataPolicy');
 const BucketMemState = require('./utils/BucketMemState');
 const MongoProcessorMetrics = require('./MongoProcessorMetrics');
+const locationsConfig = require('../../conf/locationConfig.json') || {};
 
 // batch metrics by location and send to kafka metrics topic every 5 seconds
 const METRIC_REPORT_INTERVAL_MS = process.env.CI === 'true' ? 1000 : 5000;
@@ -70,9 +71,14 @@ class MongoQueueProcessor {
         this._consumer = null;
         this._bootstrapList = null;
         this.logger = new Logger('Backbeat:Ingestion:MongoProcessor');
-        this.mongoClientConfig.logger = this.logger;
         this._policy = new metadataPolicies[mongoProcessorConfig.mode ?? defaultMode]();
-        this._mongoClient = new MongoClient(this.mongoClientConfig);
+        // the client tells the versions whose data is not on this site yet
+        // from the locations, and never makes them master
+        this._mongoClient = new MongoClient({
+            ...this.mongoClientConfig,
+            logger: this.logger,
+            locations: locationsConfig,
+        });
         this._bucketMemState = new BucketMemState();
 
         // in-mem batch of metrics, we only track total entry count by location

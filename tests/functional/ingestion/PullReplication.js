@@ -14,6 +14,8 @@ const fakeLogger = require('../../utils/fakeLogger');
 const REPLICATION_GROUP_ID = 'RG001';
 const LOCATION = 'us-east-1';
 const COLD_LOCATION = 'cold-location';
+// isCRR in conf/locationConfig.json: data still to be pulled from the source
+const CRR_LOCATION = 'location-crr-source';
 const KEY = 'pull-replication-key';
 
 // the mock client hands back the very document it was given, so what it
@@ -85,11 +87,29 @@ describe('MongoQueueProcessor in dr mode against mongodb', function drMongo() {
         return value;
     }
 
+    function hotObject(versionId, dataStoreName) {
+        return new ObjectMD()
+            .setKey(KEY)
+            .setContentLength(1024)
+            .setContentMd5('9e107d9d372bb6826bd81d3542a419d6')
+            .setLastModified('2026-09-01T10:00:00.000Z')
+            .setDataStoreName(dataStoreName)
+            .setLocation([{ key: KEY, size: 1024, start: 0, dataStoreName, dataStoreVersionId: versionId }])
+            .setVersionId(versionId)
+            .getValue();
+    }
+
     // the entry the source pipeline produces for the document stored under
     // `documentKey`
     function replicate(documentKey, value) {
         return promisify(mqp.processKafkaEntry.bind(mqp))({
             value: JSON.stringify({ type: 'put', bucket, key: documentKey, value }),
+        });
+    }
+
+    function replicateDelete(versionId) {
+        return promisify(mqp.processKafkaEntry.bind(mqp))({
+            value: JSON.stringify({ type: 'del', bucket, key: `${KEY}${VID_SEP}${versionId}` }),
         });
     }
 
@@ -156,4 +176,38 @@ describe('MongoQueueProcessor in dr mode against mongodb', function drMongo() {
             assert.deepStrictEqual(await getObject(versionId), written);
         }),
     );
+
+    describe('a version whose data is not pulled yet', () => {
+        it('should not be visible as the object', async () => {
+            const versionId = VersionID.generateVersionId('', REPLICATION_GROUP_ID);
+
+            await replicate(`${KEY}${VID_SEP}${versionId}`, hotObject(versionId, CRR_LOCATION));
+
+            assert.strictEqual((await getObject(versionId)).dataStoreName, CRR_LOCATION);
+            await assert.rejects(getObject(), err => err.is.NoSuchKey);
+        });
+
+        it('should leave the object on the previous version', async () => {
+            const localVersionId = VersionID.generateVersionId('', REPLICATION_GROUP_ID);
+            const crrVersionId = VersionID.generateVersionId('', REPLICATION_GROUP_ID);
+
+            await replicate(`${KEY}${VID_SEP}${localVersionId}`, hotObject(localVersionId, LOCATION));
+            await replicate(`${KEY}${VID_SEP}${crrVersionId}`, hotObject(crrVersionId, CRR_LOCATION));
+
+            assert.strictEqual((await getObject()).versionId, localVersionId);
+        });
+
+        it('should not become the object when the latest version is deleted', async () => {
+            const oldVersionId = VersionID.generateVersionId('', REPLICATION_GROUP_ID);
+            const crrVersionId = VersionID.generateVersionId('', REPLICATION_GROUP_ID);
+            const latestVersionId = VersionID.generateVersionId('', REPLICATION_GROUP_ID);
+
+            await replicate(`${KEY}${VID_SEP}${oldVersionId}`, hotObject(oldVersionId, LOCATION));
+            await replicate(`${KEY}${VID_SEP}${crrVersionId}`, hotObject(crrVersionId, CRR_LOCATION));
+            await replicate(`${KEY}${VID_SEP}${latestVersionId}`, hotObject(latestVersionId, LOCATION));
+            await replicateDelete(latestVersionId);
+
+            assert.strictEqual((await getObject()).versionId, oldVersionId);
+        });
+    });
 });
