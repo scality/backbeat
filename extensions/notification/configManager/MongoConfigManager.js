@@ -84,6 +84,7 @@ class MongoConfigManager extends BaseConfigManager {
         this._logger = params.logger;
         this._mongoConfig = params.mongoConfig;
         this._cachedConfigs = new LRUCache(params.maxCachedConfigs);
+        this._pendingLookups = new Map();
         this._bucketMetastore = params.bucketMetastore;
         this._mongoClient = null;
         this._metastore = null;
@@ -142,6 +143,11 @@ class MongoConfigManager extends BaseConfigManager {
      * @returns {undefined}
      */
     _handleChangeStreamChangeEvent(change) {
+        // any change event can change the configuration. we don't know if it was an
+        // actual change or a noop from just the event and an empty cache.
+        for (const lookup of this._pendingLookups.get(change.documentKey._id) ?? []) {
+            lookup.changed = true;
+        }
         // invalidating cached notification configs
         const cachedConfig = this._cachedConfigs.get(change.documentKey._id);
         const bucketNotificationConfiguration = change.fullDocument
@@ -271,6 +277,8 @@ class MongoConfigManager extends BaseConfigManager {
                 notificationConfiguration: cachedConfig,
             };
         }
+        const lookup = { changed: false };
+        this._addPendingLookup(bucket, lookup);
         try {
             // retreiving bucket metadata from the metastore
             const bucketMetadata = await this._metastore.findOne({ _id: bucket });
@@ -278,16 +286,26 @@ class MongoConfigManager extends BaseConfigManager {
             const delay = (Date.now() - startTime) / 1000;
             onConfigManagerConfigGet(false, delay);
             // when disabled after being enabled bucket notification configuration is set to an empty object
-            if (!notificationConfiguration || !Object.keys(notificationConfiguration).length) {
+            const hasConfig = notificationConfiguration && Object.keys(notificationConfiguration).length > 0;
+            if (lookup.changed) {
+                this._logger.debug('not caching configuration read while the bucket changed', {
+                    method: 'MongoConfigManager.getConfig',
+                    bucket,
+                });
+                onConfigManagerCacheUpdate('skip', this._cachedConfigs.count());
+            } else if (!hasConfig) {
                 // caching the absence of configuration too, so that the
                 // entries of buckets without one do not each cost a lookup
                 this._cachedConfigs.add(bucket, NO_CONFIG);
                 onConfigManagerCacheUpdate('add', this._cachedConfigs.count());
+            } else {
+                // caching the bucket configuration
+                this._cachedConfigs.add(bucket, notificationConfiguration);
+                onConfigManagerCacheUpdate('add', this._cachedConfigs.count());
+            }
+            if (!hasConfig) {
                 return undefined;
             }
-            // caching the bucket configuration
-            this._cachedConfigs.add(bucket, notificationConfiguration);
-            onConfigManagerCacheUpdate('add', this._cachedConfigs.count());
             return {
                 bucket,
                 notificationConfiguration,
@@ -299,6 +317,25 @@ class MongoConfigManager extends BaseConfigManager {
                 error: err.message,
             });
             throw errors.InternalError.customizeDescription(err.message);
+        } finally {
+            this._removePendingLookup(bucket, lookup);
+        }
+    }
+
+    _addPendingLookup(bucket, lookup) {
+        const lookups = this._pendingLookups.get(bucket);
+        if (lookups) {
+            lookups.add(lookup);
+        } else {
+            this._pendingLookups.set(bucket, new Set([lookup]));
+        }
+    }
+
+    _removePendingLookup(bucket, lookup) {
+        const lookups = this._pendingLookups.get(bucket);
+        lookups.delete(lookup);
+        if (lookups.size === 0) {
+            this._pendingLookups.delete(bucket);
         }
     }
 
