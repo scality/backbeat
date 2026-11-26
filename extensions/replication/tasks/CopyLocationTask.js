@@ -222,8 +222,7 @@ class CopyLocationTask extends BackbeatTask {
                 `source location ${site} returned no account for owner ${ownerId}`,
             );
         }
-        this.sourceAccountIds.set(cacheKey, accountId);
-        this.sourceAccountIds.expireOldest();
+        this.sourceAccountIds.setAndExpireOldest(cacheKey, accountId);
         return accountId;
     }
 
