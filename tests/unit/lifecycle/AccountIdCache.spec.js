@@ -54,6 +54,19 @@ describe('accound id cache', () => {
         assert.deepStrictEqual(cache.get('c'), 3);
     });
 
+    it('should expire the oldest values when setting one', () => {
+        const cache = new AccountIdCache(2);
+
+        cache.setAndExpireOldest('a', 1);
+        cache.setAndExpireOldest('b', 2);
+        cache.setAndExpireOldest('c', 3);
+
+        assert.deepStrictEqual(cache.size, 2);
+        assert.deepStrictEqual(cache.get('a'), undefined);
+        assert.deepStrictEqual(cache.get('b'), 2);
+        assert.deepStrictEqual(cache.get('c'), 3);
+    });
+
     it('should store misses', () => {
         const cache = new AccountIdCache(1);
 

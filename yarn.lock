@@ -7182,6 +7182,17 @@ vary@^1, vary@~1.1.2:
   resolved "https://registry.yarnpkg.com/vary/-/vary-1.1.2.tgz#2299f02c6ded30d4a5961b0b9f74524a18f634fc"
   integrity sha512-BNGbWLfd0eUPabhkXUVm0j8uuvREyTh5ovRa/dyow/BqAbZJyC+5fU+IzQOzmAKzYqYRAISoRhdQr3eIZ/PXqg==
 
+vaultclient@scality/vaultclient#8.5.10:
+  version "8.5.10"
+  resolved "https://codeload.github.com/scality/vaultclient/tar.gz/4ea39d26f4fc3b9544b0c185b88f11fe8a03c03d"
+  dependencies:
+    "@aws-crypto/sha256-universal" "^5.2.0"
+    "@smithy/signature-v4" "^4.1.0"
+    commander "^11.0.0"
+    httpagent "git+https://github.com/scality/httpagent#1.1.1"
+    werelogs scality/werelogs#8.2.5
+    xml2js "^0.6.2"
+
 vaultclient@scality/vaultclient#8.5.9:
   version "8.5.9"
   resolved "https://codeload.github.com/scality/vaultclient/tar.gz/f809e3b79f2ad9acf26ddc98a550e6689c568515"

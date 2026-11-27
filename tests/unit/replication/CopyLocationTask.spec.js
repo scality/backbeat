@@ -4,6 +4,8 @@ const sinon = require('sinon');
 const CopyLocationTask = require('../../../extensions/replication/tasks/CopyLocationTask');
 const ClientManager = require('../../../lib/clients/ClientManager');
 const ClientManagerCache = require('../../../lib/clients/ClientManagerCache');
+const VaultClient = require('vaultclient').Client;
+const { AccountIdCache } = require('../../../extensions/utils/AccountIdCache');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const { errors } = require('@scality/arsenal');
 const { ObjectMD } = require('@scality/arsenal').models;
@@ -323,7 +325,8 @@ describe('CopyLocationTask', () => {
         let task;
 
         // what the operator writes for a location we replicate to over CRR:
-        // the servers to reach it, and an STS to assume roles on it
+        // the servers to reach it, and an STS to assume roles on it and to
+        // find the account of an object owner
         const remoteSiteDetails = {
             transport: 'https',
             servers: ['production.example.com:443'],
@@ -345,7 +348,8 @@ describe('CopyLocationTask', () => {
             // as the source stores it, not as its S3 API takes it
             dataStoreVersionId: '98501018544962999999RG001  ',
             bucket: 'backup-repo-01',
-            role: 'arn:aws:iam::123456789012:role/clean-room-read',
+            ownerId: 'owner-canonical-id',
+            roleName: 'svcid-dr-source',
         };
 
         function sourceObjectMD(location = [sourcePart]) {
@@ -356,13 +360,20 @@ describe('CopyLocationTask', () => {
             return objMd;
         }
 
+        // the account lookup on the source's Vault
+        let getAccountIds;
+
         beforeEach(() => {
             locationConfig['source-site'] = { type: 'aws_s3', isCRR: true, details: remoteSiteDetails };
             sinon.stub(fakeLogger, 'getSerializedUids').returns('req-uid-1');
+            getAccountIds = sinon
+                .stub(VaultClient.prototype, 'getAccountIds')
+                .yields(null, { message: { body: { 'owner-canonical-id': '123456789012' } } });
             task = new CopyLocationTask({
                 getStateVars: () => ({
                     mProducer: { getProducer: () => {} },
                     sourceConfig: { transport: 'http' },
+                    sourceAccountIds: new AccountIdCache(10),
                 }),
             });
         });
@@ -405,14 +416,17 @@ describe('CopyLocationTask', () => {
                 ._sendGetObject(entry, sourceObjectMD(), undefined, fakeLogger, new AbortController())
                 .then(response => {
                     assert.deepStrictEqual(response, { Body: 'remote-stream' });
+                    // the role of the part, in the account of its owner on the source
+                    assert.deepStrictEqual(getAccountIds.firstCall.args[0], ['owner-canonical-id']);
                     assert(task._getAssumedRoleS3Client.calledOnce);
-                    const [siteConfig, roleArn] = task._getAssumedRoleS3Client.firstCall.args;
+                    const [siteConfig, accountId, roleName] = task._getAssumedRoleS3Client.firstCall.args;
                     assert.deepStrictEqual(siteConfig, {
                         transport: 'https',
                         endpoint: 'production.example.com:443',
                         sts: remoteSiteDetails.sts,
                     });
-                    assert.strictEqual(roleArn, 'arn:aws:iam::123456789012:role/clean-room-read');
+                    assert.strictEqual(accountId, '123456789012');
+                    assert.strictEqual(roleName, 'scality-internal/svcid-dr-source');
                     assert(remoteClient.send.calledOnce);
                     const command = remoteClient.send.firstCall.args[0];
                     // bucket, key and version all describe the data on the
@@ -427,6 +441,23 @@ describe('CopyLocationTask', () => {
                     // the data is native there, it must not be redirected
                     assert.strictEqual(command.input.LocationConstraint, undefined);
                 });
+        });
+
+        it('should assume the role the part carries, without looking its owner up', () => {
+            const remoteClient = { send: sinon.stub().resolves({}) };
+            sinon.stub(task, '_getAssumedRoleS3Client').returns(remoteClient);
+
+            const entry = new ActionQueueEntry({ target: {} });
+            const objMd = sourceObjectMD([
+                { ...sourcePart, role: 'arn:aws:iam::210987654321:role/scality-internal/svcid-dr-source' },
+            ]);
+
+            return task._sendGetObject(entry, objMd, undefined, fakeLogger, new AbortController()).then(() => {
+                assert(getAccountIds.notCalled);
+                const [, accountId, roleName] = task._getAssumedRoleS3Client.firstCall.args;
+                assert.strictEqual(accountId, '210987654321');
+                assert.strictEqual(roleName, 'scality-internal/svcid-dr-source');
+            });
         });
 
         it('should read the null version when the part carries no version id', () => {
@@ -453,6 +484,86 @@ describe('CopyLocationTask', () => {
                 .then(() => {
                     const command = remoteClient.send.firstCall.args[0];
                     assert.strictEqual(command.input.Range, 'bytes=0-99');
+                });
+        });
+
+        it('should look the account of an owner up once per source', () => {
+            sinon.stub(task, '_getAssumedRoleS3Client').returns({ send: sinon.stub().resolves({}) });
+
+            const read = () =>
+                task._sendGetObject(
+                    new ActionQueueEntry({ target: {} }),
+                    sourceObjectMD(),
+                    undefined,
+                    fakeLogger,
+                    new AbortController(),
+                );
+
+            return read()
+                .then(read)
+                .then(() => {
+                    assert(getAccountIds.calledOnce);
+                    assert(task.sourceAccountIds.has('https://sts.production.example.com:443::owner-canonical-id'));
+                });
+        });
+
+        it('should reject when the source refuses the owner lookup', () => {
+            // what Vault answers for an unknown owner
+            getAccountIds.yields({ code: 'AccessDenied', description: 'Access Denied', AccessDenied: true });
+
+            const entry = new ActionQueueEntry({ target: {} });
+
+            return task
+                ._sendGetObject(entry, sourceObjectMD(), undefined, fakeLogger, new AbortController())
+                .then(() => assert.fail('expected rejection'))
+                .catch(err => {
+                    assert(err.is.AccessDenied);
+                    assert.notStrictEqual(err.retryable, true);
+                });
+        });
+
+        it('should reject with a retryable error when the source cannot be reached for the owner lookup', () => {
+            // what vaultclient gives on a network error
+            getAccountIds.yields({ code: 500, description: 'We encountered an internal error.', InternalError: true });
+
+            const entry = new ActionQueueEntry({ target: {} });
+
+            return task
+                ._sendGetObject(entry, sourceObjectMD(), undefined, fakeLogger, new AbortController())
+                .then(() => assert.fail('expected rejection'))
+                .catch(err => {
+                    assert(err.is.InternalError);
+                    assert.strictEqual(err.retryable, true);
+                    assert.strictEqual(task.sourceAccountIds.size, 0);
+                });
+        });
+
+        it('should reject with a retryable error when the source fails the owner lookup', () => {
+            getAccountIds.yields({ code: 'ServiceUnavailable', description: 'Unavailable', ServiceUnavailable: true });
+
+            const entry = new ActionQueueEntry({ target: {} });
+
+            return task
+                ._sendGetObject(entry, sourceObjectMD(), undefined, fakeLogger, new AbortController())
+                .then(() => assert.fail('expected rejection'))
+                .catch(err => {
+                    assert(err.is.ServiceUnavailable);
+                    assert.strictEqual(err.retryable, true);
+                });
+        });
+
+        it('should reject when the source answers without the owner', () => {
+            getAccountIds.yields(null, { message: { body: {} } });
+
+            const entry = new ActionQueueEntry({ target: {} });
+
+            return task
+                ._sendGetObject(entry, sourceObjectMD(), undefined, fakeLogger, new AbortController())
+                .then(() => assert.fail('expected rejection'))
+                .catch(err => {
+                    assert(err.is.InternalError);
+                    assert.match(err.description, /returned no account for owner owner-canonical-id/);
+                    assert.strictEqual(task.sourceAccountIds.size, 0);
                 });
         });
 
@@ -514,12 +625,11 @@ describe('CopyLocationTask', () => {
                 });
         });
 
-        it('should reject without calling Cloudserver or the remote site when the role is missing', () => {
+        it('should reject without calling Cloudserver or the remote site when the part has no role nor owner', () => {
             task.backbeatClient = { send: sinon.stub() };
             sinon.stub(task, '_getAssumedRoleS3Client');
 
             const entry = new ActionQueueEntry({ target: {} });
-            // no role: owner absent from the ownerId->role map
             const objMd = sourceObjectMD([{ key: 'k', bucket: 'b', dataStoreName: 'source-site' }]);
 
             return task
@@ -527,9 +637,11 @@ describe('CopyLocationTask', () => {
                 .then(() => assert.fail('expected rejection'))
                 .catch(err => {
                     assert(err.AccessDenied);
-                    assert.strictEqual(err.retryable, true);
+                    // the metadata will not change: retrying cannot help
+                    assert.notStrictEqual(err.retryable, true);
                     assert(task.backbeatClient.send.notCalled);
                     assert(task._getAssumedRoleS3Client.notCalled);
+                    assert(getAccountIds.notCalled);
                 });
         });
     });
@@ -622,7 +734,8 @@ describe('CopyLocationTask', () => {
                 secretKey: 'SK',
             },
         };
-        const roleArn = 'arn:aws:iam::123456789012:role/clean-room-read';
+        const accountId = '123456789012';
+        const roleName = 'scality-internal/clean-room-read';
 
         let getBackbeatClient;
 
@@ -645,8 +758,8 @@ describe('CopyLocationTask', () => {
         });
 
         it('should reuse the client manager for the same endpoint and role', () => {
-            const client1 = task._getAssumedRoleS3Client(siteConfig, roleArn, fakeLogger);
-            const client2 = task._getAssumedRoleS3Client(siteConfig, roleArn, fakeLogger);
+            const client1 = task._getAssumedRoleS3Client(siteConfig, accountId, roleName, fakeLogger);
+            const client2 = task._getAssumedRoleS3Client(siteConfig, accountId, roleName, fakeLogger);
 
             assert.strictEqual(client1, client2);
             assert.strictEqual(task.sourceClientManagers.size, 1);
@@ -668,15 +781,20 @@ describe('CopyLocationTask', () => {
                 }),
             });
 
-            const client1 = task._getAssumedRoleS3Client(siteConfig, roleArn, fakeLogger);
-            const client2 = otherEntry._getAssumedRoleS3Client(siteConfig, roleArn, fakeLogger);
+            const client1 = task._getAssumedRoleS3Client(siteConfig, accountId, roleName, fakeLogger);
+            const client2 = otherEntry._getAssumedRoleS3Client(siteConfig, accountId, roleName, fakeLogger);
 
             assert.strictEqual(client1, client2);
             assert.strictEqual(sourceClientManagers.size, 1);
         });
 
         it('should default the port when the location carries none', () => {
-            task._getAssumedRoleS3Client({ ...siteConfig, endpoint: 'production.example.com' }, roleArn, fakeLogger);
+            task._getAssumedRoleS3Client(
+                { ...siteConfig, endpoint: 'production.example.com' },
+                accountId,
+                roleName,
+                fakeLogger,
+            );
 
             const clientManager = firstManager(task.sourceClientManagers);
             assert.deepStrictEqual(clientManager._s3Config, { host: 'production.example.com', port: 443 });
@@ -687,19 +805,17 @@ describe('CopyLocationTask', () => {
             const logSpy = sinon.spy(fakeLogger, 'error');
 
             assert.throws(
-                () => task._getAssumedRoleS3Client(siteConfig, roleArn, fakeLogger),
+                () => task._getAssumedRoleS3Client(siteConfig, accountId, roleName, fakeLogger),
                 err => err.AccessDenied && err.retryable === true,
             );
             assert(logSpy.calledOnce);
         });
 
-        it('should keep the full role name, including any path, when the role ARN has one', () => {
-            const pathedRoleArn = 'arn:aws:iam::123456789012:role/service-role/clean-room-read';
-
-            task._getAssumedRoleS3Client(siteConfig, pathedRoleArn, fakeLogger);
+        it('should assume the role with its path', () => {
+            task._getAssumedRoleS3Client(siteConfig, accountId, roleName, fakeLogger);
 
             const clientManager = firstManager(task.sourceClientManagers);
-            assert.strictEqual(clientManager._authConfig.roleName, 'service-role/clean-room-read');
+            assert.strictEqual(clientManager._authConfig.roleName, 'scality-internal/clean-room-read');
         });
     });
 });

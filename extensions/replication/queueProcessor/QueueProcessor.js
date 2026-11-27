@@ -16,6 +16,7 @@ const BackbeatProducer = require('../../../lib/BackbeatProducer');
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 const VaultClientCache = require('../../../lib/clients/VaultClientCache');
 const ClientManagerCache = require('../../../lib/clients/ClientManagerCache');
+const { AccountIdCache } = require('../../utils/AccountIdCache');
 const QueueEntry = require('../../../lib/models/QueueEntry');
 const TaskScheduler = require('../../../lib/tasks/TaskScheduler');
 const { getTaskSchedulerQueueKey, getTaskSchedulerDedupeKey } = require('./taskSchedulerHelpers');
@@ -40,6 +41,7 @@ const {
     proxyVaultPath,
     proxyIAMPath,
     replicationBackends,
+    sourceAccountIdsCacheSize,
 } = require('../constants');
 
 /**
@@ -241,6 +243,10 @@ class QueueProcessor extends EventEmitter {
         // by endpoint and role, shared by all copy location tasks: they assume
         // their role on the remote site's STS
         this.sourceClientManagers = new ClientManagerCache();
+
+        // the account of each object owner on the sites we read data from,
+        // keyed by IAM endpoint and owner, shared by all copy location tasks
+        this.sourceAccountIds = new AccountIdCache(sourceAccountIdsCacheSize);
 
         // clients to write to the destination site, keyed by host and role,
         // shared by all replication tasks: they assume their role on the
@@ -707,6 +713,7 @@ class QueueProcessor extends EventEmitter {
             vaultclientCache: this.vaultclientCache,
             accountCredsCache: this.accountCredsCache,
             sourceClientManagers: this.sourceClientManagers,
+            sourceAccountIds: this.sourceAccountIds,
             destClientManagers: this.destClientManagers,
             replicationStatusProducer: this.replicationStatusProducer,
             mProducer: this._mProducer,

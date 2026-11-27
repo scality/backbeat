@@ -1,4 +1,5 @@
 const async = require('async');
+const { promisify } = require('util');
 const { v4: uuid } = require('uuid');
 
 const { errors, jsutil, models, versioning } = require('@scality/arsenal');
@@ -24,6 +25,8 @@ const { isRetryableMiddleware, TIMEOUT_MS } = require('../../../lib/clients/util
 const { getAccountCredentials } = require('../../../lib/credentials/AccountCredentials');
 const RoleCredentials = require('../../../lib/credentials/RoleCredentials');
 const ClientManager = require('../../../lib/clients/ClientManager');
+const CredentialsManager = require('../../../lib/credentials/CredentialsManager');
+const VaultClient = require('vaultclient').Client;
 const { authTypeAssumeRole } = require('../../../lib/constants');
 const { metricsExtension, metricsTypeQueued, metricsTypeCompleted } = require('../constants');
 const locations = require('../../../conf/locationConfig.json') || {};
@@ -112,21 +115,20 @@ class CopyLocationTask extends BackbeatTask {
 
     /**
      * Get a cached client on a remote site, authenticated with the
-     * assumed-role credentials for the role carried on a location part.
+     * assumed-role credentials for a role in one of its accounts.
      * @param {Object} siteConfig - transport, endpoint and STS of the source site
-     * @param {String} roleArn - the role ARN carried by the location part
+     * @param {String} accountId - the account to assume the role in
+     * @param {String} roleName - the role name, with its path
      * @param {Werelogs} log - the logger instance
      * @return {BackbeatRoutesClient} the client
      * @throws {ArsenalError} AccessDenied (retryable) if credentials
      * could not be obtained for the role
      */
-    _getAssumedRoleS3Client(siteConfig, roleArn, log) {
+    _getAssumedRoleS3Client(siteConfig, accountId, roleName, log) {
         const { transport, endpoint, sts } = siteConfig;
         // a location may carry its servers without an explicit port
         const [host, port = transport === 'https' ? 443 : 80] = endpoint.split(':');
         const s3Endpoint = `${transport}://${host}:${port}`;
-        const accountId = roleArn.split(':')[4];
-        const roleName = roleArn.split(':role/')[1];
         // one manager per endpoint and role: it holds the credentials and
         // clients of every account we assume that role on, and expires them
         const cacheKey = `${s3Endpoint}::${roleName}`;
@@ -152,14 +154,76 @@ class CopyLocationTask extends BackbeatTask {
         if (!client) {
             log.error('unable to obtain assumed-role credentials for source location', {
                 method: 'CopyLocationTask._getAssumedRoleS3Client',
-                roleArn,
+                accountId,
+                roleName,
                 endpoint: s3Endpoint,
             });
-            const err = errors.AccessDenied.customizeDescription(`unable to assume role ${roleArn} on source location`);
+            const err = errors.AccessDenied.customizeDescription(
+                `unable to assume role ${roleName} in account ${accountId} on source location`,
+            );
             err.retryable = true;
             throw err;
         }
         return client;
+    }
+
+    /**
+     * Get the account of an object owner on the source, against the source's
+     * Vault: the objects only carry their owner's canonical id.
+     * @param {String} site - the source location
+     * @param {Object} siteConfig - transport and STS of the source site
+     * @param {String} ownerId - canonical id of the owner on the source
+     * @param {Werelogs} log - the logger instance
+     * @return {Promise<String>} the account id
+     * @throws {ArsenalError} if the lookup fails: AccessDenied if the source
+     * knows no such owner, or the key may not look accounts up
+     */
+    async _getOwnerAccountId(site, siteConfig, ownerId, log) {
+        const { transport, sts } = siteConfig;
+        const cacheKey = `${transport}://${sts.host}:${sts.port}::${ownerId}`;
+        const cachedAccountId = this.sourceAccountIds.get(cacheKey);
+        if (cachedAccountId) {
+            return cachedAccountId;
+        }
+        const { accessKey, secretKey } = CredentialsManager.resolveExternalFileSync(sts, log);
+        const vaultClient = new VaultClient(
+            sts.host,
+            Number(sts.port),
+            transport === 'https',
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            accessKey,
+            secretKey,
+        ).enableIAMOnAdminRoutes();
+        const getAccountIds = promisify(vaultClient.getAccountIds.bind(vaultClient));
+        let res;
+        try {
+            res = await getAccountIds([ownerId], { reqUid: log.getSerializedUids() });
+        } catch (err) {
+            log.error('unable to get the account of an owner on source location', {
+                method: 'CopyLocationTask._getOwnerAccountId',
+                site,
+                ownerId,
+                errorCode: err.code,
+                error: err.description ?? err.message,
+            });
+            const arsenalError = errors[err.code] ?? errors.InternalError;
+            const lookupError = arsenalError.customizeDescription(
+                `unable to get the account of owner ${ownerId} on source location ${site}`,
+            );
+            lookupError.retryable = lookupError.code >= 500;
+            throw lookupError;
+        }
+        const accountId = res.message.body[ownerId];
+        if (!accountId) {
+            throw errors.InternalError.customizeDescription(
+                `source location ${site} returned no account for owner ${ownerId}`,
+            );
+        }
+        this.sourceAccountIds.setAndExpireOldest(cacheKey, accountId);
+        return accountId;
     }
 
     /**
@@ -169,13 +233,13 @@ class CopyLocationTask extends BackbeatTask {
      * clean room reads its source data from.
      * @param {ObjectMD} objMD - metadata object
      * @param {Werelogs} log - the logger instance
-     * @return {Object|null} the client and the location part to read, or
-     * null if the data is reachable through Cloudserver
+     * @return {Promise<Object|null>} the client and the location part to read,
+     * or null if the data is reachable through Cloudserver
      * @throws {ArsenalError} if the site cannot be read from: no endpoint to
      * reach it, no single part to read, no role to assume, or no credentials
      * for that role
      */
-    _getSourceLocationClient(objMD, log) {
+    async _getSourceLocationClient(objMD, log) {
         const site = objMD.getDataStoreName();
         if (!locations[site]?.isCRR) {
             return null;
@@ -204,18 +268,27 @@ class CopyLocationTask extends BackbeatTask {
             );
         }
         const part = parts[0];
-        if (!part.role) {
-            log.error('missing role on location part for source location', {
-                method: 'CopyLocationTask._getSourceLocationClient',
-                site,
-            });
-            const err = errors.AccessDenied.customizeDescription(
-                `missing role on location part for source location ${site}`,
-            );
-            err.retryable = true;
-            throw err;
+        let accountId;
+        let roleName;
+        if (part.role) {
+            // part.role is the full role ARN: arn:aws:iam::210987654321:role/scality-internal/svcid-dr-source
+            accountId = part.role.split(':')[4];
+            roleName = part.role.split(':role/')[1];
+        } else {
+            if (!part.ownerId || !part.roleName) {
+                log.error('missing role, or owner and role name, on location part for source location', {
+                    method: 'CopyLocationTask._getSourceLocationClient',
+                    site,
+                });
+                throw errors.AccessDenied.customizeDescription(
+                    `missing role, or owner and role name, on location part for source location ${site}`,
+                );
+            }
+            accountId = await this._getOwnerAccountId(site, { transport, sts }, part.ownerId, log);
+            // the role is seeded under the scality-internal path
+            roleName = `scality-internal/${part.roleName}`;
         }
-        const client = this._getAssumedRoleS3Client({ transport, endpoint: servers[0], sts }, part.role, log);
+        const client = this._getAssumedRoleS3Client({ transport, endpoint: servers[0], sts }, accountId, roleName, log);
         const { bucket, key, dataStoreVersionId } = part;
         // the part carries the raw/decoded version id, the task needs the encoded form for S3 Api
         const version = dataStoreVersionId ? VersionID.encode(dataStoreVersionId) : 'null';
@@ -243,7 +316,7 @@ class CopyLocationTask extends BackbeatTask {
             client,
             target: { bucket, key, version },
             dataStoreName,
-        } = this._getSourceLocationClient(objMD, log) ?? {
+        } = (await this._getSourceLocationClient(objMD, log)) ?? {
             client: this.backbeatClient,
             target: actionEntry.getAttribute('target'),
             dataStoreName: objMD.getDataStoreName(),

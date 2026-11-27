@@ -1,0 +1,24 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "ReadAccounts",
+            "Effect": "Allow",
+            "Action": ["vaultadmin:GetAccountInfo"],
+            "Resource": "arn:aws:iam::*:root"
+            {{- $sourceIPs := index . "sourceIPs" }}
+            {{- $tlsOnly := index . "tlsOnly" }}
+            {{- if or $sourceIPs $tlsOnly }},
+            "Condition": {
+                {{- if $sourceIPs }}
+                "IpAddress": { "aws:SourceIp": {{ json $sourceIPs }} }
+                {{- if $tlsOnly }},{{ end }}
+                {{- end }}
+                {{- if $tlsOnly }}
+                "Bool": { "aws:SecureTransport": "true" }
+                {{- end }}
+            }
+            {{- end }}
+        }
+    ]
+}

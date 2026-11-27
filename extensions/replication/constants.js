@@ -33,6 +33,7 @@ const constants = {
         failedCRR: testIsOn ? 'test:bb:crr:failed' : 'bb:crr:failed',
     },
     replicationBackends: ['aws_s3', 'azure', 'gcp'],
+    sourceAccountIdsCacheSize: 10000,
     replicationDirections: {
         push: 'push',
         pull: 'pull',

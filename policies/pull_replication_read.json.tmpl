@@ -11,13 +11,15 @@
                 {{ json (printf "arn:aws:s3:::%s/*" $bucket) }}
                 {{- end }}
             ]
-            {{- if or .sourceIPs .tlsOnly }},
+            {{- $sourceIPs := index . "sourceIPs" }}
+            {{- $tlsOnly := index . "tlsOnly" }}
+            {{- if or $sourceIPs $tlsOnly }},
             "Condition": {
-                {{- if .sourceIPs }}
-                "IpAddress": { "aws:SourceIp": {{ json .sourceIPs }} }
-                {{- if .tlsOnly }},{{ end }}
+                {{- if $sourceIPs }}
+                "IpAddress": { "aws:SourceIp": {{ json $sourceIPs }} }
+                {{- if $tlsOnly }},{{ end }}
                 {{- end }}
-                {{- if .tlsOnly }}
+                {{- if $tlsOnly }}
                 "Bool": { "aws:SecureTransport": "true" }
                 {{- end }}
             }
