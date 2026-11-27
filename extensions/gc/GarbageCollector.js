@@ -115,8 +115,7 @@ class GarbageCollector extends EventEmitter {
                 return cb(err);
             }
 
-            this._accountIdCache.set(ownerId, accountId);
-            this._accountIdCache.expireOldest();
+            this._accountIdCache.setAndExpireOldest(ownerId, accountId);
 
             return cb(null, accountId);
         });

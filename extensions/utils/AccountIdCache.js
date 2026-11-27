@@ -31,6 +31,11 @@ class AccountIdCache extends Map {
         this._expireMisses();
     }
 
+    setAndExpireOldest(key, value) {
+        this.set(key, value);
+        this.expireOldest();
+    }
+
     _expireMisses() {
         // all misses use the same TTL and are (re)inserted on `miss()`, so the
         // map is ordered by expiration: stop at the first live entry

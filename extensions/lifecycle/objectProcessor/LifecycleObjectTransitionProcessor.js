@@ -101,8 +101,7 @@ class LifecycleObjectTransitionProcessor extends LifecycleObjectProcessor {
                 return cb(err);
             }
 
-            this._accountIdCache.set(ownerId, accountId);
-            this._accountIdCache.expireOldest();
+            this._accountIdCache.setAndExpireOldest(ownerId, accountId);
 
             return cb(null, accountId);
         });
